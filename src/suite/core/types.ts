@@ -7,7 +7,7 @@ export interface SuiteModule {
   id: ModuleId;
   name: string;
   description: string;
-  status: 'ready' | 'adapter' | 'planned';
+  status: 'foundation' | 'partial' | 'adapter' | 'planned' | 'complete';
   featureFlag: string;
   engine: string;
   group: 'Core' | 'Create' | 'Intelligence' | 'Enterprise' | 'System';

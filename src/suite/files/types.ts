@@ -12,6 +12,12 @@ export interface LibraryDocument {
   lastOpenedMs: number | null;
   available: boolean;
   locationLabel: string;
+  /**
+   * Browser/Codespaces-only ephemeral source.
+   * Native library documents never receive this field over IPC.
+   */
+  browserFile?: File;
+  ephemeral?: boolean;
 }
 
 export interface ImportFailure {
