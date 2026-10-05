@@ -172,13 +172,13 @@ export default function App() {
       run:()=>activateSession(session.id),
     })),
     ...(activeSession ? [
-      {
+      ...(!activeSession.document.browserFile ? [{
         id:'active-save-as',
         label:`Save a copy of ${activeSession.document.name}`,
         group:'Current document',
         keywords:'save as export copy',
         run:()=>{ void saveSessionAs(activeSession.id); },
-      },
+      }] : []),
       {
         id:'active-close',
         label:`Close ${activeSession.document.name}`,
