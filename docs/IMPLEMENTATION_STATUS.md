@@ -173,3 +173,8 @@ This branch must pass frontend, Windows Rust and Codespaces/Linux CI before merg
 ## Codespaces AI bootstrap profile
 
 MALENJO Codespaces development can now explicitly bootstrap a loopback Ollama runtime and, in a separate opt-in step, a small reviewed local development model. The runtime/model setup remains separate from normal application startup and is not a substitute for the full production model-manager requirements.
+
+
+## Native tab restoration
+
+The shell now persists and restores native library tab identities across MALENJO restarts while excluding browser-session file objects. This improves professional multi-document continuity but does not yet provide dirty-content autosave/crash recovery.
