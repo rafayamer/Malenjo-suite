@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   frontend:
     runs-on: windows-latest
@@ -16,7 +20,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install
+      - name: Use current npm client
+        run: npm install --global npm@11 --no-audit --no-fund
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
@@ -30,3 +37,4 @@ jobs:
         with:
           workspaces: 'src-tauri -> target'
       - run: cargo check --manifest-path src-tauri/Cargo.toml
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --lib

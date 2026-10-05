@@ -1,0 +1,38 @@
+{
+  "name": "MALENJO Suite",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    },
+    "ghcr.io/devcontainers/features/rust:1": {
+      "version": "stable",
+      "profile": "minimal"
+    }
+  },
+  "postCreateCommand": "npm install --global npm@11 --no-audit --no-fund && npm install --no-audit --no-fund && cargo fetch --manifest-path src-tauri/Cargo.toml",
+  "forwardPorts": [1420],
+  "portsAttributes": {
+    "1420": {
+      "label": "MALENJO Vite",
+      "onAutoForward": "notify"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "rust-lang.rust-analyzer",
+        "tauri-apps.tauri-vscode"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "typescript.tsdk": "node_modules/typescript/lib"
+      }
+    }
+  },
+  "remoteUser": "vscode"
+}
