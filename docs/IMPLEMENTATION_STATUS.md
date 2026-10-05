@@ -154,3 +154,19 @@ Current correction work on `feat/master-completeness-shell-ai` includes:
 - master completeness audit in `docs/MASTER_COMPLETENESS_AUDIT.md`.
 
 No major module is promoted to `complete` by this correction alone.
+
+
+## Master completeness pass 2 — shell/PDF operational depth
+
+Current branch `feat/shell-pdf-completeness-pass-2` adds:
+
+- desktop and Codespaces drag/drop multi-file opening;
+- professional tab close actions;
+- corrected dirty/clean synchronization;
+- PDF mutation undo/redo with bounded memory;
+- PDF text search and result navigation;
+- permanent PDF text and rectangle/highlight tools;
+- page-range extraction/export;
+- regression tests for PDF mutation primitives and session state.
+
+This work must pass frontend, Windows Rust and Codespaces/Linux CI before merge. It does not promote the shell or PDF workspace to `complete`.
