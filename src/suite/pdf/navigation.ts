@@ -122,7 +122,9 @@ export async function resolvePdfOutlinePage(
 
 export function sanitizePdfAttachmentName(value: unknown, fallback: string): string {
   const raw = cleanText(value, fallback, MAX_ATTACHMENT_NAME_CHARS)
-    .replace(/[\\/]+/g, '_')
+    .replace(/\.{2,}/g, '_')
+    .replace(/[\\/\s]+/g, '_')
+    .replace(/_+/g, '_')
     .replace(/^\.+/, '')
     .trim();
   return (raw || fallback).slice(0, MAX_ATTACHMENT_NAME_CHARS);
