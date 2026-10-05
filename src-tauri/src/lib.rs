@@ -4,6 +4,7 @@ use suite::{
     library::{
         add_library_documents, list_library_documents, open_library_document,
         refresh_library_document, remove_library_document, save_as_library_document,
+        stage_library_document, commit_staged_document, discard_staged_document,
     },
     local_services::LocalServiceManager,
 };
@@ -35,7 +36,10 @@ pub fn run() {
             open_library_document,
             refresh_library_document,
             remove_library_document,
-            save_as_library_document
+            save_as_library_document,
+            stage_library_document,
+            commit_staged_document,
+            discard_staged_document
         ])
         .run(tauri::generate_context!())
         .expect("error while running MALENJO Suite");
