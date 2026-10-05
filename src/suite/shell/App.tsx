@@ -270,39 +270,39 @@ export default function App() {
         onClose={closeCommandPalette}
       />
 
-      {activeSession
-        ? <div className="document-session-stack">
-            {sessions.map((session) => <section
-              className={session.id === activeSessionId ? 'document-session-panel active' : 'document-session-panel'}
-              key={session.id}
-              aria-hidden={session.id !== activeSessionId}
-            >{renderDocumentWorkspace(session)}</section>)}
-          </div>
-        : active === 'home'
-          ? <Home onSelect={selectModule} onOpen={openFromLibrary}/>
-          : active === 'files'
-            ? <FileLibrary onOpen={openFromLibrary}/>
-            : active === 'scanner'
-              ? <ScannerWorkspace mode="scanner" onBackToFiles={()=>selectModule('files')}/>
-              : active === 'ocr'
-                ? <ScannerWorkspace mode="ocr" onBackToFiles={()=>selectModule('files')}/>
-                : active === 'ai'
-                  ? <AiWorkspace onBackToFiles={()=>selectModule('files')}/>
-                  : active === 'security'
-                    ? <SecurityWorkspace onBackToFiles={()=>selectModule('files')}/>
-                    : active === 'metadata'
-                      ? <MetadataWorkspace onBackToFiles={()=>selectModule('files')}/>
-                      : active === 'sign'
-                        ? <SignWorkspace onBackToFiles={()=>selectModule('files')}/>
-                        : active === 'dms'
-                          ? <EnterpriseWorkspace mode="dms" onBackToFiles={()=>selectModule('files')}/>
-                          : active === 'automation'
-                            ? <EnterpriseWorkspace mode="automation" onBackToFiles={()=>selectModule('files')}/>
-                            : active === 'backup'
-                              ? <EnterpriseWorkspace mode="backup" onBackToFiles={()=>selectModule('files')}/>
-                              : active === 'admin'
-                                ? <EnterpriseWorkspace mode="admin" onBackToFiles={()=>selectModule('files')}/>
-                                : <ModuleView module={module} session={null} notice="" onSaveAs={async()=>{}} onBackToFiles={()=>selectModule('files')}/>}
+      {!!sessions.length && <div className={activeSession ? 'document-session-stack' : 'document-session-stack parked'} aria-hidden={!activeSession}>
+        {sessions.map((session) => <section
+          className={session.id === activeSessionId ? 'document-session-panel active' : 'document-session-panel'}
+          key={session.id}
+          aria-hidden={session.id !== activeSessionId}
+        >{renderDocumentWorkspace(session)}</section>)}
+      </div>}
+
+      {!activeSession && (active === 'home'
+        ? <Home onSelect={selectModule} onOpen={openFromLibrary}/>
+        : active === 'files'
+          ? <FileLibrary onOpen={openFromLibrary}/>
+          : active === 'scanner'
+            ? <ScannerWorkspace mode="scanner" onBackToFiles={()=>selectModule('files')}/>
+            : active === 'ocr'
+              ? <ScannerWorkspace mode="ocr" onBackToFiles={()=>selectModule('files')}/>
+              : active === 'ai'
+                ? <AiWorkspace onBackToFiles={()=>selectModule('files')}/>
+                : active === 'security'
+                  ? <SecurityWorkspace onBackToFiles={()=>selectModule('files')}/>
+                  : active === 'metadata'
+                    ? <MetadataWorkspace onBackToFiles={()=>selectModule('files')}/>
+                    : active === 'sign'
+                      ? <SignWorkspace onBackToFiles={()=>selectModule('files')}/>
+                      : active === 'dms'
+                        ? <EnterpriseWorkspace mode="dms" onBackToFiles={()=>selectModule('files')}/>
+                        : active === 'automation'
+                          ? <EnterpriseWorkspace mode="automation" onBackToFiles={()=>selectModule('files')}/>
+                          : active === 'backup'
+                            ? <EnterpriseWorkspace mode="backup" onBackToFiles={()=>selectModule('files')}/>
+                            : active === 'admin'
+                              ? <EnterpriseWorkspace mode="admin" onBackToFiles={()=>selectModule('files')}/>
+                              : <ModuleView module={module} session={null} notice="" onSaveAs={async()=>{}} onBackToFiles={()=>selectModule('files')}/>)}
     </main>
   </div>
 }
