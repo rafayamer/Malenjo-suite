@@ -426,3 +426,28 @@ The Codespaces bridge already routes only approved local status/chat endpoints. 
 - CI syntax-validates both shell helpers and JSON-validates the model manifest without downloading external software or weights.
 
 This remains a development profile, not the full master AI model manager. Production model import/download, license acceptance, checksums, resource estimation, policy and per-feature model assignment remain open under the AI completeness workstream.
+
+
+## Completion pass — PDF bookmarks and embedded attachments
+
+Implemented on `feat/pdf-outline-attachments`:
+
+### Bookmarks / outline
+- PDF.js document outline discovery;
+- nested outline flattening with preserved hierarchy depth;
+- named and explicit internal PDF destinations resolve to one-based MALENJO pages;
+- bookmark navigation stays within the active PDF tab;
+- pathological outline display is capped at 1,000 entries;
+- external URL bookmarks are identified but **never opened automatically**.
+
+### Embedded attachments
+- PDF.js embedded-file discovery;
+- attachment list with sanitized export filenames;
+- explicit user-triggered extraction/download only;
+- embedded attachment count capped at 200 displayed entries;
+- per-attachment extraction capped at 100 MB;
+- empty or over-limit attachments are disabled with an explicit reason;
+- extracted files use `application/octet-stream` and are never auto-executed or auto-previewed;
+- pure unit tests cover outline flattening, destination resolution, filename hardening, byte copying and extraction limits.
+
+This closes the read-only bookmark/attachment navigation gap identified in the audit. It does **not** yet implement bookmark creation/editing/reordering, attachment insertion/removal, true comment annotations, form editing, document comparison, or the remaining advanced PDF master requirements.
