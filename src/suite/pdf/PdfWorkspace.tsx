@@ -245,7 +245,10 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
       let result=Uint8Array.from(sourceBytes);
       for(const file of files){
         if(file.size>512*1024*1024)throw new Error(`${file.name} exceeds the 512 MB safety limit.`);
-        result=await appendPdf(result,new Uint8Array(await file.arrayBuffer()));
+        const merged=await appendPdf(result,new Uint8Array(await file.arrayBuffer()));
+        const owned=new Uint8Array(merged.byteLength);
+        owned.set(merged);
+        result=owned;
       }
       await installPdf(result,sourceName,browserFile,true);
       setDirty(true);
