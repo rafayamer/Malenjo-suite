@@ -168,3 +168,8 @@ Current branch `feat/shell-pdf-completeness-pass-2-final` adds:
 - unit tests for PDF overlay validation/mutation.
 
 This branch must pass frontend, Windows Rust and Codespaces/Linux CI before merge. Shell and PDF remain `partial`.
+
+
+## Codespaces AI bootstrap profile
+
+MALENJO Codespaces development can now explicitly bootstrap a loopback Ollama runtime and, in a separate opt-in step, a small reviewed local development model. The runtime/model setup remains separate from normal application startup and is not a substitute for the full production model-manager requirements.
