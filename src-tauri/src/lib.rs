@@ -1,6 +1,7 @@
 mod suite;
 
 use suite::{
+    ai::{cancel_local_ai, local_ai_chat, local_ai_status},
     library::{
         add_library_documents, list_library_documents, open_library_document,
         refresh_library_document, remove_library_document, save_as_library_document,
@@ -48,7 +49,10 @@ pub fn run() {
             write_office_copy,
             paddle_ocr_status,
             paddle_ocr_image,
-            cancel_paddle_ocr
+            cancel_paddle_ocr,
+            local_ai_status,
+            local_ai_chat,
+            cancel_local_ai
         ])
         .run(tauri::generate_context!())
         .expect("error while running MALENJO Suite");
