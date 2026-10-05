@@ -46,3 +46,26 @@ Unsigned developer packages may be produced locally. Production distribution mus
 Never merge third-party applications into MALENJO as visible products. Define a MALENJO interface, build a thin adapter, test it on Windows and offline, audit license/security/performance, then integrate behind the unified UI.
 
 See `docs/ARCHITECTURE.md`, `docs/IMPLEMENTATION_STATUS.md`, and the complete source-of-truth material in `docs/source-of-truth/`.
+
+
+## GitHub Codespaces
+
+After Phase 1 is merged, create new Codespaces from the default `main` branch. The repository contains a `.devcontainer/` configuration that installs Node.js 22, npm 11, Rust stable and the Linux libraries needed for Tauri development.
+
+Inside the Codespace:
+
+```bash
+npm run typecheck
+npm test
+npm run build
+cargo check --manifest-path src-tauri/Cargo.toml
+cargo test --manifest-path src-tauri/Cargo.toml --lib
+```
+
+For browser-shell development:
+
+```bash
+npm run dev -- --host 0.0.0.0
+```
+
+See `docs/CODESPACES.md` for the Windows-specific limitations of Codespaces.
