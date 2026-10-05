@@ -11,6 +11,7 @@ import { saveAsLibraryDocument } from '../files/api';
 import PdfWorkspace from '../pdf/PdfWorkspace';
 import OfficeWorkspace from '../office/OfficeWorkspace';
 import ScannerWorkspace from '../scanner/ScannerWorkspace';
+import AiWorkspace from '../ai/AiWorkspace';
 
 const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
   {label:'Open document', icon: FolderOpen, target:'files'},
@@ -87,7 +88,9 @@ export default function App() {
                     ? <ScannerWorkspace mode="scanner" onBackToFiles={()=>selectModule('files')}/>
                     : active === 'ocr'
                       ? <ScannerWorkspace mode="ocr" onBackToFiles={()=>selectModule('files')}/>
-                      : <ModuleView module={module} session={session} notice={workspaceNotice} onSaveAs={saveSessionAs} onBackToFiles={()=>selectModule('files')}/>}
+                      : active === 'ai'
+                        ? <AiWorkspace onBackToFiles={()=>selectModule('files')}/>
+                        : <ModuleView module={module} session={session} notice={workspaceNotice} onSaveAs={saveSessionAs} onBackToFiles={()=>selectModule('files')}/>}
     </main>
   </div>
 }
