@@ -1,9 +1,9 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import type { ImportResult, LibraryDocument, StagedDocument } from './types';
 
 export function isDesktopRuntime(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  return isTauri();
 }
 
 export async function listLibraryDocuments(): Promise<LibraryDocument[]> {
@@ -23,15 +23,15 @@ export async function chooseAndAddDocuments(): Promise<ImportResult | null> {
 }
 
 export async function openLibraryDocument(documentId: string): Promise<LibraryDocument> {
-  return invoke<LibraryDocument>('open_library_document', { document_id: documentId });
+  return invoke<LibraryDocument>('open_library_document', { documentId });
 }
 
 export async function refreshLibraryDocument(documentId: string): Promise<LibraryDocument> {
-  return invoke<LibraryDocument>('refresh_library_document', { document_id: documentId });
+  return invoke<LibraryDocument>('refresh_library_document', { documentId });
 }
 
 export async function removeLibraryDocument(documentId: string): Promise<boolean> {
-  return invoke<boolean>('remove_library_document', { document_id: documentId });
+  return invoke<boolean>('remove_library_document', { documentId });
 }
 
 export async function saveAsLibraryDocument(document: LibraryDocument): Promise<LibraryDocument | null> {
@@ -45,22 +45,22 @@ export async function saveAsLibraryDocument(document: LibraryDocument): Promise<
 
   if (!destination) return null;
   return invoke<LibraryDocument>('save_as_library_document', {
-    document_id: document.id,
+    documentId: document.id,
     destination,
   });
 }
 
 export async function stageLibraryDocument(documentId: string): Promise<StagedDocument> {
-  return invoke<StagedDocument>('stage_library_document', { document_id: documentId });
+  return invoke<StagedDocument>('stage_library_document', { documentId });
 }
 
 export async function commitStagedDocument(documentId: string, stagingToken: string): Promise<LibraryDocument> {
   return invoke<LibraryDocument>('commit_staged_document', {
-    document_id: documentId,
-    staging_token: stagingToken,
+    documentId,
+    stagingToken,
   });
 }
 
 export async function discardStagedDocument(stagingToken: string): Promise<boolean> {
-  return invoke<boolean>('discard_staged_document', { staging_token: stagingToken });
+  return invoke<boolean>('discard_staged_document', { stagingToken });
 }
