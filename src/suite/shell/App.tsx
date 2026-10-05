@@ -196,6 +196,7 @@ export default function App() {
     if (route === 'pdf') {
       return <PdfWorkspace
         session={session}
+        active={session.id === activeSessionId}
         notice={notice}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty)=>markSessionDirty(session.id,dirty)}
