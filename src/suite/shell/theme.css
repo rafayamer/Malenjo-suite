@@ -191,3 +191,16 @@
 .pdf-coordinate-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}.pdf-coordinate-grid label{display:block}.pdf-coordinate-grid input{margin-top:3px}
 .pdf-edit-form small{display:block;color:#667f92;font-size:8px;line-height:1.4;margin-top:6px}
 
+.pdf-navigator{display:flex;flex-direction:column;min-height:0}
+.pdf-navigator-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-bottom:1px solid #183247;background:#07141e}
+.pdf-navigator-tabs button{min-width:0;border:0;border-right:1px solid #183247;background:transparent;color:#6f8ca0;padding:7px 3px;display:grid;grid-template-columns:14px minmax(0,1fr);grid-template-rows:auto auto;gap:1px 4px;align-items:center;justify-content:center;cursor:pointer}
+.pdf-navigator-tabs button:last-child{border-right:0}.pdf-navigator-tabs button.active{background:#0d2537;color:#d6e7f1;box-shadow:inset 0 -2px 0 #2c8dca}.pdf-navigator-tabs button svg{grid-row:1/3;justify-self:end}.pdf-navigator-tabs button span{font-size:8px;overflow:hidden;text-overflow:ellipsis}.pdf-navigator-tabs button b{font-size:7px;color:#54768d}
+.pdf-navigator-notice{border-bottom:1px solid #3e4d2a;background:#222617;color:#cbbd76;padding:7px;font-size:8px;line-height:1.35}
+.pdf-outline-list,.pdf-attachment-list{flex:1;min-height:0;overflow:auto}.pdf-outline-list>p,.pdf-attachment-list>p{padding:10px;color:#728da1;font-size:9px}
+.pdf-outline-list>button{width:100%;border:0;border-bottom:1px solid #142c3e;background:transparent;color:#a8bfce;display:flex;align-items:center;gap:6px;text-align:left;padding-top:7px;padding-bottom:7px;padding-right:8px;cursor:pointer}
+.pdf-outline-list>button:hover{background:#0d2638;color:#e0edf4}.pdf-outline-list>button span{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px}.pdf-outline-list>button small{border:1px solid #594c2f;background:#262116;color:#c2aa6a;border-radius:999px;padding:2px 4px;font-size:6px;text-transform:uppercase}
+.pdf-navigator-empty{display:flex;min-height:160px;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#607d91;text-align:center;padding:18px}.pdf-navigator-empty b{font-size:10px;color:#94adbd}.pdf-navigator-empty span{font-size:8px;line-height:1.4}
+.pdf-navigator-limit{border-top:1px solid #513c28;background:#281f16;color:#c5a66c;padding:7px;font-size:8px}
+.pdf-attachment-list article{border-bottom:1px solid #163044;padding:8px}.pdf-attachment-list article>div{display:flex;gap:6px;align-items:center}.pdf-attachment-list article b{min-width:0;flex:1;color:#b9cedb;font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pdf-attachment-list article span{color:#627f94;font-size:7px}.pdf-attachment-list article>button{margin-top:6px;border:1px solid #294c65;background:#0b2232;color:#a9c5d5;border-radius:5px;padding:5px 7px;display:flex;align-items:center;gap:4px;font-size:8px;cursor:pointer}.pdf-attachment-list article>button:disabled{opacity:.35;cursor:not-allowed}.pdf-attachment-list article small{display:block;margin-top:5px;color:#a98a67;font-size:7px;line-height:1.35}
+.pdf-attachment-warning{margin:8px;border:1px solid #61492c;background:#2b2117;color:#ccb076;border-radius:6px;padding:7px;font-size:8px;line-height:1.4}
+
