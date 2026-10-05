@@ -173,3 +173,8 @@ This branch must pass frontend, Windows Rust and Codespaces/Linux CI before merg
 ## Codespaces AI bootstrap profile
 
 MALENJO Codespaces development can now explicitly bootstrap a loopback Ollama runtime and, in a separate opt-in step, a small reviewed local development model. The runtime/model setup remains separate from normal application startup and is not a substitute for the full production model-manager requirements.
+
+
+## PDF bookmark/attachment navigation
+
+The PDF completeness track now includes internal bookmark navigation and explicit safe extraction of embedded attachments. External document-supplied links remain non-executing, and embedded files are treated as untrusted content. PDF remains `partial`; bookmark authoring, attachment mutation, comments/forms, compare and other advanced master features remain open.
