@@ -12,6 +12,12 @@ MALENJO Suite is a **local-first Windows document workspace** being built from t
 - DOCX, XLSX and PPTX workspaces with explicit OOXML fidelity warnings and exact-copy export for untouched documents.
 - Scanner/OCR workspace with image processing, perspective correction, optional PaddleOCR, portable OCR fallback, searchable PDF export and cancellation.
 - Private local RAG with citation-bearing retrieval and native loopback Ollama/llama.cpp adapters; no automatic model download or AI startup.
+- Security Center and Metadata Studio with metadata sanitization, destructive PDF CDR/redaction, watermarking, AES-GCM secure export, audit history, and optional ClamAV.
+- Local PDF signature validation/signed-copy workflow through the native pyHanko boundary with ephemeral zeroized passphrase handling.
+- Local DMS with immutable SHA-256 versions, retention preview/apply, legal hold and native permission enforcement.
+- Automation Studio with saved local workflow contracts plus an optional fixed-loopback Temporal handoff.
+- Verified offline Backup / DR with per-file SHA-256 manifests, tamper detection, recovery-copy restore safety, and optional Kopia integration.
+- Administration policy shared across DMS, automation and backup with owner/admin/editor/viewer permission contracts and archive-based audit retention.
 - Feature registry and adapter status model.
 - Tauri/Rust native shell with a `LocalServiceManager` catalog and security boundary.
 - Localhost-only service policy; heavyweight services are not launched on UI startup.
