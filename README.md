@@ -8,6 +8,7 @@ MALENJO Suite is a **local-first Windows document workspace** being built from t
 
 - Unified MALENJO desktop shell and dark navy / electric-blue visual system.
 - Full module navigation for Files, DMS, PDF, Office, Scanner, OCR, local AI, Sign, Invoice, Metadata, Automation, Security, CAD, DICOM, Administration, Backup, Settings, Account and Help.
+- Real PDF workspace with PDF.js 6.4.299, thumbnails, page navigation, zoom/fit, rotation, print/export paths, and local performance telemetry.
 - Feature registry and adapter status model.
 - Tauri/Rust native shell with a `LocalServiceManager` catalog and security boundary.
 - Localhost-only service policy; heavyweight services are not launched on UI startup.
