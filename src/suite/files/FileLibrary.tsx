@@ -10,7 +10,13 @@ import {
   removeLibraryDocument,
   saveAsLibraryDocument,
 } from './api';
-import type { LibraryDocument, LibraryDocumentKind } from './types';
+import {
+  listBrowserDocuments,
+  markBrowserDocumentOpened,
+  registerBrowserFiles,
+  removeBrowserDocument,
+} from './browserStore';
+import type { LibraryDocument } from './types';
 
 interface Props {
   onOpen(document: LibraryDocument): void;
@@ -28,66 +34,18 @@ function formatDate(timestamp: number): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(timestamp);
 }
 
-function browserKind(file: File): LibraryDocumentKind {
-  const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
-  switch (extension) {
-    case 'pdf': return 'pdf';
-    case 'docx': return 'docx';
-    case 'xlsx': return 'xlsx';
-    case 'pptx': return 'pptx';
-    case 'dxf': return 'cad';
-    case 'dcm':
-    case 'dicom': return 'dicom';
-    case 'png':
-    case 'jpg':
-    case 'jpeg':
-    case 'webp':
-    case 'tif':
-    case 'tiff':
-    case 'bmp': return 'image';
-    default: return 'other';
-  }
-}
-
-function browserDocument(file: File): LibraryDocument {
-  const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
-  return {
-    id: `browser-${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
-    name: file.name,
-    extension,
-    kind: browserKind(file),
-    sizeBytes: file.size,
-    modifiedMs: file.lastModified || Date.now(),
-    addedMs: Date.now(),
-    lastOpenedMs: null,
-    available: true,
-    locationLabel: 'Browser / Codespaces session',
-    browserFile: file,
-    ephemeral: true,
-  };
-}
-
-function downloadBrowserCopy(document: LibraryDocument) {
-  const file = document.browserFile;
-  if (!file) return;
-  const url = URL.createObjectURL(file);
-  const anchor = window.document.createElement('a');
-  anchor.href = url;
-  anchor.download = file.name;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
 export default function FileLibrary({ onOpen }: Props) {
   const browserInputRef = useRef<HTMLInputElement>(null);
   const [documents, setDocuments] = useState<LibraryDocument[]>([]);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string>('');
+  const desktop = isDesktopRuntime();
 
   const load = useCallback(async () => {
-    if (!isDesktopRuntime()) {
-      setNotice((current) => current || 'Browser/Codespaces files are temporary for this session. Native persistent library indexing is available in the desktop app.');
+    if (!desktop) {
+      setDocuments(listBrowserDocuments());
+      setNotice('Codespaces/browser files are session-only. They remain available while this MALENJO page stays open.');
       return;
     }
     try {
@@ -96,7 +54,7 @@ export default function FileLibrary({ onOpen }: Props) {
     } catch (error) {
       setNotice(String(error));
     }
-  }, []);
+  }, [desktop]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -109,16 +67,8 @@ export default function FileLibrary({ onOpen }: Props) {
     );
   }, [documents, query]);
 
-  function addBrowserFiles(files: FileList | null) {
-    if (!files?.length) return;
-    const additions = Array.from(files).map(browserDocument);
-    setDocuments((current) => [...current, ...additions]);
-    additions.forEach(onOpen);
-    setNotice(`Opened ${additions.length} temporary browser document(s) as independent MALENJO tabs.`);
-  }
-
   async function addFiles() {
-    if (!isDesktopRuntime()) {
+    if (!desktop) {
       browserInputRef.current?.click();
       return;
     }
@@ -128,10 +78,9 @@ export default function FileLibrary({ onOpen }: Props) {
       const result = await chooseAndAddDocuments();
       if (!result) return;
       await load();
-      result.documents.forEach(onOpen);
       setNotice(result.errors.length
-        ? `Added/opened ${result.documents.length} document(s); ${result.errors.length} could not be added.`
-        : `Added and opened ${result.documents.length} document(s) in independent tabs.`);
+        ? `Added ${result.documents.length} document(s); ${result.errors.length} could not be added.`
+        : `Added ${result.documents.length} document(s).`);
     } catch (error) {
       setNotice(String(error));
     } finally {
@@ -139,11 +88,18 @@ export default function FileLibrary({ onOpen }: Props) {
     }
   }
 
+  function addBrowserFiles(files: FileList | null) {
+    if (!files?.length) return;
+    const additions = registerBrowserFiles(files);
+    setDocuments(listBrowserDocuments());
+    setNotice(`Opened ${additions.length} browser-session document(s) in separate MALENJO tabs.`);
+    additions.forEach((document) => onOpen(markBrowserDocumentOpened(document)));
+  }
+
   async function openDocument(document: LibraryDocument) {
-    if (document.browserFile) {
-      const refreshed = { ...document, lastOpenedMs: Date.now() };
-      setDocuments((current) => current.map((item) => item.id === document.id ? refreshed : item));
-      onOpen(refreshed);
+    if (!desktop) {
+      onOpen(markBrowserDocumentOpened(document));
+      setDocuments(listBrowserDocuments());
       return;
     }
 
@@ -161,11 +117,10 @@ export default function FileLibrary({ onOpen }: Props) {
   }
 
   async function refreshDocument(document: LibraryDocument) {
-    if (document.browserFile) {
-      setNotice('Browser/Codespaces files are ephemeral and are read directly from the selected File object.');
+    if (!desktop) {
+      setDocuments(listBrowserDocuments());
       return;
     }
-
     try {
       const refreshed = await refreshLibraryDocument(document.id);
       setDocuments((current) => current.map((item) => item.id === refreshed.id ? refreshed : item));
@@ -175,12 +130,10 @@ export default function FileLibrary({ onOpen }: Props) {
   }
 
   async function saveCopy(document: LibraryDocument) {
-    if (document.browserFile) {
-      downloadBrowserCopy(document);
-      setNotice(`Downloaded a copy of ${document.name}.`);
+    if (!desktop) {
+      setNotice('Open the browser-session document in its workspace and use that workspace Export command.');
       return;
     }
-
     setBusy(true);
     try {
       const copy = await saveAsLibraryDocument(document);
@@ -195,22 +148,20 @@ export default function FileLibrary({ onOpen }: Props) {
   }
 
   async function remove(document: LibraryDocument) {
-    const message = document.browserFile
-      ? `Remove "${document.name}" from this temporary browser session?`
-      : `Remove "${document.name}" from the MALENJO library? The original file will not be deleted.`;
-
-    const approved = document.browserFile
-      ? window.confirm(message)
-      : await confirm(message, { title: 'MALENJO Suite', kind: 'warning' });
-
-    if (!approved) return;
-
-    if (document.browserFile) {
-      setDocuments((current) => current.filter((item) => item.id !== document.id));
-      setNotice('Removed from this browser session. The source file was not changed.');
+    if (!desktop) {
+      const approved = window.confirm(`Remove "${document.name}" from this browser session? The original local file will not be deleted.`);
+      if (!approved) return;
+      removeBrowserDocument(document);
+      setDocuments(listBrowserDocuments());
+      setNotice('Removed from the browser-session library. The original local file was not deleted.');
       return;
     }
 
+    const approved = await confirm(
+      `Remove "${document.name}" from the MALENJO library? The original file will not be deleted.`,
+      { title: 'MALENJO Suite', kind: 'warning' },
+    );
+    if (!approved) return;
     try {
       await removeLibraryDocument(document.id);
       setDocuments((current) => current.filter((item) => item.id !== document.id));
@@ -226,7 +177,7 @@ export default function FileLibrary({ onOpen }: Props) {
       className="visually-hidden"
       type="file"
       multiple
-      accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.webp,.tif,.tiff,.bmp,.dxf,.dcm,.dicom"
+      accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.webp,.tif,.tiff,.bmp,.dxf,.dwg,.dcm,.dicom"
       onChange={(event) => {
         addBrowserFiles(event.target.files);
         event.target.value = '';
@@ -237,12 +188,12 @@ export default function FileLibrary({ onOpen }: Props) {
       <div>
         <p className="eyebrow">FILES / DOCUMENT LIBRARY</p>
         <h1>One library for every workspace.</h1>
-        <p>{isDesktopRuntime()
+        <p>{desktop
           ? 'MALENJO indexes references to your local files. Adding or removing a library entry never moves or deletes the original document.'
-          : 'Codespaces/browser mode can open several local files into temporary MALENJO tabs. The selected files stay in the browser session and are not uploaded by this UI.'}</p>
+          : 'Codespaces uses an in-memory browser-session library. Choose several files here, then open and switch between them with the shared tab strip.'}</p>
       </div>
       <button className="primary-action" disabled={busy} onClick={() => void addFiles()}>
-        <FilePlus2 size={17}/> Open files
+        <FilePlus2 size={17}/> {desktop ? 'Add files' : 'Add session files'}
       </button>
     </div>
 
@@ -260,7 +211,7 @@ export default function FileLibrary({ onOpen }: Props) {
       </div>
       {filtered.map((document) => <div className={document.available ? 'library-row' : 'library-row unavailable'} role="row" key={document.id}>
         <button className="file-name" disabled={!document.available || busy} onClick={() => void openDocument(document)}>
-          <FolderOpen size={17}/><span><b>{document.name}</b><small>{document.ephemeral ? 'Temporary browser file' : document.available ? 'Available' : 'File moved or unavailable'}</small></span>
+          <FolderOpen size={17}/><span><b>{document.name}</b><small>{document.available ? 'Available' : 'File moved or unavailable'}</small></span>
         </button>
         <span className="type-chip">{document.kind.toUpperCase()}</span>
         <span>{document.locationLabel}</span>
@@ -268,17 +219,17 @@ export default function FileLibrary({ onOpen }: Props) {
         <span>{document.available ? formatDate(document.modifiedMs) : '—'}</span>
         <div className="library-actions">
           <button title="Open in MALENJO" disabled={!document.available || busy} onClick={() => void openDocument(document)}><FolderOpen size={15}/></button>
-          <button title="Save/download a copy" disabled={!document.available || busy} onClick={() => void saveCopy(document)}><Copy size={15}/></button>
+          <button title={desktop ? 'Save a copy' : 'Export from workspace'} disabled={!document.available || busy} onClick={() => void saveCopy(document)}><Copy size={15}/></button>
           <button title="Refresh metadata" disabled={busy} onClick={() => void refreshDocument(document)}><RefreshCw size={15}/></button>
-          <button title="Remove from library/session" disabled={busy} onClick={() => void remove(document)}><Trash2 size={15}/></button>
+          <button title="Remove from library" disabled={busy} onClick={() => void remove(document)}><Trash2 size={15}/></button>
         </div>
       </div>)}
       {!filtered.length && <div className="library-empty">
         <FolderOpen size={30}/><h3>{documents.length ? 'No matching documents' : 'Your library is empty'}</h3>
-        <p>{documents.length ? 'Change the filter to see other files.' : isDesktopRuntime()
+        <p>{documents.length ? 'Change the filter to see other files.' : desktop
           ? 'Add PDFs, Office files, images, CAD or DICOM documents to begin.'
-          : 'Use Open files and multi-select PDFs or Office files to create multiple document tabs.'}</p>
+          : 'Choose several PDF or Office files to test MALENJO multi-document tabs in Codespaces.'}</p>
       </div>}
     </div>
-  </div>;
+  </div>
 }
