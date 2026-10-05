@@ -390,3 +390,25 @@ Unimplemented master features should not masquerade as working controls.
 ## Completion rule
 
 No future issue, milestone, module badge or user-facing status may call a module `complete` unless its source-of-truth feature manifest reaches full traced coverage or contains an explicit user-approved/legal/technical exclusion.
+
+
+## Completion pass 2B — shell drag/drop and PDF content tools
+
+Implemented on `feat/shell-pdf-completeness-pass-2-final` on top of PR #33:
+
+### Shell / Files
+- Tauri webview native file-drop handling adds dropped paths through the persistent MALENJO library command;
+- Codespaces/browser drag/drop registers temporary session files and opens them into independent document tabs;
+- tab action menu: close, close others, close tabs to right, close all;
+- Ctrl/Cmd+Shift+W closes all tabs with a dirty-document confirmation gate;
+- current Ctrl/Cmd+W single-tab behavior remains.
+
+### PDF
+- local PDF.js full-document text search over up to 500 pages, capped to 100 result pages per search;
+- search-result snippets navigate directly to matching pages;
+- permanent text placement on the current PDF page;
+- permanent highlight or outline rectangle placement;
+- overlay mutations flow through PR #33's bounded per-tab Undo/Redo history;
+- overlay coordinates are validated and tested.
+
+These are operational additions, not source-complete Acrobat/Foxit parity. Visual drag handles, direct existing-text/object editing, comments/true annotation objects, forms, bookmarks, attachments, compare, advanced protect/convert flows and many other master requirements remain open.
