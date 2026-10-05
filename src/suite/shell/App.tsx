@@ -192,7 +192,7 @@ export default function App() {
       <nav>
         {groups.map(group => <section key={group}><h3>{group}</h3>{modules.filter(item=>item.group===group).map(item =>
           <button className={!activeSessionId && active===item.id?'nav-item active':'nav-item'} onClick={()=>selectModule(item.id)} key={item.id}>
-            <span>{item.name}</span><small>{item.status==='ready'?'●':'○'}</small>
+            <span>{item.name}</span><small>{item.status==='complete'?'●':item.status==='partial'?'◐':'○'}</small>
           </button>
         )}</section>)}
       </nav>
