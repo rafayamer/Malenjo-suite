@@ -9,6 +9,8 @@ import {
   Plus,
   Printer,
   RotateCw,
+  Undo2,
+  Redo2,
 } from 'lucide-react';
 import type { DocumentSession } from '../files/session';
 import { isDesktopRuntime } from '../files/api';
@@ -24,6 +26,15 @@ import {
 } from './editor';
 import { disposePdf, loadPdfBytes, type PdfLoadResult } from './engine';
 import {
+  canRedoPdfHistory,
+  canUndoPdfHistory,
+  createPdfHistory,
+  recordPdfHistory,
+  redoPdfHistory,
+  undoPdfHistory,
+  type PdfHistory,
+} from './history';
+import {
   clampPdfPage,
   rotatePdfClockwise,
   stepPdfZoom,
@@ -35,6 +46,7 @@ import { useScrollFps } from './useScrollFps';
 
 interface Props {
   session: DocumentSession | null;
+  active: boolean;
   notice: string;
   onBackToFiles(): void;
   onDirtyChange?(dirty:boolean): void;
@@ -51,7 +63,7 @@ function editedName(name:string,suffix='edited'):string{
   return `${base}-${suffix}.pdf`;
 }
 
-export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyChange }: Props) {
+export default function PdfWorkspace({ session, active, notice, onBackToFiles, onDirtyChange }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const appendInputRef = useRef<HTMLInputElement>(null);
@@ -60,6 +72,7 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
   const loadStartedRef = useRef(0);
   const firstPageReportedRef = useRef(false);
   const previewIdRef = useRef(`pdf-preview-${Math.random().toString(36).slice(2)}`);
+  const historyRef = useRef<PdfHistory | null>(null);
 
   const [pdf, setPdf] = useState<PdfLoadResult | null>(null);
   const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
@@ -78,6 +91,7 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
   const [firstPageMs, setFirstPageMs] = useState<number | null>(null);
   const [forceRenderAll, setForceRenderAll] = useState(false);
   const [viewport, setViewport] = useState({ width: 900, height: 700 });
+  const [historyRevision, setHistoryRevision] = useState(0);
   const scrollFps = useScrollFps(scrollRef);
   const domIdPrefix=session?.id??previewIdRef.current;
 
@@ -115,7 +129,11 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
       setZoom(1);
       setRotation(0);
       setForceRenderAll(false);
-      if(!preserveDirty)setDirty(false);
+      if(!preserveDirty){
+        setDirty(false);
+        historyRef.current=createPdfHistory(owned,1);
+        setHistoryRevision((value)=>value+1);
+      }
     } catch (reason) {
       if (requestId === requestIdRef.current) {
         setPdf(null);
@@ -223,8 +241,13 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
     setError('');
     try{
       const result=await operation(Uint8Array.from(sourceBytes));
+      const targetPage=Math.max(1,preferredPage);
       await installPdf(result,sourceName,browserFile,true);
-      setCurrentPage(Math.max(1,preferredPage));
+      historyRef.current=historyRef.current
+        ? recordPdfHistory(historyRef.current,result,targetPage,label)
+        : recordPdfHistory(createPdfHistory(sourceBytes,currentPage),result,targetPage,label);
+      setHistoryRevision((value)=>value+1);
+      setCurrentPage(targetPage);
       setDirty(true);
       onDirtyChange?.(true);
       setActionNotice(label);
@@ -250,16 +273,85 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
         owned.set(merged);
         result=owned;
       }
+      const label=`Appended ${files.length} PDF file(s).`;
       await installPdf(result,sourceName,browserFile,true);
+      historyRef.current=historyRef.current
+        ? recordPdfHistory(historyRef.current,result,currentPage,label)
+        : recordPdfHistory(createPdfHistory(sourceBytes,currentPage),result,currentPage,label);
+      setHistoryRevision((value)=>value+1);
       setDirty(true);
       onDirtyChange?.(true);
-      setActionNotice(`Appended ${files.length} PDF file(s).`);
+      setActionNotice(label);
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
       setMutating(false);
     }
   }
+
+  async function undoEdit(){
+    const history=historyRef.current;
+    if(!history||mutating||!canUndoPdfHistory(history))return;
+    const undoneLabel=history.entries[history.cursor]?.label??'PDF edit';
+    const transition=undoPdfHistory(history);
+    if(!transition.changed)return;
+    setMutating(true);
+    setError('');
+    try{
+      await installPdf(transition.entry.bytes,sourceName,browserFile,true);
+      historyRef.current=transition.history;
+      setHistoryRevision((value)=>value+1);
+      setCurrentPage(transition.entry.page);
+      setDirty(transition.entry.dirty);
+      onDirtyChange?.(transition.entry.dirty);
+      setActionNotice(`Undid: ${undoneLabel}`);
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }finally{
+      setMutating(false);
+    }
+  }
+
+  async function redoEdit(){
+    const history=historyRef.current;
+    if(!history||mutating||!canRedoPdfHistory(history))return;
+    const transition=redoPdfHistory(history);
+    if(!transition.changed)return;
+    setMutating(true);
+    setError('');
+    try{
+      await installPdf(transition.entry.bytes,sourceName,browserFile,true);
+      historyRef.current=transition.history;
+      setHistoryRevision((value)=>value+1);
+      setCurrentPage(transition.entry.page);
+      setDirty(transition.entry.dirty);
+      onDirtyChange?.(transition.entry.dirty);
+      setActionNotice(`Redid: ${transition.entry.label}`);
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }finally{
+      setMutating(false);
+    }
+  }
+
+  useEffect(()=>{
+    if(!active)return;
+    const onKeyDown=(event:KeyboardEvent)=>{
+      if(!(event.ctrlKey||event.metaKey))return;
+      const target=event.target as HTMLElement|null;
+      if(target?.closest('input,textarea,[contenteditable="true"]'))return;
+      const key=event.key.toLowerCase();
+      if(key==='z'&&!event.shiftKey){
+        event.preventDefault();
+        void undoEdit();
+      }else if((key==='z'&&event.shiftKey)||key==='y'){
+        event.preventDefault();
+        void redoEdit();
+      }
+    };
+    window.addEventListener('keydown',onKeyDown);
+    return()=>window.removeEventListener('keydown',onKeyDown);
+  },[active,historyRevision,mutating]);
 
   async function exportCurrent(){
     if(!sourceBytes){
@@ -326,6 +418,8 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
         <button onClick={onBackToFiles} title="Back to MALENJO Files"><FolderOpen size={16}/> Files</button>
         <button disabled={!!session} onClick={() => fileInputRef.current?.click()} title={session ? "Use Files / Library to open another PDF in a new tab" : "Open a temporary PDF in this workspace"}><FileText size={16}/> Open PDF</button>
         <button disabled={!pdf||mutating} onClick={() => void exportCurrent()} title="Export current PDF bytes"><Download size={16}/> Export</button>
+        <button disabled={!historyRef.current||mutating||!canUndoPdfHistory(historyRef.current)} onClick={()=>void undoEdit()} title="Undo PDF edit (Ctrl+Z)"><Undo2 size={16}/> Undo</button>
+        <button disabled={!historyRef.current||mutating||!canRedoPdfHistory(historyRef.current)} onClick={()=>void redoEdit()} title="Redo PDF edit (Ctrl+Y / Ctrl+Shift+Z)"><Redo2 size={16}/> Redo</button>
         <button disabled={!pdf||mutating} onClick={printDocument} title="Print rendered PDF pages"><Printer size={16}/> Print</button>
       </div>
 
@@ -413,6 +507,7 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
           <div><dt>Size</dt><dd>{sourceBytes ? formatBytes(sourceBytes.byteLength) : session?.document ? formatBytes(session.document.sizeBytes) : '—'}</dd></div>
           <div><dt>Renderer</dt><dd>PDF.js 6.4.299</dd></div>
           <div><dt>Edit state</dt><dd>{dirty?'Modified':'Original'}</dd></div>
+          <div><dt>History</dt><dd>{historyRef.current?`${historyRef.current.cursor+1}/${historyRef.current.entries.length} · ${formatBytes(historyRef.current.totalBytes)}`:'—'}</dd></div>
           <div><dt>View</dt><dd>{fitMode === 'custom' ? `${Math.round(zoom * 100)}%` : fitMode} · {rotation}°</dd></div>
         </dl>
 
