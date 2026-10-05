@@ -197,8 +197,8 @@ export default function App() {
       return <PdfWorkspace
         session={session}
         notice={notice}
-        onSaveAs={() => saveSessionAs(session.id)}
         onBackToFiles={() => selectModule('files')}
+        onDirtyChange={(dirty)=>markSessionDirty(session.id,dirty)}
       />;
     }
     if (route === 'word') {
