@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import { Activity, Command, FilePlus2, FolderOpen, Search, ShieldCheck, Sparkles } from 'lucide-react';
 import { modules } from '../modules/registry';
 import type { ModuleId } from '../core/types';
@@ -208,7 +208,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [activeSessionId, sessions]);
 
-  function handleBrowserDrop(event:React.DragEvent<HTMLElement>){
+  function handleBrowserDrop(event:DragEvent<HTMLElement>){
     if(isDesktopRuntime())return;
     event.preventDefault();
     setDropActive(false);
