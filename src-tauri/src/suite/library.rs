@@ -469,7 +469,8 @@ pub fn save_as_library_document(
     fs::copy(&source, &destination)
         .map_err(|error| format!("Unable to save document copy: {error}"))?;
 
-    let canonical_destination = canonical_user_file(&destination)?;
+    let destination_text = destination.to_string_lossy();
+    let canonical_destination = canonical_user_file(destination_text.as_ref())?;
     let id = make_document_id(&canonical_destination);
     let opened = now_ms();
 
