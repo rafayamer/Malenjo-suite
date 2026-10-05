@@ -102,3 +102,7 @@ export function downloadBrowserDocument(documentId: string, name?: string): void
   anchor.click();
   URL.revokeObjectURL(url);
 }
+
+export function markBrowserDocumentOpened(document: LibraryDocument): LibraryDocument {
+  return openBrowserDocument(document.id);
+}
