@@ -102,8 +102,9 @@ async function deriveKey(password: string, salt: Uint8Array, usages: KeyUsage[])
     false,
     ['deriveKey'],
   );
+  const ownedSalt = Uint8Array.from(salt);
   return crypto.subtle.deriveKey(
-    { name:'PBKDF2', hash:'SHA-256', salt, iterations:PBKDF2_ITERATIONS },
+    { name:'PBKDF2', hash:'SHA-256', salt:ownedSalt.buffer, iterations:PBKDF2_ITERATIONS },
     material,
     { name:'AES-GCM', length:256 },
     false,
@@ -116,7 +117,8 @@ export async function encryptMalenjoEnvelope(bytes: Uint8Array, password: string
   const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
   const key = await deriveKey(password, salt, ['encrypt']);
   const plain = Uint8Array.from(bytes);
-  const cipher = new Uint8Array(await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, plain));
+  const ownedIv = Uint8Array.from(iv);
+  const cipher = new Uint8Array(await crypto.subtle.encrypt({ name:'AES-GCM', iv:ownedIv.buffer }, key, plain.buffer));
   const out = new Uint8Array(MAGIC.length + SALT_BYTES + IV_BYTES + cipher.length);
   out.set(MAGIC, 0);
   out.set(salt, MAGIC.length);
@@ -138,7 +140,9 @@ export async function decryptMalenjoEnvelope(bytes: Uint8Array, password: string
   const cipher = bytes.slice(cipherStart);
   const key = await deriveKey(password, salt, ['decrypt']);
   try {
-    const plain = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, key, cipher);
+    const ownedIv = Uint8Array.from(iv);
+    const ownedCipher = Uint8Array.from(cipher);
+    const plain = await crypto.subtle.decrypt({ name:'AES-GCM', iv:ownedIv.buffer }, key, ownedCipher.buffer);
     return new Uint8Array(plain);
   } catch {
     throw new Error('Unable to decrypt secure envelope. The password or file may be incorrect.');
