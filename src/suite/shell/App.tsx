@@ -12,7 +12,7 @@ import {
   markDocumentSaving,
   type DocumentSession,
 } from '../files/session';
-import type { LibraryDocument } from '../files/types';
+import type { LibraryDocument, LibraryDocumentKind } from '../files/types';
 import { saveAsLibraryDocument } from '../files/api';
 import PdfWorkspace from '../pdf/PdfWorkspace';
 import OfficeWorkspace from '../office/OfficeWorkspace';
@@ -24,6 +24,18 @@ import SignWorkspace from '../security/SignWorkspace';
 import EnterpriseWorkspace from '../enterprise/EnterpriseWorkspace';
 import DocumentTabs from './DocumentTabs';
 import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
+
+function browserKindForFile(file: File): LibraryDocumentKind {
+  const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
+  if (extension === 'pdf') return 'pdf';
+  if (extension === 'docx') return 'docx';
+  if (extension === 'xlsx') return 'xlsx';
+  if (extension === 'pptx') return 'pptx';
+  if (['png','jpg','jpeg','webp','tif','tiff','bmp'].includes(extension)) return 'image';
+  if (['dxf','dwg'].includes(extension)) return 'cad';
+  if (['dcm','dicom'].includes(extension)) return 'dicom';
+  return 'other';
+}
 
 const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
   {label:'Open document', icon: FolderOpen, target:'files'},
@@ -70,6 +82,34 @@ export default function App() {
     setSessions((current) => [...current, session]);
     setActiveSessionId(session.id);
     setActive(workspaceForDocument(document.kind));
+  }
+
+  function openBrowserFiles(files: FileList | File[]) {
+    const list = Array.from(files);
+    if (!list.length) return;
+
+    const created = list.map((file, index) => {
+      const now = Date.now() + index;
+      const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
+      const document: LibraryDocument = {
+        id: `browser-${now.toString(36)}-${Math.random().toString(36).slice(2,8)}`,
+        name: file.name,
+        extension,
+        kind: browserKindForFile(file),
+        sizeBytes: file.size,
+        modifiedMs: file.lastModified || now,
+        addedMs: now,
+        lastOpenedMs: now,
+        available: true,
+        locationLabel: 'Codespaces/browser session',
+      };
+      return createDocumentSession(document, now, file);
+    });
+
+    setSessions((current) => [...current, ...created]);
+    const first = created[0];
+    setActiveSessionId(first.id);
+    setActive(workspaceForDocument(first.document.kind));
   }
 
   function updateSession(sessionId: string, updater: (session: DocumentSession) => DocumentSession) {
@@ -172,7 +212,7 @@ export default function App() {
       run:()=>activateSession(session.id),
     })),
     ...(activeSession ? [
-      ...(!activeSession.document.browserFile ? [{
+      ...(!activeSession.document.browserFile && !['pdf','docx','xlsx','pptx'].includes(activeSession.document.kind) ? [{
         id:'active-save-as',
         label:`Save a copy of ${activeSession.document.name}`,
         group:'Current document',
@@ -197,8 +237,8 @@ export default function App() {
       return <PdfWorkspace
         session={session}
         notice={notice}
-        onSaveAs={() => saveSessionAs(session.id)}
         onBackToFiles={() => selectModule('files')}
+        onDirtyChange={(dirty)=>markSessionDirty(session.id,dirty)}
       />;
     }
     if (route === 'word') {
@@ -281,7 +321,7 @@ export default function App() {
       {!activeSession && (active === 'home'
         ? <Home onSelect={selectModule} onOpen={openFromLibrary}/>
         : active === 'files'
-          ? <FileLibrary onOpen={openFromLibrary}/>
+          ? <FileLibrary onOpen={openFromLibrary} onOpenBrowserFiles={openBrowserFiles}/>
           : active === 'scanner'
             ? <ScannerWorkspace mode="scanner" onBackToFiles={()=>selectModule('files')}/>
             : active === 'ocr'
@@ -348,7 +388,7 @@ function ModuleView({
       <div className="canvas-toolbar">
         <button onClick={onBackToFiles}>Files</button>
         <button disabled={!session?.dirty}>Save</button>
-        <button disabled={!document || session?.saving} onClick={() => void onSaveAs()}>Save As</button>
+        <button disabled={!document || session?.saving || !!document?.browserFile} onClick={() => void onSaveAs()}>Save As</button>
         <button disabled={!document}>Export</button>
         <button disabled={!document}>Print</button>
         <button>More</button>
