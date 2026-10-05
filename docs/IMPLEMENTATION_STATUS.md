@@ -1,6 +1,6 @@
 # Implementation status
 
-This repository contains the **Phase 0–5 executable foundation**, with Phase 6 implemented on its feature branch; this is not a claim that all 300+ pages of the developer guide are already implemented.
+This repository contains the **Phase 0–6 executable foundation**, with Phase 7 implemented on its feature branch; this is not a claim that all 300+ pages of the developer guide are already implemented.
 
 | Area | Status | Next gate |
 |---|---|---|
@@ -12,8 +12,8 @@ This repository contains the **Phase 0–5 executable foundation**, with Phase 6
 | Office | Phase 3 merged and CI-verified | Windows Office/LibreOffice interoperability validation |
 | Scanner/OCR | Phase 4 merged and CI-verified | packaged PaddleOCR/model pack + Windows camera matrix |
 | Local AI | Phase 5 merged and branch CI-verified | post-merge CI + Windows CPU/GPU runtime matrix |
-| Sign/Metadata/Security | Phase 6 implemented on feature branch | CI + Windows ClamAV/pyHanko matrix + persistent secret-store provider |
-| DMS/Automation/Admin | Planned scaffold | data model and policy service implementation |
+| Sign/Metadata/Security | Phase 6 merged and tree-equivalent CI-verified | Windows ClamAV/pyHanko matrix + persistent secret-store provider |
+| DMS/Automation/Admin/Backup | Phase 7 implemented on feature branch | CI + Windows Temporal/Kopia matrix + identity-provider binding |
 | CAD/DICOM | Adapter boundary | optional-pack proof of concept |
 | Packaging | Configured developer targets | signing, SBOM, installer QA, update manifests |
 
@@ -117,4 +117,23 @@ Implemented on `feat/security-signing-phase-6`:
 - append-only native JSONL audit events;
 - security/tamper/error corpus and provenance records.
 
-Phase 6 remains open until CI and post-merge validation pass. Physical Windows ClamAV/pyHanko integration and a persistent Windows Credential Manager/DPAPI provider remain release-quality gates.
+Phase 6 merged through PR #23 after tree-equivalent develop CI #118 passed frontend, Windows Rust and Codespaces/Linux. Physical Windows ClamAV/pyHanko integration and a persistent Windows Credential Manager/DPAPI provider remain release-quality gates.
+
+## Phase 7 evidence — DMS, automation, backup and administration
+
+Implemented on `feat/enterprise-workflows-phase-7`:
+
+- local DMS index and immutable SHA-256 version snapshots;
+- legal hold plus preview/apply retention that protects the newest version;
+- versioned local workflow contracts and native execution;
+- optional fixed-loopback Temporal CLI handoff;
+- verified offline backup with SHA-256 manifest;
+- integrity-gated restore with pre-restore recovery copy;
+- automated restore and tamper-detection tests;
+- optional Kopia snapshot/restore adapter;
+- shared owner/admin/editor/viewer permission model enforced in Rust;
+- shared DMS/audit retention policy;
+- audit retention archives expired events rather than silently discarding them;
+- Phase 6 audit logging reused by enterprise operations.
+
+Phase 7 remains open until CI and post-merge validation pass. Physical Windows Temporal/Kopia testing and multi-user identity-provider binding remain release-quality gates.

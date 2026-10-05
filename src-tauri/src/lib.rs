@@ -2,6 +2,14 @@ mod suite;
 
 use suite::{
     ai::{cancel_local_ai, local_ai_chat, local_ai_status},
+    enterprise::{
+        admin_apply_audit_retention, admin_get_policy, admin_update_policy, automation_list_workflows,
+        automation_run_local, automation_save_workflow, create_local_backup,
+        dms_apply_retention, dms_list_records, dms_register_document,
+        dms_retention_preview, dms_snapshot_record, dms_update_retention,
+        inspect_local_backup, kopia_restore_snapshot, kopia_snapshot_app_state,
+        kopia_status, restore_local_backup, temporal_start_workflow, temporal_status,
+    },
     library::{
         add_library_documents, list_library_documents, open_library_document,
         refresh_library_document, remove_library_document, save_as_library_document,
@@ -67,7 +75,27 @@ pub fn run() {
             clamav_scan_document,
             pyhanko_status,
             pyhanko_validate_document,
-            pyhanko_sign_copy
+            pyhanko_sign_copy,
+            dms_list_records,
+            dms_register_document,
+            dms_snapshot_record,
+            dms_update_retention,
+            dms_retention_preview,
+            dms_apply_retention,
+            admin_get_policy,
+            admin_update_policy,
+            admin_apply_audit_retention,
+            automation_list_workflows,
+            automation_save_workflow,
+            automation_run_local,
+            temporal_status,
+            temporal_start_workflow,
+            create_local_backup,
+            inspect_local_backup,
+            restore_local_backup,
+            kopia_status,
+            kopia_snapshot_app_state,
+            kopia_restore_snapshot
         ])
         .run(tauri::generate_context!())
         .expect("error while running MALENJO Suite");
