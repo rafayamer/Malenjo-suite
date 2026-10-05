@@ -20,6 +20,8 @@ interface Props{
   currentPage:number;
   selectedPages:Set<number>;
   onSelectPage(page:number,additive:boolean,range:boolean):void;
+  onSelectAll():void;
+  onSelectCurrent():void;
   onGoToPage(page:number):void;
   active:boolean;
 }
@@ -41,7 +43,7 @@ function downloadAttachment(item:PdfAttachmentEntry){
 }
 
 export default function PdfNavigationPane({
-  document,pageCount,currentPage,selectedPages,onSelectPage,onGoToPage,active,
+  document,pageCount,currentPage,selectedPages,onSelectPage,onSelectAll,onSelectCurrent,onGoToPage,active,
 }:Props){
   const searchInputRef=useRef<HTMLInputElement>(null);
   const [mode,setMode]=useState<Mode>('pages');
@@ -114,6 +116,8 @@ export default function PdfNavigationPane({
       <div className="pdf-pane-title"><span>Pages</span><b>{pageCount}</b></div>
       <div className="pdf-selection-bar">
         <span>{selectedPages.size||1} selected</span>
+        <button onClick={onSelectAll}>All</button>
+        <button onClick={onSelectCurrent}>Current</button>
       </div>
       <div className="pdf-thumbnail-list">
         {Array.from({length:pageCount},(_,index)=>index+1).map(page=><PdfThumbnail
