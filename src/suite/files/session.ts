@@ -7,9 +7,10 @@ export interface DocumentSession {
   saving: boolean;
   openedAt: number;
   lastSavedAt: number | null;
+  browserFile: File | null;
 }
 
-export function createDocumentSession(document: LibraryDocument, openedAt = Date.now()): DocumentSession {
+export function createDocumentSession(document: LibraryDocument, openedAt = Date.now(), browserFile: File | null = null): DocumentSession {
   return {
     id: `session-${document.id}-${openedAt.toString(36)}`,
     document,
@@ -17,6 +18,7 @@ export function createDocumentSession(document: LibraryDocument, openedAt = Date
     saving: false,
     openedAt,
     lastSavedAt: null,
+    browserFile,
   };
 }
 
