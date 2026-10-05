@@ -56,4 +56,20 @@ describe('document session state', () => {
     expect(saved.saving).toBe(false);
     expect(saved.lastSavedAt).toBe(200);
   });
+  it('pins sessions without changing dirty/save state', () => {
+    const session = markDocumentDirty(createDocumentSession(document, 10));
+    const pinned = setDocumentPinned(session, true);
+    expect(pinned.pinned).toBe(true);
+    expect(pinned.dirty).toBe(true);
+    expect(pinned.lastSavedAt).toBeNull();
+  });
+
+  it('duplicates a document into an independent clean unpinned session', () => {
+    const original = setDocumentPinned(markDocumentDirty(createDocumentSession(document, 10)), true);
+    const duplicate = duplicateDocumentSession(original, 20);
+    expect(duplicate.id).not.toBe(original.id);
+    expect(duplicate.document.id).toBe(original.document.id);
+    expect(duplicate.dirty).toBe(false);
+    expect(duplicate.pinned).toBe(false);
+  });
 });
