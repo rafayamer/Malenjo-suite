@@ -33,4 +33,4 @@ Implemented on `feat/document-library-native-pipeline`:
 - Dirty-state session model for future workspace editors.
 - Rust malformed-path/type tests plus TypeScript routing/session tests.
 
-Remaining before Issue #8 can be considered fully closed: same-file editor commit/staging API, real editor dirty-state wiring, and end-to-end Windows picker/save tests.
+Remaining before Issue #8 can be considered fully closed: real editor dirty-state wiring and end-to-end Windows picker/save tests. A MALENJO-controlled staging/commit API for same-file Save is now implemented.
