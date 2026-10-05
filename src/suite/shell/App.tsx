@@ -13,7 +13,8 @@ import {
   type DocumentSession,
 } from '../files/session';
 import type { LibraryDocument } from '../files/types';
-import { saveAsLibraryDocument } from '../files/api';
+import { addLibraryDocumentsByPaths, isDesktopRuntime, saveAsLibraryDocument } from '../files/api';
+import { markBrowserDocumentOpened, registerBrowserFiles } from '../files/browserStore';
 import PdfWorkspace from '../pdf/PdfWorkspace';
 import OfficeWorkspace from '../office/OfficeWorkspace';
 import ScannerWorkspace from '../scanner/ScannerWorkspace';
@@ -36,6 +37,7 @@ export default function App() {
   const [active, setActive] = useState<ModuleId>('home');
   const [query, setQuery] = useState('');
   const [commandOpen, setCommandOpen] = useState(false);
+  const [dropActive, setDropActive] = useState(false);
   const [sessions, setSessions] = useState<DocumentSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [workspaceNotices, setWorkspaceNotices] = useState<Record<string,string>>({});
@@ -79,6 +81,32 @@ export default function App() {
   function markSessionDirty(sessionId: string, dirty: boolean) {
     if (!dirty) return;
     updateSession(sessionId, markDocumentDirty);
+  }
+
+  function closeSessions(sessionIds: string[]) {
+    const targets=sessions.filter((session)=>sessionIds.includes(session.id));
+    if(!targets.length)return;
+    const dirty=targets.filter((session)=>session.dirty);
+    if(dirty.length&&!window.confirm(`Close ${targets.length} tab(s)? ${dirty.length} contain unsaved edits that will be discarded.`))return;
+
+    const remove=new Set(sessionIds);
+    const remaining=sessions.filter((session)=>!remove.has(session.id));
+    setSessions(remaining);
+    setWorkspaceNotices((current)=>{
+      const next={...current};
+      sessionIds.forEach((id)=>delete next[id]);
+      return next;
+    });
+
+    if(activeSessionId&&!remove.has(activeSessionId))return;
+    const next=remaining.at(-1)??null;
+    if(next){
+      setActiveSessionId(next.id);
+      setActive(workspaceForDocument(next.document.kind));
+    }else{
+      setActiveSessionId(null);
+      setActive('files');
+    }
   }
 
   function closeSession(sessionId: string) {
@@ -130,6 +158,36 @@ export default function App() {
   }
 
   useEffect(() => {
+    if(!isDesktopRuntime())return;
+    let unlisten:(()=>void)|undefined;
+    void import('@tauri-apps/api/webview')
+      .then(({getCurrentWebview})=>getCurrentWebview().onDragDropEvent((event)=>{
+        if(event.payload.type==='over'){
+          setDropActive(true);
+          return;
+        }
+        if(event.payload.type==='leave'){
+          setDropActive(false);
+          return;
+        }
+        if(event.payload.type==='drop'){
+          setDropActive(false);
+          void addLibraryDocumentsByPaths(event.payload.paths)
+            .then((result)=>{
+              result.documents.forEach(openFromLibrary);
+              if(result.errors.length){
+                setWorkspaceNotices((current)=>({...current,__drop:`${result.errors.length} dropped file(s) could not be added.`}));
+              }
+            })
+            .catch((error)=>setWorkspaceNotices((current)=>({...current,__drop:String(error)})));
+        }
+      }))
+      .then((fn)=>{unlisten=fn;})
+      .catch(()=>{});
+    return()=>unlisten?.();
+  },[sessions]);
+
+  useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
@@ -139,11 +197,26 @@ export default function App() {
       if (activeSessionId && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'w') {
         event.preventDefault();
         closeSession(activeSessionId);
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'w') {
+        event.preventDefault();
+        closeSessions(sessions.map((session)=>session.id));
       }
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [activeSessionId, sessions]);
+
+  function handleBrowserDrop(event:React.DragEvent<HTMLElement>){
+    if(isDesktopRuntime())return;
+    event.preventDefault();
+    setDropActive(false);
+    const files=Array.from(event.dataTransfer.files);
+    if(!files.length)return;
+    const documents=registerBrowserFiles(files);
+    documents.forEach((document)=>openFromLibrary(markBrowserDocumentOpened(document)));
+  }
 
   function closeCommandPalette() {
     setCommandOpen(false);
@@ -249,7 +322,14 @@ export default function App() {
       <div className="local-state"><Activity size={16}/><div><b>Local-first</b><span>{sessions.length} document{sessions.length===1?'':'s'} open · network optional</span></div></div>
     </aside>
 
-    <main className="workspace">
+    <main
+      className={dropActive?'workspace drop-active':'workspace'}
+      onDragEnter={(event)=>{if(!isDesktopRuntime()&&event.dataTransfer.types.includes('Files'))setDropActive(true);}}
+      onDragOver={(event)=>{if(!isDesktopRuntime()&&event.dataTransfer.types.includes('Files'))event.preventDefault();}}
+      onDragLeave={(event)=>{if(!isDesktopRuntime()&&event.currentTarget===event.target)setDropActive(false);}}
+      onDrop={handleBrowserDrop}
+    >
+      {dropActive&&<div className="global-drop-overlay"><FolderOpen size={34}/><b>Drop files to open in MALENJO</b><span>{isDesktopRuntime()?'They will be added to the persistent local library.':'They will open as temporary Codespaces/browser sessions.'}</span></div>}
       <header className="topbar">
         <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);setCommandOpen(true);}} placeholder="Search files, tools and commands"/><kbd>Ctrl K</kbd></div>
         <button className="command" onClick={()=>setCommandOpen(true)}><Command size={17}/> Commands</button>
@@ -260,6 +340,12 @@ export default function App() {
         activeSessionId={activeSessionId}
         onActivate={activateSession}
         onClose={closeSession}
+        onCloseOthers={(sessionId)=>closeSessions(sessions.filter((session)=>session.id!==sessionId).map((session)=>session.id))}
+        onCloseRight={(sessionId)=>{
+          const index=sessions.findIndex((session)=>session.id===sessionId);
+          closeSessions(sessions.slice(index+1).map((session)=>session.id));
+        }}
+        onCloseAll={()=>closeSessions(sessions.map((session)=>session.id))}
       />
 
       <CommandPalette
