@@ -21,14 +21,14 @@ export default function DocumentTabs({
   onCloseRight,
   onCloseAll,
 }: Props) {
-  const [menu, setMenu] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{id:string;left:number;top:number} | null>(null);
   if (!sessions.length) return null;
 
   return <div className="document-tabs" role="tablist" aria-label="Open documents">
     <div className="document-tabs-scroll">
       {sessions.map((session, index) => {
         const active = session.id === activeSessionId;
-        const open = menu === session.id;
+        const open = menu?.id === session.id;
         return <div
           className={active ? 'document-tab active' : 'document-tab'}
           key={session.id}
@@ -55,7 +55,18 @@ export default function DocumentTabs({
             aria-label={`Tab actions for ${session.document.name}`}
             title="Tab actions"
             aria-expanded={open}
-            onClick={() => setMenu(open ? null : session.id)}
+            onClick={(event) => {
+              if (open) {
+                setMenu(null);
+                return;
+              }
+              const rect = event.currentTarget.getBoundingClientRect();
+              setMenu({
+                id: session.id,
+                left: Math.max(8, Math.min(window.innerWidth - 168, rect.right - 154)),
+                top: Math.min(window.innerHeight - 150, rect.bottom + 4),
+              });
+            }}
           ><MoreHorizontal size={13}/></button>
           <button
             className="document-tab-close"
@@ -63,7 +74,7 @@ export default function DocumentTabs({
             title="Close"
             onClick={() => onClose(session.id)}
           ><X size={13}/></button>
-          {open && <div className="document-tab-menu" role="menu">
+          {open && menu && <div className="document-tab-menu" role="menu" style={{left:menu.left,top:menu.top}}>
             <button onClick={() => { setMenu(null); onClose(session.id); }}>Close</button>
             <button disabled={sessions.length <= 1} onClick={() => { setMenu(null); onCloseOthers(session.id); }}>Close others</button>
             <button disabled={index === sessions.length - 1} onClick={() => { setMenu(null); onCloseRight(session.id); }}>Close tabs to right</button>
