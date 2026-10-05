@@ -50,7 +50,7 @@ import {
   type PdfFitMode,
 } from './layout';
 import PdfPageCanvas from './PdfPageCanvas';
-import PdfThumbnail from './PdfThumbnail';
+import PdfNavigator from './PdfNavigator';
 import { useScrollFps } from './useScrollFps';
 
 interface Props {
@@ -589,26 +589,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     </div>}
 
     {pdf && <div className="pdf-layout">
-      <aside className="pdf-thumbnails" aria-label="PDF page thumbnails">
-        <div className="pdf-pane-title"><span>Pages</span><b>{pageCount}</b></div>
-        <div className="pdf-selection-bar">
-          <span>{selectedPageNumbers.length || 1} selected</span>
-          <button onClick={()=>{setSelectedPages(new Set(Array.from({length:pageCount},(_,index)=>index+1)));selectionAnchorRef.current=1;}}>All</button>
-          <button onClick={()=>{setSelectedPages(new Set([currentPage]));selectionAnchorRef.current=currentPage;}}>Current</button>
-        </div>
-        <div className="pdf-thumbnail-list">
-          {Array.from({ length: pageCount }, (_, index) => index + 1).map((page) =>
-            <PdfThumbnail
-              key={page}
-              document={pdf.document}
-              pageNumber={page}
-              active={page === currentPage}
-              selected={selectedPages.has(page)}
-              onSelect={selectThumbnail}
-            />
-          )}
-        </div>
-      </aside>
+      <PdfNavigator
+        document={pdf.document}
+        pageCount={pageCount}
+        currentPage={currentPage}
+        selectedPages={selectedPages}
+        onSelectPage={selectThumbnail}
+        onNavigatePage={goToPage}
+      />
 
       <div ref={scrollRef} className="pdf-scroll">
         <div className="pdf-stage">
