@@ -10,12 +10,33 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "title": "MALENJO Suite", "width": 1440, "height": 900, "minWidth": 1080, "minHeight": 700, "resizable": true }],
-    "security": { "csp": "default-src 'self'; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://127.0.0.1:*; script-src 'self'" }
+    "windows": [
+      {
+        "title": "MALENJO Suite",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1080,
+        "minHeight": 700,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: data: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://127.0.0.1:*; script-src 'self' blob:; worker-src 'self' blob:"
+    }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "msi"],
-    "windows": { "nsis": { "installMode": "currentUser" } }
+    "targets": [
+      "nsis",
+      "msi"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
+    "resources": [
+      "../workers/paddleocr/worker.py"
+    ]
   }
 }

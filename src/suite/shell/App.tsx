@@ -10,6 +10,7 @@ import type { LibraryDocument } from '../files/types';
 import { saveAsLibraryDocument } from '../files/api';
 import PdfWorkspace from '../pdf/PdfWorkspace';
 import OfficeWorkspace from '../office/OfficeWorkspace';
+import ScannerWorkspace from '../scanner/ScannerWorkspace';
 
 const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
   {label:'Open document', icon: FolderOpen, target:'files'},
@@ -82,7 +83,11 @@ export default function App() {
                 ? <OfficeWorkspace kind="xlsx" session={session} onBackToFiles={()=>selectModule('files')} onDirtyChange={(dirty)=>setSession((current)=>current && dirty ? markDocumentDirty(current) : current)}/>
                 : active === 'presentation'
                   ? <OfficeWorkspace kind="pptx" session={session} onBackToFiles={()=>selectModule('files')} onDirtyChange={(dirty)=>setSession((current)=>current && dirty ? markDocumentDirty(current) : current)}/>
-                  : <ModuleView module={module} session={session} notice={workspaceNotice} onSaveAs={saveSessionAs} onBackToFiles={()=>selectModule('files')}/>}
+                  : active === 'scanner'
+                    ? <ScannerWorkspace mode="scanner" onBackToFiles={()=>selectModule('files')}/>
+                    : active === 'ocr'
+                      ? <ScannerWorkspace mode="ocr" onBackToFiles={()=>selectModule('files')}/>
+                      : <ModuleView module={module} session={session} notice={workspaceNotice} onSaveAs={saveSessionAs} onBackToFiles={()=>selectModule('files')}/>}
     </main>
   </div>
 }
