@@ -11,7 +11,7 @@ This repository contains the **Phase 0–2 executable foundation**, not a claim 
 | PDF | Phase 2 viewer implemented and CI-verified | Windows rendering/printing verification, then mutation backend proof of concept |
 | Office | Phase 3 editors implemented on feature branch | CI + Windows Office/LibreOffice interoperability validation |
 | Scanner/OCR | Phase 4 pipeline implemented on feature branch | CI + packaged PaddleOCR/model pack + Windows camera matrix |
-| Local AI | Adapter boundary | Ollama/llama.cpp local RAG proof of concept |
+| Local AI | Phase 5 local RAG implemented on feature branch | CI + Windows CPU/GPU runtime matrix |
 | Sign/Invoice/Metadata | Adapter boundary | module-by-module implementation and tests |
 | DMS/Automation/Admin | Planned scaffold | data model and policy service implementation |
 | CAD/DICOM | Adapter boundary | optional-pack proof of concept |
@@ -84,3 +84,21 @@ Implemented on `feat/scanner-ocr-phase-4`:
 - scanner/OCR tests and provenance records.
 
 Phase 4 remains open until CI and post-merge validation pass. Packaged PaddleOCR/model installation and physical Windows camera coverage remain release-quality gates.
+
+## Phase 5 evidence — Malenjo AI local RAG
+
+Implemented on `feat/local-ai-rag-phase-5`:
+
+- local-only Ollama and llama.cpp server adapters;
+- hard-coded loopback endpoints and disabled redirects;
+- model discovery separated from model download/startup;
+- bounded local PDF/Office/text source extraction and chunking;
+- citation-bearing lexical retrieval;
+- grounded prompt construction with untrusted-source boundaries;
+- prompt-injection regression tests;
+- cancellable local inference;
+- Lite Mode memory/context/token limits;
+- explicit runtime/model/resource status UI;
+- no AI/model process launched during MALENJO startup.
+
+Phase 5 remains open until CI and post-merge validation pass. Windows CPU/GPU model-runtime performance and optional model-pack installation remain release-quality gates.
