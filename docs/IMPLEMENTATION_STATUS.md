@@ -8,7 +8,7 @@ This repository is the **Phase 0 / Phase 1 executable foundation**, not a claim 
 | Module registry/navigation | Implemented scaffold | command palette + deeper document routing |
 | Rust native boundary | Phase 1 file-library commands implemented | staged-save/secret-store/update commands |
 | Local service manager | Contract scaffold | supervised subprocess lifecycle + health checks |
-| PDF | Adapter boundary | legally cleared Stirling/PDF.js/PDFBox proof of concept |
+| PDF | Phase 2 viewer implemented on feature branch | CI + Windows rendering/printing verification, then mutation backend proof of concept |
 | Office | Adapter boundary | Tiptap/Univer + OOXML fidelity proof of concept |
 | Scanner/OCR | Adapter boundary | camera + OpenCV + PaddleOCR proof of concept |
 | Local AI | Adapter boundary | Ollama/llama.cpp local RAG proof of concept |
@@ -34,3 +34,19 @@ Implemented on `feat/document-library-native-pipeline`:
 - Rust malformed-path/type tests plus TypeScript routing/session tests.
 
 Remaining before Issue #8 can be considered fully closed: real editor dirty-state wiring and end-to-end Windows picker/save tests. A MALENJO-controlled staging/commit API for same-file Save is now implemented.
+
+## Phase 2 evidence — PDF viewer
+
+Implemented on `feat/pdf-workspace-phase-2`:
+
+- MALENJO-owned three-pane PDF workspace.
+- PDF.js 6.4.299 local worker integration.
+- Native raw-byte PDF IPC boundary with signature and 512 MB safety checks.
+- Lazy page canvas and thumbnail rendering.
+- Page navigation, fit width/page, zoom, rotation, export-copy and print controls.
+- Browser/Codespaces ephemeral PDF preview.
+- First-page render timing and scroll-FPS telemetry.
+- Malformed/active-content fixture corpus.
+- Viewer-only backend capability boundary and third-party provenance.
+
+Phase 2 remains open until branch CI and post-merge validation pass; Windows manual print/render checks remain a release-quality gate.
