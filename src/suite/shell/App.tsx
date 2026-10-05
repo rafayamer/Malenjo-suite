@@ -10,6 +10,7 @@ import {
   markDocumentDirty,
   markDocumentSaved,
   markDocumentSaving,
+  setDocumentDirty,
   type DocumentSession,
 } from '../files/session';
 import type { LibraryDocument } from '../files/types';
@@ -77,8 +78,7 @@ export default function App() {
   }
 
   function markSessionDirty(sessionId: string, dirty: boolean) {
-    if (!dirty) return;
-    updateSession(sessionId, markDocumentDirty);
+    updateSession(sessionId, (session) => setDocumentDirty(session, dirty));
   }
 
   function closeSession(sessionId: string) {
@@ -196,6 +196,7 @@ export default function App() {
     if (route === 'pdf') {
       return <PdfWorkspace
         session={session}
+        active={session.id === activeSessionId}
         notice={notice}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty)=>markSessionDirty(session.id,dirty)}
