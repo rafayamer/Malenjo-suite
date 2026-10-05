@@ -1,6 +1,6 @@
 # Implementation status
 
-This repository contains the **Phase 0–5 executable foundation**, not a claim that all 300+ pages of the developer guide are already implemented.
+This repository contains the **Phase 0–5 executable foundation**, with Phase 6 implemented on its feature branch; this is not a claim that all 300+ pages of the developer guide are already implemented.
 
 | Area | Status | Next gate |
 |---|---|---|
@@ -12,7 +12,7 @@ This repository contains the **Phase 0–5 executable foundation**, not a claim 
 | Office | Phase 3 merged and CI-verified | Windows Office/LibreOffice interoperability validation |
 | Scanner/OCR | Phase 4 merged and CI-verified | packaged PaddleOCR/model pack + Windows camera matrix |
 | Local AI | Phase 5 merged and branch CI-verified | post-merge CI + Windows CPU/GPU runtime matrix |
-| Sign/Invoice/Metadata | Adapter boundary | module-by-module implementation and tests |
+| Sign/Metadata/Security | Phase 6 implemented on feature branch | CI + Windows ClamAV/pyHanko matrix + persistent secret-store provider |
 | DMS/Automation/Admin | Planned scaffold | data model and policy service implementation |
 | CAD/DICOM | Adapter boundary | optional-pack proof of concept |
 | Packaging | Configured developer targets | signing, SBOM, installer QA, update manifests |
@@ -102,3 +102,19 @@ Implemented on `feat/local-ai-rag-phase-5`:
 - no AI/model process launched during MALENJO startup.
 
 Phase 5 merged through PR #21 after hardened-head CI #107 passed across frontend, Windows Rust, and Codespaces/Linux. Post-merge main validation remains required; Windows CPU/GPU model-runtime performance and optional model-pack installation remain release-quality gates.
+
+## Phase 6 evidence — Security Center, Metadata Studio and signing
+
+Implemented on `feat/security-signing-phase-6`:
+
+- PDF/OOXML metadata inspection and sanitized-copy export;
+- destructive rasterized PDF CDR/redaction export;
+- separate content-preserving watermark operation;
+- AES-256-GCM MALENJO secure-envelope export;
+- bounded direct ClamAV adapter with audit events;
+- pyHanko validation and signed-copy adapter;
+- native ephemeral zeroizing signing-secret store;
+- append-only native JSONL audit events;
+- security/tamper/error corpus and provenance records.
+
+Phase 6 remains open until CI and post-merge validation pass. Physical Windows ClamAV/pyHanko integration and a persistent Windows Credential Manager/DPAPI provider remain release-quality gates.
