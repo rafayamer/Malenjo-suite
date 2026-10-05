@@ -23,6 +23,7 @@ import MetadataWorkspace from '../security/MetadataWorkspace';
 import SignWorkspace from '../security/SignWorkspace';
 import EnterpriseWorkspace from '../enterprise/EnterpriseWorkspace';
 import DocumentTabs from './DocumentTabs';
+import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
 
 const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
   {label:'Open document', icon: FolderOpen, target:'files'},
@@ -34,6 +35,7 @@ const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
 export default function App() {
   const [active, setActive] = useState<ModuleId>('home');
   const [query, setQuery] = useState('');
+  const [commandOpen, setCommandOpen] = useState(false);
   const [sessions, setSessions] = useState<DocumentSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [workspaceNotices, setWorkspaceNotices] = useState<Record<string,string>>({});
@@ -129,8 +131,12 @@ export default function App() {
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (!activeSessionId) return;
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'w') {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setCommandOpen(true);
+        return;
+      }
+      if (activeSessionId && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'w') {
         event.preventDefault();
         closeSession(activeSessionId);
       }
@@ -138,6 +144,50 @@ export default function App() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [activeSessionId, sessions]);
+
+  function closeCommandPalette() {
+    setCommandOpen(false);
+    setQuery('');
+  }
+
+  const commandItems: CommandPaletteItem[] = [
+    { id:'go-home', label:'Home', group:'Navigation', keywords:'start dashboard', run:()=>selectModule('home') },
+    { id:'go-files', label:'Open Files / Library', group:'Navigation', keywords:'open import documents', run:()=>selectModule('files') },
+    { id:'go-scan', label:'Scan document', group:'Tools', keywords:'camera capture scanner', run:()=>selectModule('scanner') },
+    { id:'go-ocr', label:'OCR document', group:'Tools', keywords:'recognize searchable text', run:()=>selectModule('ocr') },
+    { id:'go-ai', label:'Ask Malenjo AI', group:'Tools', keywords:'local rag ollama llama', run:()=>selectModule('ai') },
+    { id:'go-sign', label:'Sign / validate PDF', group:'Tools', keywords:'signature certificate pyhanko', run:()=>selectModule('sign') },
+    { id:'go-meta', label:'Open Metadata Studio', group:'Tools', keywords:'properties privacy sanitize metadata', run:()=>selectModule('metadata') },
+    { id:'go-security', label:'Open Security Center', group:'Tools', keywords:'protect cdr redact clamav encrypt', run:()=>selectModule('security') },
+    { id:'go-auto', label:'Run automation', group:'Enterprise', keywords:'workflow temporal', run:()=>selectModule('automation') },
+    { id:'go-dms', label:'Open Enterprise DMS', group:'Enterprise', keywords:'versions retention records', run:()=>selectModule('dms') },
+    { id:'go-backup', label:'Open Backup / DR', group:'Enterprise', keywords:'backup restore recovery kopia', run:()=>selectModule('backup') },
+    { id:'go-admin', label:'Open Administration', group:'Enterprise', keywords:'roles permissions policy', run:()=>selectModule('admin') },
+    ...sessions.map((session) => ({
+      id:`tab-${session.id}`,
+      label:`Switch to ${session.document.name}`,
+      group:'Open documents',
+      detail:`${session.document.kind.toUpperCase()} · ${session.dirty ? 'unsaved changes' : 'saved'}`,
+      keywords:`${session.document.name} ${session.document.kind}`,
+      run:()=>activateSession(session.id),
+    })),
+    ...(activeSession ? [
+      {
+        id:'active-save-as',
+        label:`Save a copy of ${activeSession.document.name}`,
+        group:'Current document',
+        keywords:'save as export copy',
+        run:()=>{ void saveSessionAs(activeSession.id); },
+      },
+      {
+        id:'active-close',
+        label:`Close ${activeSession.document.name}`,
+        group:'Current document',
+        keywords:'close tab',
+        run:()=>closeSession(activeSession.id),
+      },
+    ] : []),
+  ];
 
   function renderDocumentWorkspace(session: DocumentSession) {
     const route = workspaceForDocument(session.document.kind);
@@ -201,8 +251,8 @@ export default function App() {
 
     <main className="workspace">
       <header className="topbar">
-        <div className="search"><Search size={17}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search files, tools and commands"/><kbd>Ctrl K</kbd></div>
-        <button className="command"><Command size={17}/> Commands</button>
+        <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);setCommandOpen(true);}} placeholder="Search files, tools and commands"/><kbd>Ctrl K</kbd></div>
+        <button className="command" onClick={()=>setCommandOpen(true)}><Command size={17}/> Commands</button>
       </header>
 
       <DocumentTabs
@@ -210,6 +260,14 @@ export default function App() {
         activeSessionId={activeSessionId}
         onActivate={activateSession}
         onClose={closeSession}
+      />
+
+      <CommandPalette
+        open={commandOpen}
+        query={query}
+        items={commandItems}
+        onQueryChange={setQuery}
+        onClose={closeCommandPalette}
       />
 
       {activeSession
