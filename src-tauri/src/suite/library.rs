@@ -60,6 +60,15 @@ pub struct ImportResult {
     pub errors: Vec<ImportError>,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StagedDocument {
+    pub token: String,
+    pub document_id: String,
+    pub name: String,
+    pub extension: String,
+}
+
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -90,6 +99,28 @@ fn library_dir(app: &AppHandle) -> Result<PathBuf, String> {
 
 fn index_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(library_dir(app)?.join("index.json"))
+}
+
+fn staging_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = library_dir(app)?.join("staging");
+    fs::create_dir_all(&dir)
+        .map_err(|error| format!("Unable to create MALENJO staging directory: {error}"))?;
+    Ok(dir)
+}
+
+fn validate_staging_token(token: &str) -> Result<(), String> {
+    if token.is_empty() || token.len() > 128 {
+        return Err("Invalid MALENJO staging token.".into());
+    }
+    if !token.chars().all(|value| value.is_ascii_alphanumeric() || value == '-') {
+        return Err("Invalid MALENJO staging token.".into());
+    }
+    Ok(())
+}
+
+fn staging_path(app: &AppHandle, token: &str) -> Result<PathBuf, String> {
+    validate_staging_token(token)?;
+    Ok(staging_dir(app)?.join(token))
 }
 
 fn load_index(app: &AppHandle) -> Result<LibraryIndex, String> {
@@ -383,9 +414,104 @@ pub fn save_as_library_document(
     Ok(result)
 }
 
+
+#[tauri::command]
+pub fn stage_library_document(app: AppHandle, document_id: String) -> Result<StagedDocument, String> {
+    let index = load_index(&app)?;
+    let entry = find_entry(&index, &document_id)?;
+    let source = canonical_user_file(&entry.path)?;
+    let public = public_document(entry);
+    let token = format!("{}-{:x}", document_id, now_ms());
+    let stage = staging_path(&app, &token)?;
+
+    fs::copy(&source, &stage)
+        .map_err(|error| format!("Unable to create MALENJO edit staging copy: {error}"))?;
+
+    Ok(StagedDocument {
+        token,
+        document_id,
+        name: public.name,
+        extension: public.extension,
+    })
+}
+
+#[tauri::command]
+pub fn commit_staged_document(
+    app: AppHandle,
+    document_id: String,
+    staging_token: String,
+) -> Result<LibraryDocument, String> {
+    validate_staging_token(&staging_token)?;
+    if !staging_token.starts_with(&format!("{}-", document_id)) {
+        return Err("Staging token does not belong to this document.".into());
+    }
+
+    let stage = staging_path(&app, &staging_token)?;
+    let stage_metadata = fs::symlink_metadata(&stage)
+        .map_err(|error| format!("MALENJO staging copy is unavailable: {error}"))?;
+    if stage_metadata.file_type().is_symlink() || !stage_metadata.is_file() {
+        return Err("MALENJO staging copy is not a regular file.".into());
+    }
+
+    let mut index = load_index(&app)?;
+    let entry = find_entry_mut(&mut index, &document_id)?;
+    let source = canonical_user_file(&entry.path)?;
+    let file_name = source
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "Source document has an invalid file name.".to_string())?;
+    let backup = source.with_file_name(format!("{file_name}.malenjo-save-backup"));
+
+    if backup.exists() {
+        fs::remove_file(&backup)
+            .map_err(|error| format!("Unable to clear stale MALENJO save backup: {error}"))?;
+    }
+
+    fs::copy(&source, &backup)
+        .map_err(|error| format!("Unable to create MALENJO save backup: {error}"))?;
+
+    let write_result = fs::copy(&stage, &source)
+        .map_err(|error| format!("Unable to commit document save: {error}"));
+
+    if let Err(error) = write_result {
+        let _ = fs::copy(&backup, &source);
+        let _ = fs::remove_file(&backup);
+        return Err(error);
+    }
+
+    if let Ok(file) = fs::OpenOptions::new().read(true).open(&source) {
+        let _ = file.sync_all();
+    }
+
+    fs::remove_file(&backup)
+        .map_err(|error| format!("Document saved, but cleanup of the temporary backup failed: {error}"))?;
+    let _ = fs::remove_file(&stage);
+
+    entry.last_opened_ms = Some(now_ms());
+    let document = public_document(entry);
+    save_index(&app, &index)?;
+    Ok(document)
+}
+
+#[tauri::command]
+pub fn discard_staged_document(app: AppHandle, staging_token: String) -> Result<bool, String> {
+    let stage = staging_path(&app, &staging_token)?;
+    if !stage.exists() {
+        return Ok(false);
+    }
+    let metadata = fs::symlink_metadata(&stage)
+        .map_err(|error| format!("Unable to inspect MALENJO staging copy: {error}"))?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err("MALENJO staging copy is not a regular file.".into());
+    }
+    fs::remove_file(stage)
+        .map_err(|error| format!("Unable to discard MALENJO staging copy: {error}"))?;
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{classify_extension, fnv1a64, validate_requested_path};
+    use super::{classify_extension, fnv1a64, validate_requested_path, validate_staging_token};
 
     #[test]
     fn maps_supported_document_extensions() {
@@ -408,5 +534,12 @@ mod tests {
     fn rejects_malformed_requested_paths() {
         assert!(validate_requested_path("").is_err());
         assert!(validate_requested_path("bad\0path.pdf").is_err());
+    }
+
+    #[test]
+    fn rejects_path_like_staging_tokens() {
+        assert!(validate_staging_token("doc-123-abc").is_ok());
+        assert!(validate_staging_token("../escape").is_err());
+        assert!(validate_staging_token("bad/token").is_err());
     }
 }
