@@ -1,6 +1,6 @@
 # Implementation status
 
-This repository contains the **Phase 0–2 executable foundation**, not a claim that all 300+ pages of the developer guide are already implemented.
+This repository contains the **Phase 0–4 executable foundation**, with Phase 5 implemented on its feature branch; this is not a claim that all 300+ pages of the developer guide are already implemented.
 
 | Area | Status | Next gate |
 |---|---|---|
@@ -9,9 +9,9 @@ This repository contains the **Phase 0–2 executable foundation**, not a claim 
 | Rust native boundary | Phase 1 file-library commands implemented | staged-save/secret-store/update commands |
 | Local service manager | Contract scaffold | supervised subprocess lifecycle + health checks |
 | PDF | Phase 2 viewer implemented and CI-verified | Windows rendering/printing verification, then mutation backend proof of concept |
-| Office | Phase 3 editors implemented on feature branch | CI + Windows Office/LibreOffice interoperability validation |
-| Scanner/OCR | Phase 4 pipeline implemented on feature branch | CI + packaged PaddleOCR/model pack + Windows camera matrix |
-| Local AI | Adapter boundary | Ollama/llama.cpp local RAG proof of concept |
+| Office | Phase 3 merged and CI-verified | Windows Office/LibreOffice interoperability validation |
+| Scanner/OCR | Phase 4 merged and CI-verified | packaged PaddleOCR/model pack + Windows camera matrix |
+| Local AI | Phase 5 local RAG implemented on feature branch | CI + Windows Ollama/llama.cpp model matrix |
 | Sign/Invoice/Metadata | Adapter boundary | module-by-module implementation and tests |
 | DMS/Automation/Admin | Planned scaffold | data model and policy service implementation |
 | CAD/DICOM | Adapter boundary | optional-pack proof of concept |
@@ -66,7 +66,7 @@ Implemented on `feat/office-workspaces-phase-3`:
 - fflate 0.8.3 MIT provenance.
 - No mandatory LibreOffice/Java conversion service at startup.
 
-Phase 3 remains open until CI and post-merge validation pass. Manual Microsoft Office/LibreOffice interoperability remains a release-quality fidelity gate.
+Phase 3 merged through PR #19 and post-merge main CI #100 passed. Manual Microsoft Office/LibreOffice interoperability remains a release-quality fidelity gate.
 
 ## Phase 4 evidence — Scanner/OCR
 
@@ -83,4 +83,21 @@ Implemented on `feat/scanner-ocr-phase-4`:
 - text export and searchable PDF via pdf-lib 1.17.1;
 - scanner/OCR tests and provenance records.
 
-Phase 4 remains open until CI and post-merge validation pass. Packaged PaddleOCR/model installation and physical Windows camera coverage remain release-quality gates.
+Phase 4 merged through PR #20 and post-merge main CI #103 passed. Packaged PaddleOCR/model installation and physical Windows camera coverage remain release-quality gates.
+
+## Phase 5 evidence — Malenjo AI local RAG
+
+Implemented on `feat/local-ai-phase-5`:
+
+- local PDF/Office/text source extraction;
+- bounded Standard/Lite chunk indexes;
+- deterministic local retrieval with source locators;
+- escaped untrusted-source prompt wrappers and injection tests;
+- Ollama loopback runtime discovery/chat;
+- llama.cpp OpenAI-compatible runtime adapter;
+- explicit installed-model/resource status;
+- request cancellation;
+- model download/weight separation;
+- no runtime or model launch at MALENJO startup.
+
+Phase 5 remains open until CI and post-merge validation pass. Manual Windows runtime/model quality and memory testing remain release-quality gates.
