@@ -1,0 +1,9 @@
+%PDF-1.7
+% Synthetic active-content fixture for MALENJO security testing.
+1 0 obj
+<< /Type /Catalog /OpenAction 2 0 R >>
+endobj
+2 0 obj
+<< /S /JavaScript /JS (app.alert\(MALENJO_TEST_ONLY\)) >>
+endobj
+%%EOF
