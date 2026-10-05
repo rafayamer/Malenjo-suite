@@ -6,7 +6,7 @@ import {
 import { listLibraryDocuments } from '../files/api';
 import type { LibraryDocument } from '../files/types';
 import {
-  applyRetention, createBackupWithPicker, enterpriseNative, getEnterprisePolicy,
+  applyAuditRetention, applyRetention, createBackupWithPicker, enterpriseNative, getEnterprisePolicy,
   inspectBackupWithPicker, kopiaSnapshot, kopiaStatus, listDmsRecords, listWorkflows,
   previewRetention, registerDmsDocument, restoreBackup, runLocalWorkflow, saveWorkflow,
   snapshotDmsRecord, startTemporalWorkflow, temporalStatus, updateDmsRetention,
@@ -173,8 +173,11 @@ function AdminPanel(){
   async function save(){
     if(!policy)return;setBusy(true);setError('');try{const next=await updateEnterprisePolicy(policy.currentRole,retention,auditDays);setPolicy(next);setNotice('Shared enterprise policy updated.');}catch(reason){setError(String(reason));}finally{setBusy(false);}
   }
+  async function rotateAudit(){
+    setBusy(true);setError('');try{const result=await applyAuditRetention();setNotice(`Audit retention archived ${result.archived} old event(s) and kept ${result.kept}.`);}catch(reason){setError(String(reason));}finally{setBusy(false);}
+  }
   return <><Message error={error} notice={notice}/><div className="enterprise-grid">
-    <section className="enterprise-card"><h2><ShieldCheck size={18}/> Shared policy</h2>{policy?<><label>Active local role<input value={policy.currentRole} disabled/></label><label>Default DMS retention days<input type="number" min="0" max="36500" value={retention} onChange={e=>setRetention(Number(e.target.value))}/></label><label>Audit retention target days<input type="number" min="0" max="36500" value={auditDays} onChange={e=>setAuditDays(Number(e.target.value))}/></label><button disabled={busy} onClick={()=>void save()}><Save size={15}/> Save policy</button></>:<p>Native policy unavailable.</p>}<div className="security-warning">Phase 7 uses a single local active role for policy enforcement. Multi-user identity binding arrives with the future identity provider layer; the UI does not allow lowering the active role and accidentally locking out the local owner.</div></section>
+    <section className="enterprise-card"><h2><ShieldCheck size={18}/> Shared policy</h2>{policy?<><label>Active local role<input value={policy.currentRole} disabled/></label><label>Default DMS retention days<input type="number" min="0" max="36500" value={retention} onChange={e=>setRetention(Number(e.target.value))}/></label><label>Audit retention target days<input type="number" min="0" max="36500" value={auditDays} onChange={e=>setAuditDays(Number(e.target.value))}/></label><div className="enterprise-actions"><button disabled={busy} onClick={()=>void save()}><Save size={15}/> Save policy</button><button disabled={busy} onClick={()=>void rotateAudit()}>Apply audit retention</button></div></>:<p>Native policy unavailable.</p>}<div className="security-warning">Phase 7 uses a single local active role for policy enforcement. Multi-user identity binding arrives with the future identity provider layer; the UI does not allow lowering the active role and accidentally locking out the local owner.</div></section>
     <section className="enterprise-card records-card"><h2>Role permissions</h2><div className="role-grid">{profiles.map(profile=><article key={profile.role}><strong>{profile.role}</strong>{profile.permissions.map(permission=><span key={permission}>{permission}</span>)}</article>)}</div></section>
   </div></>;
 }
