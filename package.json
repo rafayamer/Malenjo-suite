@@ -12,7 +12,8 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "typecheck": "tsc -b --pretty false",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify:codespace": "bash scripts/verify-codespace.sh"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.1",
