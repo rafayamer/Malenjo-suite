@@ -3,6 +3,7 @@ import { Activity, Command, FilePlus2, FolderOpen, Search, ShieldCheck, Sparkles
 import { modules } from '../modules/registry';
 import type { ModuleId } from '../core/types';
 import FileLibrary from '../files/FileLibrary';
+import RecentDocuments from '../files/RecentDocuments';
 import { workspaceForDocument } from '../files/route';
 import { createDocumentSession, type DocumentSession } from '../files/session';
 import type { LibraryDocument } from '../files/types';
@@ -51,7 +52,7 @@ export default function App() {
       </header>
 
       {active === 'home'
-        ? <Home onSelect={selectModule}/>
+        ? <Home onSelect={selectModule} onOpen={openFromLibrary}/>
         : active === 'files'
           ? <FileLibrary onOpen={openFromLibrary}/>
           : <ModuleView module={module} session={session} onBackToFiles={()=>selectModule('files')}/>}
@@ -59,12 +60,13 @@ export default function App() {
   </div>
 }
 
-function Home({onSelect}:{onSelect:(id:ModuleId)=>void}) {
+function Home({onSelect,onOpen}:{onSelect:(id:ModuleId)=>void;onOpen:(document:LibraryDocument)=>void}) {
   return <div className="content">
     <div className="hero"><div><p className="eyebrow">LOCAL-FIRST DOCUMENT PLATFORM</p><h1>Your documents. One private workspace.</h1><p>MALENJO combines PDF, Office, OCR, private AI, signing, metadata, automation and enterprise tools behind one consistent desktop shell.</p></div><div className="hero-mark">M</div></div>
     <div className="quick-grid">{quick.map(({label,icon:Icon,target})=><button key={label} onClick={()=>onSelect(target)}><Icon size={21}/><span>{label}</span></button>)}</div>
     <div className="section-head"><div><h2>Workspaces</h2><p>Heavy engines are adapters and load only when a task needs them.</p></div><span className="pill">All student features enabled</span></div>
     <div className="module-grid">{modules.filter(item=>!['home','settings','account','help'].includes(item.id)).map(item=><button className="module-card" key={item.id} onClick={()=>onSelect(item.id)}><div className="card-top"><span className={'status '+item.status}>{item.status}</span><span>↗</span></div><h3>{item.name}</h3><p>{item.description}</p><footer>{item.engine}</footer></button>)}</div>
+      <RecentDocuments onOpen={onOpen} onViewAll={()=>onSelect('files')}/>
   </div>
 }
 
