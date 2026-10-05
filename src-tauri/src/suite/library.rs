@@ -172,7 +172,7 @@ fn fnv1a64(value: &str) -> u64 {
     hash
 }
 
-fn document_id(path: &Path) -> String {
+fn make_document_id(path: &Path) -> String {
     let normalized = path.to_string_lossy().replace('\\', "/").to_lowercase();
     format!("doc-{:016x}", fnv1a64(&normalized))
 }
@@ -267,7 +267,7 @@ pub fn add_library_documents(app: AppHandle, paths: Vec<String>) -> Result<Impor
     for requested in paths {
         match canonical_user_file(&requested) {
             Ok(path) => {
-                let id = document_id(&path);
+                let id = make_document_id(&path);
                 if let Some(existing) = index.documents.iter().find(|entry| entry.id == id) {
                     documents.push(public_document(existing));
                     continue;
@@ -361,7 +361,7 @@ pub fn save_as_library_document(
         .map_err(|error| format!("Unable to save document copy: {error}"))?;
 
     let canonical_destination = canonical_user_file(&destination)?;
-    let id = document_id(&canonical_destination);
+    let id = make_document_id(&canonical_destination);
     let opened = now_ms();
 
     if let Some(existing) = index.documents.iter_mut().find(|entry| entry.id == id) {
