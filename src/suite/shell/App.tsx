@@ -102,6 +102,8 @@ export default function App() {
         lastOpenedMs: now,
         available: true,
         locationLabel: 'Codespaces/browser session',
+        browserFile: file,
+        ephemeral: true,
       };
       return createDocumentSession(document, now, file);
     });
