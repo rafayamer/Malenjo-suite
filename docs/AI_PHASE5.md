@@ -111,3 +111,16 @@ Ollama and llama.cpp are external optional runtimes and are not vendored by Phas
 - [x] cloud-routed model IDs disabled.
 - [x] CI validation (PR CI #104: frontend, Windows Rust, Codespaces/Linux all passed).
 - [ ] physical Windows GPU/CPU model-runtime performance matrix.
+
+
+## Merge record
+
+Phase 5 was merged to `main` through PR #21 in commit `49a96f311252313cc32cd7692e72ea2c22e6486f`.
+
+The exact hardened PR head passed CI #107 across:
+
+- frontend typecheck, unit tests and production build;
+- Windows Rust `cargo check` and Rust unit tests;
+- Codespaces/Linux `cargo check` and Rust unit tests.
+
+Post-merge `main` CI remains the final repository-state gate.
