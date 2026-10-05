@@ -103,6 +103,7 @@ export default function PdfPageCanvas({
         canvas.style.height = `${Math.floor(viewport.height)}px`;
 
         renderTask = page.render({
+          canvas,
           canvasContext: context,
           viewport,
           transform: dpr === 1 ? undefined : [dpr, 0, 0, dpr, 0, 0],
