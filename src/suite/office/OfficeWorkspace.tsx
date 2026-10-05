@@ -49,11 +49,17 @@ export default function OfficeWorkspace({ kind, session, onBackToFiles, onDirtyC
     onDirtyChange?.(false);
 
     const document = session?.document;
-    if (!document || document.kind !== kind || !isDesktopRuntime()) return;
+    if (!document || document.kind !== kind) return;
 
     let cancelled = false;
     setLoading(true);
-    void readOfficeDocument(document.id)
+    const load = document.browserFile
+      ? document.browserFile.arrayBuffer()
+      : isDesktopRuntime()
+        ? readOfficeDocument(document.id)
+        : Promise.reject(new Error('This document has no browser source or native library source.'));
+
+    void load
       .then((buffer) => {
         if (cancelled) return;
         const bytes = new Uint8Array(buffer);
