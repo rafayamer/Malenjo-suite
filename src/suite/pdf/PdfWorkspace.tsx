@@ -101,9 +101,21 @@ export default function PdfWorkspace({ session, notice, onSaveAs, onBackToFiles 
 
   useEffect(() => {
     const document = session?.document;
-    if (!document || document.kind !== 'pdf' || !isDesktopRuntime()) return;
+    if (!document || document.kind !== 'pdf') return;
 
     let cancelled = false;
+    if (document.browserFile) {
+      void document.browserFile.arrayBuffer()
+        .then((bytes) => {
+          if (!cancelled) return installPdf(bytes, document.name, document.browserFile ?? null);
+        })
+        .catch((reason) => {
+          if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason));
+        });
+      return () => { cancelled = true; };
+    }
+
+    if (!isDesktopRuntime()) return;
     void readPdfDocumentBytes(document.id)
       .then((bytes) => {
         if (!cancelled) return installPdf(bytes, document.name);
