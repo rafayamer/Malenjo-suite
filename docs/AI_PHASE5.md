@@ -109,5 +109,5 @@ Ollama and llama.cpp are external optional runtimes and are not vendored by Phas
 - [x] prompt-injection/untrusted-document tests.
 - [x] no AI/model startup at application startup.
 - [x] cloud-routed model IDs disabled.
-- [ ] CI validation.
+- [x] CI validation (PR CI #104: frontend, Windows Rust, Codespaces/Linux all passed).
 - [ ] physical Windows GPU/CPU model-runtime performance matrix.
