@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { DocumentSession } from '../files/session';
 import { isDesktopRuntime } from '../files/api';
+import { getBrowserDocumentFile, readBrowserDocumentBytes } from '../files/browserStore';
 import { exportPdfBytes, readPdfDocumentBytes } from './api';
 import {
   appendPdf,
@@ -134,9 +135,15 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
 
     let cancelled = false;
 
-    if (document.browserFile) {
-      const file = document.browserFile;
-      void file.arrayBuffer()
+    if (document.runtimeSource === 'browser-session') {
+      let file: File;
+      try {
+        file = getBrowserDocumentFile(document.id);
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : String(reason));
+        return;
+      }
+      void readBrowserDocumentBytes(document.id)
         .then((bytes) => {
           if (!cancelled) return installPdf(bytes, document.name, file);
         })
@@ -146,7 +153,10 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
       return () => { cancelled = true; };
     }
 
-    if (!isDesktopRuntime()) return;
+    if (!isDesktopRuntime()) {
+      setError('This PDF is not backed by a browser-session file or the native MALENJO library.');
+      return;
+    }
 
     void readPdfDocumentBytes(document.id)
       .then((bytes) => {
