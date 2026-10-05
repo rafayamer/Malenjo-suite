@@ -49,4 +49,4 @@ Implemented on `feat/pdf-workspace-phase-2`:
 - Malformed/active-content fixture corpus.
 - Viewer-only backend capability boundary and third-party provenance.
 
-Phase 2 branch CI passed across frontend, Windows Rust, and Codespaces/Linux. Post-merge validation remains required; Windows manual print/render checks remain a release-quality gate.
+Phase 2 branch CI and post-merge main CI #93 passed across frontend, Windows Rust, and Codespaces/Linux. Windows manual print/render checks remain a release-quality gate.
