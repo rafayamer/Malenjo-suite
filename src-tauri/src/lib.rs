@@ -3,7 +3,7 @@ mod suite;
 use suite::{
     ai::{cancel_local_ai, local_ai_chat, local_ai_status},
     enterprise::{
-        admin_get_policy, admin_update_policy, automation_list_workflows,
+        admin_apply_audit_retention, admin_get_policy, admin_update_policy, automation_list_workflows,
         automation_run_local, automation_save_workflow, create_local_backup,
         dms_apply_retention, dms_list_records, dms_register_document,
         dms_retention_preview, dms_snapshot_record, dms_update_retention,
@@ -84,6 +84,7 @@ pub fn run() {
             dms_apply_retention,
             admin_get_policy,
             admin_update_policy,
+            admin_apply_audit_retention,
             automation_list_workflows,
             automation_save_workflow,
             automation_run_local,
