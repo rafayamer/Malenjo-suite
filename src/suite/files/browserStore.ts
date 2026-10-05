@@ -1,11 +1,6 @@
 import type { LibraryDocument, LibraryDocumentKind } from './types';
 
-interface BrowserEntry {
-  document: LibraryDocument;
-  file: File;
-}
-
-const entries = new Map<string, BrowserEntry>();
+const entries = new Map<string, LibraryDocument>();
 
 function kindFromExtension(extension: string): LibraryDocumentKind {
   switch (extension) {
@@ -35,10 +30,10 @@ function token(): string {
 
 export function registerBrowserFiles(files: FileList | File[]): LibraryDocument[] {
   return Array.from(files).map((file) => {
-    const id = token();
+    const id = `browser-${token()}`;
     const extension = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : '';
     const document: LibraryDocument = {
-      id: `browser-${id}`,
+      id,
       name: file.name,
       extension,
       kind: kindFromExtension(extension),
@@ -48,35 +43,26 @@ export function registerBrowserFiles(files: FileList | File[]): LibraryDocument[
       lastOpenedMs: null,
       available: true,
       locationLabel: 'Codespaces/browser session',
-      runtimeSource: 'browser-session',
-      runtimeToken: id,
+      browserFile: file,
+      ephemeral: true,
     };
-    entries.set(id, { document, file });
+    entries.set(id, document);
     return document;
   });
 }
 
 export function listBrowserDocuments(): LibraryDocument[] {
-  return Array.from(entries.values())
-    .map((entry) => entry.document)
-    .sort((a, b) => b.addedMs - a.addedMs);
-}
-
-export function getBrowserFile(runtimeToken: string | undefined): File | null {
-  if (!runtimeToken) return null;
-  return entries.get(runtimeToken)?.file ?? null;
+  return Array.from(entries.values()).sort((a, b) => b.addedMs - a.addedMs);
 }
 
 export function markBrowserDocumentOpened(document: LibraryDocument): LibraryDocument {
-  if (document.runtimeSource !== 'browser-session' || !document.runtimeToken) return document;
-  const entry = entries.get(document.runtimeToken);
-  if (!entry) return document;
-  const next = { ...entry.document, lastOpenedMs: Date.now() };
-  entries.set(document.runtimeToken, { ...entry, document: next });
+  const current = entries.get(document.id);
+  if (!current) return document;
+  const next = { ...current, lastOpenedMs: Date.now() };
+  entries.set(document.id, next);
   return next;
 }
 
 export function removeBrowserDocument(document: LibraryDocument): boolean {
-  if (document.runtimeSource !== 'browser-session' || !document.runtimeToken) return false;
-  return entries.delete(document.runtimeToken);
+  return entries.delete(document.id);
 }
