@@ -70,7 +70,7 @@ export default function OfficeWorkspace({ kind, session, onBackToFiles, onDirtyC
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [kind, onDirtyChange, session]);
+  }, [kind, session]);
 
   function markDirty(next: OfficeModel) {
     setModel(next);
