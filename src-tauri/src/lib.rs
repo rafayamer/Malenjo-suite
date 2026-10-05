@@ -11,6 +11,11 @@ use suite::{
     office::{read_office_document, write_office_copy},
     ocr::{cancel_paddle_ocr, paddle_ocr_image, paddle_ocr_status},
     pdf::read_pdf_document,
+    security::{
+        clamav_scan_document, clamav_status, clear_ephemeral_secret, list_audit_events,
+        pyhanko_sign_copy, pyhanko_status, pyhanko_validate_document, record_audit_event,
+        store_ephemeral_secret, SecurityState,
+    },
 };
 
 #[tauri::command]
@@ -31,6 +36,7 @@ fn local_service_catalog() -> Vec<suite::local_services::ServiceDescriptor> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(SecurityState::default())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             system_status,
@@ -52,7 +58,16 @@ pub fn run() {
             cancel_paddle_ocr,
             local_ai_status,
             local_ai_chat,
-            cancel_local_ai
+            cancel_local_ai,
+            record_audit_event,
+            list_audit_events,
+            store_ephemeral_secret,
+            clear_ephemeral_secret,
+            clamav_status,
+            clamav_scan_document,
+            pyhanko_status,
+            pyhanko_validate_document,
+            pyhanko_sign_copy
         ])
         .run(tauri::generate_context!())
         .expect("error while running MALENJO Suite");
