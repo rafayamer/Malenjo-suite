@@ -12,7 +12,7 @@ MALENJO PDF rendering adapter.
 
 ## Security profile
 
-The adapter loads byte arrays provided by MALENJO, disables PDF.js eval support, and does not register the upstream scripting service. Rendering failures are surfaced inside the workspace rather than crashing the shell.
+The adapter loads byte arrays provided by MALENJO and does not register the upstream scripting service. Rendering failures are surfaced inside the workspace rather than crashing the shell.
 
 ## Boundary
 
