@@ -12,7 +12,7 @@ export async function listLibraryDocuments(): Promise<LibraryDocument[]> {
 
 export async function addLibraryDocumentsByPaths(paths: string[]): Promise<ImportResult> {
   if (!paths.length) return { documents: [], errors: [] };
-  return addLibraryDocumentsByPaths(paths);
+  return invoke<ImportResult>('add_library_documents', { paths });
 }
 
 export async function chooseAndAddDocuments(): Promise<ImportResult | null> {
@@ -24,7 +24,7 @@ export async function chooseAndAddDocuments(): Promise<ImportResult | null> {
 
   if (selected === null) return null;
   const paths = Array.isArray(selected) ? selected : [selected];
-  return invoke<ImportResult>('add_library_documents', { paths });
+  return addLibraryDocumentsByPaths(paths);
 }
 
 export async function openLibraryDocument(documentId: string): Promise<LibraryDocument> {
