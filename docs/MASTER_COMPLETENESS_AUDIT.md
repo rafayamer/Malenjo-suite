@@ -412,3 +412,17 @@ Implemented on `feat/shell-pdf-completeness-pass-2-final` on top of PR #33:
 - overlay coordinates are validated and tested.
 
 These are operational additions, not source-complete Acrobat/Foxit parity. Visual drag handles, direct existing-text/object editing, comments/true annotation objects, forms, bookmarks, attachments, compare, advanced protect/convert flows and many other master requirements remain open.
+
+
+## Completion pass — Codespaces AI bootstrap
+
+The Codespaces bridge already routes only approved local status/chat endpoints. This pass makes the development runtime operational rather than merely reachable:
+
+- explicit `npm run ai:codespace:setup` installs/starts the Ollama runtime on loopback only and downloads no model;
+- explicit `npm run ai:codespace:setup:model` installs the reviewed `qwen3:0.6b` development model and runs a local smoke test;
+- `third_party/models/MODEL_LICENSES.json` records the reviewed model source, Apache-2.0 license and expected Ollama digest prefix;
+- `npm run ai:codespace:check` now distinguishes server-only from AI-ready runtime+model state;
+- the Malenjo AI runtime panel surfaces the correct setup command based on current state;
+- CI syntax-validates both shell helpers and JSON-validates the model manifest without downloading external software or weights.
+
+This remains a development profile, not the full master AI model manager. Production model import/download, license acceptance, checksums, resource estimation, policy and per-feature model assignment remain open under the AI completeness workstream.

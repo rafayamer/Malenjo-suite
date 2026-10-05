@@ -1,3 +1,4 @@
+import { isTauri } from '@tauri-apps/api/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bot,
@@ -74,6 +75,14 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
   );
   const currentStatus = statuses[provider];
   const limits = liteMode ? RAG_LIMITS.lite : RAG_LIMITS.normal;
+  const desktopRuntime = isTauri();
+  const setupCommand = desktopRuntime
+    ? (provider === 'ollama' ? 'ollama pull <reviewed-model>' : 'llama-server -m model.gguf --port 8080')
+    : !currentStatus?.available
+      ? 'npm run ai:codespace:setup'
+      : !currentStatus.models.length
+        ? 'npm run ai:codespace:setup:model'
+        : 'npm run ai:codespace:check';
 
   async function refreshProviders() {
     setNotice('Checking local model runtimes…');
@@ -339,9 +348,15 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
         </section>
 
         <section className="model-install-note">
-          <h3>Models are separate</h3>
-          <p>MALENJO never downloads a model from this chat screen. Install/load model weights separately, then refresh status.</p>
-          <code>{provider === 'ollama' ? 'ollama pull <model>' : 'llama-server -m model.gguf --port 8080'}</code>
+          <h3>{desktopRuntime ? 'Models are separate' : 'Codespaces AI setup'}</h3>
+          <p>{desktopRuntime
+            ? 'MALENJO never downloads model weights from this chat screen. Install/load a reviewed local model separately, then refresh status.'
+            : currentStatus?.available && currentStatus.models.length
+              ? 'A local Codespaces runtime and model are available. Use the diagnostic command if the chat still cannot answer.'
+              : currentStatus?.available
+                ? 'The runtime is reachable, but it reports no installed model. Use the reviewed development-model bootstrap, then refresh status.'
+                : 'No local model runtime is reachable inside this Codespace. Start the explicit loopback runtime bootstrap first.'}</p>
+          <code>{setupCommand}</code>
         </section>
       </aside>
     </div>
