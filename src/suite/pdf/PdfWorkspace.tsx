@@ -20,7 +20,6 @@ import {
   deletePdfPage,
   deletePdfPages,
   duplicatePdfPage,
-  extractPdfPage,
   extractPdfPages,
   insertBlankPdfPage,
   insertPdfAfter,
@@ -450,18 +449,6 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       await exportPdfBytes(`${base}-part-1.pdf`,left);
       await exportPdfBytes(`${base}-part-2.pdf`,right);
       setActionNotice(`Split after page ${currentPage} and exported two PDFs.`);
-    }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
-    }
-  }
-
-  async function extractCurrent(){
-    if(!sourceBytes)return;
-    try{
-      const bytes=await extractPdfPage(sourceBytes,currentPage);
-      const base=sourceName.replace(/\.pdf$/i,'')||'MALENJO-document';
-      await exportPdfBytes(`${base}-page-${currentPage}.pdf`,bytes);
-      setActionNotice(`Extracted page ${currentPage} as a new PDF.`);
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }
