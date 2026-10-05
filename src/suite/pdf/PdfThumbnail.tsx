@@ -5,11 +5,10 @@ interface Props {
   document: PDFDocumentProxy;
   pageNumber: number;
   active: boolean;
-  selected: boolean;
-  onSelect(pageNumber: number, additive: boolean, range: boolean): void;
+  onSelect(pageNumber: number): void;
 }
 
-export default function PdfThumbnail({ document, pageNumber, active, selected, onSelect }: Props) {
+export default function PdfThumbnail({ document, pageNumber, active, onSelect }: Props) {
   const wrapperRef = useRef<HTMLButtonElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [visible, setVisible] = useState(pageNumber <= 3);
@@ -81,10 +80,9 @@ export default function PdfThumbnail({ document, pageNumber, active, selected, o
 
   return <button
     ref={wrapperRef}
-    className={`pdf-thumb${active ? ' active' : ''}${selected ? ' selected' : ''}`}
-    onClick={(event) => onSelect(pageNumber, event.ctrlKey || event.metaKey, event.shiftKey)}
-    aria-label={`Select page ${pageNumber}`}
-    aria-pressed={selected}
+    className={active ? 'pdf-thumb active' : 'pdf-thumb'}
+    onClick={() => onSelect(pageNumber)}
+    aria-label={`Go to page ${pageNumber}`}
   >
     <div className="pdf-thumb-canvas">
       {failed ? <span>Preview unavailable</span> : <canvas ref={canvasRef}/>}

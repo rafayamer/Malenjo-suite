@@ -10,7 +10,6 @@ import {
   markDocumentDirty,
   markDocumentSaved,
   markDocumentSaving,
-  setDocumentDirty,
   type DocumentSession,
 } from '../files/session';
 import type { LibraryDocument } from '../files/types';
@@ -78,7 +77,8 @@ export default function App() {
   }
 
   function markSessionDirty(sessionId: string, dirty: boolean) {
-    updateSession(sessionId, (session) => setDocumentDirty(session, dirty));
+    if (!dirty) return;
+    updateSession(sessionId, markDocumentDirty);
   }
 
   function closeSession(sessionId: string) {
@@ -172,7 +172,7 @@ export default function App() {
       run:()=>activateSession(session.id),
     })),
     ...(activeSession ? [
-      ...(!activeSession.document.browserFile && !['pdf','docx','xlsx','pptx'].includes(activeSession.document.kind) ? [{
+      ...(activeSession.document.runtimeSource !== 'browser-session' && !['pdf','docx','xlsx','pptx'].includes(activeSession.document.kind) ? [{
         id:'active-save-as',
         label:`Save a copy of ${activeSession.document.name}`,
         group:'Current document',
@@ -196,7 +196,6 @@ export default function App() {
     if (route === 'pdf') {
       return <PdfWorkspace
         session={session}
-        active={session.id === activeSessionId}
         notice={notice}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty)=>markSessionDirty(session.id,dirty)}
@@ -349,7 +348,7 @@ function ModuleView({
       <div className="canvas-toolbar">
         <button onClick={onBackToFiles}>Files</button>
         <button disabled={!session?.dirty}>Save</button>
-        <button disabled={!document || session?.saving || !!document?.browserFile} onClick={() => void onSaveAs()}>Save As</button>
+        <button disabled={!document || session?.saving || document?.runtimeSource === 'browser-session'} onClick={() => void onSaveAs()}>Save As</button>
         <button disabled={!document}>Export</button>
         <button disabled={!document}>Print</button>
         <button>More</button>

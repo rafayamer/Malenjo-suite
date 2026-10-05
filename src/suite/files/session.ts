@@ -20,13 +20,9 @@ export function createDocumentSession(document: LibraryDocument, openedAt = Date
   };
 }
 
-export function setDocumentDirty(session: DocumentSession, dirty: boolean): DocumentSession {
-  if (session.dirty === dirty) return session;
-  return { ...session, dirty };
-}
-
 export function markDocumentDirty(session: DocumentSession): DocumentSession {
-  return setDocumentDirty(session, true);
+  if (session.dirty) return session;
+  return { ...session, dirty: true };
 }
 
 export function markDocumentSaving(session: DocumentSession, saving = true): DocumentSession {

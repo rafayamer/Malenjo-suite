@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Download, FileText, FolderOpen, Printer, Table2, Presentation } from 'lucide-react';
 import type { DocumentSession } from '../files/session';
 import { isDesktopRuntime } from '../files/api';
+import { readBrowserDocumentBytes } from '../files/browserStore';
 import { exportOfficeCopy, readOfficeDocument } from './api';
 import {
   detectOfficeKind,
@@ -53,11 +54,11 @@ export default function OfficeWorkspace({ kind, session, onBackToFiles, onDirtyC
 
     let cancelled = false;
     setLoading(true);
-    const load = document.browserFile
-      ? document.browserFile.arrayBuffer()
+    const load = document.runtimeSource === 'browser-session'
+      ? readBrowserDocumentBytes(document.id)
       : isDesktopRuntime()
         ? readOfficeDocument(document.id)
-        : Promise.reject(new Error('This document has no browser source or native library source.'));
+        : Promise.reject(new Error('This document has no browser-session source or native library source.'));
 
     void load
       .then((buffer) => {
