@@ -10,6 +10,11 @@ export async function listLibraryDocuments(): Promise<LibraryDocument[]> {
   return invoke<LibraryDocument[]>('list_library_documents');
 }
 
+export async function addLibraryDocumentsByPaths(paths: string[]): Promise<ImportResult> {
+  if (!paths.length) return { documents: [], errors: [] };
+  return addLibraryDocumentsByPaths(paths);
+}
+
 export async function chooseAndAddDocuments(): Promise<ImportResult | null> {
   const selected = await open({
     multiple: true,
