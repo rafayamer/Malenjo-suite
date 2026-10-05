@@ -20,6 +20,7 @@ import type { LibraryDocument } from './types';
 
 interface Props {
   onOpen(document: LibraryDocument): void;
+  onOpenBrowserFiles(files: FileList | File[]): void;
 }
 
 function formatBytes(bytes: number): string {
@@ -171,6 +172,17 @@ export default function FileLibrary({ onOpen }: Props) {
   }
 
   return <div className="content library-view">
+    <input
+      ref={browserInputRef}
+      className="visually-hidden"
+      type="file"
+      multiple
+      accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.webp,.tif,.tiff,.bmp,.dxf,.dwg,.dcm,.dicom"
+      onChange={(event) => {
+        if (event.target.files?.length) onOpenBrowserFiles(event.target.files);
+        event.target.value = '';
+      }}
+    />
     <input
       ref={browserInputRef}
       className="visually-hidden"
