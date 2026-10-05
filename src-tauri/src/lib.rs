@@ -18,7 +18,7 @@ use suite::{
     local_services::LocalServiceManager,
     office::{read_office_document, write_office_copy},
     ocr::{cancel_paddle_ocr, paddle_ocr_image, paddle_ocr_status},
-    pdf::read_pdf_document,
+    pdf::{read_pdf_document, write_pdf_copy},
     security::{
         clamav_scan_document, clamav_status, clear_ephemeral_secret, list_audit_events,
         pyhanko_sign_copy, pyhanko_status, pyhanko_validate_document, record_audit_event,
@@ -59,6 +59,7 @@ pub fn run() {
             commit_staged_document,
             discard_staged_document,
             read_pdf_document,
+            write_pdf_copy,
             read_office_document,
             write_office_copy,
             paddle_ocr_status,
