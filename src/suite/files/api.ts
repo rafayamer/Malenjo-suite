@@ -1,17 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
-import type { ImportResult, LibraryDocument } from './types';
-
-const documentFilters = [{
-  name: 'Documents',
-  extensions: [
-    'pdf', 'doc', 'docx', 'odt', 'rtf',
-    'xls', 'xlsx', 'xlsm', 'csv', 'ods',
-    'ppt', 'pptx', 'odp',
-    'png', 'jpg', 'jpeg', 'tif', 'tiff', 'bmp', 'gif', 'webp', 'heic',
-    'dxf', 'dwg', 'dcm', 'dicom'
-  ],
-}];
+import type { ImportResult, LibraryDocument, StagedDocument } from './types';
 
 export function isDesktopRuntime(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -26,7 +15,6 @@ export async function chooseAndAddDocuments(): Promise<ImportResult | null> {
     multiple: true,
     directory: false,
     title: 'Add documents to MALENJO',
-    filters: documentFilters,
   });
 
   if (selected === null) return null;
@@ -60,4 +48,19 @@ export async function saveAsLibraryDocument(document: LibraryDocument): Promise<
     document_id: document.id,
     destination,
   });
+}
+
+export async function stageLibraryDocument(documentId: string): Promise<StagedDocument> {
+  return invoke<StagedDocument>('stage_library_document', { document_id: documentId });
+}
+
+export async function commitStagedDocument(documentId: string, stagingToken: string): Promise<LibraryDocument> {
+  return invoke<LibraryDocument>('commit_staged_document', {
+    document_id: documentId,
+    staging_token: stagingToken,
+  });
+}
+
+export async function discardStagedDocument(stagingToken: string): Promise<boolean> {
+  return invoke<boolean>('discard_staged_document', { staging_token: stagingToken });
 }
