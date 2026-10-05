@@ -49,11 +49,17 @@ export default function OfficeWorkspace({ kind, session, onBackToFiles, onDirtyC
     onDirtyChange?.(false);
 
     const document = session?.document;
-    if (!document || document.kind !== kind || !isDesktopRuntime()) return;
+    if (!document || document.kind !== kind) return;
 
     let cancelled = false;
     setLoading(true);
-    void readOfficeDocument(document.id)
+    const load = document.browserFile
+      ? document.browserFile.arrayBuffer()
+      : isDesktopRuntime()
+        ? readOfficeDocument(document.id)
+        : Promise.reject(new Error('This document has no browser source or native library source.'));
+
+    void load
       .then((buffer) => {
         if (cancelled) return;
         const bytes = new Uint8Array(buffer);
@@ -70,7 +76,7 @@ export default function OfficeWorkspace({ kind, session, onBackToFiles, onDirtyC
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [kind, session]);
+  }, [kind, session?.id]);
 
   function markDirty(next: OfficeModel) {
     setModel(next);
@@ -136,7 +142,7 @@ export default function OfficeWorkspace({ kind, session, onBackToFiles, onDirtyC
     <div className="office-toolbar">
       <div className="office-toolbar-group">
         <button onClick={onBackToFiles}><FolderOpen size={16}/> Files</button>
-        <button onClick={() => inputRef.current?.click()}><MetaIcon size={16}/> Open {expectedExtension.toUpperCase()}</button>
+        <button disabled={!!session} onClick={() => inputRef.current?.click()} title={session ? "Use Files / Library to open another document in a new tab" : undefined}><MetaIcon size={16}/> Open {expectedExtension.toUpperCase()}</button>
         <button disabled={!model} onClick={() => void exportDocument()}><Download size={16}/> Export copy</button>
         <button disabled={!model} onClick={() => window.print()}><Printer size={16}/> Print</button>
       </div>
