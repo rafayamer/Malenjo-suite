@@ -12,9 +12,10 @@ A module may be called **complete** only when its full source-of-truth feature t
 
 The canonical master README audited for this program contains:
 
-- 5,946 lines;
-- 1,114 Markdown bullet requirements/items;
-- 1,088 unique bullet lines after simple normalized de-duplication;
+- 5,945 source lines in the currently mounted canonical README;
+- 382 Markdown headings;
+- 1,142 Markdown bullet lines;
+- 1,120 unique bullet texts after simple de-duplication;
 - additional numbered requirements, code-block command lists, journeys, acceptance criteria and engineering constraints that are not included in the bullet count.
 
 The bullet count is **not** itself a feature count. It demonstrates why the existing Phase 1–7 issue checklists cannot be treated as the full MALENJO product specification.
@@ -114,6 +115,19 @@ Master requirements still include major operational families such as:
 - full Windows rendering/printing/editing fidelity QA.
 
 The master README Advanced PDF Object Editing section alone contains 21 bullet requirements/items; that does not include all PDF requirements elsewhere in the source.
+
+The master-completeness correction branch now also adds operational page mutation primitives with tests:
+
+- delete page while preserving at least one page;
+- duplicate page;
+- move page earlier/later;
+- permanent 90° page rotation;
+- insert a blank page;
+- extract the current page to a new PDF;
+- append one or more PDFs;
+- export modified PDF bytes in both browser/Codespaces and Windows/Tauri paths.
+
+These are real mutations, but they still do not make the PDF workspace source-complete.
 
 ### Document / Spreadsheet / Presentation — PARTIAL
 
@@ -287,7 +301,7 @@ TPM-backed protections, full integrity/signature chain, forensic watermarking an
 
 ### Metadata Studio — PARTIAL
 
-The dedicated deep Metadata Studio source section contains **254 bullet requirements/items**.
+The dedicated deep Metadata Studio source section contains **265 Markdown bullet lines** in the currently mounted canonical README.
 
 Current implementation handles a small subset of PDF/OOXML standard metadata.
 
@@ -307,7 +321,7 @@ No complete DICOM workspace exists yet.
 
 ### Installer / Updater / Uninstaller — NOT COMPLETE
 
-The locked installer/update/uninstaller section contains 61 bullet requirements/items plus many numbered subsections.
+The locked installer/update/uninstaller section contains 69 Markdown bullet lines plus 33 nested headings in the currently mounted canonical README.
 
 Still required includes the full NSIS/MSIX paths, component packs, custom/standard/enterprise offline setup, first-run onboarding, repair, rollback, silent deployment/removal, winget path, update channels/manifests, differential strategy, signing, installer security, CI matrix and uninstall data-preservation behavior.
 
