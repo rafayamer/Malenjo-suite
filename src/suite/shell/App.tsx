@@ -15,6 +15,7 @@ import AiWorkspace from '../ai/AiWorkspace';
 import SecurityWorkspace from '../security/SecurityWorkspace';
 import MetadataWorkspace from '../security/MetadataWorkspace';
 import SignWorkspace from '../security/SignWorkspace';
+import EnterpriseWorkspace from '../enterprise/EnterpriseWorkspace';
 
 const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
   {label:'Open document', icon: FolderOpen, target:'files'},
@@ -99,7 +100,15 @@ export default function App() {
                             ? <MetadataWorkspace onBackToFiles={()=>selectModule('files')}/>
                             : active === 'sign'
                               ? <SignWorkspace onBackToFiles={()=>selectModule('files')}/>
-                              : <ModuleView module={module} session={session} notice={workspaceNotice} onSaveAs={saveSessionAs} onBackToFiles={()=>selectModule('files')}/>}
+                              : active === 'dms'
+                                ? <EnterpriseWorkspace mode="dms" onBackToFiles={()=>selectModule('files')}/>
+                                : active === 'automation'
+                                  ? <EnterpriseWorkspace mode="automation" onBackToFiles={()=>selectModule('files')}/>
+                                  : active === 'backup'
+                                    ? <EnterpriseWorkspace mode="backup" onBackToFiles={()=>selectModule('files')}/>
+                                    : active === 'admin'
+                                      ? <EnterpriseWorkspace mode="admin" onBackToFiles={()=>selectModule('files')}/>
+                                      : <ModuleView module={module} session={session} notice={workspaceNotice} onSaveAs={saveSessionAs} onBackToFiles={()=>selectModule('files')}/>}
     </main>
   </div>
 }
