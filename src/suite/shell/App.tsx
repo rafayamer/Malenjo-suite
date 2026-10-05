@@ -5,8 +5,9 @@ import type { ModuleId } from '../core/types';
 import FileLibrary from '../files/FileLibrary';
 import RecentDocuments from '../files/RecentDocuments';
 import { workspaceForDocument } from '../files/route';
-import { createDocumentSession, type DocumentSession } from '../files/session';
+import { createDocumentSession, markDocumentSaved, type DocumentSession } from '../files/session';
 import type { LibraryDocument } from '../files/types';
+import { saveAsLibraryDocument } from '../files/api';
 
 const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
   {label:'Open document', icon: FolderOpen, target:'files'},
@@ -19,17 +20,33 @@ export default function App() {
   const [active, setActive] = useState<ModuleId>('home');
   const [query, setQuery] = useState('');
   const [session, setSession] = useState<DocumentSession | null>(null);
+  const [workspaceNotice, setWorkspaceNotice] = useState('');
   const module = modules.find((item) => item.id === active) ?? modules[0];
   const groups = useMemo(() => ['Core','Create','Intelligence','Enterprise','System'] as const, []);
 
   function selectModule(id: ModuleId) {
     setActive(id);
+    setWorkspaceNotice('');
     if (id === 'home' || id === 'files') setSession(null);
   }
 
   function openFromLibrary(document: LibraryDocument) {
     setSession(createDocumentSession(document));
+    setWorkspaceNotice('');
     setActive(workspaceForDocument(document.kind));
+  }
+
+  async function saveSessionAs() {
+    if (!session) return;
+    try {
+      const copy = await saveAsLibraryDocument(session.document);
+      if (!copy) return;
+      setSession((current) => current ? markDocumentSaved(current, copy) : current);
+      setActive(workspaceForDocument(copy.kind));
+      setWorkspaceNotice(`Saved a copy as ${copy.name} and added it to the MALENJO library.`);
+    } catch (error) {
+      setWorkspaceNotice(String(error));
+    }
   }
 
   return <div className="app-shell">
@@ -55,7 +72,7 @@ export default function App() {
         ? <Home onSelect={selectModule} onOpen={openFromLibrary}/>
         : active === 'files'
           ? <FileLibrary onOpen={openFromLibrary}/>
-          : <ModuleView module={module} session={session} onBackToFiles={()=>selectModule('files')}/>}
+          : <ModuleView module={module} session={session} notice={workspaceNotice} onSaveAs={saveSessionAs} onBackToFiles={()=>selectModule('files')}/>}
     </main>
   </div>
 }
@@ -73,10 +90,14 @@ function Home({onSelect,onOpen}:{onSelect:(id:ModuleId)=>void;onOpen:(document:L
 function ModuleView({
   module,
   session,
+  notice,
+  onSaveAs,
   onBackToFiles,
 }:{
   module:(typeof modules)[number];
   session:DocumentSession | null;
+  notice:string;
+  onSaveAs():Promise<void>;
   onBackToFiles():void;
 }) {
   const document = session?.document;
@@ -96,12 +117,13 @@ function ModuleView({
     <div className="canvas-placeholder">
       <div className="canvas-toolbar">
         <button onClick={onBackToFiles}>Files</button>
-        <button disabled={!document}>Save</button>
-        <button disabled={!document}>Save As</button>
+        <button disabled={!session?.dirty}>Save</button>
+        <button disabled={!document} onClick={() => void onSaveAs()}>Save As</button>
         <button disabled={!document}>Export</button>
         <button disabled={!document}>Print</button>
         <button>More</button>
       </div>
+      {notice && <div className="workspace-notice">{notice}</div>}
       <div className="empty-state">
         <div className="empty-icon">M</div>
         <h2>{document ? document.name : `${module.name} adapter boundary is ready`}</h2>
