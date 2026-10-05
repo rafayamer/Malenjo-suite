@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import type { DocumentSession } from '../files/session';
 import { isDesktopRuntime } from '../files/api';
-import { getBrowserFile } from '../files/browserStore';
 import { exportPdfBytes, readPdfDocumentBytes } from './api';
 import {
   appendPdf,
@@ -135,12 +134,8 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
 
     let cancelled = false;
 
-    if (document.runtimeSource === 'browser-session') {
-      const file = getBrowserFile(document.runtimeToken);
-      if (!file) {
-        setError('This Codespaces/browser session file is no longer available. Re-add it from Files.');
-        return;
-      }
+    if (document.browserFile) {
+      const file = document.browserFile;
       void file.arrayBuffer()
         .then((bytes) => {
           if (!cancelled) return installPdf(bytes, document.name, file);
