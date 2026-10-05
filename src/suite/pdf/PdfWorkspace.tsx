@@ -13,7 +13,16 @@ import {
 import type { DocumentSession } from '../files/session';
 import { isDesktopRuntime } from '../files/api';
 import { getBrowserFile } from '../files/browserStore';
-import { readPdfDocumentBytes } from './api';
+import { exportPdfBytes, readPdfDocumentBytes } from './api';
+import {
+  appendPdf,
+  deletePdfPage,
+  duplicatePdfPage,
+  extractPdfPage,
+  insertBlankPdfPage,
+  movePdfPage,
+  rotatePdfPagePermanent,
+} from './editor';
 import { disposePdf, loadPdfBytes, type PdfLoadResult } from './engine';
 import {
   clampPdfPage,
@@ -30,6 +39,7 @@ interface Props {
   notice: string;
   onSaveAs(): Promise<void>;
   onBackToFiles(): void;
+  onDirtyChange?(dirty:boolean): void;
 }
 
 function formatBytes(bytes: number): string {
@@ -38,15 +48,23 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
 }
 
-export default function PdfWorkspace({ session, notice, onSaveAs, onBackToFiles }: Props) {
+function editedName(name:string,suffix='edited'):string{
+  const base=name.replace(/\.pdf$/i,'')||'MALENJO-document';
+  return `${base}-${suffix}.pdf`;
+}
+
+export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyChange }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const appendInputRef = useRef<HTMLInputElement>(null);
   const activeLoadRef = useRef<PdfLoadResult | null>(null);
   const requestIdRef = useRef(0);
   const loadStartedRef = useRef(0);
   const firstPageReportedRef = useRef(false);
+  const previewIdRef = useRef(`pdf-preview-${Math.random().toString(36).slice(2)}`);
 
   const [pdf, setPdf] = useState<PdfLoadResult | null>(null);
+  const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
   const [sourceName, setSourceName] = useState('PDF Workspace');
   const [browserFile, setBrowserFile] = useState<File | null>(null);
   const [pageCount, setPageCount] = useState(0);
@@ -55,14 +73,22 @@ export default function PdfWorkspace({ session, notice, onSaveAs, onBackToFiles 
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [mutating, setMutating] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [error, setError] = useState('');
   const [actionNotice, setActionNotice] = useState('');
   const [firstPageMs, setFirstPageMs] = useState<number | null>(null);
   const [forceRenderAll, setForceRenderAll] = useState(false);
   const [viewport, setViewport] = useState({ width: 900, height: 700 });
   const scrollFps = useScrollFps(scrollRef);
+  const domIdPrefix=session?.id??previewIdRef.current;
 
-  const installPdf = useCallback(async (bytes: ArrayBuffer, name: string, file: File | null = null) => {
+  const installPdf = useCallback(async (
+    input: ArrayBuffer | Uint8Array,
+    name: string,
+    file: File | null = null,
+    preserveDirty = false,
+  ) => {
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setError('');
@@ -72,7 +98,8 @@ export default function PdfWorkspace({ session, notice, onSaveAs, onBackToFiles 
     loadStartedRef.current = performance.now();
 
     try {
-      const result = await loadPdfBytes(bytes);
+      const owned = input instanceof Uint8Array ? Uint8Array.from(input) : new Uint8Array(input.slice(0));
+      const result = await loadPdfBytes(owned);
       if (requestId !== requestIdRef.current) {
         await disposePdf(result);
         return;
@@ -81,6 +108,7 @@ export default function PdfWorkspace({ session, notice, onSaveAs, onBackToFiles 
       await disposePdf(activeLoadRef.current);
       activeLoadRef.current = result;
       setPdf(result);
+      setSourceBytes(owned);
       setBrowserFile(file);
       setSourceName(name);
       setPageCount(result.document.numPages);
@@ -89,9 +117,11 @@ export default function PdfWorkspace({ session, notice, onSaveAs, onBackToFiles 
       setZoom(1);
       setRotation(0);
       setForceRenderAll(false);
+      if(!preserveDirty)setDirty(false);
     } catch (reason) {
       if (requestId === requestIdRef.current) {
         setPdf(null);
+        setSourceBytes(null);
         setPageCount(0);
         setError(reason instanceof Error ? reason.message : String(reason));
       }
@@ -105,10 +135,16 @@ export default function PdfWorkspace({ session, notice, onSaveAs, onBackToFiles 
     if (!document || document.kind !== 'pdf') return;
 
     let cancelled = false;
-    if (document.browserFile) {
-      void document.browserFile.arrayBuffer()
+
+    if (document.runtimeSource === 'browser-session') {
+      const file = getBrowserFile(document.runtimeToken);
+      if (!file) {
+        setError('This Codespaces/browser session file is no longer available. Re-add it from Files.');
+        return;
+      }
+      void file.arrayBuffer()
         .then((bytes) => {
-          if (!cancelled) return installPdf(bytes, document.name, document.browserFile ?? null);
+          if (!cancelled) return installPdf(bytes, document.name, file);
         })
         .catch((reason) => {
           if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason));
@@ -117,6 +153,7 @@ export default function PdfWorkspace({ session, notice, onSaveAs, onBackToFiles 
     }
 
     if (!isDesktopRuntime()) return;
+
     void readPdfDocumentBytes(document.id)
       .then((bytes) => {
         if (!cancelled) return installPdf(bytes, document.name);
@@ -151,11 +188,11 @@ export default function PdfWorkspace({ session, notice, onSaveAs, onBackToFiles 
   const goToPage = useCallback((requested: number) => {
     const page = clampPdfPage(requested, pageCount);
     setCurrentPage(page);
-    document.getElementById(`pdf-page-${page}`)?.scrollIntoView({
+    document.getElementById(`${domIdPrefix}-page-${page}`)?.scrollIntoView({
       behavior: 'smooth',
       block: 'start',
     });
-  }, [pageCount]);
+  }, [domIdPrefix,pageCount]);
 
   const onPageVisible = useCallback((page: number) => {
     setCurrentPage(page);
@@ -174,7 +211,7 @@ export default function PdfWorkspace({ session, notice, onSaveAs, onBackToFiles 
     if (!file) return;
 
     if (file.size > 512 * 1024 * 1024) {
-      setError('The selected PDF exceeds the 512 MB Phase 2 safety limit.');
+      setError('The selected PDF exceeds the 512 MB safety limit.');
       return;
     }
 
@@ -182,24 +219,76 @@ export default function PdfWorkspace({ session, notice, onSaveAs, onBackToFiles 
     await installPdf(bytes, file.name, file);
   }
 
-  async function exportCopy() {
-    if (session?.document.kind === 'pdf' && isDesktopRuntime()) {
-      await onSaveAs();
-      return;
+  async function mutate(
+    label:string,
+    operation:(bytes:Uint8Array)=>Promise<Uint8Array>,
+    preferredPage=currentPage,
+  ){
+    if(!sourceBytes||mutating)return;
+    setMutating(true);
+    setError('');
+    try{
+      const result=await operation(Uint8Array.from(sourceBytes));
+      await installPdf(result,sourceName,browserFile,true);
+      const nextPage=Math.max(1,Math.min(preferredPage,(await loadPdfBytes(result)).document.numPages));
+      setCurrentPage(nextPage);
+      setDirty(true);
+      onDirtyChange?.(true);
+      setActionNotice(label);
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }finally{
+      setMutating(false);
     }
+  }
 
-    if (!browserFile) {
+  async function appendDocuments(event:React.ChangeEvent<HTMLInputElement>){
+    const files=Array.from(event.target.files??[]);
+    event.target.value='';
+    if(!files.length||!sourceBytes)return;
+    setMutating(true);
+    setError('');
+    try{
+      let result=Uint8Array.from(sourceBytes);
+      for(const file of files){
+        if(file.size>512*1024*1024)throw new Error(`${file.name} exceeds the 512 MB safety limit.`);
+        result=await appendPdf(result,new Uint8Array(await file.arrayBuffer()));
+      }
+      await installPdf(result,sourceName,browserFile,true);
+      setDirty(true);
+      onDirtyChange?.(true);
+      setActionNotice(`Appended ${files.length} PDF file(s).`);
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }finally{
+      setMutating(false);
+    }
+  }
+
+  async function exportCurrent(){
+    if(!sourceBytes){
       setActionNotice('Open a PDF first.');
       return;
     }
+    try{
+      const name=dirty?editedName(sourceName):editedName(sourceName,'copy');
+      const saved=await exportPdfBytes(name,sourceBytes);
+      if(saved)setActionNotice(dirty?'Exported the edited PDF as a new file.':'Exported a PDF copy.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }
+  }
 
-    const url = URL.createObjectURL(browserFile);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = browserFile.name;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    setActionNotice('Downloaded a copy of the browser-preview PDF.');
+  async function extractCurrent(){
+    if(!sourceBytes)return;
+    try{
+      const bytes=await extractPdfPage(sourceBytes,currentPage);
+      const base=sourceName.replace(/\.pdf$/i,'')||'MALENJO-document';
+      await exportPdfBytes(`${base}-page-${currentPage}.pdf`,bytes);
+      setActionNotice(`Extracted page ${currentPage} as a new PDF.`);
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }
   }
 
   function printDocument() {
@@ -227,13 +316,21 @@ export default function PdfWorkspace({ session, notice, onSaveAs, onBackToFiles 
       accept="application/pdf,.pdf"
       onChange={(event) => void chooseBrowserPdf(event)}
     />
+    <input
+      ref={appendInputRef}
+      className="visually-hidden"
+      type="file"
+      accept="application/pdf,.pdf"
+      multiple
+      onChange={(event)=>void appendDocuments(event)}
+    />
 
     <div className="pdf-toolbar">
       <div className="pdf-toolbar-group">
         <button onClick={onBackToFiles} title="Back to MALENJO Files"><FolderOpen size={16}/> Files</button>
-        <button onClick={() => fileInputRef.current?.click()} title="Preview a PDF in this workspace"><FileText size={16}/> Open PDF</button>
-        <button disabled={!pdf} onClick={() => void exportCopy()} title="Save or download a copy"><Download size={16}/> Export</button>
-        <button disabled={!pdf} onClick={printDocument} title="Print rendered PDF pages"><Printer size={16}/> Print</button>
+        <button onClick={() => fileInputRef.current?.click()} title="Open a temporary PDF in this workspace"><FileText size={16}/> Open PDF</button>
+        <button disabled={!pdf||mutating} onClick={() => void exportCurrent()} title="Export current PDF bytes"><Download size={16}/> Export</button>
+        <button disabled={!pdf||mutating} onClick={printDocument} title="Print rendered PDF pages"><Printer size={16}/> Print</button>
       </div>
 
       <div className="pdf-toolbar-group pdf-page-nav">
@@ -261,18 +358,18 @@ export default function PdfWorkspace({ session, notice, onSaveAs, onBackToFiles 
     </div>
 
     {(notice || actionNotice) && <div className="pdf-notice">{notice || actionNotice}</div>}
+    {error && <div className="pdf-notice error">{error}</div>}
 
     {!pdf && <div className="pdf-empty">
       <div className="empty-icon">M</div>
       <h1>PDF Workspace</h1>
       <p>{loading
         ? 'Loading PDF with the local PDF.js renderer…'
-        : 'Open a PDF from MALENJO Files, or choose a local PDF here for a browser-only preview in Codespaces.'}</p>
+        : 'Open PDFs from MALENJO Files to keep several documents in tabs, or choose one here for a temporary workspace preview.'}</p>
       <button className="primary-action" disabled={loading} onClick={() => fileInputRef.current?.click()}>
         <FileText size={17}/> {loading ? 'Loading…' : 'Choose PDF'}
       </button>
-      {error && <div className="pdf-error">{error}</div>}
-      <small>Browser previews are temporary and are not added to the MALENJO library.</small>
+      <small>For multi-document work in Codespaces, add several files from Files / Library first.</small>
     </div>}
 
     {pdf && <div className="pdf-layout">
@@ -304,6 +401,7 @@ export default function PdfWorkspace({ session, notice, onSaveAs, onBackToFiles 
               availableWidth={viewport.width}
               availableHeight={viewport.height}
               forceRender={forceRenderAll}
+              domIdPrefix={domIdPrefix}
               onVisible={onPageVisible}
               onRendered={onPageRendered}
             />
@@ -316,11 +414,24 @@ export default function PdfWorkspace({ session, notice, onSaveAs, onBackToFiles 
         <dl>
           <div><dt>Name</dt><dd title={sourceName}>{sourceName}</dd></div>
           <div><dt>Pages</dt><dd>{pageCount}</dd></div>
-          <div><dt>Size</dt><dd>{session?.document ? formatBytes(session.document.sizeBytes) : browserFile ? formatBytes(browserFile.size) : '—'}</dd></div>
+          <div><dt>Size</dt><dd>{sourceBytes ? formatBytes(sourceBytes.byteLength) : session?.document ? formatBytes(session.document.sizeBytes) : '—'}</dd></div>
           <div><dt>Renderer</dt><dd>PDF.js 6.4.299</dd></div>
-          <div><dt>Mode</dt><dd>{fitMode === 'custom' ? `${Math.round(zoom * 100)}%` : fitMode}</dd></div>
-          <div><dt>Rotation</dt><dd>{rotation}°</dd></div>
+          <div><dt>Edit state</dt><dd>{dirty?'Modified':'Original'}</dd></div>
+          <div><dt>View</dt><dd>{fitMode === 'custom' ? `${Math.round(zoom * 100)}%` : fitMode} · {rotation}°</dd></div>
         </dl>
+
+        <div className="pdf-pane-title">Page tools</div>
+        <div className="pdf-page-tools">
+          <button disabled={mutating||pageCount<=1} onClick={()=>void mutate(`Deleted page ${currentPage}.`,bytes=>deletePdfPage(bytes,currentPage),Math.min(currentPage,pageCount-1))}>Delete</button>
+          <button disabled={mutating} onClick={()=>void mutate(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)}>Duplicate</button>
+          <button disabled={mutating||currentPage<=1} onClick={()=>void mutate('Moved page earlier.',bytes=>movePdfPage(bytes,currentPage,currentPage-1),currentPage-1)}>Move earlier</button>
+          <button disabled={mutating||currentPage>=pageCount} onClick={()=>void mutate('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)}>Move later</button>
+          <button disabled={mutating} onClick={()=>void mutate(`Permanently rotated page ${currentPage} by 90°.`,bytes=>rotatePdfPagePermanent(bytes,currentPage),currentPage)}>Rotate page</button>
+          <button disabled={mutating} onClick={()=>void mutate(`Inserted a blank page after page ${currentPage}.`,bytes=>insertBlankPdfPage(bytes,currentPage),currentPage+1)}>Blank after</button>
+          <button disabled={mutating} onClick={()=>void extractCurrent()}>Extract page</button>
+          <button disabled={mutating} onClick={()=>appendInputRef.current?.click()}>Append PDF…</button>
+        </div>
+        <div className="pdf-edit-note">Page operations rebuild the PDF file and mark this tab modified. They do not overwrite the source document; use Export to create the edited file.</div>
 
         <div className="pdf-pane-title">Performance</div>
         <dl>
