@@ -54,6 +54,7 @@ function formatBytes(value: number | null): string {
 
 export default function AiWorkspace({ onBackToFiles }: Props) {
   const sourceInputRef = useRef<HTMLInputElement>(null);
+  const activeJobRef = useRef<string | null>(null);
   const [sources, setSources] = useState<SourceDocument[]>([]);
   const [liteMode, setLiteMode] = useState(true);
   const [provider, setProvider] = useState<AiProvider>('ollama');
@@ -102,7 +103,7 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
   useEffect(() => {
     void refreshProviders();
     return () => {
-      if (activeJob) void cancelLocalAi(activeJob);
+      if (activeJobRef.current) void cancelLocalAi(activeJobRef.current);
     };
   // Runtime probing occurs only when this workspace mounts, never at app startup.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -163,6 +164,7 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
 
     const job = id('ai');
     setActiveJob(job);
+    activeJobRef.current = job;
     setBusy(true);
     try {
       const prompt = buildGroundedPrompt(value, citations, conversation);
@@ -180,6 +182,7 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
     } finally {
       setBusy(false);
       setActiveJob(null);
+      activeJobRef.current = null;
     }
   }
 
@@ -188,6 +191,7 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
     await cancelLocalAi(activeJob);
     setBusy(false);
     setActiveJob(null);
+    activeJobRef.current = null;
     setNotice('Local AI request cancelled.');
   }
 
