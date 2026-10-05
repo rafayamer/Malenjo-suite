@@ -48,3 +48,18 @@ No module is complete merely because its navigation entry exists. Completion req
 | Backend separation | PDF backend | `backend.ts` capability-denied default | architecture review | Implemented |
 | PDF.js license provenance | Third-party records | `third_party/pdfjs/PROVENANCE.md` | Apache-2.0 upstream review | Implemented |
 | No proprietary Stirling copy | Repository boundary | no Stirling source vendored | tree/review | Implemented |
+
+## Phase 3 traceability — Office workspaces
+
+| Requirement | Component | Implementation | Evidence | Status |
+|---|---|---|---|---|
+| DOCX editor | Document Workspace | `OfficeWorkspace.tsx`, `ooxml.ts` | OOXML unit tests | Implemented, CI pending |
+| XLSX editor | Spreadsheet | editable grid + first-sheet OOXML adapter | OOXML unit tests | Implemented, CI pending |
+| PPTX editor | Presentation | slide list + text-run editor | OOXML unit tests | Implemented, CI pending |
+| Exact untouched fidelity | OOXML core | `exactCopy` | byte equality test | Implemented |
+| Edited fidelity warning | Office UI | fidelity pill + module warnings | UI/code review | Implemented |
+| Export | Native/browser Office adapter | explicit copy writer / download | CI + manual pending | Implemented |
+| Print | Office UI | print CSS + browser/WebView print | manual Windows check pending | Implemented |
+| Lazy heavy engines | Office architecture | no LibreOffice/Java startup dependency | architecture review | Implemented |
+| Corpus | testing/suite/fixtures/{docx,xlsx,pptx} | synthetic cases + future matrix | tests/docs | Implemented |
+| Dependency licensing | third_party/fflate | fflate 0.8.3 MIT | provenance record | Implemented |
