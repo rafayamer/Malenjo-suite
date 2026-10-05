@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { PDFDocument, StandardFonts, degrees, rgb } from 'pdf-lib';
 import { disposePdf, loadPdfBytes } from '../pdf/engine';
 import type { RedactionRect } from './types';
 
@@ -157,7 +157,7 @@ export async function watermarkPdfPreservingContent(bytes: Uint8Array, text: str
       font,
       color: rgb(0.15, 0.45, 0.65),
       opacity: 0.18,
-      rotate: { type:'degrees', angle: -30 } as never,
+      rotate: degrees(-30),
     });
   }
   return Uint8Array.from(await pdf.save());
