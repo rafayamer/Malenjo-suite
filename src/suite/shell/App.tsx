@@ -14,7 +14,7 @@ import {
   type DocumentSession,
 } from '../files/session';
 import type { LibraryDocument } from '../files/types';
-import { addLibraryDocumentsByPaths, isDesktopRuntime, saveAsLibraryDocument } from '../files/api';
+import { addLibraryDocumentsByPaths, isDesktopRuntime, openLibraryDocument, saveAsLibraryDocument } from '../files/api';
 import { markBrowserDocumentOpened, registerBrowserFiles } from '../files/browserStore';
 import PdfWorkspace from '../pdf/PdfWorkspace';
 import OfficeWorkspace from '../office/OfficeWorkspace';
@@ -26,6 +26,7 @@ import SignWorkspace from '../security/SignWorkspace';
 import EnterpriseWorkspace from '../enterprise/EnterpriseWorkspace';
 import DocumentTabs from './DocumentTabs';
 import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
+import { buildWorkspaceState, readWorkspaceState, writeWorkspaceState } from './workspaceState';
 
 const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
   {label:'Open document', icon: FolderOpen, target:'files'},
@@ -42,6 +43,7 @@ export default function App() {
   const [sessions, setSessions] = useState<DocumentSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [workspaceNotices, setWorkspaceNotices] = useState<Record<string,string>>({});
+  const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
   const module = modules.find((item) => item.id === active) ?? modules[0];
   const groups = useMemo(() => ['Core','Create','Intelligence','Enterprise','System'] as const, []);
 
@@ -156,6 +158,54 @@ export default function App() {
       setWorkspaceNotices((current) => ({ ...current, [sessionId]: String(error) }));
     }
   }
+
+  useEffect(() => {
+    if (!isDesktopRuntime()) {
+      setWorkspaceHydrated(true);
+      return;
+    }
+
+    const persisted = readWorkspaceState(window.localStorage);
+    if (!persisted.nativeDocumentIds.length) {
+      setWorkspaceHydrated(true);
+      return;
+    }
+
+    let cancelled = false;
+    void Promise.all(
+      persisted.nativeDocumentIds.map((documentId) =>
+        openLibraryDocument(documentId).catch(() => null),
+      ),
+    ).then((documents) => {
+      if (cancelled) return;
+      const restored = documents
+        .filter((document): document is LibraryDocument => document !== null)
+        .map((document, index) => createDocumentSession(document, Date.now() + index));
+
+      setSessions((current) => {
+        if (current.length) return current;
+        return restored;
+      });
+
+      if (!restored.length) return;
+      const requested = restored.find((session) => session.document.id === persisted.activeDocumentId);
+      const next = requested ?? restored[0];
+      setActiveSessionId((current) => current ?? next.id);
+      setActive((current) => current === 'home' ? workspaceForDocument(next.document.kind) : current);
+    }).finally(() => {
+      if (!cancelled) setWorkspaceHydrated(true);
+    });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!workspaceHydrated || !isDesktopRuntime()) return;
+    writeWorkspaceState(
+      window.localStorage,
+      buildWorkspaceState(sessions, activeSessionId),
+    );
+  }, [workspaceHydrated, sessions, activeSessionId]);
 
   useEffect(() => {
     if (!isDesktopRuntime()) return;
