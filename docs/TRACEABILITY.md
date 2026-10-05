@@ -96,3 +96,19 @@ No module is complete merely because its navigation entry exists. Completion req
 | Prompt injection defense | Grounded prompt | source blocks explicitly untrusted, hostile-source test | `rag.test.ts` | Implemented |
 | No model startup at app launch | Architecture | provider probing only when AI workspace mounts; no spawn/download | architecture review | Implemented |
 | Local-only network boundary | Native AI | provider enum + hard-coded loopback + redirects disabled | Rust tests | Implemented |
+
+## Phase 6 traceability — Security, metadata and signing
+
+| Requirement | Component | Implementation | Evidence | Status |
+|---|---|---|---|---|
+| Metadata inspect/edit/sanitize | Metadata Studio | `metadata.ts`, `MetadataWorkspace.tsx` | metadata unit tests | Implemented, CI pending |
+| Destructive redaction/CDR | Security Center | rasterized clean-room PDF export | redaction bounds tests + docs | Implemented, CI pending |
+| Watermark | Security Center | content-preserving pdf-lib watermark copy | code review/manual | Implemented |
+| Encryption | Security Center | AES-256-GCM MALENJO envelope | round-trip/wrong-password tests | Implemented |
+| ClamAV | Native security adapter | bounded direct `clamscan` process | Rust tests + external matrix pending | Implemented adapter |
+| CDR isolation | Security architecture | independent from malware result, browser-local raster rebuild | docs/code review | Implemented |
+| pyHanko validation | Native signing adapter | `pyhanko sign validate` | external matrix pending | Implemented adapter |
+| pyHanko signing | Native signing adapter | isolated Python worker + PKCS#12 + stdin secret | external matrix pending | Implemented adapter |
+| Secret protection | Native SecurityState | zeroized ephemeral passphrase tokens; no key persistence | Rust baseline tests | Implemented |
+| Audit events | Native security layer | JSONL app-data audit + UI | Rust/UI review | Implemented |
+| Security corpus | testing/suite/fixtures/security + signatures | synthetic cases and failure matrix | repository evidence | Implemented |
