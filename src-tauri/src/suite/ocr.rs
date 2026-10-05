@@ -1,9 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashSet,
     fs,
     io::Read,
     path::PathBuf,
     process::{Command, Stdio},
+    sync::{Mutex, OnceLock},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -11,6 +13,26 @@ use tauri::{AppHandle, Manager};
 
 const MAX_OCR_IMAGE_BYTES: usize = 25 * 1024 * 1024;
 const OCR_TIMEOUT: Duration = Duration::from_secs(120);
+
+fn cancelled_jobs() -> &'static Mutex<HashSet<String>> {
+    static CANCELLED: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    CANCELLED.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+fn take_cancelled(job_id: &str) -> bool {
+    cancelled_jobs()
+        .lock()
+        .map(|mut jobs| jobs.remove(job_id))
+        .unwrap_or(false)
+}
+
+#[tauri::command]
+pub fn cancel_paddle_ocr(job_id: String) -> bool {
+    cancelled_jobs()
+        .lock()
+        .map(|mut jobs| jobs.insert(job_id))
+        .unwrap_or(false)
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -125,7 +147,10 @@ pub fn paddle_ocr_image(
     app: AppHandle,
     bytes: Vec<u8>,
     language: Option<String>,
+    job_id: String,
 ) -> Result<PaddleResult, String> {
+    let _ = take_cancelled(&job_id);
+
     if bytes.is_empty() {
         return Err("OCR image is empty.".into());
     }
@@ -157,6 +182,13 @@ pub fn paddle_ocr_image(
 
     let started = Instant::now();
     loop {
+        if take_cancelled(&job_id) {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = fs::remove_file(&temp);
+            return Err("OCR job cancelled.".into());
+        }
+
         match child.try_wait() {
             Ok(Some(status)) => {
                 let stdout = child.stdout.take().map(read_pipe).unwrap_or_default();
