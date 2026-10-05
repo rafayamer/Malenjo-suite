@@ -113,7 +113,8 @@ export default function FileLibrary({ onOpen }: Props) {
     if (!files?.length) return;
     const additions = Array.from(files).map(browserDocument);
     setDocuments((current) => [...current, ...additions]);
-    setNotice(`Added ${additions.length} temporary browser document(s). Select several files at once, then open each into an independent MALENJO tab.`);
+    additions.forEach(onOpen);
+    setNotice(`Opened ${additions.length} temporary browser document(s) as independent MALENJO tabs.`);
   }
 
   async function addFiles() {
@@ -127,9 +128,10 @@ export default function FileLibrary({ onOpen }: Props) {
       const result = await chooseAndAddDocuments();
       if (!result) return;
       await load();
+      result.documents.forEach(onOpen);
       setNotice(result.errors.length
-        ? `Added ${result.documents.length} document(s); ${result.errors.length} could not be added.`
-        : `Added ${result.documents.length} document(s).`);
+        ? `Added/opened ${result.documents.length} document(s); ${result.errors.length} could not be added.`
+        : `Added and opened ${result.documents.length} document(s) in independent tabs.`);
     } catch (error) {
       setNotice(String(error));
     } finally {
@@ -240,7 +242,7 @@ export default function FileLibrary({ onOpen }: Props) {
           : 'Codespaces/browser mode can open several local files into temporary MALENJO tabs. The selected files stay in the browser session and are not uploaded by this UI.'}</p>
       </div>
       <button className="primary-action" disabled={busy} onClick={() => void addFiles()}>
-        <FilePlus2 size={17}/> {isDesktopRuntime() ? 'Add files' : 'Open files'}
+        <FilePlus2 size={17}/> Open files
       </button>
     </div>
 
