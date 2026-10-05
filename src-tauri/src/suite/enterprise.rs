@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::HashSet,
     env,
     fs::{self, File},
-    io::{Read, Write},
+    io::Read,
     path::{Component, Path, PathBuf},
     process::{Command, Stdio},
     thread,
@@ -14,7 +14,7 @@ use tauri::{AppHandle, Manager};
 
 use super::{
     library::resolve_library_document_path,
-    security::append_audit,
+    security::{append_audit, archive_audit_older_than},
 };
 
 const DMS_VERSION: u32 = 1;
@@ -157,6 +157,13 @@ pub struct BackupInspection {
     pub file_count: usize,
     pub total_bytes: u64,
     pub errors: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuditRetentionResult {
+    pub kept: usize,
+    pub archived: usize,
 }
 
 fn now_ms() -> u64 {
@@ -567,6 +574,21 @@ pub fn admin_update_policy(
     Ok(policy)
 }
 
+#[tauri::command]
+pub fn admin_apply_audit_retention(app: AppHandle) -> Result<AuditRetentionResult, String> {
+    require_permission(&app, "admin.write")?;
+    let policy = load_policy(&app)?;
+    let (kept, archived) = archive_audit_older_than(&app, policy.audit_retention_days)?;
+    append_audit(
+        &app,
+        "audit-retention",
+        "warning",
+        "Administration",
+        format!("Archived {archived} old audit event(s); kept {kept}."),
+    )?;
+    Ok(AuditRetentionResult { kept, archived })
+}
+
 fn load_workflows(app: &AppHandle) -> Result<Vec<WorkflowContract>, String> {
     let path = workflows_path(app)?;
     if !path.exists() {
@@ -742,15 +764,14 @@ pub fn temporal_start_workflow(
     }
     let temporal_id = format!("malenjo-{}-{}", contract.id, now_ms());
     let mut command = command_with_path("temporal");
-    command.args([
-        "workflow", "start",
-        "--address", "127.0.0.1:7233",
-        "--namespace", "default",
-        "--task-queue", "malenjo",
-        "--type", "MalenjoDocumentWorkflow",
-        "--workflow-id", &temporal_id,
-        "--input", &input,
-    ]);
+    command
+        .arg("workflow").arg("start")
+        .arg("--address").arg("127.0.0.1:7233")
+        .arg("--namespace").arg("default")
+        .arg("--task-queue").arg("malenjo")
+        .arg("--type").arg("MalenjoDocumentWorkflow")
+        .arg("--workflow-id").arg(&temporal_id)
+        .arg("--input").arg(&input);
     let (code, stdout, stderr) = run_bounded(command, PROCESS_TIMEOUT)?;
     if code != 0 {
         return Err(format!("Temporal CLI failed: {} {}", stdout.trim(), stderr.trim()));
