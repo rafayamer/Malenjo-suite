@@ -8,6 +8,7 @@ import { workspaceForDocument } from '../files/route';
 import { createDocumentSession, markDocumentSaved, type DocumentSession } from '../files/session';
 import type { LibraryDocument } from '../files/types';
 import { saveAsLibraryDocument } from '../files/api';
+import PdfWorkspace from '../pdf/PdfWorkspace';
 
 const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
   {label:'Open document', icon: FolderOpen, target:'files'},
@@ -72,7 +73,9 @@ export default function App() {
         ? <Home onSelect={selectModule} onOpen={openFromLibrary}/>
         : active === 'files'
           ? <FileLibrary onOpen={openFromLibrary}/>
-          : <ModuleView module={module} session={session} notice={workspaceNotice} onSaveAs={saveSessionAs} onBackToFiles={()=>selectModule('files')}/>}
+          : active === 'pdf'
+            ? <PdfWorkspace session={session} notice={workspaceNotice} onSaveAs={saveSessionAs} onBackToFiles={()=>selectModule('files')}/>
+            : <ModuleView module={module} session={session} notice={workspaceNotice} onSaveAs={saveSessionAs} onBackToFiles={()=>selectModule('files')}/>}
     </main>
   </div>
 }

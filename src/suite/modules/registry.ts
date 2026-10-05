@@ -3,7 +3,7 @@ import type { SuiteModule } from '../core/types';
 export const modules: SuiteModule[] = [
   { id:'home', name:'Home', description:'Recent work, quick actions and system health.', status:'ready', featureFlag:'core', engine:'MALENJO shell', group:'Core' },
   { id:'files', name:'Files / Library', description:'One local-first document library across every workspace.', status:'ready', featureFlag:'core', engine:'MALENJO document model', group:'Core' },
-  { id:'pdf', name:'PDF Workspace', description:'Fast document-first PDF viewing and editing surface.', status:'adapter', featureFlag:'core', engine:'PDF.js + PDFBox/PDFium adapter', group:'Create' },
+  { id:'pdf', name:'PDF Workspace', description:'Fast document-first PDF viewing surface with local rendering.', status:'ready', featureFlag:'core', engine:'PDF.js 6.4.299 + MALENJO native adapter', group:'Create' },
   { id:'word', name:'Document Workspace', description:'Word-like editing with OOXML fidelity tracking.', status:'adapter', featureFlag:'wordEditor', engine:'Tiptap + docx4j/POI adapter', group:'Create' },
   { id:'spreadsheet', name:'Spreadsheet', description:'Workbook editing and local spreadsheet operations.', status:'adapter', featureFlag:'spreadsheetEditor', engine:'Univer + POI adapter', group:'Create' },
   { id:'presentation', name:'Presentation', description:'Slide editing, preview and export workflow.', status:'adapter', featureFlag:'presentationEditor', engine:'Univer/PPTX adapter', group:'Create' },

@@ -342,6 +342,15 @@ fn find_entry<'a>(index: &'a LibraryIndex, document_id: &str) -> Result<&'a Libr
         .ok_or_else(|| "Document is not in the MALENJO library.".to_string())
 }
 
+pub(super) fn resolve_library_document_path(
+    app: &AppHandle,
+    document_id: &str,
+) -> Result<PathBuf, String> {
+    let index = load_index(app)?;
+    let entry = find_entry(&index, document_id)?;
+    canonical_user_file(&entry.path)
+}
+
 #[tauri::command]
 pub fn list_library_documents(app: AppHandle) -> Result<Vec<LibraryDocument>, String> {
     let index = load_index(&app)?;
