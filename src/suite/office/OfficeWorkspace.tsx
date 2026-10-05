@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Download, FileText, FolderOpen, Printer, Table2, Presentation } from 'lucide-react';
 import type { DocumentSession } from '../files/session';
 import { isDesktopRuntime } from '../files/api';
+import { getBrowserFile } from '../files/browserStore';
 import { exportOfficeCopy, readOfficeDocument } from './api';
 import {
   detectOfficeKind,
