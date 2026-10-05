@@ -37,7 +37,6 @@ import { useScrollFps } from './useScrollFps';
 interface Props {
   session: DocumentSession | null;
   notice: string;
-  onSaveAs(): Promise<void>;
   onBackToFiles(): void;
   onDirtyChange?(dirty:boolean): void;
 }
@@ -230,8 +229,7 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
     try{
       const result=await operation(Uint8Array.from(sourceBytes));
       await installPdf(result,sourceName,browserFile,true);
-      const nextPage=Math.max(1,Math.min(preferredPage,(await loadPdfBytes(result)).document.numPages));
-      setCurrentPage(nextPage);
+      setCurrentPage(Math.max(1,preferredPage));
       setDirty(true);
       onDirtyChange?.(true);
       setActionNotice(label);
