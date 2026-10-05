@@ -8,16 +8,24 @@ import {
   Minus,
   Plus,
   Printer,
+  Redo2,
   RotateCw,
+  Search,
+  Square,
+  Type,
+  Undo2,
 } from 'lucide-react';
 import type { DocumentSession } from '../files/session';
 import { isDesktopRuntime } from '../files/api';
 import { exportPdfBytes, readPdfDocumentBytes } from './api';
 import {
+  addPdfRectangleOverlay,
+  addPdfTextOverlay,
   appendPdf,
   deletePdfPage,
   duplicatePdfPage,
   extractPdfPage,
+  extractPdfRange,
   insertBlankPdfPage,
   movePdfPage,
   rotatePdfPagePermanent,
@@ -60,6 +68,8 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
   const loadStartedRef = useRef(0);
   const firstPageReportedRef = useRef(false);
   const previewIdRef = useRef(`pdf-preview-${Math.random().toString(36).slice(2)}`);
+  const undoRef = useRef<Uint8Array[]>([]);
+  const redoRef = useRef<Uint8Array[]>([]);
 
   const [pdf, setPdf] = useState<PdfLoadResult | null>(null);
   const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
@@ -73,6 +83,15 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
   const [loading, setLoading] = useState(false);
   const [mutating, setMutating] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [undoCount, setUndoCount] = useState(0);
+  const [redoCount, setRedoCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<Array<{page:number;excerpt:string}>>([]);
+  const [textOverlay, setTextOverlay] = useState({ text:'', x:0.12, y:0.82, size:12 });
+  const [shapeOverlay, setShapeOverlay] = useState({ x:0.12, y:0.68, width:0.35, height:0.08, mode:'highlight' as 'highlight'|'outline' });
+  const [rangeStart, setRangeStart] = useState(1);
+  const [rangeEnd, setRangeEnd] = useState(1);
   const [error, setError] = useState('');
   const [actionNotice, setActionNotice] = useState('');
   const [firstPageMs, setFirstPageMs] = useState<number | null>(null);
@@ -110,12 +129,20 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
       setBrowserFile(file);
       setSourceName(name);
       setPageCount(result.document.numPages);
+      setRangeStart(1);
+      setRangeEnd(result.document.numPages);
       setCurrentPage(1);
       setFitMode('width');
       setZoom(1);
       setRotation(0);
       setForceRenderAll(false);
-      if(!preserveDirty)setDirty(false);
+      if(!preserveDirty){
+        setDirty(false);
+        undoRef.current=[];
+        redoRef.current=[];
+        setUndoCount(0);
+        setRedoCount(0);
+      }
     } catch (reason) {
       if (requestId === requestIdRef.current) {
         setPdf(null);
@@ -213,6 +240,24 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
     await installPdf(bytes, file.name, file);
   }
 
+  function rememberForUndo(bytes:Uint8Array){
+    // Avoid multiplying memory usage for very large documents.
+    if(bytes.byteLength>32*1024*1024){
+      undoRef.current=[];
+      redoRef.current=[];
+      setUndoCount(0);
+      setRedoCount(0);
+      return false;
+    }
+    const next=[...undoRef.current,Uint8Array.from(bytes)];
+    while(next.length>8||next.reduce((sum,item)=>sum+item.byteLength,0)>128*1024*1024)next.shift();
+    undoRef.current=next;
+    redoRef.current=[];
+    setUndoCount(next.length);
+    setRedoCount(0);
+    return true;
+  }
+
   async function mutate(
     label:string,
     operation:(bytes:Uint8Array)=>Promise<Uint8Array>,
@@ -221,17 +266,76 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
     if(!sourceBytes||mutating)return;
     setMutating(true);
     setError('');
+    const historyStored=rememberForUndo(sourceBytes);
     try{
       const result=await operation(Uint8Array.from(sourceBytes));
       await installPdf(result,sourceName,browserFile,true);
       setCurrentPage(Math.max(1,preferredPage));
       setDirty(true);
       onDirtyChange?.(true);
-      setActionNotice(label);
+      setActionNotice(historyStored?label:`${label} Undo history was skipped because this PDF exceeds 32 MB.`);
     }catch(reason){
+      if(historyStored){
+        undoRef.current.pop();
+        setUndoCount(undoRef.current.length);
+      }
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
       setMutating(false);
+    }
+  }
+
+  async function undoMutation(){
+    if(!sourceBytes||!undoRef.current.length||mutating)return;
+    const previous=undoRef.current.pop()!;
+    redoRef.current.push(Uint8Array.from(sourceBytes));
+    setUndoCount(undoRef.current.length);
+    setRedoCount(redoRef.current.length);
+    await installPdf(previous,sourceName,browserFile,true);
+    const nowDirty=undoRef.current.length>0;
+    setDirty(nowDirty);
+    onDirtyChange?.(nowDirty);
+    setActionNotice('Undid the last PDF mutation.');
+  }
+
+  async function redoMutation(){
+    if(!sourceBytes||!redoRef.current.length||mutating)return;
+    const next=redoRef.current.pop()!;
+    undoRef.current.push(Uint8Array.from(sourceBytes));
+    setUndoCount(undoRef.current.length);
+    setRedoCount(redoRef.current.length);
+    await installPdf(next,sourceName,browserFile,true);
+    setDirty(true);
+    onDirtyChange?.(true);
+    setActionNotice('Redid the PDF mutation.');
+  }
+
+  async function searchPdf(){
+    if(!pdf||!searchQuery.trim())return;
+    const needle=searchQuery.trim().toLocaleLowerCase();
+    setSearching(true);
+    setError('');
+    try{
+      const results:Array<{page:number;excerpt:string}>=[];
+      const count=Math.min(pdf.document.numPages,500);
+      for(let pageNumber=1;pageNumber<=count&&results.length<100;pageNumber+=1){
+        const page=await pdf.document.getPage(pageNumber);
+        const content=await page.getTextContent();
+        const text=content.items.map((item)=>'str' in item?String(item.str):'').join(' ').replace(/\s+/g,' ').trim();
+        const index=text.toLocaleLowerCase().indexOf(needle);
+        if(index>=0){
+          results.push({
+            page:pageNumber,
+            excerpt:text.slice(Math.max(0,index-70),Math.min(text.length,index+needle.length+120)),
+          });
+        }
+      }
+      setSearchResults(results);
+      setActionNotice(results.length?`Found ${results.length} matching page(s).`:'No matching PDF text was found.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }finally{
+      setSearching(false);
     }
   }
 
@@ -241,6 +345,7 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
     if(!files.length||!sourceBytes)return;
     setMutating(true);
     setError('');
+    const historyStored=rememberForUndo(sourceBytes);
     try{
       let result=Uint8Array.from(sourceBytes);
       for(const file of files){
@@ -255,9 +360,25 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
       onDirtyChange?.(true);
       setActionNotice(`Appended ${files.length} PDF file(s).`);
     }catch(reason){
+      if(historyStored){
+        undoRef.current.pop();
+        setUndoCount(undoRef.current.length);
+      }
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
       setMutating(false);
+    }
+  }
+
+  async function exportRange(){
+    if(!sourceBytes)return;
+    try{
+      const bytes=await extractPdfRange(sourceBytes,rangeStart,rangeEnd);
+      const base=sourceName.replace(/\.pdf$/i,'')||'MALENJO-document';
+      await exportPdfBytes(`${base}-pages-${rangeStart}-${rangeEnd}.pdf`,bytes);
+      setActionNotice(`Exported pages ${rangeStart}–${rangeEnd} as a new PDF.`);
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
     }
   }
 
@@ -344,6 +465,8 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
       </div>
 
       <div className="pdf-toolbar-group">
+        <button disabled={!undoCount||mutating} onClick={()=>void undoMutation()} title="Undo last PDF mutation"><Undo2 size={16}/></button>
+        <button disabled={!redoCount||mutating} onClick={()=>void redoMutation()} title="Redo PDF mutation"><Redo2 size={16}/></button>
         <button disabled={!pdf} onClick={() => { setFitMode('custom'); setZoom((value) => stepPdfZoom(value, -1)); }} aria-label="Zoom out"><Minus size={16}/></button>
         <button className="pdf-zoom-label" disabled={!pdf} onClick={() => setFitMode((mode) => mode === 'width' ? 'page' : 'width')}>{zoomLabel}</button>
         <button disabled={!pdf} onClick={() => { setFitMode('custom'); setZoom((value) => stepPdfZoom(value, 1)); }} aria-label="Zoom in"><Plus size={16}/></button>
@@ -416,6 +539,34 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
           <div><dt>View</dt><dd>{fitMode === 'custom' ? `${Math.round(zoom * 100)}%` : fitMode} · {rotation}°</dd></div>
         </dl>
 
+        <div className="pdf-pane-title">Find in document</div>
+        <div className="pdf-find">
+          <div><Search size={14}/><input value={searchQuery} onChange={(event)=>setSearchQuery(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter')void searchPdf();}} placeholder="Search PDF text"/></div>
+          <button disabled={searching||!searchQuery.trim()} onClick={()=>void searchPdf()}>{searching?'Searching…':'Find'}</button>
+          {!!searchResults.length&&<div className="pdf-search-results">{searchResults.map((result)=><button key={result.page} onClick={()=>goToPage(result.page)}><b>Page {result.page}</b><span>{result.excerpt}</span></button>)}</div>}
+        </div>
+
+        <div className="pdf-pane-title">Edit current page</div>
+        <div className="pdf-edit-form">
+          <label><Type size={13}/> Add text<textarea value={textOverlay.text} onChange={(event)=>setTextOverlay({...textOverlay,text:event.target.value})} placeholder="Text to place on the current page"/></label>
+          <div className="pdf-coordinate-grid">
+            <label>X<input type="number" min="0" max="1" step="0.01" value={textOverlay.x} onChange={(event)=>setTextOverlay({...textOverlay,x:Number(event.target.value)})}/></label>
+            <label>Y<input type="number" min="0" max="1" step="0.01" value={textOverlay.y} onChange={(event)=>setTextOverlay({...textOverlay,y:Number(event.target.value)})}/></label>
+            <label>Pt<input type="number" min="4" max="144" step="1" value={textOverlay.size} onChange={(event)=>setTextOverlay({...textOverlay,size:Number(event.target.value)})}/></label>
+          </div>
+          <button disabled={mutating||!textOverlay.text.trim()} onClick={()=>void mutate('Added permanent text to the PDF.',bytes=>addPdfTextOverlay(bytes,{pageNumber:currentPage,...textOverlay}),currentPage)}>Place text</button>
+
+          <label><Square size={13}/> Rectangle<select value={shapeOverlay.mode} onChange={(event)=>setShapeOverlay({...shapeOverlay,mode:event.target.value as 'highlight'|'outline'})}><option value="highlight">Highlight</option><option value="outline">Outline</option></select></label>
+          <div className="pdf-coordinate-grid">
+            <label>X<input type="number" min="0" max="1" step="0.01" value={shapeOverlay.x} onChange={(event)=>setShapeOverlay({...shapeOverlay,x:Number(event.target.value)})}/></label>
+            <label>Y<input type="number" min="0" max="1" step="0.01" value={shapeOverlay.y} onChange={(event)=>setShapeOverlay({...shapeOverlay,y:Number(event.target.value)})}/></label>
+            <label>W<input type="number" min="0.01" max="1" step="0.01" value={shapeOverlay.width} onChange={(event)=>setShapeOverlay({...shapeOverlay,width:Number(event.target.value)})}/></label>
+            <label>H<input type="number" min="0.01" max="1" step="0.01" value={shapeOverlay.height} onChange={(event)=>setShapeOverlay({...shapeOverlay,height:Number(event.target.value)})}/></label>
+          </div>
+          <button disabled={mutating} onClick={()=>void mutate(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage)}>Apply rectangle</button>
+          <small>Coordinates are normalized 0–1 from the PDF page’s bottom-left corner. A later visual drag tool will replace manual coordinates.</small>
+        </div>
+
         <div className="pdf-pane-title">Page tools</div>
         <div className="pdf-page-tools">
           <button disabled={mutating||pageCount<=1} onClick={()=>void mutate(`Deleted page ${currentPage}.`,bytes=>deletePdfPage(bytes,currentPage),Math.min(currentPage,pageCount-1))}>Delete</button>
@@ -426,6 +577,11 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
           <button disabled={mutating} onClick={()=>void mutate(`Inserted a blank page after page ${currentPage}.`,bytes=>insertBlankPdfPage(bytes,currentPage),currentPage+1)}>Blank after</button>
           <button disabled={mutating} onClick={()=>void extractCurrent()}>Extract page</button>
           <button disabled={mutating} onClick={()=>appendInputRef.current?.click()}>Append PDF…</button>
+        </div>
+        <div className="pdf-range-tools">
+          <label>Range start<input type="number" min="1" max={pageCount} value={rangeStart} onChange={(event)=>setRangeStart(clampPdfPage(Number(event.target.value),pageCount))}/></label>
+          <label>Range end<input type="number" min="1" max={pageCount} value={rangeEnd} onChange={(event)=>setRangeEnd(clampPdfPage(Number(event.target.value),pageCount))}/></label>
+          <button disabled={mutating||rangeEnd<rangeStart} onClick={()=>void exportRange()}>Extract range</button>
         </div>
         <div className="pdf-edit-note">Page operations rebuild the PDF file and mark this tab modified. They do not overwrite the source document; use Export to create the edited file.</div>
 
