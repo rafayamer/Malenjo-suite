@@ -18,9 +18,7 @@ export async function loadPdfBytes(data: ArrayBuffer | Uint8Array): Promise<PdfL
 
   const loadingTask = getDocument({
     data: bytes,
-    isEvalSupported: false,
     useSystemFonts: true,
-    stopEvent: true,
   });
 
   const document = await loadingTask.promise;
