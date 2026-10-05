@@ -85,6 +85,6 @@ Stirling/PDFBox or another PDF mutation backend is not vendored by this phase. B
 - [x] Malformed/active-content fixture corpus.
 - [x] Backend capability boundary.
 - [x] Dependency provenance.
-- [ ] Automated CI/typecheck/build verification on Phase 2 branch.
+- [x] Automated CI/typecheck/build verification on Phase 2 branch (CI #90: frontend, Windows Rust, Codespaces/Linux all passed).
 - [ ] Windows desktop manual rendering/printing check.
 - [ ] Representative fidelity corpus expansion.
