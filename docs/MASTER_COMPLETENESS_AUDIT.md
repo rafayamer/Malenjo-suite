@@ -390,3 +390,27 @@ Unimplemented master features should not masquerade as working controls.
 ## Completion rule
 
 No future issue, milestone, module badge or user-facing status may call a module `complete` unless its source-of-truth feature manifest reaches full traced coverage or contains an explicit user-approved/legal/technical exclusion.
+
+
+## Completion pass 2 — shell and PDF depth
+
+Implemented on `feat/shell-pdf-completeness-pass-2`:
+
+### Shell / Files
+- native Tauri drag/drop import using webview file-drop paths;
+- Codespaces/browser drag/drop multi-open into independent temporary tabs;
+- tab action menu: close, close others, close tabs to right, close all;
+- Ctrl/Cmd+W current-tab close and Ctrl/Cmd+Shift+W all-tab close;
+- two-way dirty-state synchronization so editor undo can return a tab to clean;
+- existing multi-document tab/session and Ctrl+K architecture retained.
+
+### PDF
+- bounded undo/redo history for PDF byte mutations;
+- memory guard: PDF snapshots above 32 MB do not enter undo history;
+- PDF.js text search across up to 500 pages with page-result navigation;
+- permanent text placement onto the current page;
+- permanent highlight/outline rectangle placement using normalized coordinates;
+- inclusive page-range extraction/export;
+- existing delete/duplicate/move/rotate/blank-page/extract/append operations retained.
+
+This pass is another operational increment, not a claim that PDF or shell completeness is finished. Visual drag handles, object/text/image editing, comments/annotations, forms, bookmarks, attachments, compare, advanced convert/protect flows, session recovery, desktop file associations and many other master requirements remain open.
