@@ -172,7 +172,7 @@ export default function App() {
       run:()=>activateSession(session.id),
     })),
     ...(activeSession ? [
-      ...(!activeSession.document.browserFile ? [{
+      ...(!activeSession.document.browserFile && !['pdf','docx','xlsx','pptx'].includes(activeSession.document.kind) ? [{
         id:'active-save-as',
         label:`Save a copy of ${activeSession.document.name}`,
         group:'Current document',
