@@ -9,6 +9,9 @@ import {
   Plus,
   Printer,
   RotateCw,
+  Search,
+  Square,
+  Type,
   Undo2,
   Redo2,
 } from 'lucide-react';
@@ -16,6 +19,8 @@ import type { DocumentSession } from '../files/session';
 import { isDesktopRuntime } from '../files/api';
 import { exportPdfBytes, readPdfDocumentBytes } from './api';
 import {
+  addPdfRectangleOverlay,
+  addPdfTextOverlay,
   appendPdf,
   deletePdfPage,
   deletePdfPages,
@@ -99,6 +104,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [forceRenderAll, setForceRenderAll] = useState(false);
   const [viewport, setViewport] = useState({ width: 900, height: 700 });
   const [historyRevision, setHistoryRevision] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<Array<{page:number;excerpt:string}>>([]);
+  const [textOverlay, setTextOverlay] = useState({ text:'', x:0.12, y:0.82, size:12 });
+  const [shapeOverlay, setShapeOverlay] = useState({ x:0.12, y:0.68, width:0.35, height:0.08, mode:'highlight' as 'highlight'|'outline' });
   const scrollFps = useScrollFps(scrollRef);
   const domIdPrefix=session?.id??previewIdRef.current;
 
@@ -413,6 +423,39 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     return()=>window.removeEventListener('keydown',onKeyDown);
   },[active,historyRevision,mutating]);
 
+  async function searchPdf(){
+    if(!pdf||!searchQuery.trim())return;
+    const needle=searchQuery.trim().toLocaleLowerCase();
+    setSearching(true);
+    setError('');
+    try{
+      const results:Array<{page:number;excerpt:string}>=[];
+      const count=Math.min(pdf.document.numPages,500);
+      for(let pageNumber=1;pageNumber<=count&&results.length<100;pageNumber+=1){
+        const page=await pdf.document.getPage(pageNumber);
+        const content=await page.getTextContent();
+        const text=content.items
+          .map((item)=>'str' in item?String(item.str):'')
+          .join(' ')
+          .replace(/\s+/g,' ')
+          .trim();
+        const index=text.toLocaleLowerCase().indexOf(needle);
+        if(index>=0){
+          results.push({
+            page:pageNumber,
+            excerpt:text.slice(Math.max(0,index-70),Math.min(text.length,index+needle.length+120)),
+          });
+        }
+      }
+      setSearchResults(results);
+      setActionNotice(results.length?`Found ${results.length} matching page(s).`:'No matching PDF text was found.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }finally{
+      setSearching(false);
+    }
+  }
+
   async function exportCurrent(){
     if(!sourceBytes){
       setActionNotice('Open a PDF first.');
@@ -599,6 +642,34 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           <div><dt>History</dt><dd>{historyRef.current?`${historyRef.current.cursor+1}/${historyRef.current.entries.length} · ${formatBytes(historyRef.current.totalBytes)}`:'—'}</dd></div>
           <div><dt>View</dt><dd>{fitMode === 'custom' ? `${Math.round(zoom * 100)}%` : fitMode} · {rotation}°</dd></div>
         </dl>
+
+        <div className="pdf-pane-title">Find in document</div>
+        <div className="pdf-find">
+          <div><Search size={14}/><input value={searchQuery} onChange={(event)=>setSearchQuery(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter')void searchPdf();}} placeholder="Search PDF text"/></div>
+          <button disabled={searching||!searchQuery.trim()} onClick={()=>void searchPdf()}>{searching?'Searching…':'Find'}</button>
+          {!!searchResults.length&&<div className="pdf-search-results">{searchResults.map((result)=><button key={result.page} onClick={()=>goToPage(result.page)}><b>Page {result.page}</b><span>{result.excerpt}</span></button>)}</div>}
+        </div>
+
+        <div className="pdf-pane-title">Edit current page</div>
+        <div className="pdf-edit-form">
+          <label><Type size={13}/> Add text<textarea value={textOverlay.text} onChange={(event)=>setTextOverlay({...textOverlay,text:event.target.value})} placeholder="Text to place on the current page"/></label>
+          <div className="pdf-coordinate-grid">
+            <label>X<input type="number" min="0" max="1" step="0.01" value={textOverlay.x} onChange={(event)=>setTextOverlay({...textOverlay,x:Number(event.target.value)})}/></label>
+            <label>Y<input type="number" min="0" max="1" step="0.01" value={textOverlay.y} onChange={(event)=>setTextOverlay({...textOverlay,y:Number(event.target.value)})}/></label>
+            <label>Pt<input type="number" min="4" max="144" step="1" value={textOverlay.size} onChange={(event)=>setTextOverlay({...textOverlay,size:Number(event.target.value)})}/></label>
+          </div>
+          <button disabled={mutating||!textOverlay.text.trim()} onClick={()=>void mutate('Added permanent text to the PDF.',bytes=>addPdfTextOverlay(bytes,{pageNumber:currentPage,...textOverlay}),currentPage)}>Place text</button>
+
+          <label><Square size={13}/> Rectangle<select value={shapeOverlay.mode} onChange={(event)=>setShapeOverlay({...shapeOverlay,mode:event.target.value as 'highlight'|'outline'})}><option value="highlight">Highlight</option><option value="outline">Outline</option></select></label>
+          <div className="pdf-coordinate-grid">
+            <label>X<input type="number" min="0" max="1" step="0.01" value={shapeOverlay.x} onChange={(event)=>setShapeOverlay({...shapeOverlay,x:Number(event.target.value)})}/></label>
+            <label>Y<input type="number" min="0" max="1" step="0.01" value={shapeOverlay.y} onChange={(event)=>setShapeOverlay({...shapeOverlay,y:Number(event.target.value)})}/></label>
+            <label>W<input type="number" min="0.01" max="1" step="0.01" value={shapeOverlay.width} onChange={(event)=>setShapeOverlay({...shapeOverlay,width:Number(event.target.value)})}/></label>
+            <label>H<input type="number" min="0.01" max="1" step="0.01" value={shapeOverlay.height} onChange={(event)=>setShapeOverlay({...shapeOverlay,height:Number(event.target.value)})}/></label>
+          </div>
+          <button disabled={mutating} onClick={()=>void mutate(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage)}>Apply rectangle</button>
+          <small>Coordinates are normalized 0–1 from the page’s bottom-left corner. A later visual drag/selection layer will replace manual coordinate entry.</small>
+        </div>
 
         <div className="pdf-pane-title">Page tools</div>
         <div className="pdf-page-tools">
