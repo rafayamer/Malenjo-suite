@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Copy, FilePlus2, FolderOpen, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { confirm } from '@tauri-apps/plugin-dialog';
 import {
   chooseAndAddDocuments,
   isDesktopRuntime,
@@ -111,7 +112,11 @@ export default function FileLibrary({ onOpen }: Props) {
   }
 
   async function remove(document: LibraryDocument) {
-    if (!window.confirm(`Remove "${document.name}" from the MALENJO library? The original file will not be deleted.`)) return;
+    const approved = await confirm(
+      `Remove "${document.name}" from the MALENJO library? The original file will not be deleted.`,
+      { title: 'MALENJO Suite', kind: 'warning' },
+    );
+    if (!approved) return;
     try {
       await removeLibraryDocument(document.id);
       setDocuments((current) => current.filter((item) => item.id !== document.id));
