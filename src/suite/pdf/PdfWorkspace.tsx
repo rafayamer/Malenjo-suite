@@ -18,11 +18,16 @@ import { exportPdfBytes, readPdfDocumentBytes } from './api';
 import {
   appendPdf,
   deletePdfPage,
+  deletePdfPages,
   duplicatePdfPage,
   extractPdfPage,
+  extractPdfPages,
   insertBlankPdfPage,
+  insertPdfAfter,
   movePdfPage,
   rotatePdfPagePermanent,
+  rotatePdfPagesPermanent,
+  splitPdfAtPage,
 } from './editor';
 import { disposePdf, loadPdfBytes, type PdfLoadResult } from './engine';
 import {
@@ -67,6 +72,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const appendInputRef = useRef<HTMLInputElement>(null);
+  const insertInputRef = useRef<HTMLInputElement>(null);
+  const selectionAnchorRef = useRef<number | null>(null);
   const activeLoadRef = useRef<PdfLoadResult | null>(null);
   const requestIdRef = useRef(0);
   const loadStartedRef = useRef(0);
@@ -80,6 +87,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [browserFile, setBrowserFile] = useState<File | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedPages, setSelectedPages] = useState<Set<number>>(() => new Set([1]));
   const [fitMode, setFitMode] = useState<PdfFitMode>('width');
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
@@ -125,6 +133,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setSourceName(name);
       setPageCount(result.document.numPages);
       setCurrentPage(1);
+      if(!preserveDirty){
+        setSelectedPages(new Set([1]));
+        selectionAnchorRef.current=1;
+      }
       setFitMode('width');
       setZoom(1);
       setRotation(0);
@@ -210,6 +222,34 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setCurrentPage(page);
   }, []);
 
+  function selectThumbnail(page:number,additive:boolean,range:boolean){
+    goToPage(page);
+    setSelectedPages((current)=>{
+      const anchor=selectionAnchorRef.current;
+      if(range&&anchor){
+        const next=additive?new Set(current):new Set<number>();
+        const start=Math.min(anchor,page);
+        const end=Math.max(anchor,page);
+        for(let value=start;value<=end;value+=1)next.add(value);
+        return next;
+      }
+      if(additive){
+        const next=new Set(current);
+        if(next.has(page))next.delete(page);else next.add(page);
+        selectionAnchorRef.current=page;
+        return next;
+      }
+      selectionAnchorRef.current=page;
+      return new Set([page]);
+    });
+  }
+
+  const selectedPageNumbers=Array.from(selectedPages)
+    .filter(page=>page>=1&&page<=pageCount)
+    .sort((a,b)=>a-b);
+  const operationPages=selectedPageNumbers.length?selectedPageNumbers:[currentPage];
+
+
   const onPageRendered = useCallback((page: number) => {
     if (page === 1 && !firstPageReportedRef.current) {
       firstPageReportedRef.current = true;
@@ -248,6 +288,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         : recordPdfHistory(createPdfHistory(sourceBytes,currentPage),result,targetPage,label);
       setHistoryRevision((value)=>value+1);
       setCurrentPage(targetPage);
+      setSelectedPages(new Set([targetPage]));
+      selectionAnchorRef.current=targetPage;
       setDirty(true);
       onDirtyChange?.(true);
       setActionNotice(label);
@@ -256,6 +298,25 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }finally{
       setMutating(false);
     }
+  }
+
+  async function insertDocuments(event:React.ChangeEvent<HTMLInputElement>){
+    const files=Array.from(event.target.files??[]);
+    event.target.value='';
+    if(!files.length||!sourceBytes)return;
+    const ordered=[...files].reverse();
+    await mutate(
+      `Inserted ${files.length} PDF file(s) after page ${currentPage}.`,
+      async(bytes)=>{
+        let result=bytes;
+        for(const file of ordered){
+          if(file.size>512*1024*1024)throw new Error(`${file.name} exceeds the 512 MB safety limit.`);
+          result=await insertPdfAfter(result,new Uint8Array(await file.arrayBuffer()),currentPage);
+        }
+        return result;
+      },
+      currentPage+1,
+    );
   }
 
   async function appendDocuments(event:React.ChangeEvent<HTMLInputElement>){
@@ -367,6 +428,33 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }
   }
 
+  async function extractSelected(){
+    if(!sourceBytes)return;
+    try{
+      const pages=operationPages;
+      const bytes=await extractPdfPages(sourceBytes,pages);
+      const base=sourceName.replace(/\.pdf$/i,'')||'MALENJO-document';
+      const label=pages.length===1?`page-${pages[0]}`:`pages-${pages[0]}-${pages[pages.length-1]}`;
+      await exportPdfBytes(`${base}-${label}.pdf`,bytes);
+      setActionNotice(`Extracted ${pages.length} selected page(s) as a new PDF.`);
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }
+  }
+
+  async function splitCurrent(){
+    if(!sourceBytes||currentPage>=pageCount)return;
+    try{
+      const [left,right]=await splitPdfAtPage(sourceBytes,currentPage);
+      const base=sourceName.replace(/\.pdf$/i,'')||'MALENJO-document';
+      await exportPdfBytes(`${base}-part-1.pdf`,left);
+      await exportPdfBytes(`${base}-part-2.pdf`,right);
+      setActionNotice(`Split after page ${currentPage} and exported two PDFs.`);
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }
+  }
+
   async function extractCurrent(){
     if(!sourceBytes)return;
     try{
@@ -411,6 +499,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       accept="application/pdf,.pdf"
       multiple
       onChange={(event)=>void appendDocuments(event)}
+    />
+    <input
+      ref={insertInputRef}
+      className="visually-hidden"
+      type="file"
+      accept="application/pdf,.pdf"
+      multiple
+      onChange={(event)=>void insertDocuments(event)}
     />
 
     <div className="pdf-toolbar">
@@ -465,6 +561,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     {pdf && <div className="pdf-layout">
       <aside className="pdf-thumbnails" aria-label="PDF page thumbnails">
         <div className="pdf-pane-title"><span>Pages</span><b>{pageCount}</b></div>
+        <div className="pdf-selection-bar">
+          <span>{selectedPageNumbers.length || 1} selected</span>
+          <button onClick={()=>{setSelectedPages(new Set(Array.from({length:pageCount},(_,index)=>index+1)));selectionAnchorRef.current=1;}}>All</button>
+          <button onClick={()=>{setSelectedPages(new Set([currentPage]));selectionAnchorRef.current=currentPage;}}>Current</button>
+        </div>
         <div className="pdf-thumbnail-list">
           {Array.from({ length: pageCount }, (_, index) => index + 1).map((page) =>
             <PdfThumbnail
@@ -472,7 +573,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               document={pdf.document}
               pageNumber={page}
               active={page === currentPage}
-              onSelect={goToPage}
+              selected={selectedPages.has(page)}
+              onSelect={selectThumbnail}
             />
           )}
         </div>
@@ -513,16 +615,26 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
         <div className="pdf-pane-title">Page tools</div>
         <div className="pdf-page-tools">
-          <button disabled={mutating||pageCount<=1} onClick={()=>void mutate(`Deleted page ${currentPage}.`,bytes=>deletePdfPage(bytes,currentPage),Math.min(currentPage,pageCount-1))}>Delete</button>
-          <button disabled={mutating} onClick={()=>void mutate(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)}>Duplicate</button>
-          <button disabled={mutating||currentPage<=1} onClick={()=>void mutate('Moved page earlier.',bytes=>movePdfPage(bytes,currentPage,currentPage-1),currentPage-1)}>Move earlier</button>
-          <button disabled={mutating||currentPage>=pageCount} onClick={()=>void mutate('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)}>Move later</button>
-          <button disabled={mutating} onClick={()=>void mutate(`Permanently rotated page ${currentPage} by 90°.`,bytes=>rotatePdfPagePermanent(bytes,currentPage),currentPage)}>Rotate page</button>
+          <button disabled={mutating||operationPages.length>=pageCount} onClick={()=>void mutate(
+            `Deleted ${operationPages.length} selected page(s).`,
+            bytes=>operationPages.length===1?deletePdfPage(bytes,operationPages[0]):deletePdfPages(bytes,operationPages),
+            Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length)),
+          )}>Delete selected</button>
+          <button disabled={mutating||operationPages.length!==1} onClick={()=>void mutate(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)}>Duplicate</button>
+          <button disabled={mutating||operationPages.length!==1||currentPage<=1} onClick={()=>void mutate('Moved page earlier.',bytes=>movePdfPage(bytes,currentPage,currentPage-1),currentPage-1)}>Move earlier</button>
+          <button disabled={mutating||operationPages.length!==1||currentPage>=pageCount} onClick={()=>void mutate('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)}>Move later</button>
+          <button disabled={mutating} onClick={()=>void mutate(
+            `Permanently rotated ${operationPages.length} selected page(s) by 90°.`,
+            bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),
+            operationPages[0],
+          )}>Rotate selected</button>
           <button disabled={mutating} onClick={()=>void mutate(`Inserted a blank page after page ${currentPage}.`,bytes=>insertBlankPdfPage(bytes,currentPage),currentPage+1)}>Blank after</button>
-          <button disabled={mutating} onClick={()=>void extractCurrent()}>Extract page</button>
+          <button disabled={mutating} onClick={()=>void extractSelected()}>Extract selected</button>
+          <button disabled={mutating} onClick={()=>insertInputRef.current?.click()}>Insert PDF here…</button>
+          <button disabled={mutating||currentPage>=pageCount} onClick={()=>void splitCurrent()}>Split here</button>
           <button disabled={mutating} onClick={()=>appendInputRef.current?.click()}>Append PDF…</button>
         </div>
-        <div className="pdf-edit-note">Page operations rebuild the PDF file and mark this tab modified. They do not overwrite the source document; use Export to create the edited file.</div>
+        <div className="pdf-edit-note">Click a thumbnail to select one page; Ctrl/Cmd-click toggles pages and Shift-click selects a range. Mutations use the bounded per-tab Undo/Redo history and never overwrite the source document; use Export to create the edited file.</div>
 
         <div className="pdf-pane-title">Performance</div>
         <dl>
