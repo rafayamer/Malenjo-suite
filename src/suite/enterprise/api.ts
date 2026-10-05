@@ -1,7 +1,7 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import type {
-  AdapterStatus, BackupInspection, DmsRecord, EnterprisePolicy, RetentionCandidate,
+  AdapterStatus, AuditRetentionResult, BackupInspection, DmsRecord, EnterprisePolicy, RetentionCandidate,
   RoleProfile, WorkflowContract, WorkflowRunResult,
 } from './types';
 
@@ -16,6 +16,7 @@ export const applyRetention=(versionIds:string[])=>invoke<number>('dms_apply_ret
 
 export const getEnterprisePolicy=()=>invoke<[EnterprisePolicy,RoleProfile[]]>('admin_get_policy');
 export const updateEnterprisePolicy=(currentRole:string,defaultRetentionDays:number,auditRetentionDays:number)=>invoke<EnterprisePolicy>('admin_update_policy',{currentRole,defaultRetentionDays,auditRetentionDays});
+export const applyAuditRetention=()=>invoke<AuditRetentionResult>('admin_apply_audit_retention');
 
 export const listWorkflows=()=>invoke<WorkflowContract[]>('automation_list_workflows');
 export const saveWorkflow=(contract:WorkflowContract)=>invoke<WorkflowContract>('automation_save_workflow',{contract});
