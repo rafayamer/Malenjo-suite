@@ -79,3 +79,20 @@ No module is complete merely because its navigation entry exists. Completion req
 | Accuracy/latency | OCR benchmark | Levenshtein accuracy + per-page latency/confidence | unit tests/UI | Implemented |
 | Resource bounds | Scanner/native OCR | 25 MB, 25 MP, 50 pages, 120 sec worker | unit tests | Implemented |
 | Offline path | PaddleOCR pack | optional local worker; no startup process | architecture review | Implemented; pack QA pending |
+
+## Phase 5 traceability — Malenjo AI local RAG
+
+| Requirement | Component | Implementation | Evidence | Status |
+|---|---|---|---|---|
+| Ollama adapter | Native AI | hard-coded loopback `127.0.0.1:11434`, tags/chat APIs | Rust tests/CI pending | Implemented |
+| llama.cpp adapter | Native AI | hard-coded loopback `127.0.0.1:8080`, OpenAI-compatible models/chat APIs | Rust tests/CI pending | Implemented |
+| Model discovery separate from download | AI runtime UI | status/list only; no pull/download action | UI/code review | Implemented |
+| Document chunking/indexing | RAG core | bounded chunk windows + lexical retrieval | unit tests | Implemented |
+| Source citations | RAG core/UI | stable `[S#]` citation objects and excerpts | unit tests/UI | Implemented |
+| PDF/Office/text sources | Source extraction | PDF.js + OOXML + text loaders | code review/CI pending | Implemented |
+| Runtime/resource UI | AI workspace | provider/model/status/resource cards | UI/code review | Implemented |
+| Cancellation | Native/frontend AI | watch-channel cancellation + UI cancel | Rust/frontend code | Implemented |
+| Lite Mode | RAG + model request | lower corpus/chunk/context/token caps, Ollama keep_alive=0 | unit tests/UI | Implemented |
+| Prompt injection defense | Grounded prompt | source blocks explicitly untrusted, hostile-source test | `rag.test.ts` | Implemented |
+| No model startup at app launch | Architecture | provider probing only when AI workspace mounts; no spawn/download | architecture review | Implemented |
+| Local-only network boundary | Native AI | provider enum + hard-coded loopback + redirects disabled | Rust tests | Implemented |
