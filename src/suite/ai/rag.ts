@@ -152,7 +152,7 @@ export function retrieveChunks(query: string, index: AiIndex, mode: AiMode): Ran
 
 export function buildGroundedMessages(question: string, chunks: RankedChunk[]) {
   const sources = chunks.map((chunk) =>
-    `<source id="${chunk.citation}" name="${escapeAttribute(chunk.sourceName)}" locator="${escapeAttribute(chunk.locator)}">\n${chunk.text}\n</source>`,
+    `<source id="${chunk.citation}" name="${escapeAttribute(chunk.sourceName)}" locator="${escapeAttribute(chunk.locator)}">\n${escapeSourceText(chunk.text)}\n</source>`,
   ).join('\n\n');
 
   return [
@@ -182,4 +182,12 @@ function escapeAttribute(value: string): string {
     '"': '&quot;',
     "'": '&apos;',
   })[character] ?? character);
+}
+
+
+function escapeSourceText(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
