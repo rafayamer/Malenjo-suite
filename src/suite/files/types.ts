@@ -23,3 +23,10 @@ export interface ImportResult {
   documents: LibraryDocument[];
   errors: ImportFailure[];
 }
+
+export interface StagedDocument {
+  token: string;
+  documentId: string;
+  name: string;
+  extension: string;
+}
