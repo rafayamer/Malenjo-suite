@@ -916,20 +916,12 @@ pub fn inspect_local_backup(path: String) -> Result<BackupInspection, String> {
     inspect_backup(&PathBuf::from(path))
 }
 
-#[tauri::command]
-pub fn restore_local_backup(
-    app: AppHandle,
-    backup_path: String,
-) -> Result<bool, String> {
-    require_permission(&app, "backup.restore")?;
-    let backup = PathBuf::from(backup_path);
-    let inspection = inspect_backup(&backup)?;
+fn restore_state_with_recovery(app_data: &Path, backup: &Path) -> Result<PathBuf, String> {
+    let inspection = inspect_backup(backup)?;
     if !inspection.valid {
         return Err(format!("Backup integrity check failed: {}", inspection.errors.join("; ")));
     }
 
-    let app_data = app.path().app_data_dir()
-        .map_err(|error| format!("Unable to resolve app data directory: {error}"))?;
     let recovery = app_data.join(format!("restore-recovery-{}", now_ms()));
     fs::create_dir_all(&recovery)
         .map_err(|error| format!("Unable to create restore recovery directory: {error}"))?;
@@ -943,10 +935,22 @@ pub fn restore_local_backup(
     copy_dir_recursive(&backup.join("state").join("security"), &stage.join("security"))?;
 
     let result = (|| -> Result<(), String> {
-        if app_data.join("enterprise").exists() { fs::remove_dir_all(app_data.join("enterprise")).map_err(|error| format!("Unable to replace enterprise state: {error}"))?; }
-        if app_data.join("security").exists() { fs::remove_dir_all(app_data.join("security")).map_err(|error| format!("Unable to replace security state: {error}"))?; }
-        if stage.join("enterprise").exists() { fs::rename(stage.join("enterprise"), app_data.join("enterprise")).map_err(|error| format!("Unable to install enterprise restore: {error}"))?; }
-        if stage.join("security").exists() { fs::rename(stage.join("security"), app_data.join("security")).map_err(|error| format!("Unable to install security restore: {error}"))?; }
+        if app_data.join("enterprise").exists() {
+            fs::remove_dir_all(app_data.join("enterprise"))
+                .map_err(|error| format!("Unable to replace enterprise state: {error}"))?;
+        }
+        if app_data.join("security").exists() {
+            fs::remove_dir_all(app_data.join("security"))
+                .map_err(|error| format!("Unable to replace security state: {error}"))?;
+        }
+        if stage.join("enterprise").exists() {
+            fs::rename(stage.join("enterprise"), app_data.join("enterprise"))
+                .map_err(|error| format!("Unable to install enterprise restore: {error}"))?;
+        }
+        if stage.join("security").exists() {
+            fs::rename(stage.join("security"), app_data.join("security"))
+                .map_err(|error| format!("Unable to install security restore: {error}"))?;
+        }
         Ok(())
     })();
 
@@ -959,7 +963,26 @@ pub fn restore_local_backup(
         return Err(format!("{error}; recovery copy retained at {}.", recovery.display()));
     }
 
-    append_audit(&app, "backup-restore", "warning", "Backup/DR", format!("Restored verified backup; recovery copy retained at {}.", recovery.display()))?;
+    Ok(recovery)
+}
+
+#[tauri::command]
+pub fn restore_local_backup(
+    app: AppHandle,
+    backup_path: String,
+) -> Result<bool, String> {
+    require_permission(&app, "backup.restore")?;
+    let backup = PathBuf::from(backup_path);
+    let app_data = app.path().app_data_dir()
+        .map_err(|error| format!("Unable to resolve app data directory: {error}"))?;
+    let recovery = restore_state_with_recovery(&app_data, &backup)?;
+    append_audit(
+        &app,
+        "backup-restore",
+        "warning",
+        "Backup/DR",
+        format!("Restored verified backup; recovery copy retained at {}.", recovery.display()),
+    )?;
     Ok(true)
 }
 
@@ -1008,7 +1031,11 @@ pub fn kopia_restore_snapshot(
 
 #[cfg(test)]
 mod tests {
-    use super::{retention_candidates, role_permissions, DmsIndex, DmsRecord, DmsVersion};
+    use super::{
+        collect_backup_files, inspect_backup, restore_state_with_recovery, retention_candidates,
+        role_permissions, BackupManifest, DmsIndex, DmsRecord, DmsVersion, BACKUP_VERSION,
+    };
+    use std::{fs, time::{SystemTime, UNIX_EPOCH}};
 
     #[test]
     fn viewer_is_read_only() {
@@ -1063,4 +1090,49 @@ mod tests {
         assert!(candidates.iter().any(|candidate| candidate.version_id == "old"));
         assert!(!candidates.iter().any(|candidate| candidate.version_id == "new"));
     }
+    fn temp_root(label: &str) -> std::path::PathBuf {
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+        std::env::temp_dir().join(format!("malenjo-phase7-{label}-{nonce}"))
+    }
+
+    fn create_test_backup(root: &std::path::Path) -> std::path::PathBuf {
+        let backup = root.join("backup");
+        let state = backup.join("state");
+        fs::create_dir_all(state.join("enterprise")).expect("create backup state");
+        fs::write(state.join("enterprise").join("new.txt"), b"new-state").expect("write backup state");
+        let mut files = Vec::new();
+        collect_backup_files(&state, &state, &mut files).expect("collect backup files");
+        let manifest = BackupManifest { version:BACKUP_VERSION, created_ms:1, files };
+        fs::write(
+            backup.join("manifest-v1.json"),
+            serde_json::to_vec_pretty(&manifest).expect("serialize manifest"),
+        ).expect("write manifest");
+        backup
+    }
+
+    #[test]
+    fn offline_restore_keeps_recovery_copy() {
+        let root = temp_root("restore");
+        let app_data = root.join("app");
+        fs::create_dir_all(app_data.join("enterprise")).expect("create app state");
+        fs::write(app_data.join("enterprise").join("old.txt"), b"old-state").expect("write old state");
+        let backup = create_test_backup(&root);
+
+        let recovery = restore_state_with_recovery(&app_data, &backup).expect("restore state");
+        assert_eq!(fs::read(app_data.join("enterprise").join("new.txt")).expect("new state"), b"new-state");
+        assert_eq!(fs::read(recovery.join("enterprise").join("old.txt")).expect("recovery state"), b"old-state");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn tampered_backup_fails_integrity_inspection() {
+        let root = temp_root("tamper");
+        let backup = create_test_backup(&root);
+        fs::write(backup.join("state").join("enterprise").join("new.txt"), b"tampered").expect("tamper backup");
+        let inspection = inspect_backup(&backup).expect("inspect backup");
+        assert!(!inspection.valid);
+        assert!(!inspection.errors.is_empty());
+        let _ = fs::remove_dir_all(root);
+    }
+
 }
