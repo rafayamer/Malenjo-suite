@@ -79,3 +79,21 @@ No module is complete merely because its navigation entry exists. Completion req
 | Accuracy/latency | OCR benchmark | Levenshtein accuracy + per-page latency/confidence | unit tests/UI | Implemented |
 | Resource bounds | Scanner/native OCR | 25 MB, 25 MP, 50 pages, 120 sec worker | unit tests | Implemented |
 | Offline path | PaddleOCR pack | optional local worker; no startup process | architecture review | Implemented; pack QA pending |
+
+## Phase 5 traceability — Malenjo AI local RAG
+
+| Requirement | Component | Implementation | Evidence | Status |
+|---|---|---|---|---|
+| Ollama adapter | AI runtime | `runtime.ts` /api/version, /api/tags, /api/chat | runtime request tests | Implemented, CI pending |
+| llama.cpp adapter | AI runtime | OpenAI-compatible /v1/models + /v1/chat/completions | runtime request tests | Implemented, CI pending |
+| Model discovery separated from download | AI runtime UI | explicit Check runtime; no pull endpoint | tests/code review | Implemented |
+| Document extraction | AI source layer | PDF, DOCX, XLSX, PPTX, text extraction | existing parser reuse + CI | Implemented |
+| Chunk/index bounds | RAG core | Standard/Lite bounded index | `rag.test.ts` | Implemented |
+| Local retrieval | RAG core | deterministic lexical retrieval | `rag.test.ts` | Implemented |
+| Source citations | RAG core/UI | pre-generation S1..Sn locators + displayed passages | tests/UI | Implemented |
+| Runtime/model status | AI workspace | reachability/version/model/resource panels | UI/code review | Implemented |
+| Cancellation | AI runtime | AbortController request cancellation | code review/manual pending | Implemented |
+| Lite Mode | AI workspace/RAG/runtime | reduced index/context/output; Ollama keep_alive 0 | unit tests | Implemented |
+| Prompt-injection defense | RAG prompt boundary | untrusted-source system rule + escaped source wrappers | injection unit test | Implemented |
+| No AI startup load | shell/runtime | component does not auto-check/start runtime/model | architecture review | Implemented |
+| Model licensing boundary | provenance/UI | no weights bundled/downloaded; per-model review required | docs/tree review | Implemented |
