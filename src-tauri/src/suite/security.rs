@@ -127,6 +127,56 @@ pub(super) fn append_audit(
     Ok(event)
 }
 
+
+pub(super) fn archive_audit_older_than(
+    app: &AppHandle,
+    retention_days: u32,
+) -> Result<(usize, usize), String> {
+    let path = audit_path(app)?;
+    if !path.exists() {
+        return Ok((0, 0));
+    }
+    let text = fs::read_to_string(&path)
+        .map_err(|error| format!("Unable to read security audit log: {error}"))?;
+    let cutoff = now_ms().saturating_sub(u64::from(retention_days).saturating_mul(86_400_000));
+    let mut kept = Vec::new();
+    let mut archived = Vec::new();
+
+    for line in text.lines() {
+        match serde_json::from_str::<AuditEvent>(line) {
+            Ok(event) if retention_days > 0 && event.timestamp_ms < cutoff => archived.push(event),
+            Ok(event) => kept.push(event),
+            Err(_) => {}
+        }
+    }
+    if archived.is_empty() {
+        return Ok((kept.len(), 0));
+    }
+
+    let security_dir = path.parent().ok_or_else(|| "Audit log has no parent directory.".to_string())?;
+    let archive_path = security_dir.join(format!("audit-archive-{}.jsonl", now_ms()));
+    let mut archive_bytes = Vec::new();
+    for event in &archived {
+        archive_bytes.extend(serde_json::to_vec(event).map_err(|error| format!("Unable to serialize audit archive: {error}"))?);
+        archive_bytes.push(b'\n');
+    }
+    fs::write(&archive_path, archive_bytes)
+        .map_err(|error| format!("Unable to write audit archive: {error}"))?;
+
+    let temp = path.with_extension("jsonl.tmp");
+    let mut kept_bytes = Vec::new();
+    for event in &kept {
+        kept_bytes.extend(serde_json::to_vec(event).map_err(|error| format!("Unable to serialize retained audit event: {error}"))?);
+        kept_bytes.push(b'\n');
+    }
+    fs::write(&temp, kept_bytes)
+        .map_err(|error| format!("Unable to write retained audit log: {error}"))?;
+    fs::rename(&temp, &path)
+        .map_err(|error| format!("Unable to rotate audit log: {error}"))?;
+
+    Ok((kept.len(), archived.len()))
+}
+
 #[tauri::command]
 pub fn record_audit_event(
     app: AppHandle,
