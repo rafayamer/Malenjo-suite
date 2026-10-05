@@ -157,7 +157,7 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
       });
 
     return () => { cancelled = true; };
-  }, [installPdf, session]);
+  }, [installPdf, session?.id]);
 
   useEffect(() => () => {
     requestIdRef.current += 1;
@@ -321,7 +321,7 @@ export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyCh
     <div className="pdf-toolbar">
       <div className="pdf-toolbar-group">
         <button onClick={onBackToFiles} title="Back to MALENJO Files"><FolderOpen size={16}/> Files</button>
-        <button onClick={() => fileInputRef.current?.click()} title="Open a temporary PDF in this workspace"><FileText size={16}/> Open PDF</button>
+        <button disabled={!!session} onClick={() => fileInputRef.current?.click()} title={session ? "Use Files / Library to open another PDF in a new tab" : "Open a temporary PDF in this workspace"}><FileText size={16}/> Open PDF</button>
         <button disabled={!pdf||mutating} onClick={() => void exportCurrent()} title="Export current PDF bytes"><Download size={16}/> Export</button>
         <button disabled={!pdf||mutating} onClick={printDocument} title="Print rendered PDF pages"><Printer size={16}/> Print</button>
       </div>
