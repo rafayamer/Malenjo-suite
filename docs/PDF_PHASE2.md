@@ -86,5 +86,10 @@ Stirling/PDFBox or another PDF mutation backend is not vendored by this phase. B
 - [x] Backend capability boundary.
 - [x] Dependency provenance.
 - [x] Automated CI/typecheck/build verification on Phase 2 branch (CI #90: frontend, Windows Rust, Codespaces/Linux all passed).
-- [ ] Windows desktop manual rendering/printing check.
+- [ ] Windows desktop manual rendering/printing check (release-quality/manual validation; automated main CI #93 passed).
 - [ ] Representative fidelity corpus expansion.
+
+
+## Post-merge verification
+
+Phase 2 was merged to `main` in commit `c41cbf011fd93af98d49821682c8672a992a67a7`. GitHub Actions run #93 passed the frontend, Windows Rust, and Codespaces/Linux jobs on the merged commit.
