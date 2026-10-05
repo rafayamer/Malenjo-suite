@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "MALENJO Suite",
+  "version": "0.1.0",
+  "identifier": "com.malenjo.suite",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [{ "title": "MALENJO Suite", "width": 1440, "height": 900, "minWidth": 1080, "minHeight": 700, "resizable": true }],
+    "security": { "csp": "default-src 'self'; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://127.0.0.1:*; script-src 'self'" }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "msi"],
+    "windows": { "nsis": { "installMode": "currentUser" } }
+  }
+}
