@@ -5,10 +5,11 @@ import type { ModuleId } from '../core/types';
 import FileLibrary from '../files/FileLibrary';
 import RecentDocuments from '../files/RecentDocuments';
 import { workspaceForDocument } from '../files/route';
-import { createDocumentSession, markDocumentSaved, type DocumentSession } from '../files/session';
+import { createDocumentSession, markDocumentDirty, markDocumentSaved, type DocumentSession } from '../files/session';
 import type { LibraryDocument } from '../files/types';
 import { saveAsLibraryDocument } from '../files/api';
 import PdfWorkspace from '../pdf/PdfWorkspace';
+import OfficeWorkspace from '../office/OfficeWorkspace';
 
 const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
   {label:'Open document', icon: FolderOpen, target:'files'},
@@ -75,7 +76,13 @@ export default function App() {
           ? <FileLibrary onOpen={openFromLibrary}/>
           : active === 'pdf'
             ? <PdfWorkspace session={session} notice={workspaceNotice} onSaveAs={saveSessionAs} onBackToFiles={()=>selectModule('files')}/>
-            : <ModuleView module={module} session={session} notice={workspaceNotice} onSaveAs={saveSessionAs} onBackToFiles={()=>selectModule('files')}/>}
+            : active === 'word'
+              ? <OfficeWorkspace kind="docx" session={session} onBackToFiles={()=>selectModule('files')} onDirtyChange={(dirty)=>setSession((current)=>current && dirty ? markDocumentDirty(current) : current)}/>
+              : active === 'spreadsheet'
+                ? <OfficeWorkspace kind="xlsx" session={session} onBackToFiles={()=>selectModule('files')} onDirtyChange={(dirty)=>setSession((current)=>current && dirty ? markDocumentDirty(current) : current)}/>
+                : active === 'presentation'
+                  ? <OfficeWorkspace kind="pptx" session={session} onBackToFiles={()=>selectModule('files')} onDirtyChange={(dirty)=>setSession((current)=>current && dirty ? markDocumentDirty(current) : current)}/>
+                  : <ModuleView module={module} session={session} notice={workspaceNotice} onSaveAs={saveSessionAs} onBackToFiles={()=>selectModule('files')}/>}
     </main>
   </div>
 }
