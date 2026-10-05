@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
+    io::Read,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -221,6 +222,34 @@ fn classify_extension(extension: &str) -> &'static str {
     }
 }
 
+fn classify_signature(bytes: &[u8], extension: &str) -> &'static str {
+    if bytes.starts_with(b"%PDF-") {
+        return "pdf";
+    }
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n")
+        || bytes.starts_with(b"\xff\xd8\xff")
+        || bytes.starts_with(b"GIF87a")
+        || bytes.starts_with(b"GIF89a")
+        || bytes.starts_with(b"II*\0")
+        || bytes.starts_with(b"MM\0*")
+    {
+        return "image";
+    }
+    if bytes.len() >= 132 && &bytes[128..132] == b"DICM" {
+        return "dicom";
+    }
+
+    classify_extension(extension)
+}
+
+fn detect_kind(path: &Path, extension: &str) -> &'static str {
+    let mut header = [0u8; 132];
+    match fs::File::open(path).and_then(|mut file| file.read(&mut header)) {
+        Ok(read) => classify_signature(&header[..read], extension),
+        Err(_) => classify_extension(extension),
+    }
+}
+
 fn public_document(entry: &LibraryEntry) -> LibraryDocument {
     let path = PathBuf::from(&entry.path);
     let metadata = fs::metadata(&path).ok();
@@ -244,7 +273,7 @@ fn public_document(entry: &LibraryEntry) -> LibraryDocument {
     LibraryDocument {
         id: entry.id.clone(),
         name,
-        kind: classify_extension(&extension).to_string(),
+        kind: detect_kind(&path, &extension).to_string(),
         extension,
         size_bytes: metadata.as_ref().map(|value| value.len()).unwrap_or_default(),
         modified_ms: metadata.as_ref().map(modified_ms).unwrap_or_default(),
@@ -511,7 +540,7 @@ pub fn discard_staged_document(app: AppHandle, staging_token: String) -> Result<
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_extension, fnv1a64, validate_requested_path, validate_staging_token};
+    use super::{classify_extension, classify_signature, fnv1a64, validate_requested_path, validate_staging_token};
 
     #[test]
     fn maps_supported_document_extensions() {
@@ -522,6 +551,17 @@ mod tests {
         assert_eq!(classify_extension("dxf"), "cad");
         assert_eq!(classify_extension("dcm"), "dicom");
         assert_eq!(classify_extension("unknown"), "other");
+    }
+
+    #[test]
+    fn signature_detection_overrides_misleading_extensions() {
+        assert_eq!(classify_signature(b"%PDF-1.7", "txt"), "pdf");
+        assert_eq!(classify_signature(b"\x89PNG\r\n\x1a\n", "bin"), "image");
+
+        let mut dicom = vec![0u8; 132];
+        dicom[128..132].copy_from_slice(b"DICM");
+        assert_eq!(classify_signature(&dicom, "bin"), "dicom");
+        assert_eq!(classify_signature(b"PK", "docx"), "docx");
     }
 
     #[test]
