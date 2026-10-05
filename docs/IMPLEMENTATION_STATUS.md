@@ -10,7 +10,7 @@ This repository contains the **Phase 0–2 executable foundation**, not a claim 
 | Local service manager | Contract scaffold | supervised subprocess lifecycle + health checks |
 | PDF | Phase 2 viewer implemented and CI-verified | Windows rendering/printing verification, then mutation backend proof of concept |
 | Office | Phase 3 editors implemented on feature branch | CI + Windows Office/LibreOffice interoperability validation |
-| Scanner/OCR | Adapter boundary | camera + OpenCV + PaddleOCR proof of concept |
+| Scanner/OCR | Phase 4 pipeline implemented on feature branch | CI + packaged PaddleOCR/model pack + Windows camera matrix |
 | Local AI | Adapter boundary | Ollama/llama.cpp local RAG proof of concept |
 | Sign/Invoice/Metadata | Adapter boundary | module-by-module implementation and tests |
 | DMS/Automation/Admin | Planned scaffold | data model and policy service implementation |
@@ -67,3 +67,20 @@ Implemented on `feat/office-workspaces-phase-3`:
 - No mandatory LibreOffice/Java conversion service at startup.
 
 Phase 3 remains open until CI and post-merge validation pass. Manual Microsoft Office/LibreOffice interoperability remains a release-quality fidelity gate.
+
+## Phase 4 evidence — Scanner/OCR
+
+Implemented on `feat/scanner-ocr-phase-4`:
+
+- camera capture and multi-image import;
+- crop, rotate, brightness/contrast/grayscale processing;
+- manual four-corner perspective correction;
+- multi-page assembly/reorder with resource limits;
+- supervised optional PaddleOCR worker with timeout/cancellation;
+- Tesseract.js 7.0.0 portable fallback;
+- SHA-256 OCR session cache;
+- latency/confidence and ground-truth accuracy benchmarking;
+- text export and searchable PDF via pdf-lib 1.17.1;
+- scanner/OCR tests and provenance records.
+
+Phase 4 remains open until CI and post-merge validation pass. Packaged PaddleOCR/model installation and physical Windows camera coverage remain release-quality gates.
