@@ -8,6 +8,7 @@ use std::{
 use tauri::{AppHandle, Manager};
 
 const INDEX_VERSION: u32 = 1;
+const STAGING_VERSION: u32 = 1;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -70,12 +71,27 @@ pub struct StagedDocument {
     pub extension: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct StagingManifest {
+    version: u32,
+    document_id: String,
+    source_size: u64,
+    source_modified_ms: u64,
+}
+
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis()
         .min(u64::MAX as u128) as u64
+}
+
+fn staging_nonce() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos()
 }
 
 fn modified_ms(metadata: &fs::Metadata) -> u64 {
@@ -122,6 +138,11 @@ fn validate_staging_token(token: &str) -> Result<(), String> {
 fn staging_path(app: &AppHandle, token: &str) -> Result<PathBuf, String> {
     validate_staging_token(token)?;
     Ok(staging_dir(app)?.join(token))
+}
+
+fn staging_manifest_path(app: &AppHandle, token: &str) -> Result<PathBuf, String> {
+    validate_staging_token(token)?;
+    Ok(staging_dir(app)?.join(format!("{token}.json")))
 }
 
 fn parse_index(bytes: &[u8]) -> Result<LibraryIndex, String> {
@@ -409,8 +430,15 @@ pub fn remove_library_document(app: AppHandle, document_id: String) -> Result<bo
 fn destination_path(destination: &str) -> Result<PathBuf, String> {
     validate_requested_path(destination)?;
     let path = PathBuf::from(destination);
-    if path.exists() && path.is_dir() {
-        return Err("Save As destination is a directory, not a file.".into());
+    if path.exists() {
+        let metadata = fs::symlink_metadata(&path)
+            .map_err(|error| format!("Unable to inspect Save As destination: {error}"))?;
+        if metadata.file_type().is_symlink() {
+            return Err("Save As refuses to overwrite a symbolic-link destination.".into());
+        }
+        if !metadata.is_file() {
+            return Err("Save As destination is not a regular file.".into());
+        }
     }
     let parent = path
         .parent()
@@ -471,11 +499,27 @@ pub fn stage_library_document(app: AppHandle, document_id: String) -> Result<Sta
     let entry = find_entry(&index, &document_id)?;
     let source = canonical_user_file(&entry.path)?;
     let public = public_document(entry);
-    let token = format!("{}-{:x}", document_id, now_ms());
+    let source_metadata = fs::metadata(&source)
+        .map_err(|error| format!("Unable to inspect source document: {error}"))?;
+    let token = format!("{}-{:x}", document_id, staging_nonce());
     let stage = staging_path(&app, &token)?;
+    let manifest_path = staging_manifest_path(&app, &token)?;
 
     fs::copy(&source, &stage)
         .map_err(|error| format!("Unable to create MALENJO edit staging copy: {error}"))?;
+
+    let manifest = StagingManifest {
+        version: STAGING_VERSION,
+        document_id: document_id.clone(),
+        source_size: source_metadata.len(),
+        source_modified_ms: modified_ms(&source_metadata),
+    };
+    let manifest_bytes = serde_json::to_vec_pretty(&manifest)
+        .map_err(|error| format!("Unable to serialize MALENJO staging manifest: {error}"))?;
+    if let Err(error) = fs::write(&manifest_path, manifest_bytes) {
+        let _ = fs::remove_file(&stage);
+        return Err(format!("Unable to create MALENJO staging manifest: {error}"));
+    }
 
     Ok(StagedDocument {
         token,
@@ -497,6 +541,15 @@ pub fn commit_staged_document(
     }
 
     let stage = staging_path(&app, &staging_token)?;
+    let manifest_path = staging_manifest_path(&app, &staging_token)?;
+    let manifest_bytes = fs::read(&manifest_path)
+        .map_err(|error| format!("MALENJO staging manifest is unavailable: {error}"))?;
+    let manifest: StagingManifest = serde_json::from_slice(&manifest_bytes)
+        .map_err(|error| format!("MALENJO staging manifest is invalid: {error}"))?;
+    if manifest.version != STAGING_VERSION || manifest.document_id != document_id {
+        return Err("MALENJO staging manifest does not match this document.".into());
+    }
+
     let stage_metadata = fs::symlink_metadata(&stage)
         .map_err(|error| format!("MALENJO staging copy is unavailable: {error}"))?;
     if stage_metadata.file_type().is_symlink() || !stage_metadata.is_file() {
@@ -506,6 +559,17 @@ pub fn commit_staged_document(
     let mut index = load_index(&app)?;
     let entry = find_entry_mut(&mut index, &document_id)?;
     let source = canonical_user_file(&entry.path)?;
+    let current_metadata = fs::metadata(&source)
+        .map_err(|error| format!("Unable to inspect source document before save: {error}"))?;
+    if current_metadata.len() != manifest.source_size
+        || modified_ms(&current_metadata) != manifest.source_modified_ms
+    {
+        return Err(
+            "The source document changed outside MALENJO after editing began. Reopen or Save As to avoid overwriting newer changes."
+                .into(),
+        );
+    }
+
     let backup = staging_dir(&app)?.join(format!("{staging_token}-backup"));
 
     if backup.exists() {
@@ -531,6 +595,7 @@ pub fn commit_staged_document(
 
     let _ = fs::remove_file(&backup);
     let _ = fs::remove_file(&stage);
+    let _ = fs::remove_file(&manifest_path);
 
     entry.last_opened_ms = Some(now_ms());
     let document = public_document(entry);
@@ -541,17 +606,32 @@ pub fn commit_staged_document(
 #[tauri::command]
 pub fn discard_staged_document(app: AppHandle, staging_token: String) -> Result<bool, String> {
     let stage = staging_path(&app, &staging_token)?;
-    if !stage.exists() {
-        return Ok(false);
+    let manifest = staging_manifest_path(&app, &staging_token)?;
+    let mut removed = false;
+
+    if stage.exists() {
+        let metadata = fs::symlink_metadata(&stage)
+            .map_err(|error| format!("Unable to inspect MALENJO staging copy: {error}"))?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err("MALENJO staging copy is not a regular file.".into());
+        }
+        fs::remove_file(&stage)
+            .map_err(|error| format!("Unable to discard MALENJO staging copy: {error}"))?;
+        removed = true;
     }
-    let metadata = fs::symlink_metadata(&stage)
-        .map_err(|error| format!("Unable to inspect MALENJO staging copy: {error}"))?;
-    if metadata.file_type().is_symlink() || !metadata.is_file() {
-        return Err("MALENJO staging copy is not a regular file.".into());
+
+    if manifest.exists() {
+        let metadata = fs::symlink_metadata(&manifest)
+            .map_err(|error| format!("Unable to inspect MALENJO staging manifest: {error}"))?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err("MALENJO staging manifest is not a regular file.".into());
+        }
+        fs::remove_file(manifest)
+            .map_err(|error| format!("Unable to discard MALENJO staging manifest: {error}"))?;
+        removed = true;
     }
-    fs::remove_file(stage)
-        .map_err(|error| format!("Unable to discard MALENJO staging copy: {error}"))?;
-    Ok(true)
+
+    Ok(removed)
 }
 
 #[cfg(test)]
