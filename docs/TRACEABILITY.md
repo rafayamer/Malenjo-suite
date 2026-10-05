@@ -101,8 +101,8 @@ No module is complete merely because its navigation entry exists. Completion req
 
 | Requirement | Component | Implementation | Evidence | Status |
 |---|---|---|---|---|
-| Metadata inspect/edit/sanitize | Metadata Studio | `metadata.ts`, `MetadataWorkspace.tsx` | metadata unit tests | Implemented, CI pending |
-| Destructive redaction/CDR | Security Center | rasterized clean-room PDF export | redaction bounds tests + docs | Implemented, CI pending |
+| Metadata inspect/edit/sanitize | Metadata Studio | `metadata.ts`, `MetadataWorkspace.tsx` | metadata unit tests + CI #118 | Implemented |
+| Destructive redaction/CDR | Security Center | rasterized clean-room PDF export | redaction bounds tests + CI #118 | Implemented |
 | Watermark | Security Center | content-preserving pdf-lib watermark copy | code review/manual | Implemented |
 | Encryption | Security Center | AES-256-GCM MALENJO envelope | round-trip/wrong-password tests | Implemented |
 | ClamAV | Native security adapter | bounded direct `clamscan` process | Rust tests + external matrix pending | Implemented adapter |
@@ -117,7 +117,7 @@ No module is complete merely because its navigation entry exists. Completion req
 
 | Requirement | Component | Implementation | Evidence | Status |
 |---|---|---|---|---|
-| DMS indexing/version model | Enterprise DMS | app-data index + immutable version snapshots | Rust tests/code review | Implemented, CI pending |
+| DMS indexing/version model | Enterprise DMS | app-data index + immutable version snapshots | Rust tests + CI #120 | Implemented |
 | Version integrity | Enterprise DMS | SHA-256 per snapshot | native implementation | Implemented |
 | Retention controls | Enterprise DMS | preview + explicit apply; newest protected | Rust retention tests | Implemented |
 | Legal hold | Enterprise DMS | legal-hold exclusion from retention | Rust test | Implemented |
@@ -129,7 +129,7 @@ No module is complete merely because its navigation entry exists. Completion req
 | Backup tamper detection | Backup / DR | manifest hash/size verification | Rust tamper test | Implemented |
 | Kopia adapter | Backup / DR | direct snapshot/restore commands | docs/code review; external matrix pending | Implemented adapter |
 | Shared policy model | Administration | owner/admin/editor/viewer permission matrix | Rust permission test | Implemented |
-| Native authorization | DMS/Automation/Backup/Admin | Rust `require_permission` gates | code review/CI | Implemented |
+| Native authorization | DMS/Automation/Backup/Admin | Rust `require_permission` gates | code review + CI #120 | Implemented |
 | Audit integration | Enterprise services | Phase 6 audit writer reused | code review | Implemented |
 | Audit retention | Administration | archive expired events, retain active JSONL | implementation/docs | Implemented |
 | Shared settings/permissions | Enterprise policy | one versioned local policy used across enterprise modules | UI/native contract | Implemented |
