@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Clock3, FileText } from 'lucide-react';
 import { isDesktopRuntime, listLibraryDocuments, openLibraryDocument } from './api';
+import { listBrowserDocuments, markBrowserDocumentOpened } from './browserStore';
 import type { LibraryDocument } from './types';
 
 interface Props {
@@ -12,13 +13,20 @@ export default function RecentDocuments({ onOpen, onViewAll }: Props) {
   const [documents, setDocuments] = useState<LibraryDocument[]>([]);
 
   useEffect(() => {
-    if (!isDesktopRuntime()) return;
+    if (!isDesktopRuntime()) {
+      setDocuments(listBrowserDocuments().filter((item) => item.available).slice(0, 5));
+      return;
+    }
     void listLibraryDocuments()
       .then((items) => setDocuments(items.filter((item) => item.available).slice(0, 5)))
       .catch(() => setDocuments([]));
   }, []);
 
   async function openDocument(document: LibraryDocument) {
+    if (!isDesktopRuntime()) {
+      onOpen(markBrowserDocumentOpened(document));
+      return;
+    }
     try {
       onOpen(await openLibraryDocument(document.id));
     } catch {
