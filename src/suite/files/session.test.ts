@@ -4,6 +4,7 @@ import {
   markDocumentDirty,
   markDocumentSaved,
   markDocumentSaving,
+  setDocumentDirty,
 } from './session';
 import type { LibraryDocument } from './types';
 
@@ -31,6 +32,14 @@ describe('document session state', () => {
     const saved = markDocumentSaved(opened, copy, 200);
     expect(saved.id).toBe(opened.id);
     expect(saved.document.id).toBe('doc-copy');
+  });
+
+  it('can return a tab to a clean state without pretending to save', () => {
+    const opened = createDocumentSession(document, 100);
+    const dirty = setDocumentDirty(opened, true);
+    const clean = setDocumentDirty(dirty, false);
+    expect(clean.dirty).toBe(false);
+    expect(clean.lastSavedAt).toBeNull();
   });
 
   it('tracks dirty, saving and saved states independently', () => {
