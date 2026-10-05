@@ -11,7 +11,7 @@ This repository contains the **Phase 0–5 executable foundation**, not a claim 
 | PDF | Phase 2 viewer implemented and CI-verified | Windows rendering/printing verification, then mutation backend proof of concept |
 | Office | Phase 3 merged and CI-verified | Windows Office/LibreOffice interoperability validation |
 | Scanner/OCR | Phase 4 merged and CI-verified | packaged PaddleOCR/model pack + Windows camera matrix |
-| Local AI | Phase 5 implemented and branch CI-verified | post-merge CI + Windows CPU/GPU runtime matrix |
+| Local AI | Phase 5 merged and branch CI-verified | post-merge CI + Windows CPU/GPU runtime matrix |
 | Sign/Invoice/Metadata | Adapter boundary | module-by-module implementation and tests |
 | DMS/Automation/Admin | Planned scaffold | data model and policy service implementation |
 | CAD/DICOM | Adapter boundary | optional-pack proof of concept |
@@ -101,4 +101,4 @@ Implemented on `feat/local-ai-rag-phase-5`:
 - explicit runtime/model/resource status UI;
 - no AI/model process launched during MALENJO startup.
 
-Phase 5 branch CI #104 passed across frontend, Windows Rust, and Codespaces/Linux. Post-merge main validation remains required; Windows CPU/GPU model-runtime performance and optional model-pack installation remain release-quality gates.
+Phase 5 merged through PR #21 after hardened-head CI #107 passed across frontend, Windows Rust, and Codespaces/Linux. Post-merge main validation remains required; Windows CPU/GPU model-runtime performance and optional model-pack installation remain release-quality gates.
