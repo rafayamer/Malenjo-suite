@@ -109,7 +109,7 @@ fn append_audit(
         action: truncate(action.into(), 120),
         severity: truncate(severity.into(), 32),
         target: truncate(target.into(), 260),
-        detail: truncate(detail.into().replace(['\r', '\n'], " "), MAX_DETAIL_CHARS),
+        detail: truncate(detail.into().replace('\r', " ").replace('\n', " "), MAX_DETAIL_CHARS),
     };
     let mut line = serde_json::to_vec(&event)
         .map_err(|error| format!("Unable to serialize security audit event: {error}"))?;
