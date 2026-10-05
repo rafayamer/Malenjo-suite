@@ -1,9 +1,32 @@
-use std::{fs, io::Read, path::Path};
+use std::{fs, io::Read, path::{Path, PathBuf}};
 use tauri::{ipc::Response, AppHandle};
 
 use super::library::resolve_library_document_path;
 
 const MAX_PDF_BYTES: u64 = 512 * 1024 * 1024;
+
+fn validate_destination(destination: &str) -> Result<PathBuf, String> {
+    if destination.trim().is_empty() {
+        return Err("Destination path is empty.".into());
+    }
+    let path = PathBuf::from(destination);
+    if path.exists() {
+        let metadata = fs::symlink_metadata(&path)
+            .map_err(|error| format!("Unable to inspect PDF destination: {error}"))?;
+        if metadata.file_type().is_symlink() {
+            return Err("Refusing to overwrite a symbolic-link PDF destination.".into());
+        }
+        if !metadata.is_file() {
+            return Err("PDF destination is not a regular file.".into());
+        }
+    }
+    let parent = path.parent()
+        .ok_or_else(|| "PDF destination has no parent folder.".to_string())?;
+    if !parent.exists() || !parent.is_dir() {
+        return Err("PDF destination folder does not exist.".into());
+    }
+    Ok(path)
+}
 
 fn validate_pdf_file(path: &Path) -> Result<u64, String> {
     let metadata = fs::metadata(path)
@@ -48,9 +71,33 @@ pub fn read_pdf_document(app: AppHandle, document_id: String) -> Result<Response
     Ok(Response::new(bytes))
 }
 
+#[tauri::command]
+pub fn write_pdf_copy(destination: String, bytes: Vec<u8>) -> Result<bool, String> {
+    if bytes.len() < 5 || &bytes[..5] != b"%PDF-" {
+        return Err("Generated content does not contain a valid PDF header.".into());
+    }
+    if bytes.len() as u64 > MAX_PDF_BYTES {
+        return Err("Generated PDF exceeds the 512 MB safety limit.".into());
+    }
+
+    let path = validate_destination(&destination)?;
+    let temp = path.with_extension("malenjo-pdf.tmp");
+    fs::write(&temp, &bytes)
+        .map_err(|error| format!("Unable to write PDF export: {error}"))?;
+
+    if path.exists() {
+        fs::remove_file(&path)
+            .map_err(|error| format!("Unable to replace PDF export: {error}"))?;
+    }
+    fs::rename(&temp, &path)
+        .map_err(|error| format!("Unable to finalize PDF export: {error}"))?;
+
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{validate_pdf_file, MAX_PDF_BYTES};
+    use super::{validate_destination, validate_pdf_file, MAX_PDF_BYTES};
     use std::{fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
 
     fn temp_path(name: &str) -> PathBuf {
@@ -80,5 +127,10 @@ mod tests {
     #[test]
     fn phase_two_pdf_limit_is_bounded() {
         assert_eq!(MAX_PDF_BYTES, 512 * 1024 * 1024);
+    }
+
+    #[test]
+    fn destination_requires_existing_parent() {
+        assert!(validate_destination("").is_err());
     }
 }
