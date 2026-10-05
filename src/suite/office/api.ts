@@ -7,7 +7,9 @@ export async function readOfficeDocument(documentId: string): Promise<ArrayBuffe
 
 export async function exportOfficeCopy(name: string, bytes: Uint8Array): Promise<boolean> {
   if (!isTauri()) {
-    const blob = new Blob([bytes], { type: 'application/octet-stream' });
+    const copy = new Uint8Array(bytes.byteLength);
+    copy.set(bytes);
+    const blob = new Blob([copy.buffer], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
