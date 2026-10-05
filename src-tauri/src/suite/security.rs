@@ -96,7 +96,7 @@ fn truncate(value: String, limit: usize) -> String {
     value.chars().take(limit).collect()
 }
 
-fn append_audit(
+pub(super) fn append_audit(
     app: &AppHandle,
     action: impl Into<String>,
     severity: impl Into<String>,
