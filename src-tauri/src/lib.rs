@@ -7,6 +7,7 @@ use suite::{
         stage_library_document, commit_staged_document, discard_staged_document,
     },
     local_services::LocalServiceManager,
+    office::{read_office_document, write_office_copy},
     pdf::read_pdf_document,
 };
 
@@ -41,7 +42,9 @@ pub fn run() {
             stage_library_document,
             commit_staged_document,
             discard_staged_document,
-            read_pdf_document
+            read_pdf_document,
+            read_office_document,
+            write_office_copy
         ])
         .run(tauri::generate_context!())
         .expect("error while running MALENJO Suite");
