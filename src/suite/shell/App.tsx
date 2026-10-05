@@ -12,6 +12,9 @@ import PdfWorkspace from '../pdf/PdfWorkspace';
 import OfficeWorkspace from '../office/OfficeWorkspace';
 import ScannerWorkspace from '../scanner/ScannerWorkspace';
 import AiWorkspace from '../ai/AiWorkspace';
+import SecurityWorkspace from '../security/SecurityWorkspace';
+import MetadataWorkspace from '../security/MetadataWorkspace';
+import SignWorkspace from '../security/SignWorkspace';
 
 const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
   {label:'Open document', icon: FolderOpen, target:'files'},
@@ -90,7 +93,13 @@ export default function App() {
                       ? <ScannerWorkspace mode="ocr" onBackToFiles={()=>selectModule('files')}/>
                       : active === 'ai'
                         ? <AiWorkspace onBackToFiles={()=>selectModule('files')}/>
-                        : <ModuleView module={module} session={session} notice={workspaceNotice} onSaveAs={saveSessionAs} onBackToFiles={()=>selectModule('files')}/>}
+                        : active === 'security'
+                          ? <SecurityWorkspace onBackToFiles={()=>selectModule('files')}/>
+                          : active === 'metadata'
+                            ? <MetadataWorkspace onBackToFiles={()=>selectModule('files')}/>
+                            : active === 'sign'
+                              ? <SignWorkspace onBackToFiles={()=>selectModule('files')}/>
+                              : <ModuleView module={module} session={session} notice={workspaceNotice} onSaveAs={saveSessionAs} onBackToFiles={()=>selectModule('files')}/>}
     </main>
   </div>
 }
