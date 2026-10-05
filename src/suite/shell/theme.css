@@ -174,7 +174,7 @@
 .document-tab{position:relative}
 .document-tab-menu-button{width:25px;border:0;background:transparent;color:#69879c;display:grid;place-items:center;cursor:pointer}
 .document-tab-menu-button:hover{background:#173148;color:#dbe9f2}
-.document-tab-menu{position:absolute;top:34px;right:4px;z-index:950;min-width:150px;border:1px solid #294a62;background:#081723;border-radius:8px;box-shadow:0 14px 35px #0009;padding:5px}
+.document-tab-menu{position:fixed;z-index:950;min-width:150px;border:1px solid #294a62;background:#081723;border-radius:8px;box-shadow:0 14px 35px #0009;padding:5px}
 .document-tab-menu button{display:block;width:100%;border:0;background:transparent;color:#a9c1d1;text-align:left;padding:7px 8px;border-radius:5px;font-size:9px;cursor:pointer}
 .document-tab-menu button:hover:not(:disabled){background:#102c42;color:#e2eef5}.document-tab-menu button:disabled{opacity:.35;cursor:not-allowed}
 .pdf-find,.pdf-edit-form{padding:8px 0 12px}
