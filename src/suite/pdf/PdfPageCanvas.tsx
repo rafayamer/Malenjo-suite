@@ -11,6 +11,7 @@ interface Props {
   availableWidth: number;
   availableHeight: number;
   forceRender: boolean;
+  domIdPrefix: string;
   onVisible(pageNumber: number): void;
   onRendered(pageNumber: number): void;
 }
@@ -24,6 +25,7 @@ export default function PdfPageCanvas({
   availableWidth,
   availableHeight,
   forceRender,
+  domIdPrefix,
   onVisible,
   onRendered,
 }: Props) {
@@ -126,7 +128,7 @@ export default function PdfPageCanvas({
 
   return <div
     ref={shellRef}
-    id={`pdf-page-${pageNumber}`}
+    id={`${domIdPrefix}-page-${pageNumber}`}
     className="pdf-page-shell"
     style={{ minWidth: placeholder.width, minHeight: placeholder.height }}
   >
