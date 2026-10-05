@@ -63,3 +63,19 @@ No module is complete merely because its navigation entry exists. Completion req
 | Lazy heavy engines | Office architecture | no LibreOffice/Java startup dependency | architecture review | Implemented |
 | Corpus | testing/suite/fixtures/{docx,xlsx,pptx} | synthetic cases + future matrix | tests/docs | Implemented |
 | Dependency licensing | third_party/fflate | fflate 0.8.3 MIT | provenance record | Implemented |
+
+## Phase 4 traceability — Scanner/OCR
+
+| Requirement | Component | Implementation | Evidence | Status |
+|---|---|---|---|---|
+| Capture/import | Scanner | file import + MediaDevices camera capture | UI/code review | Implemented |
+| Crop/rotate | Scan processing | normalized crop + 90-degree rotation | image pipeline | Implemented |
+| Perspective correction | Scan processing | manual quadrilateral bilinear mapping | geometry unit tests | Implemented |
+| Page assembly | Scanner | multi-page list/reorder/remove, 50-page cap | UI/code review | Implemented |
+| PaddleOCR worker | Native OCR | supervised Python worker, timeout, JSON contract | Rust tests/CI pending | Implemented |
+| Searchable output | OCR export | text export + pdf-lib image/text PDF | code review/CI pending | Implemented |
+| OCR cache | OCR core | SHA-256 session cache | code review | Implemented |
+| Cancellation | OCR core/native | Tesseract terminate + Paddle child kill | native/frontend code | Implemented |
+| Accuracy/latency | OCR benchmark | Levenshtein accuracy + per-page latency/confidence | unit tests/UI | Implemented |
+| Resource bounds | Scanner/native OCR | 25 MB, 25 MP, 50 pages, 120 sec worker | unit tests | Implemented |
+| Offline path | PaddleOCR pack | optional local worker; no startup process | architecture review | Implemented; pack QA pending |
