@@ -8,6 +8,7 @@ use suite::{
     },
     local_services::LocalServiceManager,
     office::{read_office_document, write_office_copy},
+    ocr::{paddle_ocr_image, paddle_ocr_status},
     pdf::read_pdf_document,
 };
 
@@ -44,7 +45,9 @@ pub fn run() {
             discard_staged_document,
             read_pdf_document,
             read_office_document,
-            write_office_copy
+            write_office_copy,
+            paddle_ocr_status,
+            paddle_ocr_image
         ])
         .run(tauri::generate_context!())
         .expect("error while running MALENJO Suite");
