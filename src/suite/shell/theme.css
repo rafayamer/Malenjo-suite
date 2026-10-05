@@ -155,3 +155,10 @@
 .command-palette-empty{padding:28px;color:#7793a7;text-align:center;font-size:11px;line-height:1.6}
 .command-palette footer{border-top:1px solid #193449;padding:7px 11px;color:#58768c;font-size:8px;background:#07141e}
 
+.pdf-page-tools{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px 0 12px}
+.pdf-page-tools button{border:1px solid #28475f;background:#0c2232;color:#b8cfde;border-radius:6px;padding:7px 6px;font-size:9px;cursor:pointer}
+.pdf-page-tools button:hover:not(:disabled){border-color:#3976a0;background:#102b40;color:#e1eef6}
+.pdf-page-tools button:disabled{opacity:.38;cursor:not-allowed}
+.pdf-edit-note{border:1px solid #28435a;background:#0a1c2a;color:#7895a9;border-radius:7px;padding:8px;font-size:9px;line-height:1.45;margin-bottom:12px}
+.pdf-notice.error{border-color:#6b3030;background:#2b1619;color:#efb6b6}
+

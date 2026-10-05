@@ -137,3 +137,20 @@ Implemented on `feat/enterprise-workflows-phase-7`:
 - Phase 6 audit logging reused by enterprise operations.
 
 Phase 7 merged through PR #24 after tree-equivalent develop CI #120 passed frontend, Windows Rust and Codespaces/Linux. Physical Windows Temporal/Kopia testing and multi-user identity-provider binding remain release-quality gates.
+
+
+## Master completeness correction
+
+The repository is undergoing a completeness correction against the full canonical README and enterprise development guide. Phase completion no longer implies source-feature completion.
+
+Current correction work on `feat/master-completeness-shell-ai` includes:
+
+- persistent multi-document tabs and mounted editor sessions;
+- Codespaces/browser multi-file Files library;
+- Ctrl+K command palette for implemented operations;
+- honest `foundation / partial / adapter / planned / complete` module coverage states;
+- Codespaces local-AI inference bridge for fixed Ollama/llama.cpp loopback routes;
+- tested PDF page mutation core and edited-PDF export;
+- master completeness audit in `docs/MASTER_COMPLETENESS_AUDIT.md`.
+
+No major module is promoted to `complete` by this correction alone.

@@ -172,7 +172,7 @@ export default function App() {
       run:()=>activateSession(session.id),
     })),
     ...(activeSession ? [
-      ...(!activeSession.document.browserFile ? [{
+      ...(!activeSession.document.browserFile && !['pdf','docx','xlsx','pptx'].includes(activeSession.document.kind) ? [{
         id:'active-save-as',
         label:`Save a copy of ${activeSession.document.name}`,
         group:'Current document',
@@ -197,8 +197,8 @@ export default function App() {
       return <PdfWorkspace
         session={session}
         notice={notice}
-        onSaveAs={() => saveSessionAs(session.id)}
         onBackToFiles={() => selectModule('files')}
+        onDirtyChange={(dirty)=>markSessionDirty(session.id,dirty)}
       />;
     }
     if (route === 'word') {
@@ -348,7 +348,7 @@ function ModuleView({
       <div className="canvas-toolbar">
         <button onClick={onBackToFiles}>Files</button>
         <button disabled={!session?.dirty}>Save</button>
-        <button disabled={!document || session?.saving} onClick={() => void onSaveAs()}>Save As</button>
+        <button disabled={!document || session?.saving || !!document?.browserFile} onClick={() => void onSaveAs()}>Save As</button>
         <button disabled={!document}>Export</button>
         <button disabled={!document}>Print</button>
         <button>More</button>
