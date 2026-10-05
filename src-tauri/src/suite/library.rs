@@ -124,15 +124,8 @@ fn staging_path(app: &AppHandle, token: &str) -> Result<PathBuf, String> {
     Ok(staging_dir(app)?.join(token))
 }
 
-fn load_index(app: &AppHandle) -> Result<LibraryIndex, String> {
-    let path = index_path(app)?;
-    if !path.exists() {
-        return Ok(LibraryIndex::default());
-    }
-
-    let bytes = fs::read(&path)
-        .map_err(|error| format!("Unable to read MALENJO library index: {error}"))?;
-    let index: LibraryIndex = serde_json::from_slice(&bytes)
+fn parse_index(bytes: &[u8]) -> Result<LibraryIndex, String> {
+    let index: LibraryIndex = serde_json::from_slice(bytes)
         .map_err(|error| format!("MALENJO library index is invalid: {error}"))?;
 
     if index.version != INDEX_VERSION {
@@ -141,8 +134,30 @@ fn load_index(app: &AppHandle) -> Result<LibraryIndex, String> {
             index.version
         ));
     }
-
     Ok(index)
+}
+
+fn load_index(app: &AppHandle) -> Result<LibraryIndex, String> {
+    let path = index_path(app)?;
+    if !path.exists() {
+        return Ok(LibraryIndex::default());
+    }
+
+    let bytes = fs::read(&path)
+        .map_err(|error| format!("Unable to read MALENJO library index: {error}"))?;
+    match parse_index(&bytes) {
+        Ok(index) => Ok(index),
+        Err(primary_error) => {
+            let backup = path.with_extension("json.bak");
+            if !backup.exists() {
+                return Err(primary_error);
+            }
+            let backup_bytes = fs::read(&backup)
+                .map_err(|error| format!("{primary_error}; backup read failed: {error}"))?;
+            parse_index(&backup_bytes)
+                .map_err(|backup_error| format!("{primary_error}; backup recovery failed: {backup_error}"))
+        }
+    }
 }
 
 fn save_index(app: &AppHandle, index: &LibraryIndex) -> Result<(), String> {
@@ -153,6 +168,12 @@ fn save_index(app: &AppHandle, index: &LibraryIndex) -> Result<(), String> {
 
     fs::write(&temp, bytes)
         .map_err(|error| format!("Unable to write MALENJO library index: {error}"))?;
+
+    if path.exists() {
+        let backup = path.with_extension("json.bak");
+        fs::copy(&path, &backup)
+            .map_err(|error| format!("Unable to create MALENJO library index backup: {error}"))?;
+    }
 
     if fs::rename(&temp, &path).is_err() {
         if path.exists() {
@@ -540,7 +561,7 @@ pub fn discard_staged_document(app: AppHandle, staging_token: String) -> Result<
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_extension, classify_signature, fnv1a64, validate_requested_path, validate_staging_token};
+    use super::{classify_extension, classify_signature, fnv1a64, parse_index, validate_requested_path, validate_staging_token};
 
     #[test]
     fn maps_supported_document_extensions() {
@@ -551,6 +572,13 @@ mod tests {
         assert_eq!(classify_extension("dxf"), "cad");
         assert_eq!(classify_extension("dcm"), "dicom");
         assert_eq!(classify_extension("unknown"), "other");
+    }
+
+    #[test]
+    fn rejects_invalid_or_future_index_data() {
+        assert!(parse_index(b"not-json").is_err());
+        assert!(parse_index(br#"{"version":999,"documents":[]}"#).is_err());
+        assert!(parse_index(br#"{"version":1,"documents":[]}"#).is_ok());
     }
 
     #[test]
