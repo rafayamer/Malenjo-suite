@@ -1,11 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Activity, Command, FilePlus2, FolderOpen, Search, ShieldCheck, Sparkles } from 'lucide-react';
 import { modules } from '../modules/registry';
 import type { ModuleId } from '../core/types';
 import FileLibrary from '../files/FileLibrary';
 import RecentDocuments from '../files/RecentDocuments';
 import { workspaceForDocument } from '../files/route';
-import { createDocumentSession, markDocumentDirty, markDocumentSaved, type DocumentSession } from '../files/session';
+import {
+  createDocumentSession,
+  markDocumentDirty,
+  markDocumentSaved,
+  markDocumentSaving,
+  type DocumentSession,
+} from '../files/session';
 import type { LibraryDocument } from '../files/types';
 import { saveAsLibraryDocument } from '../files/api';
 import PdfWorkspace from '../pdf/PdfWorkspace';
@@ -16,6 +22,7 @@ import SecurityWorkspace from '../security/SecurityWorkspace';
 import MetadataWorkspace from '../security/MetadataWorkspace';
 import SignWorkspace from '../security/SignWorkspace';
 import EnterpriseWorkspace from '../enterprise/EnterpriseWorkspace';
+import DocumentTabs from './DocumentTabs';
 
 const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
   {label:'Open document', icon: FolderOpen, target:'files'},
@@ -27,34 +34,156 @@ const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
 export default function App() {
   const [active, setActive] = useState<ModuleId>('home');
   const [query, setQuery] = useState('');
-  const [session, setSession] = useState<DocumentSession | null>(null);
-  const [workspaceNotice, setWorkspaceNotice] = useState('');
+  const [sessions, setSessions] = useState<DocumentSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [workspaceNotices, setWorkspaceNotices] = useState<Record<string,string>>({});
   const module = modules.find((item) => item.id === active) ?? modules[0];
   const groups = useMemo(() => ['Core','Create','Intelligence','Enterprise','System'] as const, []);
 
+  const activeSession = useMemo(
+    () => sessions.find((session) => session.id === activeSessionId) ?? null,
+    [activeSessionId, sessions],
+  );
+
   function selectModule(id: ModuleId) {
     setActive(id);
-    setWorkspaceNotice('');
-    if (id === 'home' || id === 'files') setSession(null);
+    setActiveSessionId(null);
+  }
+
+  function activateSession(sessionId: string) {
+    const session = sessions.find((item) => item.id === sessionId);
+    if (!session) return;
+    setActiveSessionId(sessionId);
+    setActive(workspaceForDocument(session.document.kind));
   }
 
   function openFromLibrary(document: LibraryDocument) {
-    setSession(createDocumentSession(document));
-    setWorkspaceNotice('');
+    const existing = sessions.find((session) => session.document.id === document.id);
+    if (existing) {
+      activateSession(existing.id);
+      return;
+    }
+
+    const session = createDocumentSession(document);
+    setSessions((current) => [...current, session]);
+    setActiveSessionId(session.id);
     setActive(workspaceForDocument(document.kind));
   }
 
-  async function saveSessionAs() {
-    if (!session) return;
-    try {
-      const copy = await saveAsLibraryDocument(session.document);
-      if (!copy) return;
-      setSession((current) => current ? markDocumentSaved(current, copy) : current);
-      setActive(workspaceForDocument(copy.kind));
-      setWorkspaceNotice(`Saved a copy as ${copy.name} and added it to the MALENJO library.`);
-    } catch (error) {
-      setWorkspaceNotice(String(error));
+  function updateSession(sessionId: string, updater: (session: DocumentSession) => DocumentSession) {
+    setSessions((current) => current.map((session) => session.id === sessionId ? updater(session) : session));
+  }
+
+  function markSessionDirty(sessionId: string, dirty: boolean) {
+    if (!dirty) return;
+    updateSession(sessionId, markDocumentDirty);
+  }
+
+  function closeSession(sessionId: string) {
+    const index = sessions.findIndex((session) => session.id === sessionId);
+    if (index < 0) return;
+    const target = sessions[index];
+    if (target.dirty && !window.confirm(`Close "${target.document.name}" without saving its current edits?`)) return;
+
+    const remaining = sessions.filter((session) => session.id !== sessionId);
+    setSessions(remaining);
+    setWorkspaceNotices((current) => {
+      const next = { ...current };
+      delete next[sessionId];
+      return next;
+    });
+
+    if (activeSessionId !== sessionId) return;
+    const next = remaining[Math.min(index, remaining.length - 1)] ?? null;
+    if (next) {
+      setActiveSessionId(next.id);
+      setActive(workspaceForDocument(next.document.kind));
+    } else {
+      setActiveSessionId(null);
+      setActive('files');
     }
+  }
+
+  async function saveSessionAs(sessionId: string) {
+    const target = sessions.find((session) => session.id === sessionId);
+    if (!target) return;
+
+    updateSession(sessionId, (session) => markDocumentSaving(session, true));
+    try {
+      const copy = await saveAsLibraryDocument(target.document);
+      if (!copy) {
+        updateSession(sessionId, (session) => markDocumentSaving(session, false));
+        return;
+      }
+      updateSession(sessionId, (session) => markDocumentSaved(session, copy));
+      setWorkspaceNotices((current) => ({
+        ...current,
+        [sessionId]: `Saved a copy as ${copy.name} and added it to the MALENJO library.`,
+      }));
+      if (activeSessionId === sessionId) setActive(workspaceForDocument(copy.kind));
+    } catch (error) {
+      updateSession(sessionId, (session) => markDocumentSaving(session, false));
+      setWorkspaceNotices((current) => ({ ...current, [sessionId]: String(error) }));
+    }
+  }
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!activeSessionId) return;
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'w') {
+        event.preventDefault();
+        closeSession(activeSessionId);
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [activeSessionId, sessions]);
+
+  function renderDocumentWorkspace(session: DocumentSession) {
+    const route = workspaceForDocument(session.document.kind);
+    const notice = workspaceNotices[session.id] ?? '';
+
+    if (route === 'pdf') {
+      return <PdfWorkspace
+        session={session}
+        notice={notice}
+        onSaveAs={() => saveSessionAs(session.id)}
+        onBackToFiles={() => selectModule('files')}
+      />;
+    }
+    if (route === 'word') {
+      return <OfficeWorkspace
+        kind="docx"
+        session={session}
+        onBackToFiles={() => selectModule('files')}
+        onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
+      />;
+    }
+    if (route === 'spreadsheet') {
+      return <OfficeWorkspace
+        kind="xlsx"
+        session={session}
+        onBackToFiles={() => selectModule('files')}
+        onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
+      />;
+    }
+    if (route === 'presentation') {
+      return <OfficeWorkspace
+        kind="pptx"
+        session={session}
+        onBackToFiles={() => selectModule('files')}
+        onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
+      />;
+    }
+
+    const targetModule = modules.find((item) => item.id === route) ?? modules[0];
+    return <ModuleView
+      module={targetModule}
+      session={session}
+      notice={notice}
+      onSaveAs={() => saveSessionAs(session.id)}
+      onBackToFiles={() => selectModule('files')}
+    />;
   }
 
   return <div className="app-shell">
@@ -62,12 +191,12 @@ export default function App() {
       <div className="brand"><div className="brand-mark">M</div><div><strong>MALENJO</strong><span>SUITE</span></div></div>
       <nav>
         {groups.map(group => <section key={group}><h3>{group}</h3>{modules.filter(item=>item.group===group).map(item =>
-          <button className={active===item.id?'nav-item active':'nav-item'} onClick={()=>selectModule(item.id)} key={item.id}>
+          <button className={!activeSessionId && active===item.id?'nav-item active':'nav-item'} onClick={()=>selectModule(item.id)} key={item.id}>
             <span>{item.name}</span><small>{item.status==='ready'?'●':'○'}</small>
           </button>
         )}</section>)}
       </nav>
-      <div className="local-state"><Activity size={16}/><div><b>Local-first</b><span>Core shell ready · network optional</span></div></div>
+      <div className="local-state"><Activity size={16}/><div><b>Local-first</b><span>{sessions.length} document{sessions.length===1?'':'s'} open · network optional</span></div></div>
     </aside>
 
     <main className="workspace">
@@ -76,39 +205,46 @@ export default function App() {
         <button className="command"><Command size={17}/> Commands</button>
       </header>
 
-      {active === 'home'
-        ? <Home onSelect={selectModule} onOpen={openFromLibrary}/>
-        : active === 'files'
-          ? <FileLibrary onOpen={openFromLibrary}/>
-          : active === 'pdf'
-            ? <PdfWorkspace session={session} notice={workspaceNotice} onSaveAs={saveSessionAs} onBackToFiles={()=>selectModule('files')}/>
-            : active === 'word'
-              ? <OfficeWorkspace kind="docx" session={session} onBackToFiles={()=>selectModule('files')} onDirtyChange={(dirty)=>setSession((current)=>current && dirty ? markDocumentDirty(current) : current)}/>
-              : active === 'spreadsheet'
-                ? <OfficeWorkspace kind="xlsx" session={session} onBackToFiles={()=>selectModule('files')} onDirtyChange={(dirty)=>setSession((current)=>current && dirty ? markDocumentDirty(current) : current)}/>
-                : active === 'presentation'
-                  ? <OfficeWorkspace kind="pptx" session={session} onBackToFiles={()=>selectModule('files')} onDirtyChange={(dirty)=>setSession((current)=>current && dirty ? markDocumentDirty(current) : current)}/>
-                  : active === 'scanner'
-                    ? <ScannerWorkspace mode="scanner" onBackToFiles={()=>selectModule('files')}/>
-                    : active === 'ocr'
-                      ? <ScannerWorkspace mode="ocr" onBackToFiles={()=>selectModule('files')}/>
-                      : active === 'ai'
-                        ? <AiWorkspace onBackToFiles={()=>selectModule('files')}/>
-                        : active === 'security'
-                          ? <SecurityWorkspace onBackToFiles={()=>selectModule('files')}/>
-                          : active === 'metadata'
-                            ? <MetadataWorkspace onBackToFiles={()=>selectModule('files')}/>
-                            : active === 'sign'
-                              ? <SignWorkspace onBackToFiles={()=>selectModule('files')}/>
-                              : active === 'dms'
-                                ? <EnterpriseWorkspace mode="dms" onBackToFiles={()=>selectModule('files')}/>
-                                : active === 'automation'
-                                  ? <EnterpriseWorkspace mode="automation" onBackToFiles={()=>selectModule('files')}/>
-                                  : active === 'backup'
-                                    ? <EnterpriseWorkspace mode="backup" onBackToFiles={()=>selectModule('files')}/>
-                                    : active === 'admin'
-                                      ? <EnterpriseWorkspace mode="admin" onBackToFiles={()=>selectModule('files')}/>
-                                      : <ModuleView module={module} session={session} notice={workspaceNotice} onSaveAs={saveSessionAs} onBackToFiles={()=>selectModule('files')}/>}
+      <DocumentTabs
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onActivate={activateSession}
+        onClose={closeSession}
+      />
+
+      {activeSession
+        ? <div className="document-session-stack">
+            {sessions.map((session) => <section
+              className={session.id === activeSessionId ? 'document-session-panel active' : 'document-session-panel'}
+              key={session.id}
+              aria-hidden={session.id !== activeSessionId}
+            >{renderDocumentWorkspace(session)}</section>)}
+          </div>
+        : active === 'home'
+          ? <Home onSelect={selectModule} onOpen={openFromLibrary}/>
+          : active === 'files'
+            ? <FileLibrary onOpen={openFromLibrary}/>
+            : active === 'scanner'
+              ? <ScannerWorkspace mode="scanner" onBackToFiles={()=>selectModule('files')}/>
+              : active === 'ocr'
+                ? <ScannerWorkspace mode="ocr" onBackToFiles={()=>selectModule('files')}/>
+                : active === 'ai'
+                  ? <AiWorkspace onBackToFiles={()=>selectModule('files')}/>
+                  : active === 'security'
+                    ? <SecurityWorkspace onBackToFiles={()=>selectModule('files')}/>
+                    : active === 'metadata'
+                      ? <MetadataWorkspace onBackToFiles={()=>selectModule('files')}/>
+                      : active === 'sign'
+                        ? <SignWorkspace onBackToFiles={()=>selectModule('files')}/>
+                        : active === 'dms'
+                          ? <EnterpriseWorkspace mode="dms" onBackToFiles={()=>selectModule('files')}/>
+                          : active === 'automation'
+                            ? <EnterpriseWorkspace mode="automation" onBackToFiles={()=>selectModule('files')}/>
+                            : active === 'backup'
+                              ? <EnterpriseWorkspace mode="backup" onBackToFiles={()=>selectModule('files')}/>
+                              : active === 'admin'
+                                ? <EnterpriseWorkspace mode="admin" onBackToFiles={()=>selectModule('files')}/>
+                                : <ModuleView module={module} session={null} notice="" onSaveAs={async()=>{}} onBackToFiles={()=>selectModule('files')}/>}
     </main>
   </div>
 }
@@ -117,9 +253,9 @@ function Home({onSelect,onOpen}:{onSelect:(id:ModuleId)=>void;onOpen:(document:L
   return <div className="content">
     <div className="hero"><div><p className="eyebrow">LOCAL-FIRST DOCUMENT PLATFORM</p><h1>Your documents. One private workspace.</h1><p>MALENJO combines PDF, Office, OCR, private AI, signing, metadata, automation and enterprise tools behind one consistent desktop shell.</p></div><div className="hero-mark">M</div></div>
     <div className="quick-grid">{quick.map(({label,icon:Icon,target})=><button key={label} onClick={()=>onSelect(target)}><Icon size={21}/><span>{label}</span></button>)}</div>
-    <div className="section-head"><div><h2>Workspaces</h2><p>Heavy engines are adapters and load only when a task needs them.</p></div><span className="pill">All student features enabled</span></div>
+    <div className="section-head"><div><h2>Workspaces</h2><p>Heavy engines are adapters and load only when a task needs them.</p></div><span className="pill">Student / classroom build</span></div>
     <div className="module-grid">{modules.filter(item=>!['home','settings','account','help'].includes(item.id)).map(item=><button className="module-card" key={item.id} onClick={()=>onSelect(item.id)}><div className="card-top"><span className={'status '+item.status}>{item.status}</span><span>↗</span></div><h3>{item.name}</h3><p>{item.description}</p><footer>{item.engine}</footer></button>)}</div>
-      <RecentDocuments onOpen={onOpen} onViewAll={()=>onSelect('files')}/>
+    <RecentDocuments onOpen={onOpen} onViewAll={()=>onSelect('files')}/>
   </div>
 }
 
@@ -146,7 +282,7 @@ function ModuleView({
         <p>{document ? `${document.name} · ${document.locationLabel}` : module.description}</p>
       </div>
       <div className="module-state">
-        {session && <span className={session.dirty ? 'session-state dirty' : 'session-state'}>{session.dirty ? 'Unsaved changes' : 'Saved'}</span>}
+        {session && <span className={session.saving ? 'session-state saving' : session.dirty ? 'session-state dirty' : 'session-state'}>{session.saving ? 'Saving…' : session.dirty ? 'Unsaved changes' : 'Saved'}</span>}
         <span className={'status large '+module.status}>{module.status}</span>
       </div>
     </div>
@@ -154,7 +290,7 @@ function ModuleView({
       <div className="canvas-toolbar">
         <button onClick={onBackToFiles}>Files</button>
         <button disabled={!session?.dirty}>Save</button>
-        <button disabled={!document} onClick={() => void onSaveAs()}>Save As</button>
+        <button disabled={!document || session?.saving} onClick={() => void onSaveAs()}>Save As</button>
         <button disabled={!document}>Export</button>
         <button disabled={!document}>Print</button>
         <button>More</button>
@@ -162,10 +298,10 @@ function ModuleView({
       {notice && <div className="workspace-notice">{notice}</div>}
       <div className="empty-state">
         <div className="empty-icon">M</div>
-        <h2>{document ? document.name : `${module.name} adapter boundary is ready`}</h2>
+        <h2>{document ? document.name : `${module.name} capability is not feature-complete yet`}</h2>
         <p>{document
-          ? <>The document is registered in the MALENJO library and routed to this workspace. Editing/rendering is the next adapter phase for <strong>{module.engine}</strong>.</>
-          : <>The shell, routing, feature registration and engine contract are established. The next implementation phase connects <strong>{module.engine}</strong> without exposing it as a second application.</>}</p>
+          ? <>This file has its own persistent MALENJO tab/session. The remaining engine-specific commands for <strong>{module.engine}</strong> must be implemented before this workspace is feature-complete.</>
+          : <>This module is registered in the shell, but the full master-README feature tree has not yet been implemented. Current registry status reflects vertical-slice readiness, not Adobe/Foxit-class completeness.</>}</p>
         <div className="notice"><ShieldCheck size={18}/>External engines must pass license, security, offline and fidelity tests before permanent integration.</div>
       </div>
     </div>
