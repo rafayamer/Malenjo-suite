@@ -47,4 +47,10 @@ describe('document session state', () => {
     expect(saved.saving).toBe(false);
     expect(saved.lastSavedAt).toBe(200);
   });
+  it('can return a dirty session to clean without pretending it was saved', () => {
+    const session = markDocumentDirty(createDocumentSession(document, 10));
+    const clean = setDocumentDirty(session, false);
+    expect(clean.dirty).toBe(false);
+    expect(clean.lastSavedAt).toBeNull();
+  });
 });
