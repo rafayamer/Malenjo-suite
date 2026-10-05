@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { DocumentSession } from '../files/session';
 import { isDesktopRuntime } from '../files/api';
+import { getBrowserFile } from '../files/browserStore';
 import { readPdfDocumentBytes } from './api';
 import { disposePdf, loadPdfBytes, type PdfLoadResult } from './engine';
 import {
