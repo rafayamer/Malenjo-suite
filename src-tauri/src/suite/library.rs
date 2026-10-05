@@ -506,11 +506,7 @@ pub fn commit_staged_document(
     let mut index = load_index(&app)?;
     let entry = find_entry_mut(&mut index, &document_id)?;
     let source = canonical_user_file(&entry.path)?;
-    let file_name = source
-        .file_name()
-        .and_then(|value| value.to_str())
-        .ok_or_else(|| "Source document has an invalid file name.".to_string())?;
-    let backup = source.with_file_name(format!("{file_name}.malenjo-save-backup"));
+    let backup = staging_dir(&app)?.join(format!("{staging_token}-backup"));
 
     if backup.exists() {
         fs::remove_file(&backup)
@@ -533,8 +529,7 @@ pub fn commit_staged_document(
         let _ = file.sync_all();
     }
 
-    fs::remove_file(&backup)
-        .map_err(|error| format!("Document saved, but cleanup of the temporary backup failed: {error}"))?;
+    let _ = fs::remove_file(&backup);
     let _ = fs::remove_file(&stage);
 
     entry.last_opened_ms = Some(now_ms());
