@@ -26,5 +26,5 @@ No module is complete merely because its navigation entry exists. Completion req
 | Never delete source on library removal | Library index | `remove_library_document` changes index only | code review | Implemented |
 | Type routing | Shell router | `workspaceForDocument` | `route.test.ts` | Implemented |
 | Dirty state | Workspace session | `session.ts` | `session.test.ts` | Implemented model; editor wiring pending |
-| Same-file Save | Workspace-native adapter contract | staged commit API | not yet implemented | Pending |
+| Same-file Save | Workspace-native adapter contract | `stage_library_document` + `commit_staged_document` + rollback backup | Rust token/path tests; Windows E2E pending | Implemented, verification pending |
 | Offline startup | Shell/native services | no network call; services remain lazy | CI/manual offline test pending | Implemented, verification pending |
