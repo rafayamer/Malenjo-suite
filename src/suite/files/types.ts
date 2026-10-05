@@ -12,6 +12,7 @@ export interface LibraryDocument {
   lastOpenedMs: number | null;
   available: boolean;
   locationLabel: string;
+  runtimeSource?: 'native-library' | 'browser-session';
   /**
    * Browser/Codespaces-only ephemeral source.
    * Native library documents never receive this field over IPC.

@@ -154,17 +154,3 @@ Current correction work on `feat/master-completeness-shell-ai` includes:
 - master completeness audit in `docs/MASTER_COMPLETENESS_AUDIT.md`.
 
 No major module is promoted to `complete` by this correction alone.
-
-
-## Master completeness pass 2B — shell drag/drop / PDF search and overlays
-
-Current branch `feat/shell-pdf-completeness-pass-2-final` adds:
-
-- persistent native drag/drop import and temporary Codespaces/browser drag/drop multi-open;
-- richer multi-document tab close actions;
-- PDF text search with page navigation;
-- permanent PDF text placement and highlight/outline rectangle tools;
-- integration with the bounded PDF Undo/Redo history from PR #33;
-- unit tests for PDF overlay validation/mutation.
-
-This branch must pass frontend, Windows Rust and Codespaces/Linux CI before merge. Shell and PDF remain `partial`.
