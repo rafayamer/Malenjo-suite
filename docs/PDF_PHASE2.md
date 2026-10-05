@@ -38,8 +38,7 @@ Codespaces/browser mode also accepts an ephemeral local PDF through a browser fi
 
 - No PDF is fetched from a remote URL by the Phase 2 viewer.
 - The PDF.js worker is bundled locally; there is no CDN dependency.
-- PDF.js `isEvalSupported` is disabled in the MALENJO adapter.
-- MALENJO does not register PDF.js scripting/JavaScript action services.
+- MALENJO does not register PDF.js scripting/JavaScript action services, so document JavaScript actions are not executed by this viewer integration.
 - The native read command accepts only a document ID already present in the MALENJO library.
 - The native command re-resolves the canonical regular file and validates the PDF signature.
 - A 512 MB Phase 2 read limit bounds a single IPC payload.
