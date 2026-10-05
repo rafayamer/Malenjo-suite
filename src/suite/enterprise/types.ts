@@ -36,3 +36,4 @@ export interface WorkflowContract { version:number; id:string; name:string; crea
 export interface WorkflowRunResult { workflowId:string; completedSteps:number; messages:string[]; }
 export interface AdapterStatus { available:boolean; version:string; detail:string; }
 export interface BackupInspection { valid:boolean; fileCount:number; totalBytes:number; errors:string[]; }
+export interface AuditRetentionResult { kept:number; archived:number; }
