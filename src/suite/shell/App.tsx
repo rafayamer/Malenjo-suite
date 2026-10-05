@@ -348,7 +348,7 @@ function ModuleView({
       <div className="canvas-toolbar">
         <button onClick={onBackToFiles}>Files</button>
         <button disabled={!session?.dirty}>Save</button>
-        <button disabled={!document || session?.saving} onClick={() => void onSaveAs()}>Save As</button>
+        <button disabled={!document || session?.saving || !!document?.browserFile} onClick={() => void onSaveAs()}>Save As</button>
         <button disabled={!document}>Export</button>
         <button disabled={!document}>Print</button>
         <button>More</button>
