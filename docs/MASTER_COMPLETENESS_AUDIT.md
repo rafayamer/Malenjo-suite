@@ -426,3 +426,21 @@ The Codespaces bridge already routes only approved local status/chat endpoints. 
 - CI syntax-validates both shell helpers and JSON-validates the model manifest without downloading external software or weights.
 
 This remains a development profile, not the full master AI model manager. Production model import/download, license acceptance, checksums, resource estimation, policy and per-feature model assignment remain open under the AI completeness workstream.
+
+
+## Completion pass — native tab session restoration
+
+Implemented on `feat/shell-session-restore`:
+
+- open native MALENJO library document IDs are persisted as a versioned workspace record;
+- at most 50 unique native document IDs are accepted from persisted state;
+- browser/Codespaces `File` objects and ephemeral documents are never persisted;
+- malformed/unknown-version workspace state is ignored;
+- native document IDs are revalidated through the MALENJO library command when restoring;
+- moved/missing/unavailable documents fail independently without preventing other tabs from restoring;
+- the previously active native document is restored when still available;
+- hydration never overwrites tabs the user manually opens before asynchronous restoration completes;
+- persistence is best-effort and never blocks the editor;
+- unit tests cover native-vs-ephemeral filtering, malformed state, deduplication and active-tab rules.
+
+This restores **open native tabs**, not unsaved editor content. Crash-safe autosave/working-copy recovery for dirty PDF/Office edits remains an explicit Shell completeness requirement under #38 and must not be claimed complete by this pass.
