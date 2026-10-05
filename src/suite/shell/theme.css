@@ -135,7 +135,7 @@
 .document-tab-main i.dirty{background:#f0b84e}.document-tab-main i.saving{background:#54b9ff;animation:pulse 1s ease-in-out infinite}.document-tab-main i.saved{background:#31546a}
 .document-tab-close{width:28px;border:0;background:transparent;color:#69879c;display:grid;place-items:center;cursor:pointer}
 .document-tab-close:hover{background:#173148;color:#dbe9f2}
-.document-session-stack{position:relative;flex:1;min-height:0;overflow:hidden}
+.document-session-stack{position:relative;flex:1;min-height:0;overflow:hidden}.document-session-stack.parked{display:none}
 .document-session-panel{display:none;position:absolute;inset:0;min-height:0;overflow:hidden}
 .document-session-panel.active{display:block}
 @keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}
