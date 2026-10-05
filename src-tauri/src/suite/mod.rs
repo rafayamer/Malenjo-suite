@@ -1,4 +1,5 @@
 pub mod ai;
+pub mod enterprise;
 pub mod library;
 pub mod local_services;
 pub mod office;
