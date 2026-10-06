@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
 import {
   clearPdfForm,
+  createPdfFormField,
   flattenPdfForm,
   listPdfFormFields,
+  setPdfFormFieldFlags,
   setPdfFormFieldValue,
 } from './forms';
 
@@ -76,4 +78,40 @@ describe('Acrobat-class PDF forms foundation',()=>{
   it('rejects invalid option values',async()=>{
     await expect(setPdfFormFieldValue(await fixture(),'country','Atlantis')).rejects.toThrow(/not valid/i);
   });
+
+  it('creates interactive text checkbox dropdown and option-list fields',async()=>{
+    let pdf=await PDFDocument.create();
+    pdf.addPage([500,700]);
+    let bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+
+    bytes=await createPdfFormField(bytes,{type:'text',name:'created.text',pageNumber:1,x:.1,y:.8,width:.4,height:.05,required:true});
+    bytes=await createPdfFormField(bytes,{type:'checkbox',name:'created.check',pageNumber:1,x:.1,y:.7,width:.04,height:.04});
+    bytes=await createPdfFormField(bytes,{type:'dropdown',name:'created.drop',pageNumber:1,x:.1,y:.6,width:.4,height:.05,options:['One','Two']});
+    bytes=await createPdfFormField(bytes,{type:'option-list',name:'created.list',pageNumber:1,x:.1,y:.4,width:.4,height:.15,options:['A','B']});
+
+    const fields=await listPdfFormFields(bytes);
+    expect(fields.find((field)=>field.name==='created.text')?.required).toBe(true);
+    expect(fields.find((field)=>field.name==='created.check')?.type).toBe('checkbox');
+    expect(fields.find((field)=>field.name==='created.drop')?.options).toEqual(['One','Two']);
+    expect(fields.find((field)=>field.name==='created.list')?.type).toBe('option-list');
+  });
+
+  it('updates required and read-only field flags',async()=>{
+    let bytes=await fixture();
+    bytes=await setPdfFormFieldFlags(bytes,'student.name',{required:true,readOnly:true});
+    const field=(await listPdfFormFields(bytes)).find((item)=>item.name==='student.name');
+    expect(field?.required).toBe(true);
+    expect(field?.readOnly).toBe(true);
+    await expect(setPdfFormFieldValue(bytes,'student.name','blocked')).rejects.toThrow(/read-only/i);
+  });
+
+  it('rejects duplicate and out-of-bounds created fields',async()=>{
+    let pdf=await PDFDocument.create();
+    pdf.addPage([500,700]);
+    let bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    bytes=await createPdfFormField(bytes,{type:'text',name:'duplicate',pageNumber:1,x:.1,y:.8,width:.4,height:.05});
+    await expect(createPdfFormField(bytes,{type:'text',name:'duplicate',pageNumber:1,x:.1,y:.7,width:.4,height:.05})).rejects.toThrow(/already exists/i);
+    await expect(createPdfFormField(bytes,{type:'text',name:'bad-bounds',pageNumber:1,x:.9,y:.9,width:.4,height:.2})).rejects.toThrow(/inside the page/i);
+  });
+
 });
