@@ -195,3 +195,19 @@
 .command-palette-results button:disabled:hover{background:#08151f}
 .command-palette-results button:disabled small{color:#8c7452}
 
+.pdf-pane-title b{font-size:9px;font-weight:600;color:#7ea2b8}
+.pdf-forms-panel{display:flex;flex-direction:column;gap:8px;padding-bottom:12px}
+.pdf-forms-panel>p{margin:0;color:#6f8ca0;font-size:9px;line-height:1.5}
+.pdf-form-field{border:1px solid #18354a;background:#071722;border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:7px}
+.pdf-form-field-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.pdf-form-field-head span{min-width:0}.pdf-form-field-head b,.pdf-form-field-head small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pdf-form-field-head b{color:#c9dce8;font-size:9px}.pdf-form-field-head small{color:#68879d;font-size:8px;margin-top:2px}
+.pdf-form-field input:not([type="checkbox"]),.pdf-form-field select{width:100%;border:1px solid #27475f;background:#06131d;color:#d5e4ed;border-radius:6px;padding:7px;font-size:9px}
+.pdf-form-field select[multiple]{min-height:72px}
+.pdf-form-check{display:flex;align-items:center;gap:7px;color:#9db4c3;font-size:9px}.pdf-form-check input{margin:0}
+.pdf-form-field button,.pdf-form-actions button{border:1px solid #27475f;background:#0c2335;color:#bdd2df;border-radius:6px;padding:7px 9px;font-size:9px;cursor:pointer}
+.pdf-form-field button:disabled,.pdf-form-actions button:disabled{opacity:.42;cursor:not-allowed}
+.pdf-form-unsupported{border:1px dashed #35475a;background:#0b1822;border-radius:6px;padding:7px;color:#8499a8;font-size:8px;line-height:1.45}
+.pdf-form-actions{display:flex;gap:7px;flex-wrap:wrap}
+.pdf-forms-panel>small{color:#687f91;font-size:8px;line-height:1.5}
+
