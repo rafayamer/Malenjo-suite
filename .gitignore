@@ -24,6 +24,6 @@ provider-packs/stirling-core/manifest.json
 .build/stirling-core/
 
 # Generated qpdf provider pack
-provider-packs/qpdf/bin/
+provider-packs/qpdf/runtime/
 provider-packs/qpdf/manifest.json
 .build/qpdf/
