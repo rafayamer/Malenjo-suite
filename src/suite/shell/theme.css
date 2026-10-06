@@ -205,3 +205,10 @@
 .document-tab.drag-over{box-shadow:inset 2px 0 0 #33d4e5}
 .document-tab-main[draggable="true"]{cursor:grab}
 .document-tab-main[draggable="true"]:active{cursor:grabbing}
+
+.pdf-field-flags{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.pdf-field-flags label{display:flex;flex-direction:row;align-items:center;gap:5px;margin:0;color:#8ba5b7}
+.pdf-field-flags input{width:auto}
+.pdf-form-inventory span{display:flex;flex-direction:column;gap:2px;white-space:normal}
+.pdf-form-inventory span strong{font-size:8px;color:#bcd1df;font-weight:600}
+.pdf-form-inventory span em{font-size:7px;color:#6f8ca0;font-style:normal;line-height:1.35}
