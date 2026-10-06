@@ -48,6 +48,14 @@ export interface PdfProviderResponse{
   bytes:number[];
 }
 
+export interface PdfProviderComponentStatus{
+  id:string;
+  ready:boolean;
+  version?:string|null;
+  source:string;
+  detail:string;
+}
+
 export interface PdfProviderStatus{
   installed:boolean;
   running:boolean;
@@ -56,6 +64,7 @@ export interface PdfProviderStatus{
   endpoint:string;
   version?:string|null;
   message:string;
+  components:PdfProviderComponentStatus[];
 }
 
 export interface PdfToolProvider{
