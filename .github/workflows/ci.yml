@@ -75,6 +75,16 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
+      - name: Install verified qpdf provider pack
+        shell: pwsh
+        run: |
+          ./scripts/install-qpdf-pack.ps1
+          $qpdf = Get-ChildItem "provider-packs/qpdf/runtime" -Recurse -File -Filter "qpdf.exe" | Select-Object -First 1
+          if (-not $qpdf) { throw "qpdf provider pack did not contain qpdf.exe." }
+          & $qpdf.FullName --version
+          if ($LASTEXITCODE -ne 0) { throw "qpdf provider pack failed version smoke test." }
+          $qpdf.Directory.FullName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       - name: Build reviewed Stirling open-core provider pack
         shell: pwsh
         run: |
@@ -122,6 +132,11 @@ jobs:
               throw "Expected a broad Stirling core OpenAPI surface, found only $($v1Paths.Count) /api/v1 paths."
             }
             Write-Host "Stirling core healthy with $($v1Paths.Count) /api/v1 paths."
+            $qpdfVersion = & qpdf --version
+            if ($LASTEXITCODE -ne 0 -or ($qpdfVersion -join " ") -notmatch "qpdf version 12\.4\.2") {
+              throw "qpdf was not available to the local provider process environment."
+            }
+            Write-Host ($qpdfVersion -join " ")
           } finally {
             if (!$process.HasExited) { Stop-Process -Id $process.Id -Force }
           }
