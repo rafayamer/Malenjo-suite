@@ -153,3 +153,134 @@ export async function flattenPdfForm(bytes: Uint8Array): Promise<Uint8Array> {
   form.flatten();
   return Uint8Array.from(await pdf.save({ useObjectStreams:false }));
 }
+
+
+export type PdfCreateFormFieldType = 'text' | 'checkbox' | 'dropdown' | 'option-list';
+
+export interface PdfCreateFormField {
+  type: PdfCreateFormFieldType;
+  name: string;
+  pageNumber: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  required?: boolean;
+  readOnly?: boolean;
+  options?: string[];
+}
+
+function normalized(value: number, label: string): number {
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error(`${label} must be between 0 and 1.`);
+  }
+  return value;
+}
+
+function cleanFieldName(name: string): string {
+  const cleaned = name.replace(/[\u0000-\u001F]/g, ' ').trim().slice(0, 180);
+  if (!cleaned) throw new Error('Form field name is required.');
+  return cleaned;
+}
+
+function applyFlags(field: PDFField, required: boolean, readOnly: boolean): void {
+  if (required) field.enableRequired(); else field.disableRequired();
+  if (readOnly) field.enableReadOnly(); else field.disableReadOnly();
+}
+
+export async function createPdfFormField(
+  bytes: Uint8Array,
+  input: PdfCreateFormField,
+): Promise<Uint8Array> {
+  const pdf = await load(bytes);
+  const pages = pdf.getPages();
+  if (!Number.isInteger(input.pageNumber) || input.pageNumber < 1 || input.pageNumber > pages.length) {
+    throw new Error(`Page ${input.pageNumber} is outside the PDF page range 1-${pages.length}.`);
+  }
+
+  const form = pdf.getForm();
+  const name = cleanFieldName(input.name);
+  if (form.getFieldMaybe(name)) throw new Error(`A PDF form field named "${name}" already exists.`);
+
+  const page = pages[input.pageNumber - 1];
+  const x = normalized(input.x, 'Field X');
+  const y = normalized(input.y, 'Field Y');
+  const widthFraction = normalized(input.width, 'Field width');
+  const heightFraction = normalized(input.height, 'Field height');
+  if (widthFraction <= 0 || heightFraction <= 0 || x + widthFraction > 1 || y + heightFraction > 1) {
+    throw new Error('Form field must have positive size and remain inside the page.');
+  }
+
+  const { width, height } = page.getSize();
+  const options = (input.options ?? [])
+    .map((option) => option.replace(/[\u0000-\u001F]/g, ' ').trim().slice(0, 200))
+    .filter(Boolean)
+    .slice(0, 200);
+
+  let field: PDFField;
+  if (input.type === 'text') {
+    const text = form.createTextField(name);
+    text.addToPage(page, {
+      x:x * width,
+      y:y * height,
+      width:widthFraction * width,
+      height:heightFraction * height,
+    });
+    field = text;
+  } else if (input.type === 'checkbox') {
+    const checkbox = form.createCheckBox(name);
+    checkbox.addToPage(page, {
+      x:x * width,
+      y:y * height,
+      width:widthFraction * width,
+      height:heightFraction * height,
+    });
+    field = checkbox;
+  } else if (input.type === 'dropdown') {
+    if (!options.length) throw new Error('Dropdown fields require at least one option.');
+    const dropdown = form.createDropdown(name);
+    dropdown.addOptions(options);
+    dropdown.addToPage(page, {
+      x:x * width,
+      y:y * height,
+      width:widthFraction * width,
+      height:heightFraction * height,
+    });
+    field = dropdown;
+  } else {
+    if (!options.length) throw new Error('Option-list fields require at least one option.');
+    const list = form.createOptionList(name);
+    list.addOptions(options);
+    list.addToPage(page, {
+      x:x * width,
+      y:y * height,
+      width:widthFraction * width,
+      height:heightFraction * height,
+    });
+    field = list;
+  }
+
+  applyFlags(field, !!input.required, !!input.readOnly);
+  form.updateFieldAppearances();
+  return Uint8Array.from(await pdf.save({ useObjectStreams:false }));
+}
+
+export interface PdfFormFieldFlags {
+  required: boolean;
+  readOnly: boolean;
+}
+
+export async function setPdfFormFieldFlags(
+  bytes: Uint8Array,
+  name: string,
+  flags: PdfFormFieldFlags,
+): Promise<Uint8Array> {
+  const pdf = await load(bytes);
+  const form = pdf.getForm();
+  const field = form.getFieldMaybe(name);
+  if (!field) throw new Error(`PDF form field "${name}" was not found.`);
+  applyFlags(field, flags.required, flags.readOnly);
+  form.updateFieldAppearances();
+  return Uint8Array.from(await pdf.save({ useObjectStreams:false }));
+}
+
