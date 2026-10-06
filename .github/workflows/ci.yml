@@ -245,9 +245,18 @@ jobs:
             & $curl --fail --silent --show-error -o $ocrOut -F "fileInput=@$ocrFixture;type=application/pdf" -F "languages=eng" -F "sidecar=false" -F "deskew=false" -F "rotatePages=false" -F "clean=false" -F "cleanFinal=false" -F "ocrType=force-ocr" -F "ocrRenderType=hocr" -F "removeImagesAfter=false" "http://127.0.0.1:28970/api/v1/misc/ocr-pdf"
             if ($LASTEXITCODE -ne 0) { throw "Tesseract OCR PDF operation smoke failed." }
 
+            $rotateReport = Join-Path (Resolve-Path ".build/provider-smoke") "auto-rotate-report.json"
+            & $curl --fail --silent --show-error -o $rotateReport -F "fileInput=@$ocrFixture;type=application/pdf" -F "detectionMode=osd" -F "confidenceThreshold=0" -F "dryRun=true" -F "inferUndetected=false" "http://127.0.0.1:28970/api/v1/misc/auto-rotate-pdf"
+            if ($LASTEXITCODE -ne 0) { throw "Tesseract auto-rotate OSD analysis smoke failed." }
+            $analysis = Get-Content $rotateReport -Raw | ConvertFrom-Json
+            $osdPages = @($analysis.pages | Where-Object { $_.method -eq "osd" })
+            if ($osdPages.Count -lt 1 -or [int]$analysis.detectedByOsd -lt 1) {
+              throw "Auto-rotate endpoint returned without a positive Tesseract OSD verdict."
+            }
+
             $rotateOut = Join-Path (Resolve-Path ".build/provider-smoke") "auto-rotate.pdf"
             & $curl --fail --silent --show-error -o $rotateOut -F "fileInput=@$ocrFixture;type=application/pdf" -F "detectionMode=osd" -F "confidenceThreshold=0" -F "dryRun=false" -F "inferUndetected=false" "http://127.0.0.1:28970/api/v1/misc/auto-rotate-pdf"
-            if ($LASTEXITCODE -ne 0) { throw "Tesseract auto-rotate operation smoke failed." }
+            if ($LASTEXITCODE -ne 0) { throw "Tesseract auto-rotate PDF operation smoke failed." }
 
             foreach ($output in @($repairOut, $compressOut, $ocrOut, $rotateOut)) {
               $bytes = [System.IO.File]::ReadAllBytes($output)
