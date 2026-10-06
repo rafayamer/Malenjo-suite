@@ -40,8 +40,11 @@ Upstream license/provenance are retained under `third_party/stirling-pdf/` and `
 | Component | Reviewed version | License | Packaging status |
 |---|---:|---|---|
 | qpdf | 12.4.2 | Apache-2.0; static libjpeg-turbo/OpenSSL/zlib obligations recorded | Integration-approved Windows x64 component pack; final distributable release remains gated on exact runtime/SBOM + Microsoft runtime redistributable check. |
+| Tesseract OCR | 5.5.3 + pinned tessdata_fast eng/osd | Apache-2.0 for Tesseract core and pinned model data | Integration-approved Windows x64 OCR pack; final distributable release remains gated on exact extracted MSYS2 runtime DLL source/version/license mapping. |
 
 The qpdf pack is injected only into the on-demand local Stirling child process and is never added to the user or machine PATH. Generated binaries are excluded from Git. Exact qpdf build evidence and retained static-dependency licenses are under `third_party/qpdf/`; release packaging must reproduce the checksum-verified pack, capture its exact file inventory in the SBOM, and complete the Microsoft runtime redistributable check.
+
+The Tesseract pack is likewise available only to the on-demand local Stirling child. MALENJO does not execute Tesseract's upstream NSIS installer and does not allow its moving runtime download of language data. Instead, `eng` and `osd` are fetched from the exact pinned `tessdata_fast` commit and verified by Git blob identity. Provenance and license records are under `third_party/tesseract/`. The current pack is integration-approved but remains release-gated until every extracted Windows runtime DLL is traced to an exact source package/version/license and required notices are retained.
 
 libjpeg-turbo/IJG acknowledgement required by the reviewed static dependency: **This software is based in part on the work of the Independent JPEG Group.**
 
