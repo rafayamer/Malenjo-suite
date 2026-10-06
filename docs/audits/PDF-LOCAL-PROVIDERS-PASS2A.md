@@ -76,3 +76,14 @@ qpdf's open-source binary obligations are recorded, but qpdf is **integration-ap
 The remaining #143 providers/replacements are still open, including OCR, Office conversion, HTML/Markdown conversion, Ghostscript-only features, EPUB, scan extraction, CBR and open-core-compatible form detection. The legal/provider matrix is in `PDF-PROVIDER-MATRIX-PASS2.md`.
 
 PDF remains **partial** and the canonical #39/#81/source-truth completion gate is unchanged.
+
+
+## Review hardening
+
+The ready-for-review audit found three provider-truth edge cases and this branch treats them as merge blockers:
+
+- Stirling OpenAPI names are normalized across slash paths, camelCase IDs and human summaries before external-provider matching. Office/OCR/etc. operations cannot fall through to an optimistic core default because their spelling differs.
+- `MALENJO_QPDF_BIN` is accepted only when it names an existing executable file. Its parent directory is injected into the Stirling child just like the reviewed bundled pack.
+- The Stirling child does **not inherit the user's PATH**. Its PATH contains only the reviewed/configured qpdf directory, or is empty when qpdf is absent. This prevents an installed Ghostscript, LibreOffice, Tesseract or other unreviewed binary from silently changing which implementation Stirling executes.
+
+These controls make runtime provider selection agree with the MALENJO capability/status contract.
