@@ -52,6 +52,7 @@ import {
 import PdfPageCanvas from './PdfPageCanvas';
 import PdfThumbnail from './PdfThumbnail';
 import { useScrollFps } from './useScrollFps';
+import { useRegisterDocumentCommands } from '../shell/documentCommands';
 
 interface Props {
   session: DocumentSession | null;
@@ -424,25 +425,6 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }
   }
 
-  useEffect(()=>{
-    if(!active)return;
-    const onKeyDown=(event:KeyboardEvent)=>{
-      if(!(event.ctrlKey||event.metaKey))return;
-      const target=event.target as HTMLElement|null;
-      if(target?.closest('input,textarea,[contenteditable="true"]'))return;
-      const key=event.key.toLowerCase();
-      if(key==='z'&&!event.shiftKey){
-        event.preventDefault();
-        void undoEdit();
-      }else if((key==='z'&&event.shiftKey)||key==='y'){
-        event.preventDefault();
-        void redoEdit();
-      }
-    };
-    window.addEventListener('keydown',onKeyDown);
-    return()=>window.removeEventListener('keydown',onKeyDown);
-  },[active,historyRevision,mutating]);
-
   async function searchPdf(){
     if(!pdf||!searchQuery.trim())return;
     const needle=searchQuery.trim().toLocaleLowerCase();
@@ -527,6 +509,45 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       window.print();
     }, delay);
   }
+
+  useRegisterDocumentCommands(
+    session?.id,
+    () => [
+      {
+        id:'undo',
+        label:'Undo PDF edit',
+        enabled:!!historyRef.current && !mutating && canUndoPdfHistory(historyRef.current),
+        shortcut:'Ctrl+Z',
+        detail:'Undo the most recent PDF mutation in this tab.',
+        run:()=>undoEdit(),
+      },
+      {
+        id:'redo',
+        label:'Redo PDF edit',
+        enabled:!!historyRef.current && !mutating && canRedoPdfHistory(historyRef.current),
+        shortcut:'Ctrl+Y / Ctrl+Shift+Z',
+        detail:'Redo the next PDF mutation in this tab.',
+        run:()=>redoEdit(),
+      },
+      {
+        id:'export',
+        label:dirty ? 'Export edited PDF' : 'Export PDF copy',
+        enabled:!!sourceBytes && !mutating,
+        shortcut:'Ctrl+Shift+S',
+        detail:dirty ? 'Write the current edited PDF bytes to a new file.' : 'Write an exact PDF copy to a new file.',
+        run:()=>exportCurrent(),
+      },
+      {
+        id:'print',
+        label:'Print PDF',
+        enabled:!!pdf && !mutating,
+        shortcut:'Ctrl+P',
+        detail:`Render and print ${pageCount || 0} page(s).`,
+        run:()=>printDocument(),
+      },
+    ],
+    [session?.id, historyRevision, mutating, sourceBytes, pdf, dirty, sourceName, pageCount],
+  );
 
   const zoomLabel = fitMode === 'width'
     ? 'Fit width'
