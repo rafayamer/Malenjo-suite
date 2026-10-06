@@ -195,3 +195,8 @@
 .command-palette-results button:disabled:hover{background:#08151f}
 .command-palette-results button:disabled small{color:#8c7452}
 
+.pdf-feature-list{display:flex;flex-direction:column;gap:4px;margin:7px 0;padding:8px;border:1px solid #1b3a4f;background:#071722;border-radius:7px}
+.pdf-feature-list b{font-size:9px;color:#c5d8e5}
+.pdf-feature-list span{font-size:8px;color:#7895a9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdf-edit-form>button svg{vertical-align:-2px;margin-right:4px}
+
