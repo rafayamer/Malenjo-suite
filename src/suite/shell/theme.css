@@ -257,3 +257,22 @@
   .pdf-left-rail{padding-left:5px;padding-right:5px}
 }
 @media print{.pdf-left-shell{display:none!important}}
+
+
+/* Source-truth UI 53.7 — document-first central canvas */
+.pdf-scroll{
+  background:#111820;
+  scrollbar-color:#355066 #111820;
+}
+.pdf-stage{
+  gap:20px;
+  padding:22px clamp(20px,3vw,44px) 72px;
+}
+.pdf-page-shell{
+  border:1px solid #ffffff14;
+  box-shadow:0 3px 14px #0008;
+}
+.pdf-page-shell:focus-within{
+  outline:1px solid #4aa8e8;
+  outline-offset:2px;
+}
