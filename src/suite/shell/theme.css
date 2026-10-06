@@ -639,3 +639,16 @@
 .stirling-tools-panel button:focus-visible,.stirling-tools-panel input:focus-visible,.stirling-tools-panel select:focus-visible,.stirling-tools-panel textarea:focus-visible{outline:2px solid #4aa8e8;outline-offset:2px}
 @media(max-width:1100px){.stirling-fields{grid-template-columns:1fr}.stirling-catalog-filter{grid-template-columns:1fr}.stirling-tools-head{flex-direction:column}}
 
+
+.pdf-stage.two{display:grid;grid-template-columns:repeat(2,max-content);align-items:start;justify-content:center}
+.pdf-stage.single{min-width:100%;min-height:100%;justify-content:flex-start}
+.pdf-workspace.presentation-mode .pdf-task-toolbar,
+.pdf-workspace.presentation-mode .pdf-left-shell,
+.pdf-workspace.presentation-mode .pdf-inspector,
+.pdf-workspace.presentation-mode .pdf-notice,
+.pdf-workspace.presentation-mode .stirling-tools-panel{display:none!important}
+.pdf-workspace.presentation-mode .pdf-layout{grid-template-columns:minmax(0,1fr)!important;height:100vh}
+.pdf-workspace.presentation-mode .pdf-scroll{background:#080b0e}
+.pdf-workspace.presentation-mode .pdf-stage{min-width:100%;min-height:100%;padding:12px;justify-content:center}
+.pdf-view-controls button.active{background:#163a57;border-color:#3b7ca6;color:#fff}
+@media(max-width:1000px){.pdf-stage.two{grid-template-columns:max-content}}
