@@ -4,6 +4,7 @@ import {
   ServerCog, Square, TriangleAlert,
 } from 'lucide-react';
 import type {
+  PdfProviderComponentStatus,
   PdfProviderInputFile,
   PdfProviderOperation,
   PdfProviderOperationField,
@@ -42,6 +43,7 @@ function providerFilename(name:string):string{
 
 export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,category,onApplyPdf}:Props){
   const [status,setStatus]=useState<PdfProviderStatus|null>(null);
+  const [components,setComponents]=useState<PdfProviderComponentStatus[]>([]);
   const [operations,setOperations]=useState<PdfProviderOperation[]>([]);
   const [search,setSearch]=useState('');
   const [selectedId,setSelectedId]=useState('');
@@ -56,8 +58,8 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   const refresh=async(loadCatalog=false)=>{
     setError('');
     try{
-      const next=await provider.status();
-      setStatus(next);
+      const [next,nextComponents]=await Promise.all([provider.status(),provider.componentStatus()]);
+      setStatus(next);setComponents(nextComponents);
       if(loadCatalog&&next.running){
         const catalog=await provider.listOperations();
         setOperations(catalog);
@@ -102,7 +104,8 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     setBusy(true);setError('');
     try{
       const next=await provider.start();setStatus(next);
-      const catalog=await provider.listOperations();setOperations(catalog);
+      const [catalog,nextComponents]=await Promise.all([provider.listOperations(),provider.componentStatus()]);
+      setOperations(catalog);setComponents(nextComponents);
       const available=catalog.filter((operation)=>operation.capability.available).length;
       setNotice(`Loaded ${catalog.length} local PDF API operations; ${available} are available through reviewed providers/fallbacks.`);
     }catch(reason){setError(reason instanceof Error?reason.message:String(reason));await refresh(false);}
@@ -148,7 +151,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       }
       const response=await provider.run(selected,fields,files);
       if(provider.responseIsPdf(response)){
-        await onApplyPdf(`Stirling core: ${selected.summary}`,Uint8Array.from(response.bytes));
+        await onApplyPdf(`Local PDF core: ${selected.summary}`,Uint8Array.from(response.bytes));
         setNotice(`${selected.summary} completed and was applied to the current MALENJO working copy.`);
       }else{
         const saved=await provider.saveResponse(response,sourceName.replace(/\.pdf$/i,'')||'malenjo-output');
@@ -216,6 +219,15 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       <button disabled={busy} onClick={()=>void refresh(Boolean(status?.running))}><RefreshCw size={14}/>Refresh</button>
     </div>
     <p className="stirling-provider-message">{status?.message??'Checking local provider…'}</p>
+    {!!components.length&&<details className="stirling-component-details">
+      <summary>{components.filter((component)=>component.available).length}/{components.length} reviewed provider components available</summary>
+      <div className="stirling-components" aria-label="Local PDF component status">
+        {components.map((component)=><div key={component.id} className={component.available?'stirling-component ready':'stirling-component'}>
+          {component.available?<CheckCircle2 size={13}/>:<TriangleAlert size={13}/>}
+          <span><b>{component.id}</b><small>{component.version??component.message}</small></span>
+        </div>)}
+      </div>
+    </details>}
     {!status?.installed&&<p className="stirling-provider-help">Windows development pack: <code>powershell -ExecutionPolicy Bypass -File scripts/build-stirling-core.ps1</code>. The provider runs on 127.0.0.1 only and never starts at MALENJO launch.</p>}
     {status?.running&&<div className="stirling-catalog">
       <div className="stirling-catalog-filter">
