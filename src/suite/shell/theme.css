@@ -200,3 +200,8 @@
 .pdf-feature-list span{font-size:8px;color:#7895a9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pdf-edit-form>button svg{vertical-align:-2px;margin-right:4px}
 
+.topbar-actions{display:flex;align-items:center;gap:8px}
+.document-tab.dragging{opacity:.5}
+.document-tab.drag-over{box-shadow:inset 2px 0 0 #33d4e5}
+.document-tab-main[draggable="true"]{cursor:grab}
+.document-tab-main[draggable="true"]:active{cursor:grabbing}
