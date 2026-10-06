@@ -203,10 +203,12 @@ function fieldsForResolvedCapability(
     resolved.providerId==='stirling-core'
     && operationMatches(operation,'replace-invert-pdf','replaceInvertPdf')
   ){
-    return operation.fields.map((field)=>field.name==='replaceAndInvertOption'&&field.enumValues
+    return operation.fields.map((field)=>field.name==='replaceAndInvertOption'
       ? {
           ...field,
-          enumValues:field.enumValues.filter((value)=>value!=='COLOR_SPACE_CONVERSION'),
+          kind:'string',
+          enumValues:['HIGH_CONTRAST_COLOR','CUSTOM_COLOR','FULL_INVERSION'],
+          defaultValue:'HIGH_CONTRAST_COLOR',
           description:'Java/PDFBox modes only. CMYK color-space conversion remains unavailable because the pinned implementation shells out to Ghostscript.',
         }
       : field);
