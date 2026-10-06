@@ -288,3 +288,5 @@ No module is complete merely because its navigation entry exists. Completion req
 | Auto Rotate OSD operation | Windows provider smoke | local `/api/v1/misc/auto-rotate-pdf`, forced OSD analysis requires a positive `method=osd` verdict before PDF smoke | CI #292 | Passed |
 | Tesseract binary redistribution | Legal/release | full runtime SHA-256 inventory + component SBOM; exact DLL package/license mapping still required | dependency record + generated manifest/SBOM | Release-gated |
 | Module completion | Registry | PDF remains `partial` | canonical #39/#81/#143 gate | Correct |
+
+| Direct Tesseract OCR control truth | PDF provider contract | direct fallback exposes only file/language/OCR-type controls it actually consumes | capability resolver + regression test + pinned Stirling source audit | Implemented; CI pending |
