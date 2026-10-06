@@ -59,6 +59,7 @@ interface Props {
   notice: string;
   onBackToFiles(): void;
   onDirtyChange?(dirty:boolean): void;
+  onWorkingCopyChange?(bytes:Uint8Array | null, dirty:boolean): void;
 }
 
 function formatBytes(bytes: number): string {
@@ -72,7 +73,7 @@ function editedName(name:string,suffix='edited'):string{
   return `${base}-${suffix}.pdf`;
 }
 
-export default function PdfWorkspace({ session, active, notice, onBackToFiles, onDirtyChange }: Props) {
+export default function PdfWorkspace({ session, active, notice, onBackToFiles, onDirtyChange, onWorkingCopyChange }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const appendInputRef = useRef<HTMLInputElement>(null);
@@ -172,6 +173,21 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     if (!document || document.kind !== 'pdf') return;
 
     let cancelled = false;
+
+    if (session.recoveryBytes) {
+      const recovered = Uint8Array.from(session.recoveryBytes);
+      void installPdf(recovered, document.name, document.browserFile ?? null)
+        .then(() => {
+          if (cancelled) return;
+          setDirty(true);
+          onDirtyChange?.(true);
+          setActionNotice(`Recovered unsaved PDF working copy from ${session.recoveredAt ? new Date(session.recoveredAt).toLocaleString() : 'the previous session'}.`);
+        })
+        .catch((reason) => {
+          if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason));
+        });
+      return () => { cancelled = true; };
+    }
 
     if (document.browserFile) {
       const file = document.browserFile;
@@ -301,6 +317,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       selectionAnchorRef.current=targetPage;
       setDirty(true);
       onDirtyChange?.(true);
+      onWorkingCopyChange?.(result,true);
       setActionNotice(label);
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
@@ -351,6 +368,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setHistoryRevision((value)=>value+1);
       setDirty(true);
       onDirtyChange?.(true);
+      onWorkingCopyChange?.(result,true);
       setActionNotice(label);
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
@@ -374,6 +392,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setCurrentPage(transition.entry.page);
       setDirty(transition.entry.dirty);
       onDirtyChange?.(transition.entry.dirty);
+      onWorkingCopyChange?.(transition.entry.dirty ? transition.entry.bytes : null, transition.entry.dirty);
       setActionNotice(`Undid: ${undoneLabel}`);
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
@@ -396,6 +415,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setCurrentPage(transition.entry.page);
       setDirty(transition.entry.dirty);
       onDirtyChange?.(transition.entry.dirty);
+      onWorkingCopyChange?.(transition.entry.dirty ? transition.entry.bytes : null, transition.entry.dirty);
       setActionNotice(`Redid: ${transition.entry.label}`);
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
