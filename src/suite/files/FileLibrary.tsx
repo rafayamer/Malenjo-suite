@@ -71,8 +71,9 @@ export default function FileLibrary({ onOpen }: Props) {
   function addBrowserFiles(files: Iterable<File>) {
     const added = addBrowserDocuments(files);
     setDocuments(listBrowserDocuments());
+    for (const document of added) onOpen(openBrowserDocument(document.id));
     setNotice(added.length
-      ? `Added ${added.length} browser-session document(s). Open several files to keep them in independent MALENJO tabs.`
+      ? `Opened ${added.length} browser-session document(s) in independent MALENJO tabs.`
       : 'No usable files were selected.');
   }
 
@@ -86,9 +87,10 @@ export default function FileLibrary({ onOpen }: Props) {
       const result = await chooseAndAddDocuments();
       if (!result) return;
       await load();
+      for (const document of result.documents) onOpen(document);
       setNotice(result.errors.length
-        ? `Added ${result.documents.length} document(s); ${result.errors.length} could not be added.`
-        : `Added ${result.documents.length} document(s).`);
+        ? `Opened ${result.documents.length} document(s) in tabs; ${result.errors.length} could not be added.`
+        : `Opened ${result.documents.length} document(s) in MALENJO tabs.`);
     } catch (error) {
       setNotice(String(error));
     } finally {
@@ -203,7 +205,7 @@ export default function FileLibrary({ onOpen }: Props) {
           : 'Codespaces/browser mode keeps selected files in an in-memory session store so multiple documents can open in normal MALENJO tabs without uploading them.'}</p>
       </div>
       <button className="primary-action" disabled={busy} onClick={() => void addFiles()}>
-        <FilePlus2 size={17}/> Add files
+        <FilePlus2 size={17}/> Open files
       </button>
     </div>
 
