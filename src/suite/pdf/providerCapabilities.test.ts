@@ -50,6 +50,19 @@ describe('PDF provider capability resolver',()=>{
     }
   });
 
+  it('normalizes Stirling slash paths, camelCase ids and spaced summaries before provider gating',()=>{
+    const variants=[
+      {path:'/api/v1/convert/pdf/word',id:'convertPDFToWord',summary:'Convert PDF to Word'},
+      {path:'/api/v1/convert/pdf/presentation',id:'convertPDFToPresentation',summary:'Convert PDF to Presentation'},
+      {path:'/api/v1/convert/pdf/html',id:'convertPDFToHTML',summary:'Convert PDF to HTML'},
+    ];
+    for(const variant of variants){
+      const result=resolvePdfProviderCapability(variant,[]);
+      expect(result.available).toBe(false);
+      expect(result.providerId).toMatch(/libreoffice|pdftohtml/);
+    }
+  });
+
   it('does not turn absent OCR/Office/proprietary providers into operational tools',()=>{
     expect(resolvePdfProviderCapability(operation('/api/v1/misc/ocr-pdf'),[]).available).toBe(false);
     expect(resolvePdfProviderCapability(operation('/api/v1/convert/pdf-to-word'),[]).available).toBe(false);
