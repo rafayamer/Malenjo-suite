@@ -45,11 +45,11 @@ No module is complete merely because its navigation entry exists. Completion req
 
 | Requirement | Component | Implementation | Test/evidence | Status |
 |---|---|---|---|---|
-| First visible page has highest render priority | PDF Workspace | `renderPriority.ts` focus phase + gated `PdfPageCanvas` | `renderPriority.test.ts` | Implemented; CI pending |
-| Next/previous pages follow focus page | PDF Workspace | adjacent render phase opens only after focused page renders | scheduler regression tests | Implemented; CI pending |
-| Visible thumbnails follow critical page pass | PDF Workspace | thumbnail render gate via `pdfCriticalPassReady` | scheduler regression tests | Implemented; CI pending |
-| Remaining pages/thumbnails stay lazy | PDF Workspace | lazy phase + IntersectionObserver; offscreen `getPage()` avoided | code audit + build/tests | Implemented; CI pending |
-| Neutral document-first canvas | PDF Workspace / theme | neutral dark gray/navy canvas + reduced page shadow | source-truth audit | Implemented; CI pending |
+| First visible page has highest render priority | PDF Workspace | `renderPriority.ts` focus phase + gated `PdfPageCanvas` | `renderPriority.test.ts` | Verified in PR #125 / CI #196 |
+| Next/previous pages follow focus page | PDF Workspace | adjacent render phase opens only after focused page renders | scheduler regression tests | Verified in PR #125 / CI #196 |
+| Visible thumbnails follow critical page pass | PDF Workspace | thumbnail render gate via `pdfCriticalPassReady` | scheduler regression tests | Verified in PR #125 / CI #196 |
+| Remaining pages/thumbnails stay lazy | PDF Workspace | lazy phase + IntersectionObserver; offscreen `getPage()` avoided | code audit + build/tests | Verified in PR #125 / CI #196 |
+| Neutral document-first canvas | PDF Workspace / theme | neutral dark gray/navy canvas + reduced page shadow | source-truth audit | Verified in PR #125 / CI #196 |
 | Detailed audit | Documentation | `docs/audits/UI-53.7-CENTRAL-CANVAS.md` | canonical SHA/lines recorded | Implemented |
 
 ## Phase 1 traceability
