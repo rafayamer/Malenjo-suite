@@ -10,6 +10,9 @@
 - Release source: https://github.com/qpdf/qpdf/releases/tag/v12.4.2
 - License source: https://github.com/qpdf/qpdf/blob/v12.4.2/LICENSE.txt
 - NOTICE source: https://github.com/qpdf/qpdf/blob/v12.4.2/NOTICE.md
+- Release build workflow: qpdf `QPDF Build` run `36273443816`, MSVC x64 job
+- vcpkg cache workflow: qpdf `vcpkg cache` run `35955712569`
+- Static dependency tuple: `libjpeg-turbo-3.2.0#1,openssl-3.6.4#1,zlib-1.3.2#2`
 
 ## MALENJO use
 
@@ -19,4 +22,6 @@ The pack builder verifies the upstream release asset checksum before extraction.
 
 ## Redistribution
 
-Apache-2.0 permits commercial redistribution subject to its notice/license obligations. A release must include the upstream Apache-2.0 license, qpdf NOTICE material, material third-party notices from the binary distribution, and the exact pack entry in the release SBOM/provenance set.
+qpdf itself is Apache-2.0. The reviewed MSVC x64 release statically links the exact libjpeg-turbo/OpenSSL/zlib versions recorded in `DEPENDENCIES.md`; their required license/acknowledgement material is retained under `third_party/qpdf/deps/`.
+
+The provider is approved for MALENJO development/integration. Final distributable release approval remains gated on the exact generated runtime file inventory/SBOM and confirmation that any Microsoft Visual C++ runtime files copied by qpdf's CMake `InstallRequiredSystemLibraries` step are included under applicable Microsoft redistributable terms. This branch therefore does not treat source-license compatibility alone as a complete binary redistribution review.
