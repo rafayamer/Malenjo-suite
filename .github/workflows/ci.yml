@@ -156,6 +156,8 @@ jobs:
         shell: pwsh
         run: |
           $jar = Resolve-Path "provider-packs/stirling-core/stirling-pdf.jar"
+          $java = (Get-Command java).Source
+          if (-not $java) { throw "Java runtime was not resolved before provider PATH isolation." }
           $qpdf = Get-ChildItem "provider-packs/qpdf/runtime" -Recurse -File -Filter "qpdf.exe" | Select-Object -First 1
           if (-not $qpdf) { throw "qpdf runtime executable was not found." }
           $tesseract = Get-ChildItem "provider-packs/tesseract/runtime" -Recurse -File -Filter "tesseract.exe" | Select-Object -First 1
@@ -166,7 +168,7 @@ jobs:
           $env:STIRLING_FLAVOR = "core"
           $env:DISABLE_ADDITIONAL_FEATURES = "true"
           $env:ENABLE_SAAS = "false"
-          $process = Start-Process -FilePath "java" -ArgumentList @(
+          $process = Start-Process -FilePath $java -ArgumentList @(
             "-Xms128m",
             "-Xmx1536m",
             "-jar", $jar,
