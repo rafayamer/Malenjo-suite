@@ -290,3 +290,15 @@ No module is complete merely because its navigation entry exists. Completion req
 | Module completion | Registry | PDF remains `partial` | canonical #39/#81/#143 gate | Correct |
 
 | Direct Tesseract OCR control truth | PDF provider contract | direct fallback exposes only file/language/OCR-type controls it actually consumes | capability resolver + regression test + pinned Stirling source audit | Implemented; CI pending |
+
+
+## PDF completion pass 2C — open-core capability truth
+
+| Requirement | Component | Implementation | Evidence | Status |
+|---|---|---|---|---|
+| Scanner Effect provider truth | PDF provider contract | pinned Java/AWT/PDFBox implementation reported as `stirling-core` | source audit + resolver tests + Windows operation smoke | Implemented; CI pending |
+| Replace/Invert provider truth | PDF provider contract | high-contrast/custom/full-inversion available through pinned PDFBox paths | source audit + resolver tests + Windows full-inversion smoke | Implemented; CI pending |
+| Ghostscript-only CMYK exclusion | MALENJO operation schema | `COLOR_SPACE_CONVERSION` removed from visible enum while Ghostscript is unapproved | capability field filtering + tests | Implemented; CI pending |
+| Vector legal boundary | PDF provider contract | PDF↔PS/EPS/PCL/XPS remains unavailable without lawful replacement | pinned `PdfVectorExportController` audit | Correct |
+| No ambient Ghostscript | Windows provider smoke | child PATH remains qpdf/Tesseract only while Scanner Effect + full inversion execute | CI | Pending |
+| Module completion | Registry | PDF remains `partial`; #39/#81/#141/#143 stay open | canonical trackers | Correct |
