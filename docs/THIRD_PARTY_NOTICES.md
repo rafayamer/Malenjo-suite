@@ -43,6 +43,8 @@ Upstream license/provenance are retained under `third_party/stirling-pdf/` and `
 
 The qpdf pack is injected only into the on-demand local Stirling child process and is never added to the user or machine PATH. Generated binaries are excluded from Git. Exact qpdf build evidence and retained static-dependency licenses are under `third_party/qpdf/`; release packaging must reproduce the checksum-verified pack, capture its exact file inventory in the SBOM, and complete the Microsoft runtime redistributable check.
 
+libjpeg-turbo/IJG acknowledgement required by the reviewed static dependency: **This software is based in part on the work of the Independent JPEG Group.**
+
 ## Optional external engines/adapters
 
 MALENJO may call locally installed tools such as Ollama, llama.cpp, PaddleOCR/Python, ClamAV, pyHanko, Temporal and Kopia through product-owned adapter boundaries. Their executable/model/package licenses are reviewed independently from this source notice before bundling or redistribution. Availability in Help diagnostics does **not** mean the engine is bundled.
