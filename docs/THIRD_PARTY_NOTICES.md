@@ -35,6 +35,14 @@ This file is the **in-product notice destination for the current source tree**. 
 
 Upstream license/provenance are retained under `third_party/stirling-pdf/` and `third_party/casualoffice/`. Stirling is open-core; its restricted directories are governed by separate non-MIT licenses and are not copied into MALENJO. The earlier shadcn-admin Home attribution was removed by correction issue #139 because that repository was not actually the structural source used by the corrected Home implementation.
 
+## Reviewed PDF provider component packs
+
+| Component | Reviewed version | License | Packaging status |
+|---|---:|---|---|
+| qpdf | 12.4.2 | Apache-2.0 | Approved Windows x64 local component pack; official release ZIP checksum-pinned. License and NOTICE retained under `third_party/qpdf/`. |
+
+The qpdf pack is injected only into the on-demand local Stirling child process and is never added to the user or machine PATH. Generated binaries are excluded from Git; release packaging must reproduce the checksum-verified pack and include it in the SBOM/provenance set.
+
 ## Optional external engines/adapters
 
 MALENJO may call locally installed tools such as Ollama, llama.cpp, PaddleOCR/Python, ClamAV, pyHanko, Temporal and Kopia through product-owned adapter boundaries. Their executable/model/package licenses are reviewed independently from this source notice before bundling or redistribution. Availability in Help diagnostics does **not** mean the engine is bundled.
