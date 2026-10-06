@@ -14,6 +14,7 @@ function Assert-Command([string]$Name) {
 }
 
 Assert-Command "git"
+Assert-Command "jar"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $work = Join-Path $repoRoot $WorkRoot
@@ -69,6 +70,16 @@ try {
   $env:DISABLE_ADDITIONAL_FEATURES = "true"
   $env:ENABLE_SAAS = "false"
 
+  Write-Host "Checking pinned Stirling runtime dependency licenses..."
+  .\gradlew.bat checkLicense generateLicenseReport --no-parallel --no-daemon
+  if ($LASTEXITCODE -ne 0) { throw "Pinned Stirling dependency license gate failed." }
+  $licenseReport = Join-Path $src "build/reports/dependency-license/index.json"
+  if (!(Test-Path $licenseReport)) { throw "Stirling dependency license report was not generated." }
+  $overrideChanges = (& git status --porcelain -- app/license-overrides.json | Out-String).Trim()
+  if ($overrideChanges) {
+    throw "Stirling dependency license resolution changed app/license-overrides.json; review the new metadata before packaging."
+  }
+
   Write-Host "Building backend-only Stirling core JAR..."
   .\gradlew.bat :stirling-pdf:bootJar -PbuildWithFrontend=false --no-daemon
 
@@ -81,6 +92,40 @@ try {
   Copy-Item $jar.FullName $destination -Force
 
   $hash = (Get-FileHash -Algorithm SHA256 $destination).Hash.ToLowerInvariant()
+
+  $officeVersion = "0.2.2"
+  $officeCommit = "673aab8d6ac784524cd1d90141c95e74b9fd26ae"
+  $officeNames = @(
+    "stirling-office-convert-$officeVersion.jar",
+    "stirling-office-convert-legacy-$officeVersion.jar",
+    "stirling-office-convert-topdf-$officeVersion.jar"
+  )
+  $jarTool = (Get-Command jar).Source
+  $jarEntries = @(& $jarTool tf $destination)
+  $embeddedRoot = Join-Path $work "embedded-office"
+  New-Item -ItemType Directory -Force -Path $embeddedRoot | Out-Null
+  $officeHashes = [ordered]@{}
+  Push-Location $embeddedRoot
+  try {
+    foreach ($officeName in $officeNames) {
+      $entry = "BOOT-INF/lib/$officeName"
+      if ($jarEntries -notcontains $entry) { throw "Stirling core JAR is missing embedded $entry." }
+      & $jarTool xf $destination $entry
+      if ($LASTEXITCODE -ne 0) { throw "Unable to extract embedded Office Convert component $officeName." }
+      $embeddedPath = Join-Path $embeddedRoot $entry
+      $officeHashes[$officeName] = (Get-FileHash -Algorithm SHA256 $embeddedPath).Hash.ToLowerInvariant()
+    }
+  } finally {
+    Pop-Location
+  }
+
+  $noticeDir = Join-Path $out "malenjo-notices"
+  New-Item -ItemType Directory -Force -Path $noticeDir | Out-Null
+  Copy-Item (Join-Path $repoRoot "third_party/stirling-pdf/LICENSE") (Join-Path $noticeDir "stirling-pdf-LICENSE.txt") -Force
+  Copy-Item (Join-Path $repoRoot "third_party/stirling-office-convert/LICENSE.txt") (Join-Path $noticeDir "stirling-office-convert-LICENSE.txt") -Force
+  Copy-Item (Join-Path $repoRoot "third_party/stirling-office-convert/DEPENDENCIES.md") (Join-Path $noticeDir "stirling-office-convert-DEPENDENCIES.md") -Force
+  Copy-Item $licenseReport (Join-Path $noticeDir "stirling-dependency-licenses.json") -Force
+
   $manifest = [ordered]@{
     schemaVersion = 1
     provider = "stirling-open-core"
@@ -96,8 +141,16 @@ try {
         sha256 = $patchHash
       }
     )
+    embeddedOfficeConvert = [ordered]@{
+      version = $officeVersion
+      upstream = "Stirling-Tools/Stirling-Office-Convert"
+      sourceCommit = $officeCommit
+      license = "MIT"
+      jars = $officeHashes
+    }
+    dependencyLicenseReport = "malenjo-notices/stirling-dependency-licenses.json"
     builtAt = [DateTime]::UtcNow.ToString("o")
-  } | ConvertTo-Json -Depth 4
+  } | ConvertTo-Json -Depth 6
   Set-Content -Path (Join-Path $out "manifest.json") -Value $manifest -Encoding UTF8
 
   Write-Host "Built MALENJO Stirling core pack: $destination"
