@@ -24,6 +24,7 @@ use suite::{
         pyhanko_sign_copy, pyhanko_status, pyhanko_validate_document, record_audit_event,
         store_ephemeral_secret, SecurityState,
     },
+    support::write_support_bundle,
 };
 
 #[tauri::command]
@@ -96,7 +97,8 @@ pub fn run() {
             restore_local_backup,
             kopia_status,
             kopia_snapshot_app_state,
-            kopia_restore_snapshot
+            kopia_restore_snapshot,
+            write_support_bundle
         ])
         .run(tauri::generate_context!())
         .expect("error while running MALENJO Suite");

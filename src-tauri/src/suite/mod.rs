@@ -6,3 +6,4 @@ pub mod office;
 pub mod ocr;
 pub mod pdf;
 pub mod security;
+pub mod support;
