@@ -110,11 +110,26 @@ Rust tests cover:
 
 A Windows CI job additionally builds the reviewed Stirling core pack and smoke-tests health/OpenAPI on localhost.
 
-## Current CI blocker
+## Executable CI verification
 
-GitHub Actions runs #236 and #237 created all jobs but every runner terminated in roughly 2–3 seconds before any workflow step/log became available. GitHub exposes one job annotation per job but no downloadable job log/step list through the connected API. A failed-jobs rerun of #237 behaved identically.
+The repository was temporarily public so standard GitHub-hosted Actions could execute again after the private-repository minute allowance had been exhausted.
 
-This pattern is an Actions runner/account/infrastructure failure rather than evidence of a completed compile/test pass. The frontend provider-call bug found by source review was corrected in commit `abb75b7d9e45f9fb00b498824f50a0f9fb01d7b8`, but **PR #142 must not merge until executable CI resumes and passes**.
+Executable CI then exposed and allowed correction of two real implementation defects:
+
+- frontend provider UI still referenced an implementation-specific operation loader instead of the injected `PdfToolProvider` contract;
+- `reqwest` query support was not enabled for GET operations;
+- Windows smoke-test initially targeted `/v3/api-docs`, while this reviewed Stirling core build exposes SpringDoc at `/v1/api-docs`.
+
+All three were corrected before verification.
+
+CI #243 (`37469066584`) passed all four jobs on the corrected tree:
+
+- frontend: TypeScript typecheck, Vitest, production build;
+- Windows Rust: `cargo check` and library tests;
+- Codespaces/Linux: dependency setup, AI-helper validation, Rust check/tests;
+- Stirling core Windows: sparse open-core build, backend-only JAR generation, localhost startup, health check, and OpenAPI smoke validation.
+
+The Windows provider pack built successfully from the pinned source and started locally as Stirling-PDF v3.1.0 on `127.0.0.1:28970`.
 
 ## Completion boundary
 
