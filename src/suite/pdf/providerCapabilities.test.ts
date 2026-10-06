@@ -45,10 +45,8 @@ describe('PDF provider capability resolver',()=>{
     expect(compress.providerId).toBe('stirling-core');
   });
 
-  it('does not advertise Ghostscript-only operations without an approved provider',()=>{
+  it('keeps genuinely Ghostscript-only vector operations unavailable',()=>{
     for(const path of [
-      '/api/v1/misc/replace-invert-pdf',
-      '/api/v1/misc/scanner-effect',
       '/api/v1/convert/pdf-to-vector',
       '/api/v1/convert/vector-to-pdf',
     ]){
@@ -57,6 +55,59 @@ describe('PDF provider capability resolver',()=>{
       expect(result.providerId).toBe('ghostscript');
       expect(result.disabledReason).toMatch(/not bundled/i);
     }
+  });
+
+  it('recovers scanner effect through the pinned Java/PDFBox-AWT implementation',()=>{
+    const result=resolvePdfProviderCapability(operation('/api/v1/misc/scanner-effect','scannerEffect'),[]);
+    expect(result).toEqual(expect.objectContaining({
+      available:true,
+      providerId:'stirling-core',
+    }));
+    expect(result.implementation).toMatch(/PDFBox-AWT/i);
+  });
+
+  it('recovers non-CMYK replace/invert through pinned open core and filters Ghostscript-only CMYK',()=>{
+    const fields:PdfProviderOperation['fields']=[
+      {
+        name:'fileInput',label:'PDF',kind:'file',required:true,location:'form',
+      },
+      {
+        name:'replaceAndInvertOption',
+        label:'Mode',
+        kind:'string',
+        required:true,
+        location:'form',
+        enumValues:['HIGH_CONTRAST_COLOR','CUSTOM_COLOR','FULL_INVERSION','COLOR_SPACE_CONVERSION'],
+        defaultValue:'HIGH_CONTRAST_COLOR',
+      },
+      {
+        name:'highContrastColorCombination',
+        label:'High contrast',
+        kind:'string',
+        required:false,
+        location:'form',
+        enumValues:['WHITE_TEXT_ON_BLACK','BLACK_TEXT_ON_WHITE','YELLOW_TEXT_ON_BLACK','GREEN_TEXT_ON_BLACK'],
+      },
+    ];
+    const [resolved]=applyPdfProviderCapabilities([{
+      id:'replaceInvertPdf',
+      path:'/api/v1/misc/replace-invert-pdf',
+      method:'POST',
+      summary:'Replace-Invert Color PDF',
+      description:'',
+      tags:[],
+      fields,
+      category:'edit',
+      capability:resolvePdfProviderCapability(operation('/api/v1/misc/replace-invert-pdf'),[]),
+    }],[]);
+    expect(resolved.capability).toEqual(expect.objectContaining({
+      available:true,
+      providerId:'stirling-core',
+    }));
+    expect(resolved.fields.find((field)=>field.name==='replaceAndInvertOption')).toEqual(expect.objectContaining({
+      enumValues:['HIGH_CONTRAST_COLOR','CUSTOM_COLOR','FULL_INVERSION'],
+      defaultValue:'HIGH_CONTRAST_COLOR',
+    }));
   });
 
   it('normalizes Stirling slash paths, camelCase ids and spaced summaries before provider gating',()=>{
