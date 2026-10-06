@@ -48,3 +48,11 @@ Stirling is the open-source upstream baseline, not MALENJO's customer-facing bra
 Use Stirling's MIT UI/UX and open PDF workflows as the default starting point, then layer MALENJO-owned capabilities and adapters for Office, Scanner/OCR, local AI, signing, metadata, enterprise DMS, automation, security, backup, CAD, DICOM, administration and other source-required features.
 
 Do not bypass or imitate paid-license checks from restricted Stirling code.
+
+
+## MALENJO reviewed patch set
+
+The generated Stirling provider pack may include MALENJO-authored compatibility patches stored under `third_party/stirling-pdf/patches/`. Each patch must target the pinned reviewed commit, apply only to MIT-licensed open-core paths, pass `git apply --check`, and be recorded by path and SHA-256 in the generated provider manifest.
+
+Current patch:
+- `0001-malenjo-java-effect-alternatives.patch` — registers Java as an endpoint alternative for Scanner Effect and Replace/Invert Colors because the reviewed controllers already implement those functions in Java/PDFBox. MALENJO separately filters the Ghostscript-only CMYK mode.
