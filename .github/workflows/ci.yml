@@ -108,6 +108,36 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $version -notmatch "12\.4\.2") {
             throw "qpdf provider pack failed its executable smoke check."
           }
+      - name: Build reviewed Tesseract OCR Windows provider pack
+        shell: pwsh
+        run: |
+          ./scripts/build-tesseract-windows.ps1
+          $manifest = Get-Content "provider-packs/tesseract/manifest.json" -Raw | ConvertFrom-Json
+          if ($manifest.version -ne "5.5.3") { throw "Unexpected Tesseract version." }
+          if ($manifest.sourceSha256 -ne "bee9e3434bd94fd65387d9be28cd467a41f61b1275383b55b0f59a1331270ae4") {
+            throw "Unexpected Tesseract installer checksum."
+          }
+          if ($manifest.tessdataCommit -ne "87416418657359cb625c412a48b6e1d6d41c29bd") {
+            throw "Unexpected tessdata_fast source pin."
+          }
+          if ($manifest.redistribution -ne "integration-approved-release-gated") {
+            throw "Unexpected Tesseract redistribution state."
+          }
+          foreach ($model in @("eng.traineddata","osd.traineddata")) {
+            if (!(Test-Path (Join-Path "provider-packs/tesseract/tessdata" $model))) {
+              throw "Pinned Tesseract model missing: $model"
+            }
+          }
+          $tesseract = Get-ChildItem "provider-packs/tesseract/runtime" -Recurse -File -Filter "tesseract.exe" | Select-Object -First 1
+          if (-not $tesseract) { throw "Tesseract provider pack did not contain tesseract.exe." }
+          $version = (& $tesseract.FullName --version 2>&1 | Out-String)
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch "tesseract 5\.5\.3") {
+            throw "Tesseract provider pack failed its executable smoke check."
+          }
+          $sbom = Get-Content "provider-packs/tesseract/sbom.cdx.json" -Raw | ConvertFrom-Json
+          if ($sbom.bomFormat -ne "CycloneDX" -or $sbom.specVersion -ne "1.5") {
+            throw "Tesseract component SBOM failed structural validation."
+          }
       - name: Build reviewed Stirling open-core provider pack
         shell: pwsh
         run: |
@@ -128,7 +158,11 @@ jobs:
           $jar = Resolve-Path "provider-packs/stirling-core/stirling-pdf.jar"
           $qpdf = Get-ChildItem "provider-packs/qpdf/runtime" -Recurse -File -Filter "qpdf.exe" | Select-Object -First 1
           if (-not $qpdf) { throw "qpdf runtime executable was not found." }
-          $env:PATH = "$($qpdf.Directory.FullName);$env:PATH"
+          $tesseract = Get-ChildItem "provider-packs/tesseract/runtime" -Recurse -File -Filter "tesseract.exe" | Select-Object -First 1
+          if (-not $tesseract) { throw "Tesseract runtime executable was not found." }
+          $tessdata = Resolve-Path "provider-packs/tesseract/tessdata"
+          $env:PATH = "$($qpdf.Directory.FullName);$($tesseract.Directory.FullName)"
+          $env:TESSDATA_PREFIX = $tessdata
           $env:STIRLING_FLAVOR = "core"
           $env:DISABLE_ADDITIONAL_FEATURES = "true"
           $env:ENABLE_SAAS = "false"
@@ -159,7 +193,7 @@ jobs:
             }
             Write-Host "Stirling core healthy with $($v1Paths.Count) /api/v1 paths."
 
-            foreach ($requiredPath in @("/api/v1/misc/repair", "/api/v1/misc/compress-pdf")) {
+            foreach ($requiredPath in @("/api/v1/misc/repair", "/api/v1/misc/compress-pdf", "/api/v1/misc/ocr-pdf", "/api/v1/misc/auto-rotate-pdf")) {
               if (!$api.paths.PSObject.Properties.Name.Contains($requiredPath)) {
                 throw "Expected qpdf-backed operation $requiredPath to be present."
               }
@@ -186,6 +220,23 @@ jobs:
               }
             }
             Write-Host "qpdf operation group passed repair + compression localhost smoke tests."
+
+            $ocrOut = Join-Path (Resolve-Path ".build/provider-smoke") "ocr.pdf"
+            & curl.exe --fail --silent --show-error -o $ocrOut -F "fileInput=@$fixture;type=application/pdf" -F "languages=eng" -F "ocrType=force-ocr" -F "ocrRenderType=hocr" "http://127.0.0.1:28970/api/v1/misc/ocr-pdf"
+            if ($LASTEXITCODE -ne 0) { throw "Tesseract OCR operation smoke failed." }
+            $ocrBytes = [System.IO.File]::ReadAllBytes($ocrOut)
+            if ($ocrBytes.Length -lt 5 -or [Text.Encoding]::ASCII.GetString($ocrBytes,0,5) -ne "%PDF-") {
+              throw "Tesseract OCR smoke output is not a PDF."
+            }
+
+            $rotateOut = Join-Path (Resolve-Path ".build/provider-smoke") "auto-rotate.pdf"
+            & curl.exe --fail --silent --show-error -o $rotateOut -F "fileInput=@$fixture;type=application/pdf" -F "detectionMode=osd" "http://127.0.0.1:28970/api/v1/misc/auto-rotate-pdf"
+            if ($LASTEXITCODE -ne 0) { throw "Tesseract Auto Rotate operation smoke failed." }
+            $rotateBytes = [System.IO.File]::ReadAllBytes($rotateOut)
+            if ($rotateBytes.Length -lt 5 -or [Text.Encoding]::ASCII.GetString($rotateBytes,0,5) -ne "%PDF-") {
+              throw "Auto Rotate smoke output is not a PDF."
+            }
+            Write-Host "Tesseract operation group passed OCR + Auto Rotate localhost smoke tests."
           } finally {
             if (!$process.HasExited) { Stop-Process -Id $process.Id -Force }
           }
