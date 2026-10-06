@@ -12,7 +12,9 @@ export type DocumentCommandId =
   | 'automate'
   | 'version-history'
   | 'security'
-  | 'properties';
+  | 'properties'
+  | 'attach'
+  | 'flatten-form';
 
 export interface DocumentCommandDescriptor {
   id: DocumentCommandId;
