@@ -1,14 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Command, FileText, Search, X } from 'lucide-react';
+import { Command, FileText, Search, SlidersHorizontal, X } from 'lucide-react';
+import { filterCommandPaletteItems, type CommandPaletteSearchItem } from './commandPaletteModel';
 
-export interface CommandPaletteItem {
-  id: string;
-  label: string;
-  group: string;
-  keywords?: string;
-  detail?: string;
-  disabled?: boolean;
-  disabledReason?: string;
+export interface CommandPaletteItem extends CommandPaletteSearchItem {
   run(): void;
 }
 
@@ -22,14 +16,7 @@ interface Props {
 
 export default function CommandPalette({ open, query, items, onQueryChange, onClose }: Props) {
   const [selected, setSelected] = useState(0);
-  const filtered = useMemo(() => {
-    const value = query.trim().toLowerCase();
-    if (!value) return items.slice(0, 30);
-    return items.filter((item) =>
-      [item.label, item.group, item.keywords ?? '', item.detail ?? '']
-        .some((field) => field.toLowerCase().includes(value)),
-    ).slice(0, 40);
-  }, [items, query]);
+  const filtered = useMemo(() => filterCommandPaletteItems(items, query), [items, query]);
 
   useEffect(() => { setSelected(0); }, [query, open]);
 
@@ -67,8 +54,8 @@ export default function CommandPalette({ open, query, items, onQueryChange, onCl
           autoFocus
           value={query}
           onChange={(event)=>onQueryChange(event.target.value)}
-          placeholder="Search actions, workspaces and open documents"
-          aria-label="Search MALENJO commands"
+          placeholder="Search actions, documents and settings"
+          aria-label="Search MALENJO actions, documents and settings"
         />
         <kbd>Esc</kbd>
         <button aria-label="Close command palette" onClick={onClose}><X size={15}/></button>
@@ -82,13 +69,19 @@ export default function CommandPalette({ open, query, items, onQueryChange, onCl
           onMouseEnter={()=>setSelected(index)}
           onClick={()=>{if(item.disabled)return;item.run();onClose();}}
         >
-          <span className="command-palette-icon">{item.group==='Open documents'?<FileText size={15}/>:<Command size={15}/>}</span>
+          <span className="command-palette-icon">
+            {item.kind==='document'
+              ? <FileText size={15}/>
+              : item.kind==='setting'
+                ? <SlidersHorizontal size={15}/>
+                : <Command size={15}/>}
+          </span>
           <span><b>{item.label}</b><small>{item.disabled ? (item.disabledReason || 'Unavailable in the current document state') : (item.detail || item.group)}</small></span>
           <em>{item.group}</em>
         </button>)}
-        {!filtered.length && <div className="command-palette-empty">No implemented command matches “{query}”. Missing master-guide features are intentionally not shown as operational commands.</div>}
+        {!filtered.length && <div className="command-palette-empty">No action, document or setting matches “{query}”. Unsupported source-truth actions appear only when their canonical phrase or keywords are searched.</div>}
       </div>
-      <footer>Ctrl+K · ↑/↓ select · Enter run · only implemented actions are executable</footer>
+      <footer>Ctrl+K · ↑/↓ select · Enter run · actions, documents and settings</footer>
     </section>
   </div>;
 }

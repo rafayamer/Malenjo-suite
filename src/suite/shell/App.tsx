@@ -20,9 +20,11 @@ import {
   addLibraryDocumentsByPaths,
   chooseAndAddDocuments,
   isDesktopRuntime,
+  listLibraryDocuments,
+  openLibraryDocument,
   saveAsLibraryDocument,
 } from '../files/api';
-import { markBrowserDocumentOpened, registerBrowserFiles } from '../files/browserStore';
+import { listBrowserDocuments, markBrowserDocumentOpened, registerBrowserFiles } from '../files/browserStore';
 import PdfWorkspace from '../pdf/PdfWorkspace';
 import OfficeWorkspace from '../office/OfficeWorkspace';
 import ScannerWorkspace from '../scanner/ScannerWorkspace';
@@ -33,6 +35,7 @@ import SignWorkspace from '../security/SignWorkspace';
 import EnterpriseWorkspace from '../enterprise/EnterpriseWorkspace';
 import DocumentTabs from './DocumentTabs';
 import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
+import { CANONICAL_COMMAND_PALETTE_EXAMPLES } from './commandPaletteModel';
 import type { DocumentCommandController } from '../commands/types';
 
 const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
@@ -51,6 +54,7 @@ export default function App() {
   const [sessions, setSessions] = useState<DocumentSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [workspaceNotices, setWorkspaceNotices] = useState<Record<string,string>>({});
+  const [paletteDocuments, setPaletteDocuments] = useState<LibraryDocument[]>([]);
   const commandControllersRef = useRef(new Map<string, DocumentCommandController>());
   const browserOpenInputRef = useRef<HTMLInputElement>(null);
   const module = modules.find((item) => item.id === active) ?? modules[0];
@@ -84,6 +88,18 @@ export default function App() {
     setSessions((current) => [...current, session]);
     setActiveSessionId(session.id);
     setActive(workspaceForDocument(document.kind));
+  }
+
+  async function openPaletteDocument(document: LibraryDocument) {
+    try {
+      const opened = isDesktopRuntime()
+        ? await openLibraryDocument(document.id)
+        : markBrowserDocumentOpened(document);
+      openFromLibrary(opened);
+    } catch (error) {
+      setWorkspaceNotices((current) => ({ ...current, __open: String(error) }));
+      selectModule('files');
+    }
   }
 
   function openBrowserFiles(files: FileList | File[]) {
@@ -213,6 +229,25 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (!commandOpen) return;
+    let cancelled = false;
+
+    async function loadPaletteDocuments() {
+      try {
+        const documents = isDesktopRuntime()
+          ? await listLibraryDocuments()
+          : listBrowserDocuments();
+        if (!cancelled) setPaletteDocuments(documents);
+      } catch {
+        if (!cancelled) setPaletteDocuments([]);
+      }
+    }
+
+    void loadPaletteDocuments();
+    return () => { cancelled = true; };
+  }, [commandOpen, sessions]);
+
+  useEffect(() => {
     if (!isDesktopRuntime()) return;
     let unlisten: (() => void) | undefined;
 
@@ -297,27 +332,58 @@ export default function App() {
     : [];
 
   const commandItems: CommandPaletteItem[] = [
-    { id:'open-documents', label:'Open document(s)…', group:'File', keywords:'open import multiple files tabs ctrl o', detail:'Ctrl/Cmd+O', run:()=>{ void openDocumentsFromPicker(); } },
-    { id:'go-home', label:'Home', group:'Navigation', keywords:'start dashboard', run:()=>selectModule('home') },
-    { id:'go-files', label:'Open Files / Library', group:'Navigation', keywords:'open import documents', run:()=>selectModule('files') },
-    { id:'go-scan', label:'Scan document', group:'Tools', keywords:'camera capture scanner', run:()=>selectModule('scanner') },
-    { id:'go-ocr', label:'OCR document', group:'Tools', keywords:'recognize searchable text', run:()=>selectModule('ocr') },
-    { id:'go-ai', label:'Ask Malenjo AI', group:'Tools', keywords:'local rag ollama llama', run:()=>selectModule('ai') },
-    { id:'go-sign', label:'Sign / validate PDF', group:'Tools', keywords:'signature certificate pyhanko', run:()=>selectModule('sign') },
-    { id:'go-meta', label:'Open Metadata Studio', group:'Tools', keywords:'properties privacy sanitize metadata', run:()=>selectModule('metadata') },
-    { id:'go-security', label:'Open Security Center', group:'Tools', keywords:'protect cdr redact clamav encrypt', run:()=>selectModule('security') },
-    { id:'go-auto', label:'Run automation', group:'Enterprise', keywords:'workflow temporal', run:()=>selectModule('automation') },
-    { id:'go-dms', label:'Open Enterprise DMS', group:'Enterprise', keywords:'versions retention records', run:()=>selectModule('dms') },
-    { id:'go-backup', label:'Open Backup / DR', group:'Enterprise', keywords:'backup restore recovery kopia', run:()=>selectModule('backup') },
-    { id:'go-admin', label:'Open Administration', group:'Enterprise', keywords:'roles permissions policy', run:()=>selectModule('admin') },
+    {
+      id:'open-documents',
+      label:'Open document(s)…',
+      group:'File',
+      keywords:'open import multiple files tabs ctrl o',
+      detail:'Ctrl/Cmd+O',
+      kind:'action',
+      run:()=>{ void openDocumentsFromPicker(); },
+    },
+    ...modules.map((item) => ({
+      id:`workspace-${item.id}`,
+      label:item.id === 'home' ? 'Home' : `Open ${item.name}`,
+      group:item.id === 'settings' ? 'Settings' : 'Workspaces',
+      keywords:`${item.name} ${item.description} ${item.engine} ${item.group}`,
+      detail:item.id === 'settings' ? 'Suite preferences and settings' : item.description,
+      kind:item.id === 'settings' ? ('setting' as const) : ('action' as const),
+      run:()=>selectModule(item.id),
+    })),
+    ...CANONICAL_COMMAND_PALETTE_EXAMPLES.map((example,index) => ({
+      id:`source-example-${index}`,
+      label:example.phrase,
+      group:example.unavailableReason ? 'Source-truth discovery' : 'Actions',
+      keywords:example.keywords,
+      detail:example.detail,
+      kind:'action' as const,
+      hiddenWhenEmpty:true,
+      disabled:!!example.unavailableReason,
+      disabledReason:example.unavailableReason,
+      run:()=>{ if (example.target) selectModule(example.target); },
+    })),
     ...sessions.map((session) => ({
       id:`tab-${session.id}`,
       label:`Switch to ${session.document.name}`,
       group:'Open documents',
       detail:`${session.document.kind.toUpperCase()} · ${session.dirty ? 'unsaved changes' : 'saved'}`,
       keywords:`${session.document.name} ${session.document.kind}`,
+      kind:'document' as const,
       run:()=>activateSession(session.id),
     })),
+    ...paletteDocuments
+      .filter((document) => !sessions.some((session) => session.document.id === document.id))
+      .map((document) => ({
+        id:`library-${document.id}`,
+        label:document.name,
+        group:'Documents',
+        detail:`${document.kind.toUpperCase()} · ${document.locationLabel}`,
+        keywords:`${document.name} ${document.extension} ${document.kind} ${document.locationLabel}`,
+        kind:'document' as const,
+        disabled:!document.available,
+        disabledReason:document.available ? undefined : 'This library document is currently unavailable.',
+        run:()=>{ void openPaletteDocument(document); },
+      })),
     ...(activeSession ? [
       ...activeDocumentCommands.map((command) => ({
         id:`active-command-${command.id}`,
@@ -325,6 +391,7 @@ export default function App() {
         group:'Current document',
         keywords:command.keywords,
         detail:command.detail,
+        kind:'action' as const,
         disabled:!command.enabled,
         disabledReason:command.disabledReason,
         run:()=>{ if(command.enabled) void command.run(); },
@@ -334,6 +401,7 @@ export default function App() {
         label:`Save a copy of ${activeSession.document.name}`,
         group:'Current document',
         keywords:'save as export copy',
+        kind:'action' as const,
         run:()=>{ void saveSessionAs(activeSession.id); },
       }] : []),
       {
@@ -341,6 +409,7 @@ export default function App() {
         label:`Close ${activeSession.document.name}`,
         group:'Current document',
         keywords:'close tab',
+        kind:'action' as const,
         run:()=>closeSession(activeSession.id),
       },
     ] : []),
