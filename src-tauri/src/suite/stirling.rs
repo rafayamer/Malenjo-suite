@@ -153,13 +153,13 @@ fn qpdf_candidates(app: &AppHandle) -> Vec<(String, String)> {
     }
 
     let development = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../provider-packs/qpdf/bin/qpdf.exe");
+        .join("../provider-packs/qpdf/runtime/bin/qpdf.exe");
     if development.is_file() {
         candidates.push((development.to_string_lossy().to_string(), "bundled".into()));
     }
 
     if let Ok(resource_dir) = app.path().resource_dir() {
-        let bundled = resource_dir.join("provider-packs/qpdf/bin/qpdf.exe");
+        let bundled = resource_dir.join("provider-packs/qpdf/runtime/bin/qpdf.exe");
         if bundled.is_file() {
             candidates.push((bundled.to_string_lossy().to_string(), "bundled".into()));
         }
