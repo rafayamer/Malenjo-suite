@@ -60,7 +60,7 @@ Copy-Item (Join-Path $tesseract.Directory.FullName '*') $RuntimeDir -Recurse -Fo
 $bundledTesseract = Get-ChildItem $RuntimeDir -Recurse -File -Filter 'tesseract.exe' | Select-Object -First 1
 if (!$bundledTesseract) { throw 'Tesseract runtime executable was not produced.' }
 $versionOutput = (& $bundledTesseract.FullName --version 2>&1 | Out-String)
-if ($LASTEXITCODE -ne 0 -or $versionOutput -notmatch 'tesseract 5\.5\.3') {
+if ($LASTEXITCODE -ne 0 -or $versionOutput -notmatch 'tesseract v?5\.5\.3') {
   throw "Unexpected Tesseract runtime version: $versionOutput"
 }
 
