@@ -68,6 +68,8 @@ import {
 } from './layout';
 import PdfPageCanvas from './PdfPageCanvas';
 import PdfThumbnail from './PdfThumbnail';
+import StirlingToolsPanel from './StirlingToolsPanel';
+import type { StirlingToolCategory } from './stirlingCore';
 import { useScrollFps } from './useScrollFps';
 import {
   DEFAULT_PDF_LEFT_PANEL,
@@ -174,6 +176,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [inspectorTab, setInspectorTab] = useState<DocumentInspectorTab>('properties');
   const [inspectorHidden, setInspectorHidden] = useState(false);
   const [taskCategory, setTaskCategory] = useState<PdfTaskCategory>('home');
+  const [providerPanelOpen, setProviderPanelOpen] = useState(false);
   const [textOverlay, setTextOverlay] = useState({ text:'', x:0.12, y:0.82, size:12 });
   const [shapeOverlay, setShapeOverlay] = useState({ x:0.12, y:0.68, width:0.35, height:0.08, mode:'highlight' as 'highlight'|'outline' });
   const [commentDraft, setCommentDraft] = useState({ text:'', author:'MALENJO User', x:0.86, y:0.86 });
@@ -1059,6 +1062,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     disabledReason:onNavigateModule?undefined:'Suite navigation is unavailable in this workspace.',
     run:()=>onNavigateModule?.(id),
   });
+  const providerCategory = taskCategory === 'ai' ? null : taskCategory as StirlingToolCategory;
+  const providerAction:PdfToolbarAction={
+    id:'local-provider-tools',
+    label:'Local tools',
+    enabled:true,
+    run:()=>setProviderPanelOpen((value)=>!value),
+  };
+
   const taskActions:Record<PdfTaskCategory,PdfToolbarAction[]>={
     home:[
       {id:'files',label:'Files',enabled:true,run:onBackToFiles},
@@ -1066,6 +1077,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'export',label:'Export',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:exportCurrent},
       {id:'print',label:'Print',enabled:!!pdf&&!mutating,disabledReason:!pdf?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:printDocument},
       {id:'inspector',label:inspectorHidden?'Show inspector':'Hide inspector',enabled:true,run:()=>setInspectorHidden((value)=>!value)},
+      providerAction,
     ],
     edit:[
       {id:'undo',label:'Undo',enabled:!!historyRef.current&&!mutating&&canUndoPdfHistory(historyRef.current),disabledReason:mutating?'Wait for the current PDF edit to finish.':'There is no PDF edit to undo.',run:undoEdit},
@@ -1073,8 +1085,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'place-text',label:'Place text',enabled:!!sourceBytes&&!mutating&&!!textOverlay.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!textOverlay.text.trim()?'Enter text in the Properties inspector first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate('Added permanent text to the PDF.',bytes=>addPdfTextOverlay(bytes,{pageNumber:currentPage,...textOverlay}),currentPage)},
       {id:'rectangle',label:shapeOverlay.mode==='highlight'?'Highlight rectangle':'Outline rectangle',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage)},
       {id:'configure-edit',label:'Edit settings',enabled:true,run:configureProperties},
+      providerAction,
     ],
-    convert:[],
+    convert:[providerAction],
     organize:[
       {id:'turn-pages',label:'Rotate selected',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate(`Permanently rotated ${operationPages.length} selected page(s) by 90°.`,bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),operationPages[0])},
       {id:'remove-pages',label:`Delete ${operationPages.length} page${operationPages.length===1?'':'s'}`,enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length>=pageCount?'A PDF must retain at least one page.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate(`Deleted ${operationPages.length} selected page(s).`,bytes=>operationPages.length===1?deletePdfPage(bytes,operationPages[0]):deletePdfPages(bytes,operationPages),Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length)))},
@@ -1086,26 +1099,31 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'blank',label:'Blank after',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate(`Inserted a blank page after page ${currentPage}.`,bytes=>insertBlankPdfPage(bytes,currentPage),currentPage+1)},
       {id:'earlier',label:'Move earlier',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&currentPage>1,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':currentPage<=1?'The first page cannot move earlier.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate('Moved page earlier.',bytes=>movePdfPage(bytes,currentPage,currentPage-1),currentPage-1)},
       {id:'later',label:'Move later',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&currentPage<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':currentPage>=pageCount?'The final page cannot move later.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)},
+      providerAction,
     ],
     comment:[
       {id:'comments-panel',label:'Comments panel',enabled:true,run:()=>openLeftPanel('comments')},
       {id:'add-comment',label:'Add comment',enabled:!!sourceBytes&&!mutating&&!!commentDraft.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!commentDraft.text.trim()?'Enter comment text in the Comments panel first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addComment},
+      providerAction,
     ],
     sign:[
       navigateAction('Open Sign workspace','sign'),
       {id:'signatures-panel',label:'Signature fields',enabled:true,run:()=>openLeftPanel('signatures')},
+      providerAction,
     ],
     protect:[
       navigateAction('Open Security Center','security'),
+      providerAction,
     ],
     forms:[
       {id:'add-form-field',label:`Add ${formDraft.type} field`,enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addFormField},
       {id:'flatten-form',label:'Flatten fields',enabled:!!sourceBytes&&!mutating&&formFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:flattenForm},
       {id:'configure-forms',label:'Form settings',enabled:true,run:configureProperties},
+      providerAction,
     ],
     ai:[navigateAction('Open Malenjo AI','ai')],
-    scan:[navigateAction('Open Scanner','scanner')],
-    automate:[navigateAction('Open Automation Studio','automation')],
+    scan:[navigateAction('Open Scanner','scanner'),providerAction],
+    automate:[navigateAction('Open Automation Studio','automation'),providerAction],
   };
   const activeTaskActions=taskActions[taskCategory];
   const primaryTaskActions=activeTaskActions.slice(0,6);
@@ -1160,7 +1178,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           tabIndex={taskCategory===category?0:-1}
           className={taskCategory===category?'active':''}
           title={`${PDF_TASK_CATEGORY_LABELS[category]} · ${PDF_TASK_CATEGORY_SHORTCUTS[category]}`}
-          onClick={()=>setTaskCategory(category)}
+          onClick={()=>{setTaskCategory(category);if(category==='ai')setProviderPanelOpen(false);}}
           onKeyDown={(event)=>{
             if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
             event.preventDefault();
@@ -1222,6 +1240,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         </div>
       </div>
     </div>
+
+    {providerPanelOpen&&providerCategory&&<StirlingToolsPanel
+      sourceBytes={sourceBytes}
+      sourceName={sourceName}
+      category={providerCategory}
+      onApplyPdf={(label,bytes)=>mutate(label,async()=>bytes,currentPage)}
+    />}
 
     {(notice || actionNotice) && <div className="pdf-notice">{notice || actionNotice}</div>}
     {error && <div className="pdf-notice error">{error}</div>}
