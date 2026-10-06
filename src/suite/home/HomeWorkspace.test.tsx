@@ -34,8 +34,8 @@ const session:DocumentSession={
   lastSavedAt:null,
 };
 
-describe('Home visual/accessibility baseline',()=>{
-  it('renders the OSS-derived start-center major states without proprietary WPS UI',()=>{
+describe('Home CasualOffice structural/accessibility baseline',()=>{
+  it('renders the source-adapted office launcher rather than the old generic dashboard',()=>{
     const html=renderToStaticMarkup(
       <HomeWorkspace
         sessions={[session]}
@@ -48,18 +48,21 @@ describe('Home visual/accessibility baseline',()=>{
       />,
     );
 
-    expect((html.match(/home-launch-tile/g)??[])).toHaveLength(8);
+    expect((html.match(/ml-co-action-card/g)??[]).length).toBeGreaterThanOrEqual(8);
+    expect(html).toContain('Welcome to Malenjo Suite');
+    expect(html).toContain('Open something, or start a local document task.');
+    expect(html).toContain('Your files');
+    expect(html).toContain('Search recent');
+    expect(html).toContain('Filter recent files by type');
     expect(html).toContain('role="tablist"');
-    expect(html).toContain('aria-label="Home document views"');
-    expect(html).toContain('Recent');
-    expect(html).toContain('Starred');
-    expect(html).toContain('Locations');
     expect(html).toContain('Continue working');
     expect(html).toContain('Unsaved changes');
-    expect(html).toContain('Ready for local work');
-    expect(html).toContain('The updater module is not operational yet');
-    expect(html).toContain('No classroom account provider is connected');
-    expect(html).toContain('Search everything');
+    expect(html).toContain('Pinned locations');
+    expect(html).toContain('updater not operational yet');
+    expect(html).toContain('Not connected');
+    expect(html).toContain('Ctrl');
+    expect(html).toContain('Search');
+    expect(html).not.toContain('shadcn-admin');
     expect(html).not.toContain('WPS');
     expect(html).not.toContain('Go Premium');
     expect(html).not.toContain('SALE');
