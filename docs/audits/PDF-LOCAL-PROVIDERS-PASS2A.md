@@ -43,7 +43,10 @@ Stirling remains bound to `127.0.0.1:28970`, has no application-launch autostart
 - license: Apache-2.0
 - Windows x64 asset: `qpdf-12.4.2-msvc64.zip`
 - SHA-256: `db87077e683630c1217e0e8f9a20a9749d952ab676e881c3689187763a5de25d`
-- pinned Stirling minimum: 12.0.0\n- qpdf release build: workflow run `36273443816` (MSVC x64)\n- exact vcpkg cache: workflow run `35955712569`\n- static deps: `libjpeg-turbo-3.2.0#1`, `openssl-3.6.4#1`, `zlib-1.3.2#2`
+- pinned Stirling minimum: 12.0.0
+- qpdf release build: workflow run `36273443816` (MSVC x64)
+- exact vcpkg cache: workflow run `35955712569`
+- static deps: `libjpeg-turbo-3.2.0#1`, `openssl-3.6.4#1`, `zlib-1.3.2#2`
 
 ## Windows CI gate
 
@@ -60,7 +63,7 @@ The Windows provider job now:
 9. calls both endpoints with that valid fixture;
 10. verifies both outputs begin with `%PDF-`.
 
-This is executable operation-group evidence, not just endpoint discovery.
+This is executable operation-group evidence, not just endpoint discovery. Verified in PR #145 / CI #269 (`37490673818`): frontend, Windows Rust, Codespaces/Linux, qpdf pack/SBOM checks, Stirling build, and Repair+Compress operation smoke all passed.
 
 ## Packaging / release boundary
 
