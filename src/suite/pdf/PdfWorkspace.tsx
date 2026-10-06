@@ -1399,7 +1399,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       </aside>
 
       <div ref={scrollRef} className="pdf-scroll">
-        <div className="pdf-stage">
+        <div className={`pdf-stage ${viewMode}`}>
           {viewPages.map((page) => {
             const schedule = pdfPageSchedule(page, currentPage, pageCount, renderedPages);
             return <PdfPageCanvas
