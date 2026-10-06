@@ -1,14 +1,21 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
+import {
+  PDF_PROVIDER_CONTRACT_VERSION,
+  type PdfProviderInputFile,
+  type PdfProviderOperation,
+  type PdfProviderOperationField,
+  type PdfProviderResponse,
+  type PdfProviderStatus,
+  type PdfProviderToolCategory,
+  type PdfToolProvider,
+} from './backend';
 
 export const STIRLING_OPEN_CORE_PIN='25220cbdbde2d526cebf173b94357884e180b8c1';
 
-export type StirlingToolCategory=
-  |'home'|'edit'|'convert'|'organize'|'comment'|'sign'|'protect'|'forms'|'scan'|'automate';
-
 export interface StirlingFrontendTool {
   id:string;
-  category:StirlingToolCategory;
+  category:PdfProviderToolCategory;
 }
 
 export const STIRLING_FRONTEND_TOOLS:StirlingFrontendTool[]=[
@@ -71,53 +78,6 @@ export const STIRLING_FRONTEND_TOOLS:StirlingFrontendTool[]=[
   {id:'stamp',category:'edit'},
 ];
 
-export interface StirlingCoreStatus{
-  installed:boolean;
-  running:boolean;
-  java?:string|null;
-  jarPath?:string|null;
-  baseUrl:string;
-  version?:string|null;
-  message:string;
-}
-
-export type StirlingFieldKind='string'|'boolean'|'number'|'integer'|'file'|'files'|'json';
-
-export interface StirlingOperationField{
-  name:string;
-  label:string;
-  kind:StirlingFieldKind;
-  required:boolean;
-  description?:string;
-  enumValues?:string[];
-  defaultValue?:string|number|boolean;
-  location:'query'|'form';
-}
-
-export interface StirlingOperation{
-  id:string;
-  path:string;
-  method:'GET'|'POST';
-  summary:string;
-  description:string;
-  tags:string[];
-  fields:StirlingOperationField[];
-  category:StirlingToolCategory;
-}
-
-export interface StirlingInputFile{
-  field:string;
-  filename:string;
-  contentType?:string;
-  bytes:number[];
-}
-
-export interface StirlingResponse{
-  status:number;
-  contentType?:string|null;
-  contentDisposition?:string|null;
-  bytes:number[];
-}
 
 type JsonRecord=Record<string,unknown>;
 
@@ -195,7 +155,7 @@ function titleFromName(name:string):string{
     .replace(/^./,(value)=>value.toUpperCase());
 }
 
-function categoryForOperation(operation:JsonRecord,path:string):StirlingToolCategory{
+function categoryForOperation(operation:JsonRecord,path:string):PdfProviderToolCategory{
   const text=[
     path,
     typeof operation.operationId==='string'?operation.operationId:'',
@@ -221,7 +181,7 @@ function fieldFromSchema(
   raw:unknown,
   required:boolean,
   location:'query'|'form',
-):StirlingOperationField{
+):PdfProviderOperationField{
   const schema=resolveSchema(document,raw);
   const type=typeof schema.type==='string'?schema.type:'string';
   const format=typeof schema.format==='string'?schema.format:'';
@@ -229,7 +189,7 @@ function fieldFromSchema(
   const binary=type==='string'&&format==='binary';
   const binaryArray=type==='array'&&items.type==='string'&&items.format==='binary';
 
-  let kind:StirlingFieldKind='string';
+  let kind:PdfProviderOperationField['kind']='string';
   if(binary)kind='file';
   else if(binaryArray)kind='files';
   else if(type==='boolean')kind='boolean';
@@ -250,8 +210,8 @@ function fieldFromSchema(
   };
 }
 
-function operationFields(document:JsonRecord,pathItem:JsonRecord,operation:JsonRecord):StirlingOperationField[]{
-  const fields:StirlingOperationField[]=[];
+function operationFields(document:JsonRecord,pathItem:JsonRecord,operation:JsonRecord):PdfProviderOperationField[]{
+  const fields:PdfProviderOperationField[]=[];
   const params=[
     ...(Array.isArray(pathItem.parameters)?pathItem.parameters:[]),
     ...(Array.isArray(operation.parameters)?operation.parameters:[]),
@@ -300,9 +260,9 @@ function operationFields(document:JsonRecord,pathItem:JsonRecord,operation:JsonR
   });
 }
 
-export function parseStirlingOpenApi(document:unknown):StirlingOperation[]{
+export function parseStirlingOpenApi(document:unknown):PdfProviderOperation[]{
   if(!isRecord(document)||!isRecord(document.paths))return [];
-  const operations:StirlingOperation[]=[];
+  const operations:PdfProviderOperation[]=[];
   for(const [path,rawPathItem] of Object.entries(document.paths)){
     if(!path.startsWith('/api/v1/')||!isRecord(rawPathItem))continue;
     for(const method of ['get','post'] as const){
@@ -327,17 +287,39 @@ export function parseStirlingOpenApi(document:unknown):StirlingOperation[]{
   return operations.sort((left,right)=>left.summary.localeCompare(right.summary));
 }
 
-export async function stirlingCoreStatus():Promise<StirlingCoreStatus>{
-  if(!isTauri())return {
-    installed:false,running:false,baseUrl:'http://127.0.0.1:28970',
-    message:'The local Stirling core provider runs only inside the Windows/Tauri desktop runtime.',
-  };
-  return invoke<StirlingCoreStatus>('stirling_core_status');
+interface NativeStirlingStatus{
+  installed:boolean;
+  running:boolean;
+  java?:string|null;
+  jarPath?:string|null;
+  baseUrl:string;
+  version?:string|null;
+  message:string;
 }
 
-export async function startStirlingCore():Promise<StirlingCoreStatus>{
-  if(!isTauri())throw new Error('The local Stirling core provider is available only in the Windows/Tauri desktop runtime.');
-  return invoke<StirlingCoreStatus>('stirling_core_start');
+function normalizeStatus(status:NativeStirlingStatus):PdfProviderStatus{
+  return {
+    installed:status.installed,
+    running:status.running,
+    runtime:status.java,
+    packagePath:status.jarPath,
+    endpoint:status.baseUrl,
+    version:status.version,
+    message:status.message,
+  };
+}
+
+export async function stirlingCoreStatus():Promise<PdfProviderStatus>{
+  if(!isTauri())return {
+    installed:false,running:false,endpoint:'http://127.0.0.1:28970',
+    message:'The local PDF provider runs only inside the Windows/Tauri desktop runtime.',
+  };
+  return normalizeStatus(await invoke<NativeStirlingStatus>('stirling_core_status'));
+}
+
+export async function startStirlingCore():Promise<PdfProviderStatus>{
+  if(!isTauri())throw new Error('The local PDF provider is available only in the Windows/Tauri desktop runtime.');
+  return normalizeStatus(await invoke<NativeStirlingStatus>('stirling_core_start'));
 }
 
 export async function stopStirlingCore():Promise<boolean>{
@@ -345,19 +327,19 @@ export async function stopStirlingCore():Promise<boolean>{
   return invoke<boolean>('stirling_core_stop');
 }
 
-export async function loadStirlingOperations():Promise<StirlingOperation[]>{
+export async function loadPdfProviderOperations():Promise<PdfProviderOperation[]>{
   if(!isTauri())return [];
   const document=await invoke<unknown>('stirling_core_openapi');
   return parseStirlingOpenApi(document);
 }
 
-export async function runStirlingOperation(
-  operation:Pick<StirlingOperation,'path'|'method'>,
+export async function runPdfProviderOperation(
+  operation:Pick<PdfProviderOperation,'path'|'method'>,
   fields:Array<{name:string;value:string}>,
-  files:StirlingInputFile[],
-):Promise<StirlingResponse>{
+  files:PdfProviderInputFile[],
+):Promise<PdfProviderResponse>{
   if(!isTauri())throw new Error('Stirling provider-backed PDF tools are available only in the Windows/Tauri desktop runtime.');
-  return invoke<StirlingResponse>('stirling_core_request',{
+  return invoke<PdfProviderResponse>('stirling_core_request',{
     method:operation.method,
     path:operation.path,
     fields,
@@ -405,20 +387,20 @@ function extensionFromMagic(bytes:number[]):string|undefined{
   return undefined;
 }
 
-function outputFilename(response:StirlingResponse,fallbackBaseName:string):string{
+function outputFilename(response:PdfProviderResponse,fallbackBaseName:string):string{
   const disposition=filenameFromDisposition(response.contentDisposition);
   if(disposition)return disposition;
   const extension=extensionForContentType(response.contentType)??extensionFromMagic(response.bytes)??'bin';
   return `${fallbackBaseName}.${extension}`;
 }
 
-export function responseIsPdf(response:StirlingResponse):boolean{
+export function responseIsPdf(response:PdfProviderResponse):boolean{
   if((response.contentType??'').toLowerCase().includes('application/pdf'))return true;
   return response.bytes.length>=5&&String.fromCharCode(...response.bytes.slice(0,5))==='%PDF-';
 }
 
-export async function saveStirlingResponse(
-  response:StirlingResponse,
+export async function savePdfProviderResponse(
+  response:PdfProviderResponse,
   fallbackBaseName='malenjo-pdf-tool-output',
 ):Promise<string|null>{
   const proposed=outputFilename(response,fallbackBaseName);
@@ -440,3 +422,19 @@ export async function saveStirlingResponse(
   await invoke<boolean>('write_pdf_tool_output',{destination,bytes:Array.from(bytes)});
   return destination;
 }
+
+
+export const stirlingCorePdfProvider:PdfToolProvider={
+  id:'malenjo.pdf.local-core',
+  contractVersion:PDF_PROVIDER_CONTRACT_VERSION,
+  execution:'local-sidecar',
+  autostart:false,
+  reviewedToolCount:STIRLING_FRONTEND_TOOLS.length,
+  status:stirlingCoreStatus,
+  start:startStirlingCore,
+  stop:stopStirlingCore,
+  listOperations:loadStirlingOperations,
+  run:runStirlingOperation,
+  responseIsPdf,
+  saveResponse:saveStirlingResponse,
+};
