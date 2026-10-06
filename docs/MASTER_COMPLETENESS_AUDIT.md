@@ -443,3 +443,20 @@ Implemented on `feat/pdf-completeness-comments-forms-attachments`:
 Still open in these families: annotation rendering/edit/reply/resolve/delete, attachment inventory/extract/remove/scan, richer AcroForm field types/properties/signature fields, visual field placement, form data import/export, XFA policy and deeper compatibility testing.
 
 The PDF module remains `partial`.
+
+
+## Completion pass 4 — PDF headers, Bates numbering and page boxes
+
+Implemented on `feat/pdf-completeness-numbering-pageboxes`:
+
+- permanent header/footer templates with page/pages/date tokens;
+- selected-page or all-page scope;
+- left/center/right alignment;
+- Bates-style prefix/start/digit/suffix numbering;
+- six Bates positions;
+- CropBox, TrimBox, BleedBox and ArtBox inset controls;
+- all mutations use the existing bounded per-tab Undo/Redo history and explicit export path.
+
+Still open: page-label number trees, header/footer/Bates inventory/removal/editing, visual crop handles, page-size normalization, print-production controls, templates/backgrounds and the wider master PDF tool tree.
+
+The PDF module remains `partial`.

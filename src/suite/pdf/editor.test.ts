@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { PDFArray, PDFDict, PDFDocument, PDFName } from 'pdf-lib';
 import {
-  addPdfCheckBox, addPdfCommentAnnotation, addPdfRectangleOverlay, addPdfTextField, addPdfTextOverlay, appendPdf, attachFileToPdf,
-  deletePdfPage, deletePdfPages, duplicatePdfPage, extractPdfPage, extractPdfPages, flattenPdfForm, insertBlankPdfPage,
-  insertPdfAfter, listPdfFormFields, movePdfPage, rotatePdfPagePermanent, rotatePdfPagesPermanent, splitPdfAtPage,
+  addPdfBatesNumbers, addPdfCheckBox, addPdfCommentAnnotation, addPdfHeaderFooter, addPdfRectangleOverlay, addPdfTextField,
+  addPdfTextOverlay, appendPdf, attachFileToPdf, deletePdfPage, deletePdfPages, duplicatePdfPage, extractPdfPage,
+  extractPdfPages, flattenPdfForm, insertBlankPdfPage, insertPdfAfter, listPdfFormFields, movePdfPage,
+  rotatePdfPagePermanent, rotatePdfPagesPermanent, setPdfPageBox, splitPdfAtPage,
 } from './editor';
 
 async function sample(pages=3):Promise<Uint8Array>{
@@ -119,6 +120,57 @@ describe('PDF mutation core',()=>{
     const names=pdf.catalog.lookupMaybe(PDFName.of('Names'),PDFDict);
     const embedded=names?.lookupMaybe(PDFName.of('EmbeddedFiles'),PDFDict);
     expect(embedded).toBeDefined();
+  });
+
+  it('adds headers/footers and Bates numbers to valid PDFs',async()=>{
+    const source=await sample(3);
+    const headerFooter=await addPdfHeaderFooter(source,{
+      pageNumbers:[1,3],
+      header:'MALENJO {page}/{pages}',
+      footer:'{date}',
+      fontSize:9,
+      margin:18,
+    });
+    expect(await count(headerFooter)).toBe(3);
+    expect(headerFooter.byteLength).toBeGreaterThan(source.byteLength);
+
+    const bates=await addPdfBatesNumbers(source,{
+      pageNumbers:[2,3],
+      prefix:'CASE-',
+      startNumber:42,
+      digits:5,
+      position:'bottom-right',
+    });
+    expect(await count(bates)).toBe(3);
+    expect(bates.byteLength).toBeGreaterThan(source.byteLength);
+  });
+
+  it('sets selected PDF page boxes using point margins',async()=>{
+    const source=await sample(2);
+    const boxed=await setPdfPageBox(source,{
+      pageNumbers:[2],
+      box:'crop',
+      top:10,
+      right:20,
+      bottom:30,
+      left:40,
+    });
+    const pdf=await PDFDocument.load(boxed);
+    const first=pdf.getPage(0).getCropBox();
+    const second=pdf.getPage(1).getCropBox();
+    expect(first.width).toBe(300);
+    expect(first.height).toBe(400);
+    expect(second.x).toBe(40);
+    expect(second.y).toBe(30);
+    expect(second.width).toBe(241);
+    expect(second.height).toBe(361);
+  });
+
+  it('rejects invalid numbering and page-box inputs',async()=>{
+    const source=await sample(1);
+    await expect(addPdfHeaderFooter(source,{header:'',footer:''})).rejects.toThrow(/header or footer/i);
+    await expect(addPdfBatesNumbers(source,{digits:0})).rejects.toThrow(/digit count/i);
+    await expect(setPdfPageBox(source,{box:'crop',top:0,right:200,bottom:0,left:200})).rejects.toThrow(/usable page area/i);
   });
 
   it('rejects unsafe form/comment/attachment inputs',async()=>{
