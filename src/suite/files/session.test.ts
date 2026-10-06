@@ -57,3 +57,32 @@ describe('document session state', () => {
     expect(saved.lastSavedAt).toBe(200);
   });
 });
+
+
+describe('multi-document session ordering', () => {
+  const docs = ['a.pdf','b.pdf','c.pdf'].map((name,index) => ({
+    id:`doc-${index}`,
+    name,
+    extension:'pdf',
+    kind:'pdf' as const,
+    sizeBytes:100,
+    modifiedMs:1,
+    addedMs:1,
+    lastOpenedMs:null,
+    available:true,
+    locationLabel:'test',
+  }));
+  const sessions = docs.map((document,index)=>createDocumentSession(document,index+1));
+
+  it('reorders tabs without changing session identity', () => {
+    const next = reorderDocumentSessions(sessions, sessions[0].id, sessions[2].id);
+    expect(next.map((session)=>session.document.name)).toEqual(['b.pdf','c.pdf','a.pdf']);
+    expect(next[2]).toBe(sessions[0]);
+  });
+
+  it('cycles forward and backward across document tabs', () => {
+    expect(cycleDocumentSessionId(sessions, sessions[0].id, 1)).toBe(sessions[1].id);
+    expect(cycleDocumentSessionId(sessions, sessions[0].id, -1)).toBe(sessions[2].id);
+    expect(cycleDocumentSessionId(sessions, null, 1)).toBe(sessions[0].id);
+  });
+});
