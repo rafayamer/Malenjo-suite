@@ -76,6 +76,7 @@ import {
   pdfLeftPanelItem,
   type PdfLeftPanelId,
 } from './leftNavigation';
+import { pdfCriticalPassReady, pdfPageSchedule } from './renderPriority';
 
 interface Props {
   session: DocumentSession | null;
@@ -139,6 +140,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [actionNotice, setActionNotice] = useState('');
   const [firstPageMs, setFirstPageMs] = useState<number | null>(null);
   const [forceRenderAll, setForceRenderAll] = useState(false);
+  const [renderedPages, setRenderedPages] = useState<Set<number>>(() => new Set());
   const [viewport, setViewport] = useState({ width: 900, height: 700 });
   const [historyRevision, setHistoryRevision] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
@@ -225,6 +227,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setBrowserFile(file);
       setSourceName(name);
       setPageCount(result.document.numPages);
+      setRenderedPages(new Set());
       setCurrentPage(1);
       if(!preserveDirty){
         setSelectedPages(new Set([1]));
@@ -344,6 +347,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
 
   const onPageRendered = useCallback((page: number) => {
+    setRenderedPages((current) => {
+      if (current.has(page)) return current;
+      const next = new Set(current);
+      next.add(page);
+      return next;
+    });
     if (page === 1 && !firstPageReportedRef.current) {
       firstPageReportedRef.current = true;
       setFirstPageMs(Math.round(performance.now() - loadStartedRef.current));
@@ -878,6 +887,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       ? 'Fit page'
       : `${Math.round(zoom * 100)}%`;
 
+  const thumbnailsRenderAllowed = forceRenderAll
+    || pdfCriticalPassReady(currentPage, pageCount, renderedPages);
+
   return <div className="pdf-workspace">
     <input
       ref={fileInputRef}
@@ -998,6 +1010,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                   pageNumber={page}
                   active={page === currentPage}
                   selected={selectedPages.has(page)}
+                  renderAllowed={thumbnailsRenderAllowed}
                   onSelect={selectThumbnail}
                 />
               )}
@@ -1053,8 +1066,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
       <div ref={scrollRef} className="pdf-scroll">
         <div className="pdf-stage">
-          {Array.from({ length: pageCount }, (_, index) => index + 1).map((page) =>
-            <PdfPageCanvas
+          {Array.from({ length: pageCount }, (_, index) => index + 1).map((page) => {
+            const schedule = pdfPageSchedule(page, currentPage, pageCount, renderedPages);
+            return <PdfPageCanvas
               key={page}
               document={pdf.document}
               pageNumber={page}
@@ -1064,11 +1078,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               availableWidth={viewport.width}
               availableHeight={viewport.height}
               forceRender={forceRenderAll}
+              renderAllowed={forceRenderAll || schedule.allowed}
+              eager={forceRenderAll || schedule.eager}
               domIdPrefix={domIdPrefix}
               onVisible={onPageVisible}
               onRendered={onPageRendered}
-            />
-          )}
+            />;
+          })}
         </div>
       </div>
 
