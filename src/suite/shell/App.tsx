@@ -85,7 +85,7 @@ export default function App() {
     setActive(workspaceForDocument(document.kind));
   }
 
-  function openBrowserFiles(files: Iterable<File>) {
+  function openBrowserFiles(files: FileList | File[]) {
     const documents = registerBrowserFiles(files);
     documents.forEach((document) => openFromLibrary(markBrowserDocumentOpened(document)));
   }
