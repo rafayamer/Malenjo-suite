@@ -20,6 +20,7 @@ interface Props {
   session: DocumentSession | null;
   onBackToFiles(): void;
   onDirtyChange?(dirty: boolean): void;
+  onWorkingCopyChange?(bytes:Uint8Array | null, dirty:boolean): void;
 }
 
 const kindMeta: Record<OfficeKind, { title: string; extension: string; icon: typeof FileText }> = {
@@ -28,7 +29,7 @@ const kindMeta: Record<OfficeKind, { title: string; extension: string; icon: typ
   pptx: { title: 'Presentation', extension: 'pptx', icon: Presentation },
 };
 
-export default function OfficeWorkspace({ kind, session, onBackToFiles, onDirtyChange }: Props) {
+export default function OfficeWorkspace({ kind, session, onBackToFiles, onDirtyChange, onWorkingCopyChange }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [original, setOriginal] = useState<Uint8Array | null>(null);
   const [model, setModel] = useState<OfficeModel | null>(null);
@@ -68,6 +69,11 @@ export default function OfficeWorkspace({ kind, session, onBackToFiles, onDirtyC
         setOriginal(bytes);
         setModel(parseOffice(bytes));
         setSourceName(document.name);
+        if (recovered) {
+          setDirty(true);
+          onDirtyChange?.(true);
+          setNotice(`Recovered unsaved ${kind.toUpperCase()} working copy from ${session.recoveredAt ? new Date(session.recoveredAt).toLocaleString() : 'the previous session'}.`);
+        }
       })
       .catch((reason) => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason));
@@ -85,6 +91,19 @@ export default function OfficeWorkspace({ kind, session, onBackToFiles, onDirtyC
       onDirtyChange?.(true);
     }
   }
+
+  useEffect(() => {
+    if (!session || !dirty || !original || !model) return;
+    const timer = window.setTimeout(() => {
+      try {
+        onWorkingCopyChange?.(writeOffice(original, model), true);
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : String(reason));
+      }
+    }, 650);
+    return () => window.clearTimeout(timer);
+  }, [dirty, model, onWorkingCopyChange, original, session?.id]);
+
 
   async function openBrowserFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
