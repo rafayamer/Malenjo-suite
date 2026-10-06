@@ -15,11 +15,11 @@ This repository contains the **Phase 0–7 executable foundation**. This is not 
 | Sign/Metadata/Security | Phase 6 merged and tree-equivalent CI-verified | Windows ClamAV/pyHanko matrix + persistent secret-store provider |
 | DMS/Automation/Admin/Backup | Phase 7 merged and tree-equivalent CI-verified | Windows Temporal/Kopia matrix + identity-provider binding |
 | CAD/DICOM | Adapter boundary | optional-pack proof of concept |
-| Home | **Correction / re-verification** | CasualOffice-derived structure implemented; complete status withheld until corrected CI/final merge |
+| Home | **Complete module — corrected** | CasualOffice-derived structure verified by CI #224; final-head and post-merge CI still required as release evidence |
 | Help / Support | **Complete module** | maintain against future source changes; release-level SBOM/logging remain separate |
 | Packaging | Configured developer targets | signing, SBOM, installer QA, update manifests |
 
-Do not mark a module complete until its acceptance criteria and traceability entries in the master guide pass. Help / Support is currently complete. Home was deliberately demoted during correction #139 and may return to complete only after the corrected OSS-structure implementation passes the full gate.
+Do not mark a module complete until its acceptance criteria and traceability entries in the master guide pass. Home and Help / Support are the two complete registered modules. Home was re-promoted only after correction #139 replaced the inaccurate UI-source claim and corrected implementation CI #224 passed.
 
 ## Phase 1 evidence — document library
 
