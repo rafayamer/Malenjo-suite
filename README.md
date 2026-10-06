@@ -1,6 +1,6 @@
 # MALENJO Suite
 
-MALENJO Suite is a **local-first Windows document workspace** being built from the supplied MALENJO master specification and step-by-step developer guide. This repository starts with the unified Tauri + React shell, native Rust boundary, feature/module registry, security defaults, documentation corpus, CI gates and adapter-first integration structure.
+MALENJO Suite is a **local-first Windows document workspace** being built from the supplied MALENJO master specification and step-by-step developer guide. The approved UI/UX and open PDF workflow upstream is the MIT-licensed open core of Stirling-PDF; MALENJO layers its own branding, Tauri/Rust desktop boundary, document sessions and additional modules on top of that reusable baseline.
 
 > **Current build profile:** personal / classroom / noncommercial student use. All MALENJO feature flags are available to the build. Paid billing, regional pricing and commercial trial counters are intentionally not implemented in this profile. This does not waive third-party license terms.
 
@@ -55,9 +55,11 @@ Unsigned developer packages may be produced locally. Production distribution mus
 
 ## Architecture rule
 
-Never merge third-party applications into MALENJO as visible products. Define a MALENJO interface, build a thin adapter, test it on Windows and offline, audit license/security/performance, then integrate behind the unified UI.
+**Stirling-PDF open core is the approved exception and primary UI/UX/PDF upstream.** Reuse/adapt its MIT code when it satisfies the MALENJO source contract, while preserving license/provenance and replacing customer-facing Stirling branding with MALENJO identity.
 
-See `docs/ARCHITECTURE.md`, `docs/IMPLEMENTATION_STATUS.md`, and the complete source-of-truth material in `docs/source-of-truth/`.
+Do **not** copy Stirling's separately licensed restricted directories (`engine/`, proprietary/saas/desktop/cloud/prototypes/portal families) without a separate valid agreement. Other third-party products remain behind MALENJO-owned interfaces/adapters.
+
+See `docs/architecture/STIRLING_UI_UPSTREAM.md`, `docs/ARCHITECTURE.md`, `docs/IMPLEMENTATION_STATUS.md`, and the complete source-of-truth material in `docs/source-of-truth/`.
 
 
 ## GitHub Codespaces

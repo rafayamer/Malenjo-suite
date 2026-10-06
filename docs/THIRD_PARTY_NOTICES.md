@@ -30,9 +30,10 @@ This file is the **in-product notice destination for the current source tree**. 
 
 | Component | Pinned source | License | MALENJO use |
 |---|---|---|---|
-| satnaing/shadcn-admin | `e16c87f213a5ba5e45964e9b67c792105ec74d26` | MIT | Home start-center dashboard information architecture and responsive card/tab/search composition; no upstream app/auth runtime is bundled. |
+| Stirling-Tools/Stirling-PDF open core | `25220cbdbde2d526cebf173b94357884e180b8c1` | MIT outside root-LICENSE restricted directories | Primary MALENJO UI/UX and PDF workflow upstream baseline. Restricted proprietary/saas/engine/desktop/cloud/portal/prototypes paths are excluded from copying. |
+| satnaing/shadcn-admin | `e16c87f213a5ba5e45964e9b67c792105ec74d26` | MIT | Historical Home start-center dashboard composition used before Stirling was designated the preferred upstream baseline. |
 
-The upstream MIT notice and MALENJO-specific provenance are retained under `third_party/shadcn-admin/`.
+Upstream license/provenance are retained under `third_party/stirling-pdf/` and `third_party/shadcn-admin/`. Stirling is open-core; its restricted directories are governed by separate non-MIT licenses and are not copied into MALENJO.
 
 ## Optional external engines/adapters
 
