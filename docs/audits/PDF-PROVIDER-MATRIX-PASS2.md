@@ -9,7 +9,7 @@ This is a source/redistribution decision record, not a claim that every row is a
 
 | Upstream dependency observed by pinned Stirling core | Reviewed target/version | License / redistribution decision | MALENJO decision | Affected operation family |
 |---|---|---|---|---|
-| qpdf | 12.4.2 | Apache-2.0; binary redistribution approved with license/NOTICE/SBOM | **bundle-approved**, checksum-pinned Windows x64 pack | Repair, Compress PDF |
+| qpdf | 12.4.2 | Apache-2.0; exact static deps: libjpeg-turbo 3.2.0#1, OpenSSL 3.6.4#1, zlib 1.3.2#2; MSVC runtime file audit still required for release | **integration-approved / release-gated**, checksum-pinned Windows x64 pack | Repair, Compress PDF |
 | Ghostscript | 10.08.0 | AGPL-3.0 or commercial license | **do not bundle for business-compatible pack**; use Stirling Java/PDFBox alternatives where real, otherwise MALENJO replacement required | Repair, Compress, Crop, Replace/Invert, Scanner Effect, vector conversion |
 | LibreOffice | 26.8.0 source line; release pack not yet approved | MPL-2.0 / LGPLv3+ project licensing plus large transitive pack | **not yet bundle-approved**; keep conversion endpoints unavailable until exact Windows pack/transitives are audited | Office↔PDF/HTML/XML/RTF/PDF-A |
 | Tesseract OCR | 5.5.3 | Apache-2.0; redistribution-compatible with notices and model-data review | **approved candidate**, packaging still pending | OCR PDF, Auto Rotate |
@@ -35,4 +35,4 @@ The MALENJO capability resolver therefore reports the implementation actually sa
 
 ## Pass-2A implemented boundary
 
-This branch introduces the first approved binary component pack, qpdf 12.4.2, and a MALENJO-owned capability resolver contract. It does **not** close #143 and does **not** promote PDF above `partial`. Remaining provider rows require implementation, Windows smoke coverage, exact transitive notices/SBOM, and replacement work where the selected upstream license is unsuitable.
+This branch introduces the first integration-approved binary component pack, qpdf 12.4.2, and a MALENJO-owned capability resolver contract. Its open-source obligations are recorded, while final distributable release approval remains gated on the exact runtime/SBOM and Microsoft redistributable file check. It does **not** close #143 and does **not** promote PDF above `partial`. Remaining provider rows require implementation, Windows smoke coverage, exact transitive notices/SBOM, and replacement work where the selected upstream license is unsuitable.
