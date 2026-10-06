@@ -5,16 +5,22 @@ export interface DocumentSession {
   document: LibraryDocument;
   dirty: boolean;
   saving: boolean;
+  sourceFile?: File;
   openedAt: number;
   lastSavedAt: number | null;
 }
 
-export function createDocumentSession(document: LibraryDocument, openedAt = Date.now()): DocumentSession {
+export function createDocumentSession(
+  document: LibraryDocument,
+  openedAt = Date.now(),
+  sourceFile?: File,
+): DocumentSession {
   return {
     id: `session-${document.id}-${openedAt.toString(36)}`,
     document,
     dirty: false,
     saving: false,
+    sourceFile,
     openedAt,
     lastSavedAt: null,
   };
