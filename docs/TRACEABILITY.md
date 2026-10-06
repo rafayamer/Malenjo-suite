@@ -290,3 +290,5 @@ No module is complete merely because its navigation entry exists. Completion req
 | Module completion | Registry | PDF remains `partial` | canonical #39/#81/#143 gate | Correct |
 
 | Direct Tesseract OCR control truth | PDF provider contract | direct fallback exposes only file/language/OCR-type controls it actually consumes | capability resolver + regression test + pinned Stirling source audit | Implemented; CI pending |
+
+| Open-core Scanner Effect + Java Replace/Invert modes | PDF effects/provider gating | Scanner Effect plus high-contrast/custom/full-inversion color modes execute through pinned Stirling Java/PDFBox; CMYK remains gated | reviewed Stirling patch + capability filter + Windows operation smoke | Implemented in pass 2C; CI/review pending |

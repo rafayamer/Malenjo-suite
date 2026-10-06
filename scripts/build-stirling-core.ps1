@@ -28,6 +28,7 @@ Write-Host "Checking out Stirling open core at $Pin..."
 git clone --filter=blob:none --no-checkout $Upstream $src
 Push-Location $src
 try {
+  git config core.autocrlf false
   git sparse-checkout init --cone
   git sparse-checkout set app/core app/common buildSrc gradle frontend/editor/public/samples
   git checkout --detach $Pin
@@ -49,6 +50,14 @@ try {
       throw "Restricted Stirling path was materialized by sparse checkout: $path"
     }
   }
+
+  $patchPath = Join-Path $repoRoot "third_party/stirling-pdf/patches/0001-malenjo-java-effect-alternatives.patch"
+  if (!(Test-Path $patchPath)) { throw "Reviewed Stirling endpoint patch is missing: $patchPath" }
+  & git apply --check $patchPath
+  if ($LASTEXITCODE -ne 0) { throw "Reviewed Stirling endpoint patch no longer applies cleanly to $Pin." }
+  & git apply $patchPath
+  if ($LASTEXITCODE -ne 0) { throw "Unable to apply reviewed Stirling endpoint patch." }
+  $patchHash = (Get-FileHash -Algorithm SHA256 $patchPath).Hash.ToLowerInvariant()
 
   # settings.gradle always declares :proprietary even in core flavor. Provide an
   # empty MALENJO-owned stub project so Gradle can configure the graph without
@@ -81,6 +90,12 @@ try {
     restrictedSourceMaterialized = $false
     jar = "stirling-pdf.jar"
     sha256 = $hash
+    patches = @(
+      [ordered]@{
+        path = "third_party/stirling-pdf/patches/0001-malenjo-java-effect-alternatives.patch"
+        sha256 = $patchHash
+      }
+    )
     builtAt = [DateTime]::UtcNow.ToString("o")
   } | ConvertTo-Json -Depth 4
   Set-Content -Path (Join-Path $out "manifest.json") -Value $manifest -Encoding UTF8

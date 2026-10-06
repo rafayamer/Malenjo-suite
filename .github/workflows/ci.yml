@@ -168,6 +168,12 @@ jobs:
           if ($manifest.restrictedSourceMaterialized -ne $false) {
             throw "Restricted Stirling source must never be materialized."
           }
+          $patchPath = "third_party/stirling-pdf/patches/0001-malenjo-java-effect-alternatives.patch"
+          $patch = @($manifest.patches)[0]
+          $patchHash = (Get-FileHash -Algorithm SHA256 $patchPath).Hash.ToLowerInvariant()
+          if ($patch.path -ne $patchPath -or $patch.sha256 -ne $patchHash) {
+            throw "Stirling open-core effects patch provenance mismatch."
+          }
       - name: Smoke-test local Windows PDF provider
         shell: pwsh
         run: |
@@ -215,7 +221,9 @@ jobs:
               "/api/v1/misc/repair",
               "/api/v1/misc/compress-pdf",
               "/api/v1/misc/ocr-pdf",
-              "/api/v1/misc/auto-rotate-pdf"
+              "/api/v1/misc/auto-rotate-pdf",
+              "/api/v1/misc/scanner-effect",
+              "/api/v1/misc/replace-invert-pdf"
             )) {
               if (!$api.paths.PSObject.Properties.Name.Contains($requiredPath)) {
                 throw "Expected qpdf-backed operation $requiredPath to be present."
@@ -235,6 +243,14 @@ jobs:
             $compressOut = Join-Path (Resolve-Path ".build/provider-smoke") "compress.pdf"
             & $curl --fail --silent --show-error -o $compressOut -F "fileInput=@$fixture;type=application/pdf" -F "optimizeLevel=3" -F "linearize=false" -F "normalize=false" -F "grayscale=false" "http://127.0.0.1:28970/api/v1/misc/compress-pdf"
             if ($LASTEXITCODE -ne 0) { throw "qpdf compression operation smoke failed." }
+
+            $replaceOut = Join-Path (Resolve-Path ".build/provider-smoke") "replace-invert.pdf"
+            & $curl --fail --silent --show-error -o $replaceOut -F "fileInput=@$fixture;type=application/pdf" -F "replaceAndInvertOption=FULL_INVERSION" -F "highContrastColorCombination=WHITE_TEXT_ON_BLACK" "http://127.0.0.1:28970/api/v1/misc/replace-invert-pdf"
+            if ($LASTEXITCODE -ne 0) { throw "Java/PDFBox replace-invert operation smoke failed." }
+
+            $scannerOut = Join-Path (Resolve-Path ".build/provider-smoke") "scanner-effect.pdf"
+            & $curl --fail --silent --show-error -o $scannerOut -F "fileInput=@$fixture;type=application/pdf" -F "quality=low" -F "rotation=none" -F "colorspace=grayscale" -F "advancedEnabled=false" "http://127.0.0.1:28970/api/v1/misc/scanner-effect"
+            if ($LASTEXITCODE -ne 0) { throw "Java/PDFBox scanner-effect operation smoke failed." }
 
             $ocrFixture = Join-Path (Resolve-Path ".build/provider-smoke") "ocr-text-page.pdf"
             ./scripts/write-ocr-pdf-smoke-fixture.ps1 -OutputPath $ocrFixture
@@ -258,13 +274,18 @@ jobs:
             & $curl --fail --silent --show-error -o $rotateOut -F "fileInput=@$ocrFixture;type=application/pdf" -F "detectionMode=osd" -F "confidenceThreshold=0" -F "dryRun=false" -F "inferUndetected=false" "http://127.0.0.1:28970/api/v1/misc/auto-rotate-pdf"
             if ($LASTEXITCODE -ne 0) { throw "Tesseract auto-rotate PDF operation smoke failed." }
 
-            foreach ($output in @($repairOut, $compressOut, $ocrOut, $rotateOut)) {
+            foreach ($output in @($repairOut, $compressOut, $replaceOut, $scannerOut, $ocrOut, $rotateOut)) {
               $bytes = [System.IO.File]::ReadAllBytes($output)
               if ($bytes.Length -lt 5 -or [Text.Encoding]::ASCII.GetString($bytes, 0, 5) -ne "%PDF-") {
                 throw "Provider smoke output is not a PDF: $output"
               }
             }
-            Write-Host "qpdf + Tesseract provider groups passed repair, compression, OCR and auto-rotate localhost smoke tests."
+            $vectorDisabledOut = Join-Path (Resolve-Path ".build/provider-smoke") "vector-disabled.bin"
+            $vectorStatus = (& $curl --silent --show-error -o $vectorDisabledOut -w "%{http_code}" -F "fileInput=@$fixture;type=application/pdf" -F "outputFormat=eps" "http://127.0.0.1:28970/api/v1/convert/pdf/vector" | Out-String).Trim()
+            if ($vectorStatus -match "^2") {
+              throw "Ghostscript-only PDF-to-vector unexpectedly executed without a reviewed Ghostscript provider."
+            }
+            Write-Host "Reviewed local provider groups passed repair, compression, Java effects, OCR and auto-rotate localhost smoke tests; Ghostscript-only vector conversion remained unavailable."
           } finally {
             if (!$process.HasExited) { Stop-Process -Id $process.Id -Force }
           }
