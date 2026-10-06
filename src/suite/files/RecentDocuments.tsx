@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Clock3, FileText } from 'lucide-react';
 import { isDesktopRuntime, listLibraryDocuments, openLibraryDocument } from './api';
+import { listBrowserDocuments, openBrowserDocument } from './browserStore';
 import { listBrowserDocuments, markBrowserDocumentOpened } from './browserStore';
 import type { LibraryDocument } from './types';
 

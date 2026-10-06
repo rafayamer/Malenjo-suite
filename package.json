@@ -15,9 +15,7 @@
     "test": "vitest run",
     "verify:codespace": "bash scripts/verify-codespace.sh",
     "dev:codespace": "vite --host 0.0.0.0",
-    "ai:codespace:check": "bash scripts/check-codespace-ai.sh",
-    "ai:codespace:setup": "bash scripts/setup-codespace-ai.sh runtime",
-    "ai:codespace:setup:model": "bash scripts/setup-codespace-ai.sh model"
+    "ai:codespace:check": "bash scripts/check-codespace-ai.sh"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.1",

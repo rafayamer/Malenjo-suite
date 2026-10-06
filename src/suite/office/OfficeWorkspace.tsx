@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Download, FileText, FolderOpen, Printer, Table2, Presentation, Undo2, Redo2 } from 'lucide-react';
+import { AlertTriangle, Download, FileText, FolderOpen, Printer, Table2, Presentation } from 'lucide-react';
 import type { DocumentSession } from '../files/session';
-import type { RegisterDocumentCommands } from '../commands/types';
 import { isDesktopRuntime } from '../files/api';
+import { readBrowserDocumentBytes } from '../files/browserStore';
 import { exportOfficeCopy, readOfficeDocument } from './api';
 import {
   detectOfficeKind,
@@ -15,24 +15,12 @@ import {
   type PptxModel,
   type XlsxModel,
 } from './ooxml';
-import {
-  canRedoOfficeHistory,
-  canUndoOfficeHistory,
-  createOfficeHistory,
-  currentOfficeHistory,
-  recordOfficeHistory,
-  redoOfficeHistory,
-  undoOfficeHistory,
-  type OfficeHistory,
-} from './history';
 
 interface Props {
   kind: OfficeKind;
   session: DocumentSession | null;
-  active: boolean;
   onBackToFiles(): void;
   onDirtyChange?(dirty: boolean): void;
-  registerCommands?: RegisterDocumentCommands;
 }
 
 const kindMeta: Record<OfficeKind, { title: string; extension: string; icon: typeof FileText }> = {
@@ -41,9 +29,8 @@ const kindMeta: Record<OfficeKind, { title: string; extension: string; icon: typ
   pptx: { title: 'Presentation', extension: 'pptx', icon: Presentation },
 };
 
-export default function OfficeWorkspace({ kind, session, active, onBackToFiles, onDirtyChange, registerCommands }: Props) {
+export default function OfficeWorkspace({ kind, session, onBackToFiles, onDirtyChange }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const historyRef = useRef<OfficeHistory | null>(null);
   const [original, setOriginal] = useState<Uint8Array | null>(null);
   const [model, setModel] = useState<OfficeModel | null>(null);
   const [sourceName, setSourceName] = useState(kindMeta[kind].title);
@@ -51,7 +38,6 @@ export default function OfficeWorkspace({ kind, session, active, onBackToFiles, 
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
-  const [historyRevision, setHistoryRevision] = useState(0);
 
   const expectedExtension = kindMeta[kind].extension;
 
@@ -61,8 +47,6 @@ export default function OfficeWorkspace({ kind, session, active, onBackToFiles, 
     setDirty(false);
     setNotice('');
     setError('');
-    historyRef.current = null;
-    setHistoryRevision((value) => value + 1);
     onDirtyChange?.(false);
 
     const document = session?.document;
@@ -70,11 +54,11 @@ export default function OfficeWorkspace({ kind, session, active, onBackToFiles, 
 
     let cancelled = false;
     setLoading(true);
-    const load = document.browserFile
-      ? document.browserFile.arrayBuffer()
+    const load = document.runtimeSource === 'browser-session'
+      ? readBrowserDocumentBytes(document.id)
       : isDesktopRuntime()
         ? readOfficeDocument(document.id)
-        : Promise.reject(new Error('This document has no browser source or native library source.'));
+        : Promise.reject(new Error('This document has no browser-session source or native library source.'));
 
     void load
       .then((buffer) => {
@@ -82,11 +66,8 @@ export default function OfficeWorkspace({ kind, session, active, onBackToFiles, 
         const bytes = new Uint8Array(buffer);
         const detected = detectOfficeKind(bytes);
         if (detected !== kind) throw new Error(`The package content is ${detected.toUpperCase()}, not ${kind.toUpperCase()}.`);
-        const parsed = parseOffice(bytes);
         setOriginal(bytes);
-        setModel(parsed);
-        historyRef.current = createOfficeHistory(parsed);
-        setHistoryRevision((value) => value + 1);
+        setModel(parseOffice(bytes));
         setSourceName(document.name);
       })
       .catch((reason) => {
@@ -98,37 +79,12 @@ export default function OfficeWorkspace({ kind, session, active, onBackToFiles, 
     return () => { cancelled = true; };
   }, [kind, session?.id]);
 
-  function applyHistory(history: OfficeHistory) {
-    historyRef.current = history;
-    const entry = currentOfficeHistory(history);
-    setModel(entry.model);
-    setDirty(entry.dirty);
-    setHistoryRevision((value) => value + 1);
-    onDirtyChange?.(entry.dirty);
-  }
-
   function markDirty(next: OfficeModel) {
-    const history = historyRef.current
-      ? recordOfficeHistory(historyRef.current, next)
-      : createOfficeHistory(next);
-    if (!historyRef.current) {
-      history.entries[0].dirty = true;
+    setModel(next);
+    if (!dirty) {
+      setDirty(true);
+      onDirtyChange?.(true);
     }
-    applyHistory(history);
-  }
-
-  function undoEdit() {
-    const history = historyRef.current;
-    if (!history || !canUndoOfficeHistory(history)) return;
-    applyHistory(undoOfficeHistory(history));
-    setNotice('Undid Office edit.');
-  }
-
-  function redoEdit() {
-    const history = historyRef.current;
-    if (!history || !canRedoOfficeHistory(history)) return;
-    applyHistory(redoOfficeHistory(history));
-    setNotice('Redid Office edit.');
   }
 
   async function openBrowserFile(event: React.ChangeEvent<HTMLInputElement>) {
@@ -145,11 +101,8 @@ export default function OfficeWorkspace({ kind, session, active, onBackToFiles, 
       if (detected !== kind) {
         throw new Error(`Choose a .${expectedExtension} document for this workspace. The selected package is ${detected.toUpperCase()}.`);
       }
-      const parsed = parseOffice(bytes);
       setOriginal(bytes);
-      setModel(parsed);
-      historyRef.current = createOfficeHistory(parsed);
-      setHistoryRevision((value) => value + 1);
+      setModel(parseOffice(bytes));
       setSourceName(file.name);
       setDirty(false);
       onDirtyChange?.(false);
@@ -175,71 +128,6 @@ export default function OfficeWorkspace({ kind, session, active, onBackToFiles, 
     }
   }
 
-
-  useEffect(() => {
-    if (!active) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
-      const key = event.key.toLowerCase();
-      if (key === 'z' && !event.shiftKey) {
-        if (!historyRef.current || !canUndoOfficeHistory(historyRef.current)) return;
-        event.preventDefault();
-        undoEdit();
-      } else if (key === 'y' || (key === 'z' && event.shiftKey)) {
-        if (!historyRef.current || !canRedoOfficeHistory(historyRef.current)) return;
-        event.preventDefault();
-        redoEdit();
-      }
-    }
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [active, historyRevision]);
-
-  useEffect(() => {
-    if (!session || !registerCommands) return;
-    registerCommands({
-      list: () => [
-        {
-          id:'export',
-          label:`Export current ${expectedExtension.toUpperCase()}`,
-          keywords:'export save as download copy office',
-          detail:dirty ? 'Export the edited OOXML package as a new file' : 'Export an exact byte-preserving copy',
-          enabled:!!original && !!model && !loading,
-          disabledReason:loading ? 'Wait for the Office document to finish loading.' : 'No Office document is loaded.',
-          run:()=>exportDocument(),
-        },
-        {
-          id:'undo',
-          label:'Undo Office edit',
-          keywords:'undo ctrl z history office',
-          detail:'Undo the most recent text/cell/slide edit in this tab',
-          enabled:!!historyRef.current && canUndoOfficeHistory(historyRef.current),
-          disabledReason:'There is no Office edit to undo.',
-          run:()=>undoEdit(),
-        },
-        {
-          id:'redo',
-          label:'Redo Office edit',
-          keywords:'redo ctrl y history office',
-          detail:'Redo the next text/cell/slide edit in this tab',
-          enabled:!!historyRef.current && canRedoOfficeHistory(historyRef.current),
-          disabledReason:'There is no Office edit to redo.',
-          run:()=>redoEdit(),
-        },
-        {
-          id:'print',
-          label:`Print current ${expectedExtension.toUpperCase()}`,
-          keywords:'print printer office',
-          detail:'Open the browser/system print path for the current workspace',
-          enabled:!!model && !loading,
-          disabledReason:loading ? 'Wait for the Office document to finish loading.' : 'No Office document is loaded.',
-          run:()=>window.print(),
-        },
-      ],
-    });
-    return () => registerCommands(null);
-  }, [session, registerCommands, original, model, dirty, loading, historyRevision, expectedExtension]);
-
   const fidelity = dirty ? 'Edited · compatibility review required' : 'Untouched · exact-copy export available';
   const MetaIcon = kindMeta[kind].icon;
 
@@ -257,8 +145,6 @@ export default function OfficeWorkspace({ kind, session, active, onBackToFiles, 
         <button onClick={onBackToFiles}><FolderOpen size={16}/> Files</button>
         <button disabled={!!session} onClick={() => inputRef.current?.click()} title={session ? "Use Files / Library to open another document in a new tab" : undefined}><MetaIcon size={16}/> Open {expectedExtension.toUpperCase()}</button>
         <button disabled={!model} onClick={() => void exportDocument()}><Download size={16}/> Export copy</button>
-        <button disabled={!historyRef.current || !canUndoOfficeHistory(historyRef.current)} onClick={undoEdit} title="Undo Office edit (Ctrl+Z)"><Undo2 size={16}/> Undo</button>
-        <button disabled={!historyRef.current || !canRedoOfficeHistory(historyRef.current)} onClick={redoEdit} title="Redo Office edit (Ctrl+Y / Ctrl+Shift+Z)"><Redo2 size={16}/> Redo</button>
         <button disabled={!model} onClick={() => window.print()}><Printer size={16}/> Print</button>
       </div>
       <div className={dirty ? 'fidelity-pill warning' : 'fidelity-pill'}>

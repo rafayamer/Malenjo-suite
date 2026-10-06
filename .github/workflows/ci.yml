@@ -57,10 +57,5 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: 'src-tauri -> target'
-      - name: Validate Codespaces AI helpers
-        run: |
-          bash -n scripts/setup-codespace-ai.sh
-          bash -n scripts/check-codespace-ai.sh
-          python3 -m json.tool third_party/models/MODEL_LICENSES.json >/dev/null
       - run: cargo check --manifest-path src-tauri/Cargo.toml
       - run: cargo test --manifest-path src-tauri/Cargo.toml --lib

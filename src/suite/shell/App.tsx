@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Activity, Command, FilePlus2, FolderOpen, Search, ShieldCheck, Sparkles } from 'lucide-react';
 import { modules } from '../modules/registry';
 import type { ModuleId } from '../core/types';
@@ -10,12 +10,10 @@ import {
   markDocumentDirty,
   markDocumentSaved,
   markDocumentSaving,
-  setDocumentDirty,
   type DocumentSession,
 } from '../files/session';
 import type { LibraryDocument } from '../files/types';
-import { addLibraryDocumentsByPaths, isDesktopRuntime, saveAsLibraryDocument } from '../files/api';
-import { markBrowserDocumentOpened, registerBrowserFiles } from '../files/browserStore';
+import { saveAsLibraryDocument } from '../files/api';
 import PdfWorkspace from '../pdf/PdfWorkspace';
 import OfficeWorkspace from '../office/OfficeWorkspace';
 import ScannerWorkspace from '../scanner/ScannerWorkspace';
@@ -26,7 +24,6 @@ import SignWorkspace from '../security/SignWorkspace';
 import EnterpriseWorkspace from '../enterprise/EnterpriseWorkspace';
 import DocumentTabs from './DocumentTabs';
 import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
-import type { DocumentCommandController } from '../commands/types';
 
 const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
   {label:'Open document', icon: FolderOpen, target:'files'},
@@ -39,11 +36,9 @@ export default function App() {
   const [active, setActive] = useState<ModuleId>('home');
   const [query, setQuery] = useState('');
   const [commandOpen, setCommandOpen] = useState(false);
-  const [dropActive, setDropActive] = useState(false);
   const [sessions, setSessions] = useState<DocumentSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [workspaceNotices, setWorkspaceNotices] = useState<Record<string,string>>({});
-  const commandControllersRef = useRef(new Map<string, DocumentCommandController>());
   const module = modules.find((item) => item.id === active) ?? modules[0];
   const groups = useMemo(() => ['Core','Create','Intelligence','Enterprise','System'] as const, []);
 
@@ -71,7 +66,7 @@ export default function App() {
       return;
     }
 
-    const session = createDocumentSession(document);
+    const session = createDocumentSession(document, Date.now());
     setSessions((current) => [...current, session]);
     setActiveSessionId(session.id);
     setActive(workspaceForDocument(document.kind));
@@ -82,41 +77,8 @@ export default function App() {
   }
 
   function markSessionDirty(sessionId: string, dirty: boolean) {
-    updateSession(sessionId, (session) => setDocumentDirty(session, dirty));
-  }
-
-  function registerSessionCommands(sessionId: string, controller: DocumentCommandController | null) {
-    if (controller) commandControllersRef.current.set(sessionId, controller);
-    else commandControllersRef.current.delete(sessionId);
-  }
-
-  function closeSessions(sessionIds: string[]) {
-    const remove = new Set(sessionIds);
-    const targets = sessions.filter((session) => remove.has(session.id));
-    if (!targets.length) return;
-    const dirty = targets.filter((session) => session.dirty);
-    if (dirty.length && !window.confirm(`Close ${targets.length} tab(s)? ${dirty.length} contain unsaved edits that will be discarded.`)) return;
-
-    const remaining = sessions.filter((session) => !remove.has(session.id));
-    setSessions(remaining);
-    setWorkspaceNotices((current) => {
-      const next = { ...current };
-      sessionIds.forEach((id) => {
-        delete next[id];
-        commandControllersRef.current.delete(id);
-      });
-      return next;
-    });
-
-    if (activeSessionId && !remove.has(activeSessionId)) return;
-    const next = remaining.at(-1) ?? null;
-    if (next) {
-      setActiveSessionId(next.id);
-      setActive(workspaceForDocument(next.document.kind));
-    } else {
-      setActiveSessionId(null);
-      setActive('files');
-    }
+    if (!dirty) return;
+    updateSession(sessionId, markDocumentDirty);
   }
 
   function closeSession(sessionId: string) {
@@ -130,7 +92,6 @@ export default function App() {
     setWorkspaceNotices((current) => {
       const next = { ...current };
       delete next[sessionId];
-      commandControllersRef.current.delete(sessionId);
       return next;
     });
 
@@ -169,53 +130,13 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (!isDesktopRuntime()) return;
-    let unlisten: (() => void) | undefined;
-
-    void import('@tauri-apps/api/webview')
-      .then(({ getCurrentWebview }) => getCurrentWebview().onDragDropEvent((event) => {
-        if (event.payload.type === 'over') {
-          setDropActive(true);
-          return;
-        }
-        if (event.payload.type === 'leave') {
-          setDropActive(false);
-          return;
-        }
-        if (event.payload.type === 'drop') {
-          setDropActive(false);
-          void addLibraryDocumentsByPaths(event.payload.paths)
-            .then((result) => {
-              result.documents.forEach(openFromLibrary);
-              if (result.errors.length) {
-                setWorkspaceNotices((current) => ({
-                  ...current,
-                  __drop: `${result.errors.length} dropped file(s) could not be added.`,
-                }));
-              }
-            })
-            .catch((error) => setWorkspaceNotices((current) => ({ ...current, __drop: String(error) })));
-        }
-      }))
-      .then((fn) => { unlisten = fn; })
-      .catch(() => {});
-
-    return () => unlisten?.();
-  }, [sessions]);
-
-  useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         setCommandOpen(true);
         return;
       }
-      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'w') {
-        event.preventDefault();
-        closeSessions(sessions.map((session) => session.id));
-        return;
-      }
-      if (activeSessionId && (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'w') {
+      if (activeSessionId && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'w') {
         event.preventDefault();
         closeSession(activeSessionId);
       }
@@ -224,24 +145,10 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [activeSessionId, sessions]);
 
-  function handleBrowserDrop(event: DragEvent<HTMLElement>) {
-    if (isDesktopRuntime()) return;
-    event.preventDefault();
-    setDropActive(false);
-    const files = Array.from(event.dataTransfer.files);
-    if (!files.length) return;
-    const documents = registerBrowserFiles(files);
-    documents.forEach((document) => openFromLibrary(markBrowserDocumentOpened(document)));
-  }
-
   function closeCommandPalette() {
     setCommandOpen(false);
     setQuery('');
   }
-
-  const activeDocumentCommands = activeSession
-    ? commandControllersRef.current.get(activeSession.id)?.list() ?? []
-    : [];
 
   const commandItems: CommandPaletteItem[] = [
     { id:'go-home', label:'Home', group:'Navigation', keywords:'start dashboard', run:()=>selectModule('home') },
@@ -265,17 +172,7 @@ export default function App() {
       run:()=>activateSession(session.id),
     })),
     ...(activeSession ? [
-      ...activeDocumentCommands.map((command) => ({
-        id:`active-command-${command.id}`,
-        label:command.label,
-        group:'Current document',
-        keywords:command.keywords,
-        detail:command.detail,
-        disabled:!command.enabled,
-        disabledReason:command.disabledReason,
-        run:()=>{ if(command.enabled) void command.run(); },
-      })),
-      ...(!activeSession.document.browserFile && !['pdf','docx','xlsx','pptx'].includes(activeSession.document.kind) ? [{
+      ...(activeSession.document.runtimeSource !== 'browser-session' && !['pdf','docx','xlsx','pptx'].includes(activeSession.document.kind) ? [{
         id:'active-save-as',
         label:`Save a copy of ${activeSession.document.name}`,
         group:'Current document',
@@ -299,41 +196,33 @@ export default function App() {
     if (route === 'pdf') {
       return <PdfWorkspace
         session={session}
-        active={session.id === activeSessionId}
         notice={notice}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty)=>markSessionDirty(session.id,dirty)}
-        registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
       />;
     }
     if (route === 'word') {
       return <OfficeWorkspace
         kind="docx"
         session={session}
-        active={session.id === activeSessionId}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
-        registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
       />;
     }
     if (route === 'spreadsheet') {
       return <OfficeWorkspace
         kind="xlsx"
         session={session}
-        active={session.id === activeSessionId}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
-        registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
       />;
     }
     if (route === 'presentation') {
       return <OfficeWorkspace
         kind="pptx"
         session={session}
-        active={session.id === activeSessionId}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
-        registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
       />;
     }
 
@@ -360,14 +249,7 @@ export default function App() {
       <div className="local-state"><Activity size={16}/><div><b>Local-first</b><span>{sessions.length} document{sessions.length===1?'':'s'} open · network optional</span></div></div>
     </aside>
 
-    <main
-      className={dropActive ? 'workspace drop-active' : 'workspace'}
-      onDragEnter={(event) => { if (!isDesktopRuntime() && event.dataTransfer.types.includes('Files')) setDropActive(true); }}
-      onDragOver={(event) => { if (!isDesktopRuntime() && event.dataTransfer.types.includes('Files')) event.preventDefault(); }}
-      onDragLeave={(event) => { if (!isDesktopRuntime() && event.currentTarget === event.target) setDropActive(false); }}
-      onDrop={handleBrowserDrop}
-    >
-      {dropActive && <div className="global-drop-overlay"><FolderOpen size={34}/><b>Drop files to open in MALENJO</b><span>{isDesktopRuntime() ? 'They will be added to the persistent local library.' : 'They will open as temporary Codespaces/browser sessions.'}</span></div>}
+    <main className="workspace">
       <header className="topbar">
         <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);setCommandOpen(true);}} placeholder="Search files, tools and commands"/><kbd>Ctrl K</kbd></div>
         <button className="command" onClick={()=>setCommandOpen(true)}><Command size={17}/> Commands</button>
@@ -378,12 +260,6 @@ export default function App() {
         activeSessionId={activeSessionId}
         onActivate={activateSession}
         onClose={closeSession}
-        onCloseOthers={(sessionId) => closeSessions(sessions.filter((session) => session.id !== sessionId).map((session) => session.id))}
-        onCloseRight={(sessionId) => {
-          const index = sessions.findIndex((session) => session.id === sessionId);
-          closeSessions(sessions.slice(index + 1).map((session) => session.id));
-        }}
-        onCloseAll={() => closeSessions(sessions.map((session) => session.id))}
       />
 
       <CommandPalette
@@ -472,7 +348,7 @@ function ModuleView({
       <div className="canvas-toolbar">
         <button onClick={onBackToFiles}>Files</button>
         <button disabled={!session?.dirty}>Save</button>
-        <button disabled={!document || session?.saving || !!document?.browserFile} onClick={() => void onSaveAs()}>Save As</button>
+        <button disabled={!document || session?.saving || document?.runtimeSource === 'browser-session'} onClick={() => void onSaveAs()}>Save As</button>
         <button disabled={!document}>Export</button>
         <button disabled={!document}>Print</button>
         <button>More</button>
@@ -483,7 +359,7 @@ function ModuleView({
         <h2>{document ? document.name : `${module.name} capability is not feature-complete yet`}</h2>
         <p>{document
           ? <>This file has its own persistent MALENJO tab/session. The remaining engine-specific commands for <strong>{module.engine}</strong> must be implemented before this workspace is feature-complete.</>
-          : <>This module is registered in the shell, but the full master-README feature tree has not yet been implemented. Current registry status reflects vertical-slice readiness, not Adobe/Foxit-class completeness.</>}</p>
+          : <>This module is registered in the shell, but the full master-README feature tree has not yet been implemented. Registry status distinguishes foundation/partial/adapter/planned/complete; no module is marked complete until its master-spec feature tree and acceptance tests are complete.</>}</p>
         <div className="notice"><ShieldCheck size={18}/>External engines must pass license, security, offline and fidelity tests before permanent integration.</div>
       </div>
     </div>

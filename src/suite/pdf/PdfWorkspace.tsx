@@ -9,64 +9,21 @@ import {
   Plus,
   Printer,
   RotateCw,
-  Search,
-  Square,
-  Type,
-  Undo2,
-  Redo2,
-  MessageSquare,
-  Paperclip,
-  ListChecks,
-  FileCheck2,
-  Link2,
-  Tags,
-  FileCog,
-  PlusCircle,
-  X,
 } from 'lucide-react';
 import type { DocumentSession } from '../files/session';
-import type { RegisterDocumentCommands } from '../commands/types';
 import { isDesktopRuntime } from '../files/api';
+import { getBrowserDocumentFile, readBrowserDocumentBytes } from '../files/browserStore';
 import { exportPdfBytes, readPdfDocumentBytes } from './api';
 import {
-  addPdfBatesNumbers,
-  addPdfCheckBox,
-  addPdfExternalLink,
-  addPdfCommentAnnotation,
-  addPdfHeaderFooter,
-  addPdfInternalPageLink,
-  addPdfRectangleOverlay,
-  addPdfTextField,
-  addPdfTextOverlay,
   appendPdf,
-  attachFileToPdf,
   deletePdfPage,
-  deletePdfPages,
   duplicatePdfPage,
-  extractPdfPages,
+  extractPdfPage,
   insertBlankPdfPage,
-  insertPdfAfter,
   movePdfPage,
   rotatePdfPagePermanent,
-  rotatePdfPagesPermanent,
-  setPdfDocumentProperties,
-  setPdfPageBox,
-  setPdfPageLabels,
-  splitPdfAtPage,
-  flattenPdfForm,
-  getPdfDocumentProperties,
-  listPdfFormFields,
 } from './editor';
 import { disposePdf, loadPdfBytes, type PdfLoadResult } from './engine';
-import {
-  canRedoPdfHistory,
-  canUndoPdfHistory,
-  createPdfHistory,
-  recordPdfHistory,
-  redoPdfHistory,
-  undoPdfHistory,
-  type PdfHistory,
-} from './history';
 import {
   clampPdfPage,
   rotatePdfClockwise,
@@ -79,11 +36,9 @@ import { useScrollFps } from './useScrollFps';
 
 interface Props {
   session: DocumentSession | null;
-  active: boolean;
   notice: string;
   onBackToFiles(): void;
   onDirtyChange?(dirty:boolean): void;
-  registerCommands?: RegisterDocumentCommands;
 }
 
 function formatBytes(bytes: number): string {
@@ -97,19 +52,15 @@ function editedName(name:string,suffix='edited'):string{
   return `${base}-${suffix}.pdf`;
 }
 
-export default function PdfWorkspace({ session, active, notice, onBackToFiles, onDirtyChange, registerCommands }: Props) {
+export default function PdfWorkspace({ session, notice, onBackToFiles, onDirtyChange }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const appendInputRef = useRef<HTMLInputElement>(null);
-  const insertInputRef = useRef<HTMLInputElement>(null);
-  const attachmentInputRef = useRef<HTMLInputElement>(null);
-  const selectionAnchorRef = useRef<number | null>(null);
   const activeLoadRef = useRef<PdfLoadResult | null>(null);
   const requestIdRef = useRef(0);
   const loadStartedRef = useRef(0);
   const firstPageReportedRef = useRef(false);
   const previewIdRef = useRef(`pdf-preview-${Math.random().toString(36).slice(2)}`);
-  const historyRef = useRef<PdfHistory | null>(null);
 
   const [pdf, setPdf] = useState<PdfLoadResult | null>(null);
   const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
@@ -117,7 +68,6 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [browserFile, setBrowserFile] = useState<File | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedPages, setSelectedPages] = useState<Set<number>>(() => new Set([1]));
   const [fitMode, setFitMode] = useState<PdfFitMode>('width');
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
@@ -129,73 +79,6 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [firstPageMs, setFirstPageMs] = useState<number | null>(null);
   const [forceRenderAll, setForceRenderAll] = useState(false);
   const [viewport, setViewport] = useState({ width: 900, height: 700 });
-  const [historyRevision, setHistoryRevision] = useState(0);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<Array<{page:number;excerpt:string}>>([]);
-  const [textOverlay, setTextOverlay] = useState({ text:'', x:0.12, y:0.82, size:12 });
-  const [shapeOverlay, setShapeOverlay] = useState({ x:0.12, y:0.68, width:0.35, height:0.08, mode:'highlight' as 'highlight'|'outline' });
-  const [commentDraft, setCommentDraft] = useState({ text:'', author:'MALENJO User', x:0.86, y:0.86 });
-  const [formDraft, setFormDraft] = useState({
-    type:'text' as 'text'|'checkbox',
-    name:'',
-    defaultValue:'',
-    x:0.12,
-    y:0.52,
-    width:0.42,
-    height:0.07,
-    size:0.05,
-  });
-  const [formFields, setFormFields] = useState<string[]>([]);
-  const [headerFooterDraft, setHeaderFooterDraft] = useState({
-    scope:'selected' as 'selected'|'all',
-    header:'',
-    footer:'Page {page} of {pages}',
-    fontSize:9,
-    margin:24,
-    headerAlign:'center' as 'left'|'center'|'right',
-    footerAlign:'center' as 'left'|'center'|'right',
-  });
-  const [batesDraft, setBatesDraft] = useState({
-    scope:'selected' as 'selected'|'all',
-    prefix:'CASE-',
-    suffix:'',
-    startNumber:1,
-    digits:6,
-    fontSize:9,
-    margin:24,
-    position:'bottom-right' as 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-center'|'bottom-right',
-  });
-  const [pageBoxDraft, setPageBoxDraft] = useState({
-    scope:'selected' as 'selected'|'all',
-    box:'crop' as 'crop'|'trim'|'bleed'|'art',
-    top:0,
-    right:0,
-    bottom:0,
-    left:0,
-  });
-  const [linkDraft, setLinkDraft] = useState({
-    type:'external' as 'external'|'internal',
-    url:'https://',
-    targetPage:1,
-    x:0.12,
-    y:0.42,
-    width:0.42,
-    height:0.06,
-  });
-  const [pageLabelRanges, setPageLabelRanges] = useState<Array<{
-    startPage:number;
-    style:'decimal'|'roman-upper'|'roman-lower'|'letters-upper'|'letters-lower';
-    prefix:string;
-    startNumber:number;
-  }>>([{startPage:1,style:'decimal',prefix:'',startNumber:1}]);
-  const [propertiesDraft, setPropertiesDraft] = useState({
-    title:'',
-    author:'',
-    subject:'',
-    keywords:'',
-    creator:'',
-  });
   const scrollFps = useScrollFps(scrollRef);
   const domIdPrefix=session?.id??previewIdRef.current;
 
@@ -229,19 +112,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setSourceName(name);
       setPageCount(result.document.numPages);
       setCurrentPage(1);
-      if(!preserveDirty){
-        setSelectedPages(new Set([1]));
-        selectionAnchorRef.current=1;
-      }
       setFitMode('width');
       setZoom(1);
       setRotation(0);
       setForceRenderAll(false);
-      if(!preserveDirty){
-        setDirty(false);
-        historyRef.current=createPdfHistory(owned,1);
-        setHistoryRevision((value)=>value+1);
-      }
+      if(!preserveDirty)setDirty(false);
     } catch (reason) {
       if (requestId === requestIdRef.current) {
         setPdf(null);
@@ -260,9 +135,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
     let cancelled = false;
 
-    if (document.browserFile) {
-      const file = document.browserFile;
-      void file.arrayBuffer()
+    if (document.runtimeSource === 'browser-session') {
+      let file: File;
+      try {
+        file = getBrowserDocumentFile(document.id);
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : String(reason));
+        return;
+      }
+      void readBrowserDocumentBytes(document.id)
         .then((bytes) => {
           if (!cancelled) return installPdf(bytes, document.name, file);
         })
@@ -272,7 +153,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       return () => { cancelled = true; };
     }
 
-    if (!isDesktopRuntime()) return;
+    if (!isDesktopRuntime()) {
+      setError('This PDF is not backed by a browser-session file or the native MALENJO library.');
+      return;
+    }
 
     void readPdfDocumentBytes(document.id)
       .then((bytes) => {
@@ -318,34 +202,6 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setCurrentPage(page);
   }, []);
 
-  function selectThumbnail(page:number,additive:boolean,range:boolean){
-    goToPage(page);
-    setSelectedPages((current)=>{
-      const anchor=selectionAnchorRef.current;
-      if(range&&anchor){
-        const next=additive?new Set(current):new Set<number>();
-        const start=Math.min(anchor,page);
-        const end=Math.max(anchor,page);
-        for(let value=start;value<=end;value+=1)next.add(value);
-        return next;
-      }
-      if(additive){
-        const next=new Set(current);
-        if(next.has(page))next.delete(page);else next.add(page);
-        selectionAnchorRef.current=page;
-        return next;
-      }
-      selectionAnchorRef.current=page;
-      return new Set([page]);
-    });
-  }
-
-  const selectedPageNumbers=Array.from(selectedPages)
-    .filter(page=>page>=1&&page<=pageCount)
-    .sort((a,b)=>a-b);
-  const operationPages=selectedPageNumbers.length?selectedPageNumbers:[currentPage];
-
-
   const onPageRendered = useCallback((page: number) => {
     if (page === 1 && !firstPageReportedRef.current) {
       firstPageReportedRef.current = true;
@@ -377,15 +233,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setError('');
     try{
       const result=await operation(Uint8Array.from(sourceBytes));
-      const targetPage=Math.max(1,preferredPage);
       await installPdf(result,sourceName,browserFile,true);
-      historyRef.current=historyRef.current
-        ? recordPdfHistory(historyRef.current,result,targetPage,label)
-        : recordPdfHistory(createPdfHistory(sourceBytes,currentPage),result,targetPage,label);
-      setHistoryRevision((value)=>value+1);
-      setCurrentPage(targetPage);
-      setSelectedPages(new Set([targetPage]));
-      selectionAnchorRef.current=targetPage;
+      setCurrentPage(Math.max(1,preferredPage));
       setDirty(true);
       onDirtyChange?.(true);
       setActionNotice(label);
@@ -394,25 +243,6 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }finally{
       setMutating(false);
     }
-  }
-
-  async function insertDocuments(event:React.ChangeEvent<HTMLInputElement>){
-    const files=Array.from(event.target.files??[]);
-    event.target.value='';
-    if(!files.length||!sourceBytes)return;
-    const ordered=[...files].reverse();
-    await mutate(
-      `Inserted ${files.length} PDF file(s) after page ${currentPage}.`,
-      async(bytes)=>{
-        let result=bytes;
-        for(const file of ordered){
-          if(file.size>512*1024*1024)throw new Error(`${file.name} exceeds the 512 MB safety limit.`);
-          result=await insertPdfAfter(result,new Uint8Array(await file.arrayBuffer()),currentPage);
-        }
-        return result;
-      },
-      currentPage+1,
-    );
   }
 
   async function appendDocuments(event:React.ChangeEvent<HTMLInputElement>){
@@ -430,333 +260,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         owned.set(merged);
         result=owned;
       }
-      const label=`Appended ${files.length} PDF file(s).`;
       await installPdf(result,sourceName,browserFile,true);
-      historyRef.current=historyRef.current
-        ? recordPdfHistory(historyRef.current,result,currentPage,label)
-        : recordPdfHistory(createPdfHistory(sourceBytes,currentPage),result,currentPage,label);
-      setHistoryRevision((value)=>value+1);
       setDirty(true);
       onDirtyChange?.(true);
-      setActionNotice(label);
+      setActionNotice(`Appended ${files.length} PDF file(s).`);
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
       setMutating(false);
-    }
-  }
-
-  async function undoEdit(){
-    const history=historyRef.current;
-    if(!history||mutating||!canUndoPdfHistory(history))return;
-    const undoneLabel=history.entries[history.cursor]?.label??'PDF edit';
-    const transition=undoPdfHistory(history);
-    if(!transition.changed)return;
-    setMutating(true);
-    setError('');
-    try{
-      await installPdf(transition.entry.bytes,sourceName,browserFile,true);
-      historyRef.current=transition.history;
-      setHistoryRevision((value)=>value+1);
-      setCurrentPage(transition.entry.page);
-      setDirty(transition.entry.dirty);
-      onDirtyChange?.(transition.entry.dirty);
-      setActionNotice(`Undid: ${undoneLabel}`);
-    }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
-    }finally{
-      setMutating(false);
-    }
-  }
-
-  async function redoEdit(){
-    const history=historyRef.current;
-    if(!history||mutating||!canRedoPdfHistory(history))return;
-    const transition=redoPdfHistory(history);
-    if(!transition.changed)return;
-    setMutating(true);
-    setError('');
-    try{
-      await installPdf(transition.entry.bytes,sourceName,browserFile,true);
-      historyRef.current=transition.history;
-      setHistoryRevision((value)=>value+1);
-      setCurrentPage(transition.entry.page);
-      setDirty(transition.entry.dirty);
-      onDirtyChange?.(transition.entry.dirty);
-      setActionNotice(`Redid: ${transition.entry.label}`);
-    }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
-    }finally{
-      setMutating(false);
-    }
-  }
-
-  useEffect(()=>{
-    if(!active)return;
-    const onKeyDown=(event:KeyboardEvent)=>{
-      if(!(event.ctrlKey||event.metaKey))return;
-      const target=event.target as HTMLElement|null;
-      if(target?.closest('input,textarea,[contenteditable="true"]'))return;
-      const key=event.key.toLowerCase();
-      if(key==='z'&&!event.shiftKey){
-        event.preventDefault();
-        void undoEdit();
-      }else if((key==='z'&&event.shiftKey)||key==='y'){
-        event.preventDefault();
-        void redoEdit();
-      }
-    };
-    window.addEventListener('keydown',onKeyDown);
-    return()=>window.removeEventListener('keydown',onKeyDown);
-  },[active,historyRevision,mutating]);
-
-
-  useEffect(()=>{
-    if(!sourceBytes){
-      setFormFields([]);
-      return;
-    }
-    let cancelled=false;
-    void listPdfFormFields(sourceBytes)
-      .then((fields)=>{ if(!cancelled)setFormFields(fields); })
-      .catch(()=>{ if(!cancelled)setFormFields([]); });
-    return()=>{cancelled=true;};
-  },[sourceBytes]);
-
-  useEffect(()=>{
-    if(!sourceBytes){
-      setPropertiesDraft({title:'',author:'',subject:'',keywords:'',creator:''});
-      return;
-    }
-    let cancelled=false;
-    void getPdfDocumentProperties(sourceBytes)
-      .then((properties)=>{
-        if(cancelled)return;
-        setPropertiesDraft({
-          title:properties.title,
-          author:properties.author,
-          subject:properties.subject,
-          keywords:properties.keywords.join(', '),
-          creator:properties.creator,
-        });
-      })
-      .catch(()=>{});
-    return()=>{cancelled=true;};
-  },[sourceBytes]);
-
-
-  async function attachDocuments(event:React.ChangeEvent<HTMLInputElement>){
-    const files=Array.from(event.target.files??[]);
-    event.target.value='';
-    if(!files.length||!sourceBytes)return;
-    await mutate(
-      `Embedded ${files.length} attachment(s) in the PDF.`,
-      async(bytes)=>{
-        let result=bytes;
-        for(const file of files){
-          result=await attachFileToPdf(result,{
-            name:file.name,
-            bytes:new Uint8Array(await file.arrayBuffer()),
-            mimeType:file.type||'application/octet-stream',
-            description:'Embedded by MALENJO PDF Workspace',
-          });
-        }
-        return result;
-      },
-      currentPage,
-    );
-  }
-
-  async function addComment(){
-    await mutate(
-      'Added a PDF comment annotation.',
-      (bytes)=>addPdfCommentAnnotation(bytes,{pageNumber:currentPage,...commentDraft}),
-      currentPage,
-    );
-    setCommentDraft((current)=>({...current,text:''}));
-  }
-
-  async function addFormField(){
-    const name=formDraft.name.trim()||`field_${Date.now().toString(36)}`;
-    if(formDraft.type==='checkbox'){
-      await mutate(
-        `Added checkbox field "${name}".`,
-        (bytes)=>addPdfCheckBox(bytes,{
-          pageNumber:currentPage,
-          name,
-          x:formDraft.x,
-          y:formDraft.y,
-          size:formDraft.size,
-        }),
-        currentPage,
-      );
-    }else{
-      await mutate(
-        `Added text field "${name}".`,
-        (bytes)=>addPdfTextField(bytes,{
-          pageNumber:currentPage,
-          name,
-          defaultValue:formDraft.defaultValue,
-          x:formDraft.x,
-          y:formDraft.y,
-          width:formDraft.width,
-          height:formDraft.height,
-        }),
-        currentPage,
-      );
-    }
-    setFormDraft((current)=>({...current,name:'',defaultValue:''}));
-  }
-
-  async function flattenForm(){
-    if(!formFields.length)return;
-    await mutate(
-      `Flattened ${formFields.length} PDF form field(s).`,
-      (bytes)=>flattenPdfForm(bytes),
-      currentPage,
-    );
-  }
-
-
-  function pagesForScope(scope:'selected'|'all'):number[]|undefined{
-    return scope==='selected' ? operationPages : undefined;
-  }
-
-  async function applyHeaderFooter(){
-    await mutate(
-      `Applied PDF header/footer to ${headerFooterDraft.scope==='selected' ? operationPages.length : pageCount} page(s).`,
-      (bytes)=>addPdfHeaderFooter(bytes,{
-        pageNumbers:pagesForScope(headerFooterDraft.scope),
-        header:headerFooterDraft.header,
-        footer:headerFooterDraft.footer,
-        fontSize:headerFooterDraft.fontSize,
-        margin:headerFooterDraft.margin,
-        headerAlign:headerFooterDraft.headerAlign,
-        footerAlign:headerFooterDraft.footerAlign,
-      }),
-      currentPage,
-    );
-  }
-
-  async function applyBates(){
-    await mutate(
-      `Applied Bates numbering to ${batesDraft.scope==='selected' ? operationPages.length : pageCount} page(s).`,
-      (bytes)=>addPdfBatesNumbers(bytes,{
-        pageNumbers:pagesForScope(batesDraft.scope),
-        prefix:batesDraft.prefix,
-        suffix:batesDraft.suffix,
-        startNumber:batesDraft.startNumber,
-        digits:batesDraft.digits,
-        fontSize:batesDraft.fontSize,
-        margin:batesDraft.margin,
-        position:batesDraft.position,
-      }),
-      currentPage,
-    );
-  }
-
-  async function applyPageBox(){
-    await mutate(
-      `Updated ${pageBoxDraft.box} box on ${pageBoxDraft.scope==='selected' ? operationPages.length : pageCount} page(s).`,
-      (bytes)=>setPdfPageBox(bytes,{
-        pageNumbers:pagesForScope(pageBoxDraft.scope),
-        box:pageBoxDraft.box,
-        top:pageBoxDraft.top,
-        right:pageBoxDraft.right,
-        bottom:pageBoxDraft.bottom,
-        left:pageBoxDraft.left,
-      }),
-      currentPage,
-    );
-  }
-
-
-  async function applyLink(){
-    if(linkDraft.type==='external'){
-      await mutate(
-        'Added external PDF hyperlink.',
-        (bytes)=>addPdfExternalLink(bytes,{
-          pageNumber:currentPage,
-          url:linkDraft.url,
-          x:linkDraft.x,
-          y:linkDraft.y,
-          width:linkDraft.width,
-          height:linkDraft.height,
-        }),
-        currentPage,
-      );
-    }else{
-      await mutate(
-        `Added internal PDF link to page ${linkDraft.targetPage}.`,
-        (bytes)=>addPdfInternalPageLink(bytes,{
-          pageNumber:currentPage,
-          targetPageNumber:linkDraft.targetPage,
-          x:linkDraft.x,
-          y:linkDraft.y,
-          width:linkDraft.width,
-          height:linkDraft.height,
-        }),
-        currentPage,
-      );
-    }
-  }
-
-  async function applyPageLabels(){
-    await mutate(
-      `Applied ${pageLabelRanges.length} PDF page-label range(s).`,
-      (bytes)=>setPdfPageLabels(bytes,pageLabelRanges),
-      currentPage,
-    );
-  }
-
-  async function applyDocumentProperties(){
-    await mutate(
-      'Updated PDF document properties.',
-      (bytes)=>setPdfDocumentProperties(bytes,{
-        title:propertiesDraft.title,
-        author:propertiesDraft.author,
-        subject:propertiesDraft.subject,
-        keywords:propertiesDraft.keywords.split(',').map((item)=>item.trim()).filter(Boolean),
-        creator:propertiesDraft.creator,
-      }),
-      currentPage,
-    );
-  }
-
-  function updatePageLabelRange(index:number,patch:Partial<(typeof pageLabelRanges)[number]>){
-    setPageLabelRanges((current)=>current.map((range,rangeIndex)=>rangeIndex===index?{...range,...patch}:range));
-  }
-
-  async function searchPdf(){
-    if(!pdf||!searchQuery.trim())return;
-    const needle=searchQuery.trim().toLocaleLowerCase();
-    setSearching(true);
-    setError('');
-    try{
-      const results:Array<{page:number;excerpt:string}>=[];
-      const count=Math.min(pdf.document.numPages,500);
-      for(let pageNumber=1;pageNumber<=count&&results.length<100;pageNumber+=1){
-        const page=await pdf.document.getPage(pageNumber);
-        const content=await page.getTextContent();
-        const text=content.items
-          .map((item)=>'str' in item?String(item.str):'')
-          .join(' ')
-          .replace(/\s+/g,' ')
-          .trim();
-        const index=text.toLocaleLowerCase().indexOf(needle);
-        if(index>=0){
-          results.push({
-            page:pageNumber,
-            excerpt:text.slice(Math.max(0,index-70),Math.min(text.length,index+needle.length+120)),
-          });
-        }
-      }
-      setSearchResults(results);
-      setActionNotice(results.length?`Found ${results.length} matching page(s).`:'No matching PDF text was found.');
-    }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
-    }finally{
-      setSearching(false);
     }
   }
 
@@ -774,28 +285,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }
   }
 
-  async function extractSelected(){
+  async function extractCurrent(){
     if(!sourceBytes)return;
     try{
-      const pages=operationPages;
-      const bytes=await extractPdfPages(sourceBytes,pages);
+      const bytes=await extractPdfPage(sourceBytes,currentPage);
       const base=sourceName.replace(/\.pdf$/i,'')||'MALENJO-document';
-      const label=pages.length===1?`page-${pages[0]}`:`pages-${pages[0]}-${pages[pages.length-1]}`;
-      await exportPdfBytes(`${base}-${label}.pdf`,bytes);
-      setActionNotice(`Extracted ${pages.length} selected page(s) as a new PDF.`);
-    }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
-    }
-  }
-
-  async function splitCurrent(){
-    if(!sourceBytes||currentPage>=pageCount)return;
-    try{
-      const [left,right]=await splitPdfAtPage(sourceBytes,currentPage);
-      const base=sourceName.replace(/\.pdf$/i,'')||'MALENJO-document';
-      await exportPdfBytes(`${base}-part-1.pdf`,left);
-      await exportPdfBytes(`${base}-part-2.pdf`,right);
-      setActionNotice(`Split after page ${currentPage} and exported two PDFs.`);
+      await exportPdfBytes(`${base}-page-${currentPage}.pdf`,bytes);
+      setActionNotice(`Extracted page ${currentPage} as a new PDF.`);
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }
@@ -811,128 +307,6 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       window.print();
     }, delay);
   }
-
-
-  useEffect(() => {
-    if (!session || !registerCommands) return;
-    registerCommands({
-      list: () => [
-        {
-          id:'export',
-          label:'Export current PDF',
-          keywords:'export download copy save as pdf',
-          detail:dirty ? 'Export edited PDF bytes as a new file' : 'Export a copy of the current PDF',
-          enabled:!!sourceBytes && !mutating,
-          disabledReason:!sourceBytes ? 'No PDF is loaded.' : mutating ? 'Wait for the current PDF edit to finish.' : undefined,
-          run:()=>exportCurrent(),
-        },
-        {
-          id:'undo',
-          label:'Undo PDF edit',
-          keywords:'undo ctrl z history',
-          detail:'Undo the most recent PDF mutation in this tab',
-          enabled:!!historyRef.current && !mutating && canUndoPdfHistory(historyRef.current),
-          disabledReason:mutating ? 'Wait for the current PDF edit to finish.' : 'There is no PDF edit to undo.',
-          run:()=>undoEdit(),
-        },
-        {
-          id:'redo',
-          label:'Redo PDF edit',
-          keywords:'redo ctrl y history',
-          detail:'Redo the next PDF mutation in this tab',
-          enabled:!!historyRef.current && !mutating && canRedoPdfHistory(historyRef.current),
-          disabledReason:mutating ? 'Wait for the current PDF edit to finish.' : 'There is no PDF edit to redo.',
-          run:()=>redoEdit(),
-        },
-        {
-          id:'attach',
-          label:'Embed file attachment in PDF',
-          keywords:'attach embed file paperclip pdf',
-          detail:'Choose one or more files and embed them inside the current PDF',
-          enabled:!!sourceBytes && !mutating,
-          disabledReason:!sourceBytes ? 'No PDF is loaded.' : 'Wait for the current PDF edit to finish.',
-          run:()=>attachmentInputRef.current?.click(),
-        },
-        {
-          id:'flatten-form',
-          label:'Flatten PDF form fields',
-          keywords:'form acroform flatten fields',
-          detail:formFields.length ? `Flatten ${formFields.length} interactive field(s)` : 'No AcroForm fields detected',
-          enabled:!!sourceBytes && !mutating && formFields.length>0,
-          disabledReason:!sourceBytes ? 'No PDF is loaded.' : !formFields.length ? 'No AcroForm fields detected.' : 'Wait for the current PDF edit to finish.',
-          run:()=>flattenForm(),
-        },
-        {
-          id:'header-footer',
-          label:'Apply PDF header / footer',
-          keywords:'header footer page number date stamp',
-          detail:headerFooterDraft.header||headerFooterDraft.footer||'Configure header/footer text in the PDF inspector',
-          enabled:!!sourceBytes && !mutating && !!(headerFooterDraft.header.trim()||headerFooterDraft.footer.trim()),
-          disabledReason:!sourceBytes ? 'No PDF is loaded.' : !(headerFooterDraft.header.trim()||headerFooterDraft.footer.trim()) ? 'Enter header or footer text in the PDF inspector.' : 'Wait for the current PDF edit to finish.',
-          run:()=>applyHeaderFooter(),
-        },
-        {
-          id:'bates',
-          label:'Apply Bates numbering',
-          keywords:'bates numbering sequence case stamp pages',
-          detail:`${batesDraft.prefix}${String(batesDraft.startNumber).padStart(batesDraft.digits,'0')}${batesDraft.suffix}`,
-          enabled:!!sourceBytes && !mutating,
-          disabledReason:!sourceBytes ? 'No PDF is loaded.' : 'Wait for the current PDF edit to finish.',
-          run:()=>applyBates(),
-        },
-        {
-          id:'page-box',
-          label:'Apply PDF page box',
-          keywords:'crop trim bleed art box margins',
-          detail:`${pageBoxDraft.box} box · ${pageBoxDraft.scope} pages`,
-          enabled:!!sourceBytes && !mutating,
-          disabledReason:!sourceBytes ? 'No PDF is loaded.' : 'Wait for the current PDF edit to finish.',
-          run:()=>applyPageBox(),
-        },
-        {
-          id:'add-link',
-          label:'Add PDF link',
-          keywords:'link hyperlink url internal page destination',
-          detail:linkDraft.type==='external' ? linkDraft.url : `Internal link to page ${linkDraft.targetPage}`,
-          enabled:!!sourceBytes && !mutating && (linkDraft.type==='internal' || !!linkDraft.url.trim()),
-          disabledReason:!sourceBytes ? 'No PDF is loaded.' : mutating ? 'Wait for the current PDF edit to finish.' : 'Configure the link in the PDF inspector.',
-          run:()=>applyLink(),
-        },
-        {
-          id:'page-labels',
-          label:'Apply PDF page labels',
-          keywords:'page labels roman letters numbering prefix',
-          detail:`${pageLabelRanges.length} page-label range(s)`,
-          enabled:!!sourceBytes && !mutating && pageLabelRanges.length>0,
-          disabledReason:!sourceBytes ? 'No PDF is loaded.' : !pageLabelRanges.length ? 'Add a page-label range.' : 'Wait for the current PDF edit to finish.',
-          run:()=>applyPageLabels(),
-        },
-        {
-          id:'document-properties',
-          label:'Apply PDF document properties',
-          keywords:'properties title author subject keywords metadata creator',
-          detail:propertiesDraft.title || sourceName,
-          enabled:!!sourceBytes && !mutating,
-          disabledReason:!sourceBytes ? 'No PDF is loaded.' : 'Wait for the current PDF edit to finish.',
-          run:()=>applyDocumentProperties(),
-        },
-        {
-          id:'print',
-          label:'Print current PDF',
-          keywords:'print printer ctrl p',
-          detail:'Render all pages and open the browser/system print path',
-          enabled:!!pdf && !mutating,
-          disabledReason:!pdf ? 'No PDF is loaded.' : 'Wait for the current PDF edit to finish.',
-          run:()=>printDocument(),
-        },
-      ],
-    });
-    return () => registerCommands(null);
-  }, [
-    session, registerCommands, sourceBytes, pdf, dirty, mutating, historyRevision, formFields.length,
-    headerFooterDraft, batesDraft, pageBoxDraft, linkDraft, pageLabelRanges, propertiesDraft,
-    currentPage, pageCount, selectedPages,
-  ]);
 
   const zoomLabel = fitMode === 'width'
     ? 'Fit width'
@@ -956,29 +330,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       multiple
       onChange={(event)=>void appendDocuments(event)}
     />
-    <input
-      ref={insertInputRef}
-      className="visually-hidden"
-      type="file"
-      accept="application/pdf,.pdf"
-      multiple
-      onChange={(event)=>void insertDocuments(event)}
-    />
-    <input
-      ref={attachmentInputRef}
-      className="visually-hidden"
-      type="file"
-      multiple
-      onChange={(event)=>void attachDocuments(event)}
-    />
 
     <div className="pdf-toolbar">
       <div className="pdf-toolbar-group">
         <button onClick={onBackToFiles} title="Back to MALENJO Files"><FolderOpen size={16}/> Files</button>
         <button disabled={!!session} onClick={() => fileInputRef.current?.click()} title={session ? "Use Files / Library to open another PDF in a new tab" : "Open a temporary PDF in this workspace"}><FileText size={16}/> Open PDF</button>
         <button disabled={!pdf||mutating} onClick={() => void exportCurrent()} title="Export current PDF bytes"><Download size={16}/> Export</button>
-        <button disabled={!historyRef.current||mutating||!canUndoPdfHistory(historyRef.current)} onClick={()=>void undoEdit()} title="Undo PDF edit (Ctrl+Z)"><Undo2 size={16}/> Undo</button>
-        <button disabled={!historyRef.current||mutating||!canRedoPdfHistory(historyRef.current)} onClick={()=>void redoEdit()} title="Redo PDF edit (Ctrl+Y / Ctrl+Shift+Z)"><Redo2 size={16}/> Redo</button>
         <button disabled={!pdf||mutating} onClick={printDocument} title="Print rendered PDF pages"><Printer size={16}/> Print</button>
       </div>
 
@@ -1024,11 +381,6 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     {pdf && <div className="pdf-layout">
       <aside className="pdf-thumbnails" aria-label="PDF page thumbnails">
         <div className="pdf-pane-title"><span>Pages</span><b>{pageCount}</b></div>
-        <div className="pdf-selection-bar">
-          <span>{selectedPageNumbers.length || 1} selected</span>
-          <button onClick={()=>{setSelectedPages(new Set(Array.from({length:pageCount},(_,index)=>index+1)));selectionAnchorRef.current=1;}}>All</button>
-          <button onClick={()=>{setSelectedPages(new Set([currentPage]));selectionAnchorRef.current=currentPage;}}>Current</button>
-        </div>
         <div className="pdf-thumbnail-list">
           {Array.from({ length: pageCount }, (_, index) => index + 1).map((page) =>
             <PdfThumbnail
@@ -1036,8 +388,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               document={pdf.document}
               pageNumber={page}
               active={page === currentPage}
-              selected={selectedPages.has(page)}
-              onSelect={selectThumbnail}
+              onSelect={goToPage}
             />
           )}
         </div>
@@ -1072,197 +423,21 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           <div><dt>Size</dt><dd>{sourceBytes ? formatBytes(sourceBytes.byteLength) : session?.document ? formatBytes(session.document.sizeBytes) : '—'}</dd></div>
           <div><dt>Renderer</dt><dd>PDF.js 6.4.299</dd></div>
           <div><dt>Edit state</dt><dd>{dirty?'Modified':'Original'}</dd></div>
-          <div><dt>History</dt><dd>{historyRef.current?`${historyRef.current.cursor+1}/${historyRef.current.entries.length} · ${formatBytes(historyRef.current.totalBytes)}`:'—'}</dd></div>
           <div><dt>View</dt><dd>{fitMode === 'custom' ? `${Math.round(zoom * 100)}%` : fitMode} · {rotation}°</dd></div>
         </dl>
 
-        <div className="pdf-pane-title">Find in document</div>
-        <div className="pdf-find">
-          <div><Search size={14}/><input value={searchQuery} onChange={(event)=>setSearchQuery(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter')void searchPdf();}} placeholder="Search PDF text"/></div>
-          <button disabled={searching||!searchQuery.trim()} onClick={()=>void searchPdf()}>{searching?'Searching…':'Find'}</button>
-          {!!searchResults.length&&<div className="pdf-search-results">{searchResults.map((result)=><button key={result.page} onClick={()=>goToPage(result.page)}><b>Page {result.page}</b><span>{result.excerpt}</span></button>)}</div>}
-        </div>
-
-        <div className="pdf-pane-title">Document properties</div>
-        <div className="pdf-edit-form">
-          <label><FileCog size={13}/> Title<input value={propertiesDraft.title} onChange={(event)=>setPropertiesDraft({...propertiesDraft,title:event.target.value})}/></label>
-          <label>Author<input value={propertiesDraft.author} onChange={(event)=>setPropertiesDraft({...propertiesDraft,author:event.target.value})}/></label>
-          <label>Subject<input value={propertiesDraft.subject} onChange={(event)=>setPropertiesDraft({...propertiesDraft,subject:event.target.value})}/></label>
-          <label>Keywords<input value={propertiesDraft.keywords} onChange={(event)=>setPropertiesDraft({...propertiesDraft,keywords:event.target.value})} placeholder="comma, separated, keywords"/></label>
-          <label>Creator<input value={propertiesDraft.creator} onChange={(event)=>setPropertiesDraft({...propertiesDraft,creator:event.target.value})}/></label>
-          <button disabled={mutating} onClick={()=>void applyDocumentProperties()}>Apply document properties</button>
-          <small>Updates standard PDF Info/XMP-facing metadata fields through pdf-lib. Use Metadata Studio for deeper privacy/forensic inspection and sanitization.</small>
-        </div>
-
-        <div className="pdf-pane-title">Links</div>
-        <div className="pdf-edit-form">
-          <label><Link2 size={13}/> Link type<select value={linkDraft.type} onChange={(event)=>setLinkDraft({...linkDraft,type:event.target.value as 'external'|'internal'})}><option value="external">External URL</option><option value="internal">Internal page</option></select></label>
-          {linkDraft.type==='external'
-            ? <label>URL<input value={linkDraft.url} onChange={(event)=>setLinkDraft({...linkDraft,url:event.target.value})} placeholder="https://example.com"/></label>
-            : <label>Target page<input type="number" min="1" max={pageCount} step="1" value={linkDraft.targetPage} onChange={(event)=>setLinkDraft({...linkDraft,targetPage:Number(event.target.value)})}/></label>}
-          <div className="pdf-coordinate-grid">
-            <label>X<input type="number" min="0" max="1" step="0.01" value={linkDraft.x} onChange={(event)=>setLinkDraft({...linkDraft,x:Number(event.target.value)})}/></label>
-            <label>Y<input type="number" min="0" max="1" step="0.01" value={linkDraft.y} onChange={(event)=>setLinkDraft({...linkDraft,y:Number(event.target.value)})}/></label>
-            <label>W<input type="number" min="0.01" max="1" step="0.01" value={linkDraft.width} onChange={(event)=>setLinkDraft({...linkDraft,width:Number(event.target.value)})}/></label>
-            <label>H<input type="number" min="0.01" max="1" step="0.01" value={linkDraft.height} onChange={(event)=>setLinkDraft({...linkDraft,height:Number(event.target.value)})}/></label>
-          </div>
-          <button disabled={mutating||(linkDraft.type==='external'&&!linkDraft.url.trim())} onClick={()=>void applyLink()}>Add link annotation</button>
-          <small>External links allow only HTTP, HTTPS and mailto. Internal links target a page with a PDF Fit destination. Coordinates are normalized from the bottom-left.</small>
-        </div>
-
-        <div className="pdf-pane-title">Page labels</div>
-        <div className="pdf-edit-form">
-          <div className="pdf-feature-list">
-            <b><Tags size={12}/> {pageLabelRanges.length} range{pageLabelRanges.length===1?'':'s'}</b>
-            {pageLabelRanges.map((range,index)=><div className="pdf-label-range" key={index}>
-              <label>Start<input type="number" min="1" max={pageCount} step="1" value={range.startPage} onChange={(event)=>updatePageLabelRange(index,{startPage:Number(event.target.value)})}/></label>
-              <label>Style<select value={range.style} onChange={(event)=>updatePageLabelRange(index,{style:event.target.value as typeof range.style})}><option value="decimal">1, 2, 3</option><option value="roman-upper">I, II, III</option><option value="roman-lower">i, ii, iii</option><option value="letters-upper">A, B, C</option><option value="letters-lower">a, b, c</option></select></label>
-              <label>Prefix<input value={range.prefix} onChange={(event)=>updatePageLabelRange(index,{prefix:event.target.value})}/></label>
-              <label>Number<input type="number" min="1" max="999999999" step="1" value={range.startNumber} onChange={(event)=>updatePageLabelRange(index,{startNumber:Number(event.target.value)})}/></label>
-              <button aria-label="Remove page-label range" disabled={pageLabelRanges.length===1} onClick={()=>setPageLabelRanges((current)=>current.filter((_,rangeIndex)=>rangeIndex!==index))}><X size={12}/></button>
-            </div>)}
-          </div>
-          <button onClick={()=>setPageLabelRanges((current)=>[...current,{startPage:Math.min(pageCount,Math.max(1,currentPage)),style:'decimal',prefix:'',startNumber:1}])}><PlusCircle size={13}/> Add label range</button>
-          <button disabled={mutating||!pageLabelRanges.length} onClick={()=>void applyPageLabels()}>Apply page labels</button>
-          <small>Ranges are sorted by physical start page and written as a PDF /PageLabels number tree. Labels affect navigation/display semantics rather than page content.</small>
-        </div>
-
-        <div className="pdf-pane-title">Edit current page</div>
-        <div className="pdf-edit-form">
-          <label><Type size={13}/> Add text<textarea value={textOverlay.text} onChange={(event)=>setTextOverlay({...textOverlay,text:event.target.value})} placeholder="Text to place on the current page"/></label>
-          <div className="pdf-coordinate-grid">
-            <label>X<input type="number" min="0" max="1" step="0.01" value={textOverlay.x} onChange={(event)=>setTextOverlay({...textOverlay,x:Number(event.target.value)})}/></label>
-            <label>Y<input type="number" min="0" max="1" step="0.01" value={textOverlay.y} onChange={(event)=>setTextOverlay({...textOverlay,y:Number(event.target.value)})}/></label>
-            <label>Pt<input type="number" min="4" max="144" step="1" value={textOverlay.size} onChange={(event)=>setTextOverlay({...textOverlay,size:Number(event.target.value)})}/></label>
-          </div>
-          <button disabled={mutating||!textOverlay.text.trim()} onClick={()=>void mutate('Added permanent text to the PDF.',bytes=>addPdfTextOverlay(bytes,{pageNumber:currentPage,...textOverlay}),currentPage)}>Place text</button>
-
-          <label><Square size={13}/> Rectangle<select value={shapeOverlay.mode} onChange={(event)=>setShapeOverlay({...shapeOverlay,mode:event.target.value as 'highlight'|'outline'})}><option value="highlight">Highlight</option><option value="outline">Outline</option></select></label>
-          <div className="pdf-coordinate-grid">
-            <label>X<input type="number" min="0" max="1" step="0.01" value={shapeOverlay.x} onChange={(event)=>setShapeOverlay({...shapeOverlay,x:Number(event.target.value)})}/></label>
-            <label>Y<input type="number" min="0" max="1" step="0.01" value={shapeOverlay.y} onChange={(event)=>setShapeOverlay({...shapeOverlay,y:Number(event.target.value)})}/></label>
-            <label>W<input type="number" min="0.01" max="1" step="0.01" value={shapeOverlay.width} onChange={(event)=>setShapeOverlay({...shapeOverlay,width:Number(event.target.value)})}/></label>
-            <label>H<input type="number" min="0.01" max="1" step="0.01" value={shapeOverlay.height} onChange={(event)=>setShapeOverlay({...shapeOverlay,height:Number(event.target.value)})}/></label>
-          </div>
-          <button disabled={mutating} onClick={()=>void mutate(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage)}>Apply rectangle</button>
-          <small>Coordinates are normalized 0–1 from the page’s bottom-left corner. A later visual drag/selection layer will replace manual coordinate entry.</small>
-        </div>
-
-        <div className="pdf-pane-title">Comments</div>
-        <div className="pdf-edit-form">
-          <label><MessageSquare size={13}/> Sticky-note comment<textarea value={commentDraft.text} onChange={(event)=>setCommentDraft({...commentDraft,text:event.target.value})} placeholder="Comment text"/></label>
-          <label>Author<input value={commentDraft.author} onChange={(event)=>setCommentDraft({...commentDraft,author:event.target.value})}/></label>
-          <div className="pdf-coordinate-grid">
-            <label>X<input type="number" min="0" max="1" step="0.01" value={commentDraft.x} onChange={(event)=>setCommentDraft({...commentDraft,x:Number(event.target.value)})}/></label>
-            <label>Y<input type="number" min="0" max="1" step="0.01" value={commentDraft.y} onChange={(event)=>setCommentDraft({...commentDraft,y:Number(event.target.value)})}/></label>
-          </div>
-          <button disabled={mutating||!commentDraft.text.trim()} onClick={()=>void addComment()}>Add PDF comment</button>
-          <small>This creates a real PDF /Text annotation. PDF.js canvas rendering does not yet provide a visual annotation layer, but the comment is embedded in the exported document and participates in Undo/Redo.</small>
-        </div>
-
-        <div className="pdf-pane-title">Forms</div>
-        <div className="pdf-edit-form">
-          <label><ListChecks size={13}/> Field type<select value={formDraft.type} onChange={(event)=>setFormDraft({...formDraft,type:event.target.value as 'text'|'checkbox'})}><option value="text">Text field</option><option value="checkbox">Checkbox</option></select></label>
-          <label>Name<input value={formDraft.name} onChange={(event)=>setFormDraft({...formDraft,name:event.target.value})} placeholder="field_name"/></label>
-          {formDraft.type==='text'&&<label>Default value<input value={formDraft.defaultValue} onChange={(event)=>setFormDraft({...formDraft,defaultValue:event.target.value})}/></label>}
-          <div className="pdf-coordinate-grid">
-            <label>X<input type="number" min="0" max="1" step="0.01" value={formDraft.x} onChange={(event)=>setFormDraft({...formDraft,x:Number(event.target.value)})}/></label>
-            <label>Y<input type="number" min="0" max="1" step="0.01" value={formDraft.y} onChange={(event)=>setFormDraft({...formDraft,y:Number(event.target.value)})}/></label>
-            {formDraft.type==='text'
-              ? <>
-                  <label>W<input type="number" min="0.01" max="1" step="0.01" value={formDraft.width} onChange={(event)=>setFormDraft({...formDraft,width:Number(event.target.value)})}/></label>
-                  <label>H<input type="number" min="0.01" max="1" step="0.01" value={formDraft.height} onChange={(event)=>setFormDraft({...formDraft,height:Number(event.target.value)})}/></label>
-                </>
-              : <label>Size<input type="number" min="0.01" max="0.25" step="0.01" value={formDraft.size} onChange={(event)=>setFormDraft({...formDraft,size:Number(event.target.value)})}/></label>}
-          </div>
-          <button disabled={mutating} onClick={()=>void addFormField()}>Add form field</button>
-          <div className="pdf-feature-list">
-            <b>{formFields.length} AcroForm field{formFields.length===1?'':'s'}</b>
-            {formFields.slice(0,12).map((field)=><span key={field}>{field}</span>)}
-            {formFields.length>12&&<span>+ {formFields.length-12} more</span>}
-          </div>
-          <button disabled={mutating||!formFields.length} onClick={()=>void flattenForm()}><FileCheck2 size={13}/> Flatten form fields</button>
-          <small>Flattening permanently paints field appearances into the PDF and removes interactive fields. It is undoable only inside the current MALENJO tab history until export/close.</small>
-        </div>
-
-        <div className="pdf-pane-title">Attachments</div>
-        <div className="pdf-edit-form">
-          <button disabled={mutating} onClick={()=>attachmentInputRef.current?.click()}><Paperclip size={13}/> Embed file attachment…</button>
-          <small>Embedded attachments are stored inside the PDF. MALENJO currently limits each new attachment to 50 MB; attachment listing/removal is a later completeness item.</small>
-        </div>
-
-        <div className="pdf-pane-title">Headers / footers</div>
-        <div className="pdf-edit-form">
-          <label>Scope<select value={headerFooterDraft.scope} onChange={(event)=>setHeaderFooterDraft({...headerFooterDraft,scope:event.target.value as 'selected'|'all'})}><option value="selected">Selected pages</option><option value="all">All pages</option></select></label>
-          <label>Header<input value={headerFooterDraft.header} onChange={(event)=>setHeaderFooterDraft({...headerFooterDraft,header:event.target.value})} placeholder="Optional header · {page} {pages} {date}"/></label>
-          <label>Footer<input value={headerFooterDraft.footer} onChange={(event)=>setHeaderFooterDraft({...headerFooterDraft,footer:event.target.value})} placeholder="Page {page} of {pages}"/></label>
-          <div className="pdf-coordinate-grid">
-            <label>Pt<input type="number" min="4" max="72" step="1" value={headerFooterDraft.fontSize} onChange={(event)=>setHeaderFooterDraft({...headerFooterDraft,fontSize:Number(event.target.value)})}/></label>
-            <label>Margin<input type="number" min="0" max="180" step="1" value={headerFooterDraft.margin} onChange={(event)=>setHeaderFooterDraft({...headerFooterDraft,margin:Number(event.target.value)})}/></label>
-          </div>
-          <label>Header align<select value={headerFooterDraft.headerAlign} onChange={(event)=>setHeaderFooterDraft({...headerFooterDraft,headerAlign:event.target.value as 'left'|'center'|'right'})}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
-          <label>Footer align<select value={headerFooterDraft.footerAlign} onChange={(event)=>setHeaderFooterDraft({...headerFooterDraft,footerAlign:event.target.value as 'left'|'center'|'right'})}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
-          <button disabled={mutating||!(headerFooterDraft.header.trim()||headerFooterDraft.footer.trim())} onClick={()=>void applyHeaderFooter()}>Apply header / footer</button>
-          <small>Supported tokens: <code>{'{page}'}</code>, <code>{'{pages}'}</code>, <code>{'{date}'}</code>. This writes permanent PDF text and is tracked in Undo/Redo.</small>
-        </div>
-
-        <div className="pdf-pane-title">Bates numbering</div>
-        <div className="pdf-edit-form">
-          <label>Scope<select value={batesDraft.scope} onChange={(event)=>setBatesDraft({...batesDraft,scope:event.target.value as 'selected'|'all'})}><option value="selected">Selected pages</option><option value="all">All pages</option></select></label>
-          <div className="pdf-coordinate-grid">
-            <label>Prefix<input value={batesDraft.prefix} onChange={(event)=>setBatesDraft({...batesDraft,prefix:event.target.value})}/></label>
-            <label>Start<input type="number" min="0" max="999999999" step="1" value={batesDraft.startNumber} onChange={(event)=>setBatesDraft({...batesDraft,startNumber:Number(event.target.value)})}/></label>
-            <label>Digits<input type="number" min="1" max="12" step="1" value={batesDraft.digits} onChange={(event)=>setBatesDraft({...batesDraft,digits:Number(event.target.value)})}/></label>
-          </div>
-          <label>Suffix<input value={batesDraft.suffix} onChange={(event)=>setBatesDraft({...batesDraft,suffix:event.target.value})}/></label>
-          <label>Position<select value={batesDraft.position} onChange={(event)=>setBatesDraft({...batesDraft,position:event.target.value as typeof batesDraft.position})}>
-            <option value="top-left">Top left</option><option value="top-center">Top center</option><option value="top-right">Top right</option>
-            <option value="bottom-left">Bottom left</option><option value="bottom-center">Bottom center</option><option value="bottom-right">Bottom right</option>
-          </select></label>
-          <div className="pdf-coordinate-grid">
-            <label>Pt<input type="number" min="4" max="72" step="1" value={batesDraft.fontSize} onChange={(event)=>setBatesDraft({...batesDraft,fontSize:Number(event.target.value)})}/></label>
-            <label>Margin<input type="number" min="0" max="180" step="1" value={batesDraft.margin} onChange={(event)=>setBatesDraft({...batesDraft,margin:Number(event.target.value)})}/></label>
-          </div>
-          <button disabled={mutating} onClick={()=>void applyBates()}>Apply Bates numbers</button>
-          <small>Preview: <code>{batesDraft.prefix}{String(batesDraft.startNumber).padStart(Math.max(1,batesDraft.digits),'0')}{batesDraft.suffix}</code>. Numbering follows selected-page order when scope is Selected pages.</small>
-        </div>
-
-        <div className="pdf-pane-title">Page boxes</div>
-        <div className="pdf-edit-form">
-          <label>Scope<select value={pageBoxDraft.scope} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,scope:event.target.value as 'selected'|'all'})}><option value="selected">Selected pages</option><option value="all">All pages</option></select></label>
-          <label>Box<select value={pageBoxDraft.box} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,box:event.target.value as 'crop'|'trim'|'bleed'|'art'})}><option value="crop">Crop box</option><option value="trim">Trim box</option><option value="bleed">Bleed box</option><option value="art">Art box</option></select></label>
-          <div className="pdf-coordinate-grid">
-            <label>Top<input type="number" min="0" max="720" step="1" value={pageBoxDraft.top} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,top:Number(event.target.value)})}/></label>
-            <label>Right<input type="number" min="0" max="720" step="1" value={pageBoxDraft.right} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,right:Number(event.target.value)})}/></label>
-            <label>Bottom<input type="number" min="0" max="720" step="1" value={pageBoxDraft.bottom} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,bottom:Number(event.target.value)})}/></label>
-            <label>Left<input type="number" min="0" max="720" step="1" value={pageBoxDraft.left} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,left:Number(event.target.value)})}/></label>
-          </div>
-          <button disabled={mutating} onClick={()=>void applyPageBox()}>Apply page box</button>
-          <small>Margins are points inset from each page’s MediaBox. Invalid/inverted boxes are rejected; the operation is undoable before export.</small>
-        </div>
-
         <div className="pdf-pane-title">Page tools</div>
         <div className="pdf-page-tools">
-          <button disabled={mutating||operationPages.length>=pageCount} onClick={()=>void mutate(
-            `Deleted ${operationPages.length} selected page(s).`,
-            bytes=>operationPages.length===1?deletePdfPage(bytes,operationPages[0]):deletePdfPages(bytes,operationPages),
-            Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length)),
-          )}>Delete selected</button>
-          <button disabled={mutating||operationPages.length!==1} onClick={()=>void mutate(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)}>Duplicate</button>
-          <button disabled={mutating||operationPages.length!==1||currentPage<=1} onClick={()=>void mutate('Moved page earlier.',bytes=>movePdfPage(bytes,currentPage,currentPage-1),currentPage-1)}>Move earlier</button>
-          <button disabled={mutating||operationPages.length!==1||currentPage>=pageCount} onClick={()=>void mutate('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)}>Move later</button>
-          <button disabled={mutating} onClick={()=>void mutate(
-            `Permanently rotated ${operationPages.length} selected page(s) by 90°.`,
-            bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),
-            operationPages[0],
-          )}>Rotate selected</button>
+          <button disabled={mutating||pageCount<=1} onClick={()=>void mutate(`Deleted page ${currentPage}.`,bytes=>deletePdfPage(bytes,currentPage),Math.min(currentPage,pageCount-1))}>Delete</button>
+          <button disabled={mutating} onClick={()=>void mutate(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)}>Duplicate</button>
+          <button disabled={mutating||currentPage<=1} onClick={()=>void mutate('Moved page earlier.',bytes=>movePdfPage(bytes,currentPage,currentPage-1),currentPage-1)}>Move earlier</button>
+          <button disabled={mutating||currentPage>=pageCount} onClick={()=>void mutate('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)}>Move later</button>
+          <button disabled={mutating} onClick={()=>void mutate(`Permanently rotated page ${currentPage} by 90°.`,bytes=>rotatePdfPagePermanent(bytes,currentPage),currentPage)}>Rotate page</button>
           <button disabled={mutating} onClick={()=>void mutate(`Inserted a blank page after page ${currentPage}.`,bytes=>insertBlankPdfPage(bytes,currentPage),currentPage+1)}>Blank after</button>
-          <button disabled={mutating} onClick={()=>void extractSelected()}>Extract selected</button>
-          <button disabled={mutating} onClick={()=>insertInputRef.current?.click()}>Insert PDF here…</button>
-          <button disabled={mutating||currentPage>=pageCount} onClick={()=>void splitCurrent()}>Split here</button>
+          <button disabled={mutating} onClick={()=>void extractCurrent()}>Extract page</button>
           <button disabled={mutating} onClick={()=>appendInputRef.current?.click()}>Append PDF…</button>
         </div>
-        <div className="pdf-edit-note">Click a thumbnail to select one page; Ctrl/Cmd-click toggles pages and Shift-click selects a range. Mutations use the bounded per-tab Undo/Redo history and never overwrite the source document; use Export to create the edited file.</div>
+        <div className="pdf-edit-note">Page operations rebuild the PDF file and mark this tab modified. They do not overwrite the source document; use Export to create the edited file.</div>
 
         <div className="pdf-pane-title">Performance</div>
         <dl>

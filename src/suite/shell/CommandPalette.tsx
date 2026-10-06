@@ -7,8 +7,6 @@ export interface CommandPaletteItem {
   group: string;
   keywords?: string;
   detail?: string;
-  disabled?: boolean;
-  disabledReason?: string;
   run(): void;
 }
 
@@ -47,9 +45,7 @@ export default function CommandPalette({ open, query, items, onQueryChange, onCl
         setSelected((value) => Math.max(0, value - 1));
       } else if (event.key === 'Enter' && filtered[selected]) {
         event.preventDefault();
-        const item = filtered[selected];
-        if (item.disabled) return;
-        item.run();
+        filtered[selected].run();
         onClose();
       }
     }
@@ -77,13 +73,11 @@ export default function CommandPalette({ open, query, items, onQueryChange, onCl
         {filtered.map((item,index)=><button
           key={item.id}
           className={index===selected?'selected':''}
-          disabled={item.disabled}
-          title={item.disabled ? item.disabledReason : undefined}
           onMouseEnter={()=>setSelected(index)}
-          onClick={()=>{if(item.disabled)return;item.run();onClose();}}
+          onClick={()=>{item.run();onClose();}}
         >
           <span className="command-palette-icon">{item.group==='Open documents'?<FileText size={15}/>:<Command size={15}/>}</span>
-          <span><b>{item.label}</b><small>{item.disabled ? (item.disabledReason || 'Unavailable in the current document state') : (item.detail || item.group)}</small></span>
+          <span><b>{item.label}</b><small>{item.detail || item.group}</small></span>
           <em>{item.group}</em>
         </button>)}
         {!filtered.length && <div className="command-palette-empty">No implemented command matches “{query}”. Missing master-guide features are intentionally not shown as operational commands.</div>}

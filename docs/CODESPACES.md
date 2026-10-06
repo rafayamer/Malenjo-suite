@@ -45,33 +45,27 @@ MALENJO development mode therefore exposes only four constrained same-origin bri
 
 The bridge does **not** expose generic Ollama/llama.cpp paths and does not expose model-pull endpoints.
 
-MALENJO now provides explicit Codespaces helpers.
-
-Runtime only — installs Ollama if required and starts it on loopback without downloading any model:
-
-```bash
-npm run ai:codespace:setup
-```
-
-Reviewed development model — explicitly downloads `qwen3:0.6b`, checks the expected Ollama digest prefix recorded in `third_party/models/MODEL_LICENSES.json`, and runs a local smoke test:
-
-```bash
-npm run ai:codespace:setup:model
-```
-
-Then verify that both a runtime **and at least one model** are available:
+Check the VM before starting MALENJO:
 
 ```bash
 npm run ai:codespace:check
 ```
 
-Finally start MALENJO:
+For Ollama, the expected development sequence is explicit and user-controlled:
 
 ```bash
+# Terminal A — only after Ollama is installed in the Codespace
+ollama serve
+
+# Terminal B — model installation remains a separate explicit action
+ollama pull <model-you-have-reviewed>
+
+# Confirm the runtime/model is visible
+npm run ai:codespace:check
+
+# Start MALENJO
 npm run dev:codespace
 ```
-
-The model helper is opt-in because model weights have separate licensing and disk/resource costs. The current reviewed development profile uses Qwen3 0.6B for a small Codespaces footprint; it is not automatically downloaded during repository setup.
 
 Then open **Malenjo AI → Runtime status**. The UI should report the model(s) returned by the runtime and can send local RAG prompts through the Codespace bridge.
 

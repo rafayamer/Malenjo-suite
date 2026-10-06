@@ -155,21 +155,10 @@ Current correction work on `feat/master-completeness-shell-ai` includes:
 
 No major module is promoted to `complete` by this correction alone.
 
+## Master-spec completeness correction
 
-## Master completeness pass 2B — shell drag/drop / PDF search and overlays
+Phase numbers describe delivery slices, not full product-module completeness. The canonical master README contains 5,945 lines, 382 headings and 1,114 bullet requirements/features (including product, architecture, UI, legal and acceptance requirements). The Phase 1–7 tickets covered only a subset.
 
-Current branch `feat/shell-pdf-completeness-pass-2-final` adds:
+Use `docs/MASTER_SPEC_COVERAGE.md` and GitHub Issue #52 as the completion control plane. Module registry states now distinguish `foundation`, `partial`, `adapter`, `planned` and `complete`. Current Phase 1–7 product modules are not marked complete.
 
-- persistent native drag/drop import and temporary Codespaces/browser drag/drop multi-open;
-- richer multi-document tab close actions;
-- PDF text search with page navigation;
-- permanent PDF text placement and highlight/outline rectangle tools;
-- integration with the bounded PDF Undo/Redo history from PR #33;
-- unit tests for PDF overlay validation/mutation.
-
-This branch must pass frontend, Windows Rust and Codespaces/Linux CI before merge. Shell and PDF remain `partial`.
-
-
-## Codespaces AI bootstrap profile
-
-MALENJO Codespaces development can now explicitly bootstrap a loopback Ollama runtime and, in a separate opt-in step, a small reviewed local development model. The runtime/model setup remains separate from normal application startup and is not a substitute for the full production model-manager requirements.
+The immediate correction branch adds persistent multi-document tabs/session state, browser/Codespaces session files routed through the common Files workspace, and a constrained Codespaces local-AI development bridge while retaining the native Rust AI boundary for desktop builds.
