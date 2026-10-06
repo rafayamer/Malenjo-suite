@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     env,
+    ffi::OsString,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{Mutex, OnceLock},
@@ -101,6 +102,58 @@ fn available_java(app: &AppHandle) -> Option<String> {
             .status()
             .is_ok_and(|status| status.success())
     })
+}
+
+
+fn find_named_file(root: &Path, filename: &str, depth: usize) -> Option<PathBuf> {
+    if depth == 0 || !root.is_dir() {
+        return None;
+    }
+    let entries = std::fs::read_dir(root).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file()
+            && path
+                .file_name()
+                .and_then(|value| value.to_str())
+                .is_some_and(|value| value.eq_ignore_ascii_case(filename))
+        {
+            return Some(path);
+        }
+        if path.is_dir() {
+            if let Some(found) = find_named_file(&path, filename, depth - 1) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+
+fn qpdf_bin_dir(app: &AppHandle) -> Option<PathBuf> {
+    let development = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../provider-packs/qpdf/runtime");
+    if let Some(exe) = find_named_file(&development, if cfg!(windows) { "qpdf.exe" } else { "qpdf" }, 6) {
+        return exe.parent().map(Path::to_path_buf);
+    }
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let packaged = resource_dir.join("provider-packs/qpdf/runtime");
+        if let Some(exe) = find_named_file(&packaged, if cfg!(windows) { "qpdf.exe" } else { "qpdf" }, 6) {
+            return exe.parent().map(Path::to_path_buf);
+        }
+    }
+    None
+}
+
+fn provider_path(app: &AppHandle) -> OsString {
+    let mut paths = Vec::new();
+    if let Some(qpdf) = qpdf_bin_dir(app) {
+        paths.push(qpdf);
+    }
+    if let Some(existing) = env::var_os("PATH") {
+        paths.extend(env::split_paths(&existing));
+    }
+    env::join_paths(paths).unwrap_or_else(|_| env::var_os("PATH").unwrap_or_default())
 }
 
 fn candidate_jar_paths(app: &AppHandle) -> Vec<PathBuf> {
@@ -228,6 +281,7 @@ fn spawn_core(java: &str, jar: &Path, app: &AppHandle) -> Result<(), String> {
         .env("DOCKER_ENABLE_SECURITY", "false")
         .env("SYSTEM_CUSTOMHTMLFILES", "false")
         .env("STIRLING_HOME", &data_dir)
+        .env("PATH", provider_path(app))
         .current_dir(&data_dir)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
