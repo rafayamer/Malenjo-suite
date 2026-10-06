@@ -125,42 +125,65 @@ function isRecord(value:unknown):value is JsonRecord{
   return Boolean(value)&&typeof value==='object'&&!Array.isArray(value);
 }
 
-function refName(ref:string):string{
-  return ref.split('/').at(-1)??ref;
+function decodePointerToken(value:string):string{
+  return value.replace(/~1/g,'/').replace(/~0/g,'~');
 }
+
+function resolvePointer(document:JsonRecord,ref:string):unknown{
+  if(!ref.startsWith('#/'))return undefined;
+  let current:unknown=document;
+  for(const rawToken of ref.slice(2).split('/')){
+    const token=decodePointerToken(rawToken);
+    if(!isRecord(current)||!(token in current))return undefined;
+    current=current[token];
+  }
+  return current;
+}
+
+type ObjectRecord=Record<string,unknown>;
 
 function mergeSchemas(parts:JsonRecord[]):JsonRecord{
   const properties:ObjectRecord={};
   const required=new Set<string>();
   let type:unknown;
+  let description:unknown;
   for(const part of parts){
     if(part.type!==undefined)type=part.type;
+    if(part.description!==undefined)description=part.description;
     if(isRecord(part.properties))Object.assign(properties,part.properties);
-    if(Array.isArray(part.required))for(const item of part.required)if(typeof item==='string')required.add(item);
+    if(Array.isArray(part.required)){
+      for(const item of part.required)if(typeof item==='string')required.add(item);
+    }
   }
-  return {type,properties,required:[...required]};
+  return {type,description,properties,required:[...required]};
 }
 
-type ObjectRecord=Record<string,unknown>;
-
-function resolveSchema(document:JsonRecord,schema:unknown,depth=0):JsonRecord{
-  if(depth>12||!isRecord(schema))return {};
+function resolveSchema(document:JsonRecord,schema:unknown,depth=0,seen=new Set<string>()):JsonRecord{
+  if(depth>16||!isRecord(schema))return {};
   if(typeof schema.$ref==='string'){
-    const name=refName(schema.$ref);
-    const components=isRecord(document.components)?document.components:{};
-    const schemas=isRecord(components.schemas)?components.schemas:{};
-    return resolveSchema(document,schemas[name],depth+1);
+    if(seen.has(schema.$ref))return {};
+    const target=resolvePointer(document,schema.$ref);
+    if(target===undefined)return {};
+    const nextSeen=new Set(seen);
+    nextSeen.add(schema.$ref);
+    const resolved=resolveSchema(document,target,depth+1,nextSeen);
+    const siblings=Object.fromEntries(Object.entries(schema).filter(([key])=>key!=='$ref'));
+    return {...resolved,...siblings};
   }
   if(Array.isArray(schema.allOf)){
-    return mergeSchemas(schema.allOf.map((item)=>resolveSchema(document,item,depth+1)));
+    return {...mergeSchemas(schema.allOf.map((item)=>resolveSchema(document,item,depth+1,new Set(seen)))),...Object.fromEntries(Object.entries(schema).filter(([key])=>key!=='allOf'))};
   }
   if(Array.isArray(schema.oneOf)&&schema.oneOf.length){
-    return resolveSchema(document,schema.oneOf[0],depth+1);
+    return {...resolveSchema(document,schema.oneOf[0],depth+1,new Set(seen)),...Object.fromEntries(Object.entries(schema).filter(([key])=>key!=='oneOf'))};
   }
   if(Array.isArray(schema.anyOf)&&schema.anyOf.length){
-    return resolveSchema(document,schema.anyOf[0],depth+1);
+    return {...resolveSchema(document,schema.anyOf[0],depth+1,new Set(seen)),...Object.fromEntries(Object.entries(schema).filter(([key])=>key!=='anyOf'))};
   }
   return schema;
+}
+
+function resolveObject(document:JsonRecord,value:unknown):JsonRecord{
+  return resolveSchema(document,value);
 }
 
 function titleFromName(name:string):string{
@@ -234,16 +257,17 @@ function operationFields(document:JsonRecord,pathItem:JsonRecord,operation:JsonR
     ...(Array.isArray(operation.parameters)?operation.parameters:[]),
   ];
   for(const raw of params){
-    const parameter=resolveSchema(document,raw);
+    const parameter=resolveObject(document,raw);
     const name=typeof parameter.name==='string'?parameter.name:'';
     if(!name)continue;
     const location=parameter.in==='query'?'query':'form';
     fields.push(fieldFromSchema(document,name,parameter.schema,parameter.required===true,location));
   }
 
-  if(isRecord(operation.requestBody)){
-    const requiredBody=operation.requestBody.required===true;
-    const content=isRecord(operation.requestBody.content)?operation.requestBody.content:{};
+  const requestBody=resolveObject(document,operation.requestBody);
+  if(Object.keys(requestBody).length){
+    const requiredBody=requestBody.required===true;
+    const content=isRecord(requestBody.content)?requestBody.content:{};
     const body=isRecord(content['multipart/form-data'])
       ?content['multipart/form-data']
       :isRecord(content['application/x-www-form-urlencoded'])
@@ -341,7 +365,7 @@ export async function runStirlingOperation(
   });
 }
 
-function extensionForContentType(contentType:string|undefined|null):string{
+function extensionForContentType(contentType:string|undefined|null):string|undefined{
   const value=(contentType??'').toLowerCase();
   if(value.includes('application/pdf'))return 'pdf';
   if(value.includes('application/zip'))return 'zip';
@@ -357,16 +381,35 @@ function extensionForContentType(contentType:string|undefined|null):string{
   if(value.includes('wordprocessingml'))return 'docx';
   if(value.includes('spreadsheetml'))return 'xlsx';
   if(value.includes('presentationml'))return 'pptx';
-  return 'bin';
+  return undefined;
 }
 
 function filenameFromDisposition(disposition:string|undefined|null):string|undefined{
   if(!disposition)return undefined;
   const utf=disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
-  if(utf){
-    try{return decodeURIComponent(utf.replace(/^["']|["']$/g,''));}catch{return utf;}
-  }
-  return disposition.match(/filename="?([^";]+)"?/i)?.[1];
+  const raw=utf
+    ?(()=>{try{return decodeURIComponent(utf.replace(/^["']|["']$/g,''));}catch{return utf;}})()
+    :disposition.match(/filename="?([^";]+)"?/i)?.[1];
+  if(!raw)return undefined;
+  const basename=raw.replace(/\\/g,'/').split('/').at(-1)?.trim();
+  if(!basename||basename==='.'||basename==='..')return undefined;
+  return basename.replace(/[<>:"|?*\u0000-\u001F]/g,'_').slice(0,180);
+}
+
+function extensionFromMagic(bytes:number[]):string|undefined{
+  if(bytes.length>=5&&String.fromCharCode(...bytes.slice(0,5))==='%PDF-')return 'pdf';
+  if(bytes.length>=4&&bytes[0]===0x50&&bytes[1]===0x4b&&(bytes[2]===0x03||bytes[2]===0x05||bytes[2]===0x07))return 'zip';
+  if(bytes.length>=8&&bytes.slice(0,8).join(',')==='137,80,78,71,13,10,26,10')return 'png';
+  if(bytes.length>=3&&bytes[0]===0xff&&bytes[1]===0xd8&&bytes[2]===0xff)return 'jpg';
+  if(bytes.length>=4&&String.fromCharCode(...bytes.slice(0,4))==='RIFF')return 'webp';
+  return undefined;
+}
+
+function outputFilename(response:StirlingResponse,fallbackBaseName:string):string{
+  const disposition=filenameFromDisposition(response.contentDisposition);
+  if(disposition)return disposition;
+  const extension=extensionForContentType(response.contentType)??extensionFromMagic(response.bytes)??'bin';
+  return `${fallbackBaseName}.${extension}`;
 }
 
 export function responseIsPdf(response:StirlingResponse):boolean{
@@ -378,9 +421,7 @@ export async function saveStirlingResponse(
   response:StirlingResponse,
   fallbackBaseName='malenjo-pdf-tool-output',
 ):Promise<string|null>{
-  const extension=extensionForContentType(response.contentType);
-  const proposed=filenameFromDisposition(response.contentDisposition)
-    ??`${fallbackBaseName}.${extension==='bin'?'zip':extension}`;
+  const proposed=outputFilename(response,fallbackBaseName);
   const bytes=Uint8Array.from(response.bytes);
 
   if(!isTauri()){
