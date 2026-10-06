@@ -426,3 +426,20 @@ The Codespaces bridge already routes only approved local status/chat endpoints. 
 - CI syntax-validates both shell helpers and JSON-validates the model manifest without downloading external software or weights.
 
 This remains a development profile, not the full master AI model manager. Production model import/download, license acceptance, checksums, resource estimation, policy and per-feature model assignment remain open under the AI completeness workstream.
+
+
+## Completion pass 3 — PDF comments, forms and attachments
+
+Implemented on `feat/pdf-completeness-comments-forms-attachments`:
+
+- genuine PDF `/Text` sticky-note annotations;
+- AcroForm text fields and checkboxes;
+- interactive form-field inventory;
+- form flattening;
+- embedded file attachments with per-file limits;
+- command-bus actions for attachment embedding and form flattening;
+- all mutations use the existing bounded per-tab Undo/Redo history.
+
+Still open in these families: annotation rendering/edit/reply/resolve/delete, attachment inventory/extract/remove/scan, richer AcroForm field types/properties/signature fields, visual field placement, form data import/export, XFA policy and deeper compatibility testing.
+
+The PDF module remains `partial`.

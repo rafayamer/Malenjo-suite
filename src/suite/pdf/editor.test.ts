@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { PDFDocument } from 'pdf-lib';
+import { PDFArray, PDFDict, PDFDocument, PDFName } from 'pdf-lib';
 import {
-  addPdfRectangleOverlay, addPdfTextOverlay, appendPdf, deletePdfPage, deletePdfPages, duplicatePdfPage, extractPdfPage, extractPdfPages,
-  insertBlankPdfPage, insertPdfAfter, movePdfPage, rotatePdfPagePermanent, rotatePdfPagesPermanent, splitPdfAtPage,
+  addPdfCheckBox, addPdfCommentAnnotation, addPdfRectangleOverlay, addPdfTextField, addPdfTextOverlay, appendPdf, attachFileToPdf,
+  deletePdfPage, deletePdfPages, duplicatePdfPage, extractPdfPage, extractPdfPages, flattenPdfForm, insertBlankPdfPage,
+  insertPdfAfter, listPdfFormFields, movePdfPage, rotatePdfPagePermanent, rotatePdfPagesPermanent, splitPdfAtPage,
 } from './editor';
 
 async function sample(pages=3):Promise<Uint8Array>{
@@ -79,6 +80,52 @@ describe('PDF mutation core',()=>{
     expect(await count(withText)).toBe(2);
     const withHighlight=await addPdfRectangleOverlay(withText,{pageNumber:1,x:0.1,y:0.7,width:0.3,height:0.08,mode:'highlight'});
     expect(await count(withHighlight)).toBe(2);
+  });
+
+  it('creates a real PDF text-comment annotation',async()=>{
+    const bytes=await addPdfCommentAnnotation(await sample(1),{
+      pageNumber:1,
+      text:'Review this clause',
+      author:'Student Reviewer',
+      x:0.2,
+      y:0.75,
+    });
+    const pdf=await PDFDocument.load(bytes);
+    const annots=pdf.getPage(0).node.lookupMaybe(PDFName.of('Annots'),PDFArray);
+    expect(annots).toBeDefined();
+    expect(annots?.size()).toBe(1);
+  });
+
+  it('creates AcroForm fields and can flatten them',async()=>{
+    let bytes=await addPdfTextField(await sample(1),{
+      pageNumber:1,name:'student_name',x:0.1,y:0.75,width:0.5,height:0.08,defaultValue:'Rafay',
+    });
+    bytes=await addPdfCheckBox(bytes,{
+      pageNumber:1,name:'approved',x:0.1,y:0.62,size:0.06,checked:true,
+    });
+    expect(await listPdfFormFields(bytes)).toEqual(['student_name','approved']);
+    const flattened=await flattenPdfForm(bytes);
+    expect(await listPdfFormFields(flattened)).toEqual([]);
+  });
+
+  it('embeds an attachment into the PDF name tree',async()=>{
+    const bytes=await attachFileToPdf(await sample(1),{
+      name:'notes.txt',
+      bytes:new TextEncoder().encode('MALENJO attachment test'),
+      mimeType:'text/plain',
+      description:'Synthetic test attachment',
+    });
+    const pdf=await PDFDocument.load(bytes);
+    const names=pdf.catalog.lookupMaybe(PDFName.of('Names'),PDFDict);
+    const embedded=names?.lookupMaybe(PDFName.of('EmbeddedFiles'),PDFDict);
+    expect(embedded).toBeDefined();
+  });
+
+  it('rejects unsafe form/comment/attachment inputs',async()=>{
+    const bytes=await sample(1);
+    await expect(addPdfCommentAnnotation(bytes,{pageNumber:1,text:'',x:0.2,y:0.2})).rejects.toThrow(/empty/i);
+    await expect(addPdfTextField(bytes,{pageNumber:1,name:'x',x:0.9,y:0.1,width:0.2,height:0.1})).rejects.toThrow(/inside the page/i);
+    await expect(attachFileToPdf(bytes,{name:'empty.bin',bytes:new Uint8Array()})).rejects.toThrow(/empty/i);
   });
 
   it('rejects overlay coordinates outside the page',async()=>{

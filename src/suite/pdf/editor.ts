@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, degrees, rgb } from 'pdf-lib';
+import { PDFArray, PDFDocument, PDFName, StandardFonts, degrees, rgb } from 'pdf-lib';
 
 function requirePage(pageNumber:number,pageCount:number):number{
   if(!Number.isInteger(pageNumber)||pageNumber<1||pageNumber>pageCount){
@@ -222,5 +222,163 @@ export async function addPdfRectangleOverlay(bytes:Uint8Array,overlay:PdfRectang
       color:rgb(1,0.88,0.18),opacity,
     });
   }
+  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+}
+
+
+export interface PdfCommentAnnotation {
+  pageNumber:number;
+  text:string;
+  author?:string;
+  x:number;
+  y:number;
+}
+
+function safeFieldName(value:string,prefix:string):string{
+  const normalized=value.trim().replace(/[^A-Za-z0-9_.-]+/g,'_').slice(0,80);
+  return normalized||`${prefix}_${Date.now().toString(36)}`;
+}
+
+export async function addPdfCommentAnnotation(
+  bytes:Uint8Array,
+  comment:PdfCommentAnnotation,
+):Promise<Uint8Array>{
+  const pdf=await load(bytes);
+  const page=pdf.getPage(requirePage(comment.pageNumber,pdf.getPageCount()));
+  const text=comment.text.replace(/[\u0000-\u001F]/g,' ').trim().slice(0,4000);
+  if(!text)throw new Error('Comment text is empty.');
+  const author=(comment.author??'MALENJO User').replace(/[\u0000-\u001F]/g,' ').trim().slice(0,160)||'MALENJO User';
+  const x=normalized(comment.x,'Comment X');
+  const y=normalized(comment.y,'Comment Y');
+  const {width,height}=page.getSize();
+  const left=Math.min(width-24,Math.max(0,x*width));
+  const bottom=Math.min(height-24,Math.max(0,y*height));
+  const annotsKey=PDFName.of('Annots');
+  let annots=page.node.lookupMaybe(annotsKey,PDFArray);
+  if(!annots){
+    annots=pdf.context.obj([]);
+    page.node.set(annotsKey,annots);
+  }
+  const annotation=pdf.context.obj({
+    Type:PDFName.of('Annot'),
+    Subtype:PDFName.of('Text'),
+    Rect:[left,bottom,left+22,bottom+22],
+    Contents:text,
+    T:author,
+    Name:PDFName.of('Comment'),
+    C:[1,0.82,0.16],
+    F:4,
+    Open:false,
+  });
+  annots.push(pdf.context.register(annotation));
+  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+}
+
+export interface PdfTextFieldSpec {
+  pageNumber:number;
+  name:string;
+  x:number;
+  y:number;
+  width:number;
+  height:number;
+  defaultValue?:string;
+}
+
+export async function addPdfTextField(bytes:Uint8Array,spec:PdfTextFieldSpec):Promise<Uint8Array>{
+  const pdf=await load(bytes);
+  const page=pdf.getPage(requirePage(spec.pageNumber,pdf.getPageCount()));
+  const x=normalized(spec.x,'Field X');
+  const y=normalized(spec.y,'Field Y');
+  const widthFraction=normalized(spec.width,'Field width');
+  const heightFraction=normalized(spec.height,'Field height');
+  if(widthFraction<=0||heightFraction<=0||x+widthFraction>1||y+heightFraction>1){
+    throw new Error('Form field must have positive size and remain inside the page.');
+  }
+  const form=pdf.getForm();
+  const name=safeFieldName(spec.name,'text');
+  if(form.getFieldMaybe(name))throw new Error(`A form field named "${name}" already exists.`);
+  const field=form.createTextField(name);
+  if(spec.defaultValue)field.setText(spec.defaultValue.slice(0,2000));
+  const {width,height}=page.getSize();
+  field.addToPage(page,{
+    x:x*width,
+    y:y*height,
+    width:widthFraction*width,
+    height:heightFraction*height,
+    borderWidth:1,
+    borderColor:rgb(0.08,0.32,0.56),
+    backgroundColor:rgb(0.98,0.99,1),
+    textColor:rgb(0.05,0.08,0.12),
+  });
+  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+}
+
+export interface PdfCheckBoxSpec {
+  pageNumber:number;
+  name:string;
+  x:number;
+  y:number;
+  size:number;
+  checked?:boolean;
+}
+
+export async function addPdfCheckBox(bytes:Uint8Array,spec:PdfCheckBoxSpec):Promise<Uint8Array>{
+  const pdf=await load(bytes);
+  const page=pdf.getPage(requirePage(spec.pageNumber,pdf.getPageCount()));
+  const x=normalized(spec.x,'Checkbox X');
+  const y=normalized(spec.y,'Checkbox Y');
+  const size=normalized(spec.size,'Checkbox size');
+  if(size<=0||x+size>1||y+size>1)throw new Error('Checkbox must remain inside the page.');
+  const form=pdf.getForm();
+  const name=safeFieldName(spec.name,'check');
+  if(form.getFieldMaybe(name))throw new Error(`A form field named "${name}" already exists.`);
+  const field=form.createCheckBox(name);
+  const {width,height}=page.getSize();
+  const points=Math.max(10,Math.min(width,height)*size);
+  field.addToPage(page,{
+    x:x*width,
+    y:y*height,
+    width:points,
+    height:points,
+    borderWidth:1,
+    borderColor:rgb(0.08,0.32,0.56),
+    backgroundColor:rgb(0.98,0.99,1),
+  });
+  if(spec.checked)field.check();
+  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+}
+
+export async function flattenPdfForm(bytes:Uint8Array):Promise<Uint8Array>{
+  const pdf=await load(bytes);
+  const form=pdf.getForm();
+  if(!form.getFields().length)throw new Error('This PDF contains no AcroForm fields to flatten.');
+  form.flatten();
+  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+}
+
+export async function listPdfFormFields(bytes:Uint8Array):Promise<string[]>{
+  const pdf=await load(bytes);
+  return pdf.getForm().getFields().map((field)=>field.getName());
+}
+
+export interface PdfAttachmentSpec {
+  name:string;
+  bytes:Uint8Array;
+  mimeType?:string;
+  description?:string;
+}
+
+export async function attachFileToPdf(bytes:Uint8Array,spec:PdfAttachmentSpec):Promise<Uint8Array>{
+  const pdf=await load(bytes);
+  const name=spec.name.replace(/[\\/\u0000-\u001F]/g,'_').trim().slice(0,180);
+  if(!name)throw new Error('Attachment name is empty.');
+  if(!spec.bytes.length)throw new Error('Attachment is empty.');
+  if(spec.bytes.length>50*1024*1024)throw new Error('Attachment exceeds the 50 MB per-file safety limit.');
+  await pdf.attach(Uint8Array.from(spec.bytes),name,{
+    mimeType:(spec.mimeType||'application/octet-stream').slice(0,120),
+    description:(spec.description||'Embedded by MALENJO').slice(0,500),
+    creationDate:new Date(),
+    modificationDate:new Date(),
+  });
   return Uint8Array.from(await pdf.save({useObjectStreams:false}));
 }
