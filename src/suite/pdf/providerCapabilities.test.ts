@@ -45,10 +45,8 @@ describe('PDF provider capability resolver',()=>{
     expect(compress.providerId).toBe('stirling-core');
   });
 
-  it('does not advertise Ghostscript-only operations without an approved provider',()=>{
+  it('does not advertise genuinely Ghostscript-only vector operations without an approved provider',()=>{
     for(const path of [
-      '/api/v1/misc/replace-invert-pdf',
-      '/api/v1/misc/scanner-effect',
       '/api/v1/convert/pdf-to-vector',
       '/api/v1/convert/vector-to-pdf',
     ]){
@@ -57,6 +55,37 @@ describe('PDF provider capability resolver',()=>{
       expect(result.providerId).toBe('ghostscript');
       expect(result.disabledReason).toMatch(/not bundled/i);
     }
+  });
+
+  it('keeps Scanner Effect and non-CMYK Replace/Invert modes on open-core Java/PDFBox',()=>{
+    const scanner=resolvePdfProviderCapability(operation('/api/v1/misc/scanner-effect','scannerEffect'),[]);
+    const replace=resolvePdfProviderCapability(operation('/api/v1/misc/replace-invert-pdf','replaceInvertPdf'),[]);
+    expect(scanner).toEqual(expect.objectContaining({available:true,providerId:'stirling-core'}));
+    expect(replace).toEqual(expect.objectContaining({available:true,providerId:'stirling-core'}));
+
+    const [resolved]=applyPdfProviderCapabilities([{
+      id:'replaceInvertPdf',
+      path:'/api/v1/misc/replace-invert-pdf',
+      method:'POST',
+      summary:'Replace-Invert Color PDF',
+      description:'',
+      tags:[],
+      fields:[{
+        name:'replaceAndInvertOption',
+        label:'Replace And Invert Option',
+        kind:'string',
+        required:true,
+        location:'form',
+        enumValues:['HIGH_CONTRAST_COLOR','CUSTOM_COLOR','FULL_INVERSION','COLOR_SPACE_CONVERSION'],
+        defaultValue:'HIGH_CONTRAST_COLOR',
+      }],
+      category:'edit',
+      capability:replace,
+    }],[]);
+    expect(resolved.fields[0].enumValues).toEqual([
+      'HIGH_CONTRAST_COLOR','CUSTOM_COLOR','FULL_INVERSION',
+    ]);
+    expect(resolved.fields[0].description).toMatch(/Ghostscript/i);
   });
 
   it('normalizes Stirling slash paths, camelCase ids and spaced summaries before provider gating',()=>{
