@@ -1,7 +1,12 @@
 import type { OfficeModel } from './ooxml';
 
+export interface OfficeHistoryEntry {
+  model: OfficeModel;
+  dirty: boolean;
+}
+
 export interface OfficeHistory {
-  entries: OfficeModel[];
+  entries: OfficeHistoryEntry[];
   cursor: number;
   maxEntries: number;
 }
@@ -10,8 +15,16 @@ function cloneModel(model: OfficeModel): OfficeModel {
   return structuredClone(model);
 }
 
+function cloneEntry(entry: OfficeHistoryEntry): OfficeHistoryEntry {
+  return { model:cloneModel(entry.model), dirty:entry.dirty };
+}
+
 export function createOfficeHistory(initial: OfficeModel, maxEntries = 80): OfficeHistory {
-  return { entries:[cloneModel(initial)], cursor:0, maxEntries:Math.max(2,maxEntries) };
+  return {
+    entries:[{ model:cloneModel(initial), dirty:false }],
+    cursor:0,
+    maxEntries:Math.max(2,maxEntries),
+  };
 }
 
 export function canUndoOfficeHistory(history: OfficeHistory): boolean {
@@ -22,13 +35,13 @@ export function canRedoOfficeHistory(history: OfficeHistory): boolean {
   return history.cursor < history.entries.length - 1;
 }
 
-export function currentOfficeHistory(history: OfficeHistory): OfficeModel {
-  return cloneModel(history.entries[history.cursor]);
+export function currentOfficeHistory(history: OfficeHistory): OfficeHistoryEntry {
+  return cloneEntry(history.entries[history.cursor]);
 }
 
 export function recordOfficeHistory(history: OfficeHistory, next: OfficeModel): OfficeHistory {
   const prefix = history.entries.slice(0, history.cursor + 1);
-  const entries = [...prefix, cloneModel(next)];
+  const entries = [...prefix, { model:cloneModel(next), dirty:true }];
   const overflow = Math.max(0, entries.length - history.maxEntries);
   const bounded = overflow ? entries.slice(overflow) : entries;
   return {
