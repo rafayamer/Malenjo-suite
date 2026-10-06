@@ -33,12 +33,12 @@ No module is complete merely because its navigation entry exists. Completion req
 
 | Requirement | Component | Implementation | Test/evidence | Status |
 |---|---|---|---|---|
-| Narrow icon rail + expandable panel | PDF Workspace | 58 px icon rail + 224 px expandable panel in `PdfWorkspace.tsx` / `theme.css` | `leftNavigation.test.ts`; source-truth audit | Implemented; CI pending |
-| Canonical PDF panel set | PDF Workspace | Pages / Bookmarks / Attachments / Layers / Signatures / Comments / Search model in `leftNavigation.ts` | exact-set regression test | Implemented; CI pending |
-| Operational existing panel functions | PDF Workspace | Pages thumbnails/selection, Search, Comments, attachment embed, signature-field inventory | existing PDF tests + new navigation regression | Implemented; CI pending |
+| Narrow icon rail + expandable panel | PDF Workspace | 58 px icon rail + 224 px expandable panel in `PdfWorkspace.tsx` / `theme.css` | `leftNavigation.test.ts`; source-truth audit | Verified in PR #64 / CI #193 |
+| Canonical PDF panel set | PDF Workspace | Pages / Bookmarks / Attachments / Layers / Signatures / Comments / Search model in `leftNavigation.ts` | exact-set regression test | Verified in PR #64 / CI #193 |
+| Operational existing panel functions | PDF Workspace | Pages thumbnails/selection, Search, Comments, attachment embed, signature-field inventory | existing PDF tests + new navigation regression | Verified in PR #64 / CI #193 |
 | Honest unsupported nested features | PDF Workspace | Bookmarks/Layers render explicit unavailable state; no fake controls | audit/code review | Implemented |
-| Collapsible suite navigation | Shell | application sidebar collapse to 60 px rail | build/typecheck + audit | Implemented; CI pending |
-| Collapsible PDF navigation | PDF Workspace | independent panel collapse to 58 px rail | build/typecheck + audit | Implemented; CI pending |
+| Collapsible suite navigation | Shell | application sidebar collapse to 60 px rail | build/typecheck + audit | Verified in PR #64 / CI #193 |
+| Collapsible PDF navigation | PDF Workspace | independent panel collapse to 58 px rail | build/typecheck + audit | Verified in PR #64 / CI #193 |
 | Detailed audit | Documentation | `docs/audits/UI-53.6-LEFT-NAVIGATION.md` | canonical README SHA + lines recorded | Implemented |
 
 ## Phase 1 traceability
