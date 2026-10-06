@@ -211,3 +211,10 @@
 .pdf-form-actions{display:flex;gap:7px;flex-wrap:wrap}
 .pdf-forms-panel>small{color:#687f91;font-size:8px;line-height:1.5}
 
+.pdf-form-flags{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.pdf-form-flags label{display:flex;align-items:center;gap:5px;color:#829bac;font-size:8px}.pdf-form-flags input{margin:0}
+.pdf-form-preparer{border:1px solid #25506d;background:#0a2030;border-radius:8px;padding:9px;display:flex;flex-direction:column;gap:7px}
+.pdf-form-preparer>b{color:#cce3f0;font-size:9px}.pdf-form-preparer label{display:flex;flex-direction:column;gap:4px;color:#7794a8;font-size:8px}
+.pdf-form-preparer input,.pdf-form-preparer select{width:100%;border:1px solid #2b5068;background:#071722;color:#d8e6ef;border-radius:6px;padding:7px;font-size:9px}
+.pdf-form-preparer button{border:1px solid #2b5f7d;background:#0d2a40;color:#cae1ef;border-radius:6px;padding:8px 9px;font-size:9px;cursor:pointer}.pdf-form-preparer button:disabled{opacity:.42;cursor:not-allowed}
+.pdf-form-preparer>small{color:#6b8495;font-size:8px;line-height:1.45}
+
