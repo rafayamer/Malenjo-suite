@@ -39,6 +39,19 @@ describe('Windows PDF provider packaging contract',()=>{
     expect(native).toContain('TESSDATA_PREFIX');
   });
 
+  it('pins the MALENJO Stirling Java-effects patch in both provider builders',()=>{
+    const windows=text('scripts/build-stirling-core.ps1');
+    const linux=text('scripts/build-stirling-core.sh');
+    const patch=text('third_party/stirling-pdf/patches/0001-malenjo-java-effect-alternatives.patch');
+
+    expect(windows).toContain('0001-malenjo-java-effect-alternatives.patch');
+    expect(windows).toContain('git apply --check');
+    expect(linux).toContain('0001-malenjo-java-effect-alternatives.patch');
+    expect(linux).toContain('git apply --check');
+    expect(patch).toContain('addEndpointAlternative("replace-invert-pdf", "Java")');
+    expect(patch).toContain('addEndpointAlternative("scanner-effect", "Java")');
+  });
+
   it('retains qpdf transitive notices in the generated component pack',()=>{
     const builder=text('scripts/build-qpdf-windows.ps1');
     for(const notice of [
