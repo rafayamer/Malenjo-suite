@@ -33,6 +33,7 @@ import SecurityWorkspace from '../security/SecurityWorkspace';
 import MetadataWorkspace from '../security/MetadataWorkspace';
 import SignWorkspace from '../security/SignWorkspace';
 import EnterpriseWorkspace from '../enterprise/EnterpriseWorkspace';
+import HelpWorkspace from '../help/HelpWorkspace';
 import DocumentTabs from './DocumentTabs';
 import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
 import { CANONICAL_COMMAND_PALETTE_EXAMPLES } from './commandPaletteModel';
@@ -575,7 +576,9 @@ export default function App() {
                             ? <EnterpriseWorkspace mode="backup" onBackToFiles={()=>selectModule('files')}/>
                             : active === 'admin'
                               ? <EnterpriseWorkspace mode="admin" onBackToFiles={()=>selectModule('files')}/>
-                              : <ModuleView module={module} session={null} notice="" onSaveAs={async()=>{}} onBackToFiles={()=>selectModule('files')}/>)}
+                              : active === 'help'
+                                ? <HelpWorkspace openDocumentCount={sessions.length}/>
+                                : <ModuleView module={module} session={null} notice="" onSaveAs={async()=>{}} onBackToFiles={()=>selectModule('files')}/>)}
     </main>
   </div>
 }
