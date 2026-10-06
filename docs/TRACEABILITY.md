@@ -270,3 +270,6 @@ No module is complete merely because its navigation entry exists. Completion req
 | No false operational tools | PDF provider UI | unavailable external-only operations are disabled with provider reason | resolver + provider panel tests/build | Verified in PR #145 / CI #269 |
 | qpdf operation smoke | Windows CI | Repair + Compress invoked over `127.0.0.1:28970`; generated valid fixture validated by qpdf; PDF output signatures checked | CI #269 (`37490673818`) | Verified |
 | Module completion | Registry | PDF explicitly remains `partial` | registry test | Correct |
+
+| Stirling PATH isolation | Native provider boundary | child PATH contains only reviewed/configured qpdf; user PATH is not inherited | Rust regression test + review | Implemented; CI pending |
+| OpenAPI provider-name normalization | PDF capability resolver | slash/camelCase/spaced names resolve to the same provider gate | provider capability tests | Implemented; CI pending |
