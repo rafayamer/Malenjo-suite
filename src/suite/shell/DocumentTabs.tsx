@@ -10,6 +10,7 @@ interface Props {
   onCloseOthers(sessionId: string): void;
   onCloseRight(sessionId: string): void;
   onCloseAll(): void;
+  onReorder(draggedId: string, targetId: string): void;
 }
 
 export default function DocumentTabs({
@@ -20,8 +21,11 @@ export default function DocumentTabs({
   onCloseOthers,
   onCloseRight,
   onCloseAll,
+  onReorder,
 }: Props) {
   const [menu, setMenu] = useState<{id:string;left:number;top:number} | null>(null);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
   if (!sessions.length) return null;
 
   return <div className="document-tabs" role="tablist" aria-label="Open documents">
@@ -30,8 +34,28 @@ export default function DocumentTabs({
         const active = session.id === activeSessionId;
         const open = menu?.id === session.id;
         return <div
-          className={active ? 'document-tab active' : 'document-tab'}
+          className={[
+            'document-tab',
+            active ? 'active' : '',
+            draggedId === session.id ? 'dragging' : '',
+            dragOverId === session.id && draggedId !== session.id ? 'drag-over' : '',
+          ].filter(Boolean).join(' ')}
           key={session.id}
+          onDragOver={(event) => {
+            if (!draggedId || draggedId === session.id) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            setDragOverId(session.id);
+          }}
+          onDragLeave={() => {
+            if (dragOverId === session.id) setDragOverId(null);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            if (draggedId && draggedId !== session.id) onReorder(draggedId, session.id);
+            setDraggedId(null);
+            setDragOverId(null);
+          }}
           onAuxClick={(event) => {
             if (event.button === 1) {
               event.preventDefault();
@@ -42,6 +66,18 @@ export default function DocumentTabs({
           <button
             className="document-tab-main"
             role="tab"
+            draggable
+            onDragStart={(event) => {
+              setMenu(null);
+              setDraggedId(session.id);
+              setDragOverId(null);
+              event.dataTransfer.effectAllowed = 'move';
+              event.dataTransfer.setData('text/plain', session.id);
+            }}
+            onDragEnd={() => {
+              setDraggedId(null);
+              setDragOverId(null);
+            }}
             aria-selected={active}
             title={session.document.name}
             onClick={() => onActivate(session.id)}

@@ -78,9 +78,10 @@ export default function FileLibrary({ onOpen }: Props) {
       const result = await chooseAndAddDocuments();
       if (!result) return;
       await load();
+      result.documents.forEach(onOpen);
       setNotice(result.errors.length
-        ? `Added ${result.documents.length} document(s); ${result.errors.length} could not be added.`
-        : `Added ${result.documents.length} document(s).`);
+        ? `Opened ${result.documents.length} document(s) in tabs; ${result.errors.length} could not be added.`
+        : `Opened ${result.documents.length} document(s) in MALENJO tabs.`);
     } catch (error) {
       setNotice(String(error));
     } finally {
@@ -193,7 +194,7 @@ export default function FileLibrary({ onOpen }: Props) {
           : 'Codespaces uses an in-memory browser-session library. Choose several files here, then open and switch between them with the shared tab strip.'}</p>
       </div>
       <button className="primary-action" disabled={busy} onClick={() => void addFiles()}>
-        <FilePlus2 size={17}/> {desktop ? 'Add files' : 'Add session files'}
+        <FilePlus2 size={17}/> {desktop ? 'Open files' : 'Open session files'}
       </button>
     </div>
 
