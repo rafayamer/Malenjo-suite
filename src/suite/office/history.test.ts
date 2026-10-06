@@ -15,16 +15,24 @@ function model(text:string):DocxModel {
 }
 
 describe('Office per-tab history',()=>{
-  it('undoes and redoes model edits',()=>{
+  it('undoes and redoes model edits with dirty state',()=>{
     let history=createOfficeHistory(model('a'));
     history=recordOfficeHistory(history,model('b'));
     history=recordOfficeHistory(history,model('c'));
     expect(canUndoOfficeHistory(history)).toBe(true);
     history=undoOfficeHistory(history);
-    expect((currentOfficeHistory(history) as DocxModel).paragraphs[0]).toBe('b');
+    expect((currentOfficeHistory(history).model as DocxModel).paragraphs[0]).toBe('b');
+    expect(currentOfficeHistory(history).dirty).toBe(true);
     expect(canRedoOfficeHistory(history)).toBe(true);
     history=redoOfficeHistory(history);
-    expect((currentOfficeHistory(history) as DocxModel).paragraphs[0]).toBe('c');
+    expect((currentOfficeHistory(history).model as DocxModel).paragraphs[0]).toBe('c');
+  });
+
+  it('returns clean state only at the retained original baseline',()=>{
+    let history=createOfficeHistory(model('a'));
+    history=recordOfficeHistory(history,model('b'));
+    history=undoOfficeHistory(history);
+    expect(currentOfficeHistory(history).dirty).toBe(false);
   });
 
   it('drops redo entries after a new edit',()=>{
@@ -33,15 +41,18 @@ describe('Office per-tab history',()=>{
     history=undoOfficeHistory(history);
     history=recordOfficeHistory(history,model('x'));
     expect(canRedoOfficeHistory(history)).toBe(false);
-    expect((currentOfficeHistory(history) as DocxModel).paragraphs[0]).toBe('x');
+    expect((currentOfficeHistory(history).model as DocxModel).paragraphs[0]).toBe('x');
   });
 
-  it('bounds memory by entry count',()=>{
+  it('preserves dirty state when the clean baseline is evicted',()=>{
     let history=createOfficeHistory(model('0'),3);
     history=recordOfficeHistory(history,model('1'));
     history=recordOfficeHistory(history,model('2'));
     history=recordOfficeHistory(history,model('3'));
     expect(history.entries).toHaveLength(3);
-    expect((history.entries[0] as DocxModel).paragraphs[0]).toBe('1');
+    expect((history.entries[0].model as DocxModel).paragraphs[0]).toBe('1');
+    history=undoOfficeHistory(undoOfficeHistory(history));
+    expect(history.cursor).toBe(0);
+    expect(currentOfficeHistory(history).dirty).toBe(true);
   });
 });
