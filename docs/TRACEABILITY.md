@@ -291,4 +291,6 @@ No module is complete merely because its navigation entry exists. Completion req
 
 | Direct Tesseract OCR control truth | PDF provider contract | direct fallback exposes only file/language/OCR-type controls it actually consumes | capability resolver + regression test + pinned Stirling source audit | Implemented; CI pending |
 
-| Open-core Scanner Effect + Java Replace/Invert modes | PDF effects/provider gating | Scanner Effect plus high-contrast/custom/full-inversion color modes execute through pinned Stirling Java/PDFBox; CMYK remains gated | reviewed Stirling patch + capability filter + Windows operation smoke | Implemented in pass 2C; CI/review pending |
+| Open-core Scanner Effect + Java Replace/Invert modes | PDF effects/provider gating | Scanner Effect plus high-contrast/custom/full-inversion color modes execute through pinned Stirling Java/PDFBox; CMYK remains gated | reviewed Stirling patch + capability filter + Windows operation smoke | Verified — CI #309 + clean final review |
+
+| Embedded Stirling Office Convert 0.2.2 | PDF Office conversion/provider gating | deterministic Java provider for reviewed File→PDF + PDF→Word/Presentation/Text-RTF/XLSX routes; LibreOffice-only routes remain gated | source pin + nested JAR hashes + dependency-license report + capability tests + Windows operation smoke | Implemented in pass 2D; CI/review pending |
