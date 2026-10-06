@@ -3,6 +3,7 @@ import { AlertTriangle, Download, FileText, FolderOpen, Printer, Table2, Present
 import type { DocumentSession } from '../files/session';
 import { isDesktopRuntime } from '../files/api';
 import { exportOfficeCopy, readOfficeDocument } from './api';
+import { useRegisterDocumentCommands } from '../shell/documentCommands';
 import {
   detectOfficeKind,
   exactCopy,
@@ -145,6 +146,29 @@ export default function OfficeWorkspace({ kind, session, onBackToFiles, onDirtyC
       setError(reason instanceof Error ? reason.message : String(reason));
     }
   }
+
+  useRegisterDocumentCommands(
+    session?.id,
+    () => [
+      {
+        id:'export',
+        label:dirty ? `Export edited ${expectedExtension.toUpperCase()}` : `Export ${expectedExtension.toUpperCase()} copy`,
+        enabled:!!model && !loading,
+        shortcut:'Ctrl+Shift+S',
+        detail:dirty ? 'Serialize the current Office edits to a new OOXML copy.' : 'Export an exact copy of the current OOXML package.',
+        run:()=>exportDocument(),
+      },
+      {
+        id:'print',
+        label:`Print ${kindMeta[kind].title}`,
+        enabled:!!model && !loading,
+        shortcut:'Ctrl+P',
+        detail:'Print the current MALENJO Office workspace view.',
+        run:()=>window.print(),
+      },
+    ],
+    [session?.id, model, dirty, loading, expectedExtension, kind],
+  );
 
   const fidelity = dirty ? 'Edited · compatibility review required' : 'Untouched · exact-copy export available';
   const MetaIcon = kindMeta[kind].icon;
