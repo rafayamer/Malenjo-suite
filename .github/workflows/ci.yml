@@ -147,7 +147,7 @@ jobs:
           if (-not $tesseract) { throw "Tesseract provider pack did not contain tesseract.exe." }
           $env:TESSDATA_PREFIX = (Resolve-Path "provider-packs/tesseract/runtime/tessdata").Path
           $version = (& $tesseract.FullName --version 2>&1 | Out-String)
-          if ($LASTEXITCODE -ne 0 -or $version -notmatch "tesseract\s+5\.5\.3") {
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch "tesseract\s+v?5\.5\.3(?:\.\d+)?") {
             throw "Tesseract provider pack failed its executable smoke check."
           }
           $languages = (& $tesseract.FullName --list-langs 2>&1 | Out-String)
