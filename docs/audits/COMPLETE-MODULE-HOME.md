@@ -1,158 +1,106 @@
-# Complete module audit — Home
+# Home module correction audit — OSS structural source
 
 ## Decision state
 
 **Module:** Home  
-**Tracking issue:** #134  
-**Registry state:** `complete` after implementation CI #211 passed. Final-head and post-merge `main` CI remain mandatory merge/release evidence.
+**Original completion issue:** #134  
+**Correction issue:** #139  
+**Registry state during correction:** `foundation` until corrected implementation CI and final-head verification pass.
 
-## Source contract
+## Why this correction exists
 
-Canonical source: `MALENJO_SUITE_FINAL_MASTER_README.md`  
-SHA-256: `e24c8f238c01bfd455f2d9994789feaa5b674ac167d191e678452fc3cf5b13aa`.
+The earlier Home implementation named `satnaing/shadcn-admin` as its structural design basis, but the resulting Home structure did not closely follow that repository. The user correctly rejected that provenance claim.
 
-The canonical README §29 Product shell / unified UX makes Home a first-class top-level workspace and requires a unified MALENJO shell in which users do not need to understand internal providers.
+This correction removes the inaccurate attribution and rebuilds Home from source-level UI patterns taken from a repository that is actually an offline/local desktop office launcher.
 
-The reconciled implementation guide adds the complete Home-specific acceptance contract:
+## Correct OSS design source
 
-- §8.2 Home: recent documents, pinned locations, continue-work cards, scan/import shortcuts, update notices and optional classroom activity; Home reads MALENJO library metadata/cached status and missing providers must degrade without blocking the application.
-- ARCH-003/004: Home capabilities and user-visible state belong to MALENJO-owned, versioned contracts/models.
-- UI-001: approximately six-to-nine high-frequency primary actions.
-- UI-002: keyboard-only primary workflow, visible focus and logical tab order.
-- UI-003: optional secondary surfaces may not destroy the central work area.
-- QA-004: happy-path plus realistic storage/provider failure recovery.
-- QA-005: keyboard/accessibility coverage and visual-regression baseline.
-- QA-006: abrupt-shutdown/cancellation exercise where Home performs long-running work. Home itself intentionally starts no long-running provider process, so cancellation is not applicable to this module; file/provider work is delegated to the owning module.
+- repository: `CasualOffice/desktop`
+- pinned commit: `39fe70960462a9f16ea4f1e9aaa8b963d5da6ef1`
+- shell/UI license: Apache-2.0
+- product architecture: Tauri desktop office launcher; local files, no required cloud/server
 
-## OSS design instruction and legal review
+Directly adapted upstream files:
 
-The user explicitly requested that Home use an open-source repository design rather than being invented from scratch.
+- `packages/casual-office-ui/src/components/ActionCard.tsx`
+- `RecentCard.tsx`
+- `SearchInput.tsx`
+- `SegmentedFilter.tsx`
+- `ContextMenu.tsx`
+- `packages/casual-office-ui/demo/App.tsx`
+- `apps/shell/src/styles.css`
+- `docs/UX-AUDIT.md`
 
-Selected source:
+MALENJO's adapted components are in `src/suite/home/CasualOfficeUi.tsx` and retain an Apache-2.0 attribution header. Full upstream license/provenance are retained under `third_party/casualoffice/`.
 
-- `satnaing/shadcn-admin`
-- pinned review commit: `e16c87f213a5ba5e45964e9b67c792105ec74d26`
-- MIT License, Copyright (c) 2024 Sat Naing
-- upstream provides responsive/accessibility-oriented sidebar, header/search, main, tabs and card dashboard patterns.
+The old `third_party/shadcn-admin/` Home provenance is deleted by this correction because it was not a truthful source description.
 
-MALENJO adapts that information architecture to the existing Tauri/React shell. It does not bundle the upstream Clerk/auth stack and does not transplant the entire application.
+## Relationship to the supplied WPS reference
 
-The user-supplied WPS Office image is only a structural benchmark for an office start center. WPS branding, advertising, promotional artwork, proprietary icons and exact trade dress are not copied.
+The WPS screenshot remains a composition target only: an office start page with prominent create/open actions and recent/pinned work.
 
-License and provenance are retained in:
+MALENJO does not copy WPS branding, ads, premium cards, proprietary icons, artwork, exact dimensions or trade dress.
 
-- `third_party/shadcn-admin/LICENSE`
-- `third_party/shadcn-admin/PROVENANCE.md`
-- `docs/THIRD_PARTY_NOTICES.md`.
+The corrected implementation gets its reusable code/structural pattern from CasualOffice, not WPS.
 
-No new npm/Rust dependency is introduced.
+## Corrected structural mapping
 
-## Implemented Home feature tree
+| CasualOffice source pattern | MALENJO adaptation |
+|---|---|
+| launcher greeting/header | MALENJO Start Center / local-first runtime badge |
+| three ActionCards | eight canonical Home actions: Open, Document, Spreadsheet, Presentation, PDF, Scan, OCR, Malenjo AI |
+| recent-file SearchInput | MALENJO library recent-file search |
+| segmented Documents/Sheets filter | All/PDF/Documents/Sheets/Slides/Images/Other |
+| pinned recent cards | Starred MALENJO documents shown in a separate Pinned group |
+| Office-Backstage time groups | Today / Yesterday / Earlier this week / Earlier |
+| recent card context menu | Open / Pin-Unpin / Files-Library |
+| launcher keyboard footer | Ctrl+O, Ctrl+K and Ctrl+Tab shortcuts |
+| local launcher behavior | Windows/Tauri library + browser/Codespaces fallback |
 
-### Office-style start launcher
+MALENJO-specific additions required by its source contract remain outside the copied pattern: Continue Working sessions, pinned native locations, honest updater state and optional Student Hub state.
 
-Eight operational high-frequency actions:
+## Canonical MALENJO requirement coverage
 
-- Open;
-- Document;
-- Spreadsheet;
-- Presentation;
-- PDF;
-- Scan;
-- OCR;
-- Malenjo AI.
+The Home source contract remains unchanged:
 
-Open invokes the existing desktop/browser multi-file pipeline. The remaining tiles route to their actual registered MALENJO workspaces; Home does not claim those destination modules are complete.
+- recent documents;
+- pinned work and pinned locations;
+- continue-work cards;
+- scan/import shortcuts;
+- update notice;
+- optional classroom state;
+- six-to-nine primary actions;
+- keyboard/accessibility;
+- MALENJO-owned state;
+- failure recovery;
+- no heavy provider startup from Home.
 
-Secondary navigation exposes Files / Library, Recent, Starred, Pinned locations, New workflow and global Ctrl+K search.
+The corrected UI keeps all operational behavior while replacing the unsupported design-source claim.
 
-### Recent documents
+## Local Windows architecture
 
-Home loads the canonical MALENJO library on desktop and the browser-session library in Codespaces. Recent ordering prefers last-opened time, then added time. Unavailable indexed documents remain visible but disabled instead of failing silently.
+The design source is especially appropriate because CasualOffice itself is a Tauri local desktop office launcher. MALENJO nevertheless retains its own Tauri/Rust library/session implementation and does not vendor CasualOffice's document editors.
 
-Selecting an available recent document reopens it through the canonical library boundary before creating/activating the shared document session.
-
-### Starred documents
-
-Users can star/unstar library documents. Star state is versioned, bounded, deduplicated and stored locally. Removed library IDs are pruned, while indexed-but-unavailable entries retain their star state.
-
-### Pinned locations
-
-Desktop users can pin document folders through the native Tauri directory picker. A pin stores only bounded local Home state. Home does not crawl or index a folder in the background.
-
-Choosing **Browse & open** opens the native file picker rooted at that folder, sends selected documents through the existing canonical MALENJO library import boundary, and opens them as normal document sessions.
-
-Browser/Codespaces reports local-folder pinning as not applicable and routes users to the session library.
-
-### Continue working
-
-Current document sessions appear as Continue working cards with:
-
-- document name/type;
-- saved/unsaved/saving state;
-- session activation;
-- independent existing document-session state preserved by the shell.
-
-Home does not create a second session model.
-
-### Update notice
-
-Home exposes the local package version and explicitly states that the updater module is not operational. It does not contact a network server or falsely report that the build is current.
-
-### Student Hub / classroom state
-
-The current student/noncommercial build shows a local-only/not-connected state when no classroom account provider is available. Local document work is never blocked by sign-in.
-
-There is no subscription, premium, billing or upsell UI.
-
-### System status
-
-Home uses only cheap cached/runtime facts:
-
-- desktop vs browser runtime;
-- open document-tab count;
-- current document-library count;
-- local-first readiness.
-
-It does not start Ollama, OCR, CAD, DICOM, Java/Python workers or other heavy providers.
-
-## MALENJO-owned state and recovery
-
-`src/suite/home/model.ts` defines versioned `HomeStateV1` and pure state transitions. Persistent state is sanitized, bounded and deduplicated before use.
-
-`src/suite/home/storage.ts` catches malformed JSON, storage denial/quota failures and unavailable storage. Storage failure produces an explicit Home notice instead of a blank shell.
-
-No Home state includes document content, OCR text, passwords, tokens or provider secrets.
-
-## Accessibility and visual baseline
-
-All primary actions are native buttons. Tabs expose tab roles/selected state, the dynamic content is an ARIA live tab panel, notices use `role=status`, controls have visible focus treatment, and reduced-motion preferences disable launcher motion.
-
-Committed baseline: `docs/visual-baselines/HOME-START-CENTER.md`.
-
-Executable semantic baseline: `src/suite/home/HomeWorkspace.test.tsx`.
+Home uses native MALENJO file pickers and canonical library APIs on Windows. No external Home web server is introduced.
 
 ## Tests
 
-`src/suite/home/model.test.ts` covers:
-
-- eight-action requirement;
-- exact pinned OSS source commit/license baseline;
-- corrupted-state sanitation;
-- pin deduplication;
-- recent/starred ordering and multi-token search;
-- missing-star pruning;
-- persistent-state round trip;
-- storage failure recovery.
-
-`src/suite/home/HomeWorkspace.test.tsx` server-renders the major Home state and verifies launcher count, tab semantics, continue-work state, honest updater/account states and absence of WPS/premium/ad content.
-
-## CI gate
-
-Implementation head `06aa772f1fed86b9532a62f888079d920c158d8d` passed CI #211 (`37453190343`): frontend typecheck/tests/build, Windows Rust check/tests and Codespaces/Linux validation/check/tests. The registry promotion and final documentation commits require a fresh final-head CI before merge; post-merge `main` CI is also required.
+- `model.test.ts` pins CasualOffice repo, commit and Apache-2.0 license.
+- filter tests verify the adapted segmented file-type filter.
+- recent grouping tests verify Office-style time buckets.
+- storage/recovery tests remain.
+- `HomeWorkspace.test.tsx` verifies the adapted launcher structure, search/filter surface, Continue Working, pinned locations, honest update/account states, and absence of WPS/premium/ad UI.
+- registry tests deliberately demote Home during correction; promotion occurs only after green implementation CI.
 
 ## Completion boundary
 
-Promoting Home to `complete` means the **Home/start-center module** satisfies its own source feature tree. It does not make Files, Office, PDF, Scanner, OCR, AI, Automation, Account, Settings, Student Hub or Updater complete.
+The corrected Home module may return to `complete` only after:
 
-Provider-specific work remains owned by those destination modules.
+1. frontend typecheck/tests/build pass;
+2. Windows Rust check/tests pass;
+3. Codespaces/Linux validation passes;
+4. registry/traceability are promoted on the exact corrected tree;
+5. final-head CI passes;
+6. post-merge main CI passes.
+
+This correction does not complete any destination module.
