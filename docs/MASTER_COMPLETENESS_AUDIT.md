@@ -36,9 +36,11 @@ MALENJO module status means:
 
 Passing unit tests or CI does not by itself promote a module to `complete`.
 
-## UI benchmark and intellectual-property boundary
+## UI benchmark, Stirling upstream and intellectual-property boundary
 
-MALENJO targets:
+MALENJO's preferred reusable UI/UX and PDF workflow source is the **MIT-licensed open core of Stirling-PDF**, pinned and reviewed in `third_party/stirling-pdf/PROVENANCE.md`. Where a suitable MIT Stirling implementation exists, it should be adapted before inventing an unrelated shell/PDF interaction.
+
+MALENJO still targets:
 
 - Acrobat-class professional document information architecture;
 - Foxit-class perceived speed;
@@ -50,7 +52,9 @@ MALENJO targets:
 - global Ctrl+K action/document/settings search;
 - strong keyboard navigation and accessibility.
 
-MALENJO must **not** copy Adobe/Foxit trademarks, copyrighted icons/assets, exact proprietary layout, artwork, branding or trade dress. Functional parity and familiar professional interaction patterns are the target; MALENJO retains its own dark-navy/electric-blue identity and component implementation.
+Stirling-PDF is open-core. MALENJO may reuse MIT content outside the restricted directories listed by the Stirling root LICENSE, but must **not** copy `engine/`, proprietary, saas, desktop, cloud, prototypes or portal-family restricted code without a separate valid agreement.
+
+MALENJO also must not copy Adobe/Foxit trademarks, copyrighted icons/assets, exact proprietary layout, artwork, branding or trade dress. The customer-facing product identity remains MALENJO.
 
 ## Phase 1–7 correction
 
