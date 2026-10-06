@@ -31,6 +31,8 @@ describe('Windows PDF provider packaging contract',()=>{
 
     expect(builder).toContain("$RuntimeDir = Join-Path $PackDir 'runtime'");
     expect(builder).toContain("$TessdataDir = Join-Path $PackDir 'tessdata'");
+    expect(builder).toContain("'configs/pdf'");
+    expect(builder).toContain("'pdf.ttf'");
     expect(builder).toContain('87416418657359cb625c412a48b6e1d6d41c29bd');
     expect(builder).toContain('bbef4675053b5b468cdb477053e28b1c698ba08e');
     expect(builder).toContain('527457ca8f8fe1fda7c2f88bce3c0e4be12be9d0');
