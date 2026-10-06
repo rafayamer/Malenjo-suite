@@ -310,6 +310,7 @@ export default function App() {
       return <OfficeWorkspace
         kind="docx"
         session={session}
+        active={session.id === activeSessionId}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
         registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
@@ -319,6 +320,7 @@ export default function App() {
       return <OfficeWorkspace
         kind="xlsx"
         session={session}
+        active={session.id === activeSessionId}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
         registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
@@ -328,6 +330,7 @@ export default function App() {
       return <OfficeWorkspace
         kind="pptx"
         session={session}
+        active={session.id === activeSessionId}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
         registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
