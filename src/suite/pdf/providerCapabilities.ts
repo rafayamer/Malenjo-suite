@@ -9,7 +9,7 @@ export const PDF_PROVIDER_LEGAL_REFERENCE='docs/audits/PDF-PROVIDER-MATRIX-PASS2
 export const PASS2_PENDING_COMPONENTS:PdfProviderComponentStatus[]=[
   {id:'ghostscript',available:false,source:'unavailable',message:'Not bundled: AGPL/commercial licensing requires a MALENJO replacement for the default business-compatible pack.'},
   {id:'libreoffice',available:false,source:'unavailable',message:'Not bundle-approved until the exact Windows binary/transitive license pack is reviewed.'},
-  {id:'tesseract',available:false,source:'unavailable',message:'Apache-2.0 candidate; Windows component pack and language-data review are still pending.'},
+  {id:'tesseract',available:false,source:'unavailable',message:'Reviewed Tesseract 5.5.3 Windows pack with pinned eng/osd data is not installed; binary redistribution remains release-gated pending exact DLL license mapping.'},
   {id:'ocrmypdf',available:false,source:'unavailable',message:'Not selected as the business redistribution path while its runtime stack requires Ghostscript.'},
   {id:'pdftohtml',available:false,source:'unavailable',message:'Poppler/pdftohtml is not approved for the default business-compatible pack; replacement required.'},
   {id:'unoconvert',available:false,source:'unavailable',message:'Legacy copyleft conversion bridge is not approved for bundling; replacement required.'},
