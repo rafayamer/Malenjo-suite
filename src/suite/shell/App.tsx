@@ -321,6 +321,7 @@ export default function App() {
         session={session}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
+        registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
       />;
     }
     if (route === 'presentation') {
@@ -329,6 +330,7 @@ export default function App() {
         session={session}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
+        registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
       />;
     }
 
