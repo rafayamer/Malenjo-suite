@@ -523,6 +523,7 @@ fn spawn_core(java: &str, jar: &Path, app: &AppHandle) -> Result<(), String> {
         .arg(format!("--server.address=127.0.0.1"))
         .arg(format!("--server.port={STIRLING_PORT}"))
         .arg("--spring.main.banner-mode=off")
+        .arg("--system.stirlingOfficeConversion=true")
         .env("STIRLING_FLAVOR", "core")
         .env("DISABLE_ADDITIONAL_FEATURES", "true")
         .env("ENABLE_SAAS", "false")
