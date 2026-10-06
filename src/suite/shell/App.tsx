@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { Activity, Command, FilePlus2, FolderOpen, Search, ShieldCheck, Sparkles } from 'lucide-react';
+import { Activity, Command, Search } from 'lucide-react';
 import { modules } from '../modules/registry';
 import type { ModuleId } from '../core/types';
 import FileLibrary from '../files/FileLibrary';
-import RecentDocuments from '../files/RecentDocuments';
 import { workspaceForDocument } from '../files/route';
 import {
   createDocumentSession,
@@ -34,17 +33,11 @@ import MetadataWorkspace from '../security/MetadataWorkspace';
 import SignWorkspace from '../security/SignWorkspace';
 import EnterpriseWorkspace from '../enterprise/EnterpriseWorkspace';
 import HelpWorkspace from '../help/HelpWorkspace';
+import HomeWorkspace from '../home/HomeWorkspace';
 import DocumentTabs from './DocumentTabs';
 import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
 import { CANONICAL_COMMAND_PALETTE_EXAMPLES } from './commandPaletteModel';
 import type { DocumentCommandController } from '../commands/types';
-
-const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
-  {label:'Open document', icon: FolderOpen, target:'files'},
-  {label:'New document', icon: FilePlus2, target:'word'},
-  {label:'Private AI', icon: Sparkles, target:'ai'},
-  {label:'Security scan', icon: ShieldCheck, target:'security'},
-];
 
 export default function App() {
   const [active, setActive] = useState<ModuleId>('home');
@@ -553,7 +546,15 @@ export default function App() {
       </div>}
 
       {!activeSession && (active === 'home'
-        ? <Home onSelect={selectModule} onOpen={openFromLibrary}/>
+        ? <HomeWorkspace
+            sessions={sessions}
+            activeSessionId={activeSessionId}
+            onSelectModule={selectModule}
+            onActivateSession={activateSession}
+            onOpenDocument={openFromLibrary}
+            onOpenDocuments={()=>void openDocumentsFromPicker()}
+            onOpenCommandPalette={()=>{setQuery('');setCommandOpen(true);}}
+          />
         : active === 'files'
           ? <FileLibrary onOpen={openFromLibrary}/>
           : active === 'scanner'
