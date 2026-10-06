@@ -79,21 +79,32 @@ function externalCapability(
   });
 }
 
-function operationKey(operation:Pick<PdfProviderOperation,'id'|'path'|'summary'>):string{
-  return [operation.id,operation.path,operation.summary].join(' ').toLowerCase();
+function compactOperationValue(value:string):string{
+  return value.toLowerCase().replace(/[^a-z0-9]+/g,'');
+}
+
+function operationMatches(
+  operation:Pick<PdfProviderOperation,'id'|'path'|'summary'>,
+  ...aliases:string[]
+):boolean{
+  const values=[operation.id,operation.path,operation.summary].map(compactOperationValue);
+  return aliases.some((alias)=>{
+    const expected=compactOperationValue(alias);
+    return values.some((value)=>value.includes(expected));
+  });
 }
 
 export function resolvePdfProviderCapability(
   operation:Pick<PdfProviderOperation,'id'|'path'|'summary'>,
   components:PdfProviderComponentStatus[],
 ):PdfProviderCapability{
-  const text=operationKey(operation);
+  const matches=(...aliases:string[])=>operationMatches(operation,...aliases);
   const statuses=new Map([
     ...PASS2_PENDING_COMPONENTS,
     ...components,
   ].map((item)=>[item.id,item] as const));
 
-  if(/repair/.test(text)){
+  if(matches('repair')){
     const qpdf=statuses.get('qpdf');
     if(qpdf?.available){
       return capability(true,'qpdf structural repair','qpdf',{
@@ -105,7 +116,7 @@ export function resolvePdfProviderCapability(
     return coreCapability('qpdf 12.4.2 when the approved component pack is installed');
   }
 
-  if(/compress-pdf|compresspdf|optimi[sz]e pdf/.test(text)){
+  if(matches('compress-pdf','compressPdf','optimize-pdf','optimizePdf')){
     const qpdf=statuses.get('qpdf');
     if(qpdf?.available){
       return capability(true,'qpdf + Stirling Java/PDFBox optimization','qpdf',{
@@ -117,51 +128,61 @@ export function resolvePdfProviderCapability(
     return coreCapability('qpdf structural optimization when the approved component pack is installed');
   }
 
-  if(/(^|[\s/])crop([\s/]|$)|crop-pdf/.test(text)){
+  if(matches('crop','crop-pdf','cropPdf')){
     return coreCapability('Ghostscript path intentionally not required');
   }
 
-  if(/markdown-to-pdf|markdowntopdf/.test(text)){
+  if(matches('markdown-to-pdf','markdownToPdf','convertMarkdownToPdf')){
     return coreCapability('WeasyPrint remains optional and unapproved as a bundled pack');
   }
 
-  if(/replace-invert|scanner-effect|pdf-to-vector|vector-to-pdf/.test(text)){
+  if(matches('replace-invert-pdf','replaceInvertPdf','scanner-effect','scannerEffect','pdf-to-vector','pdfToVector','vector-to-pdf','vectorToPdf')){
     return unavailable('ghostscript','Ghostscript-only Stirling operation');
   }
 
-  if(/ocr-pdf/.test(text)){
+  if(matches('ocr-pdf','ocrPdf')){
     return externalCapability('Local OCR provider',['tesseract','ocrmypdf'],statuses);
   }
-  if(/auto-rotate-pdf/.test(text)){
+  if(matches('auto-rotate-pdf','autoRotatePdf')){
     return externalCapability('Tesseract orientation detection',['tesseract'],statuses);
   }
 
-  if(/file-to-pdf/.test(text)){
+  if(matches('file-to-pdf','fileToPdf')){
     return externalCapability('Office conversion provider',['libreoffice','unoconvert'],statuses);
   }
-  if(/pdf-to-(word|presentation|rtf|xml|pdfa)/.test(text)){
+  if(matches(
+    'pdf-to-word','pdfToWord','convertPdfToWord',
+    'pdf-to-presentation','pdfToPresentation','convertPdfToPresentation',
+    'pdf-to-rtf','pdfToRtf','convertPdfToRtf',
+    'pdf-to-xml','pdfToXml','convertPdfToXml',
+    'pdf-to-pdfa','pdfToPdfa','convertPdfToPdfa',
+  )){
     return externalCapability('Office/PDF conversion provider',['libreoffice'],statuses);
   }
-  if(/pdf-to-html/.test(text)){
+  if(matches('pdf-to-html','pdfToHtml','convertPdfToHtml')){
     return externalCapability('PDF to HTML provider',['libreoffice','pdftohtml'],statuses);
   }
-  if(/pdf-to-markdown/.test(text)){
+  if(matches('pdf-to-markdown','pdfToMarkdown','convertPdfToMarkdown')){
     return externalCapability('PDF to Markdown provider',['pdftohtml'],statuses);
   }
 
-  if(/(html|url|eml)-to-pdf/.test(text)){
+  if(matches(
+    'html-to-pdf','htmlToPdf',
+    'url-to-pdf','urlToPdf',
+    'eml-to-pdf','emlToPdf',
+  )){
     return externalCapability('HTML-family rendering provider',['weasyprint'],statuses);
   }
-  if(/pdf-to-epub/.test(text)){
+  if(matches('pdf-to-epub','pdfToEpub')){
     return externalCapability('EPUB conversion provider',['calibre'],statuses);
   }
-  if(/extract-image-scans/.test(text)){
+  if(matches('extract-image-scans','extractImageScans')){
     return externalCapability('Python/OpenCV scan extraction provider',['opencv'],statuses);
   }
-  if(/pdf-to-cbr/.test(text)){
+  if(matches('pdf-to-cbr','pdfToCbr')){
     return externalCapability('CBR archive provider',['rar'],statuses);
   }
-  if(/form-detection|autoformdetection/.test(text)){
+  if(matches('form-detection','formDetection','autoFormDetection')){
     return externalCapability('MALENJO form-detection model pack',['form-detection'],statuses);
   }
 
