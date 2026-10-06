@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { PDFArray, PDFDict, PDFDocument, PDFName } from 'pdf-lib';
 import {
-  addPdfBatesNumbers, addPdfCheckBox, addPdfCommentAnnotation, addPdfHeaderFooter, addPdfRectangleOverlay, addPdfTextField,
-  addPdfTextOverlay, appendPdf, attachFileToPdf, deletePdfPage, deletePdfPages, duplicatePdfPage, extractPdfPage,
-  extractPdfPages, flattenPdfForm, insertBlankPdfPage, insertPdfAfter, listPdfFormFields, movePdfPage,
-  rotatePdfPagePermanent, rotatePdfPagesPermanent, setPdfPageBox, splitPdfAtPage,
+  addPdfBatesNumbers, addPdfCheckBox, addPdfCommentAnnotation, addPdfExternalLink, addPdfHeaderFooter,
+  addPdfInternalPageLink, addPdfRectangleOverlay, addPdfTextField, addPdfTextOverlay, appendPdf, attachFileToPdf,
+  deletePdfPage, deletePdfPages, duplicatePdfPage, extractPdfPage, extractPdfPages, flattenPdfForm,
+  getPdfDocumentProperties, insertBlankPdfPage, insertPdfAfter, listPdfFormFields, movePdfPage,
+  rotatePdfPagePermanent, rotatePdfPagesPermanent, setPdfDocumentProperties, setPdfPageBox, setPdfPageLabels,
+  splitPdfAtPage,
 } from './editor';
 
 async function sample(pages=3):Promise<Uint8Array>{
@@ -171,6 +173,55 @@ describe('PDF mutation core',()=>{
     await expect(addPdfHeaderFooter(source,{header:'',footer:''})).rejects.toThrow(/header or footer/i);
     await expect(addPdfBatesNumbers(source,{digits:0})).rejects.toThrow(/digit count/i);
     await expect(setPdfPageBox(source,{box:'crop',top:0,right:200,bottom:0,left:200})).rejects.toThrow(/usable page area/i);
+  });
+
+  it('creates external and internal PDF link annotations',async()=>{
+    let bytes=await addPdfExternalLink(await sample(3),{
+      pageNumber:1,url:'https://example.com/resource',x:0.1,y:0.5,width:0.4,height:0.08,
+    });
+    bytes=await addPdfInternalPageLink(bytes,{
+      pageNumber:1,targetPageNumber:3,x:0.1,y:0.35,width:0.4,height:0.08,
+    });
+    const pdf=await PDFDocument.load(bytes);
+    const annots=pdf.getPage(0).node.lookupMaybe(PDFName.of('Annots'),PDFArray);
+    expect(annots?.size()).toBe(2);
+  });
+
+  it('rejects unsafe external-link protocols',async()=>{
+    const bytes=await sample(1);
+    await expect(addPdfExternalLink(bytes,{
+      pageNumber:1,url:'javascript:alert(1)',x:0.1,y:0.1,width:0.3,height:0.1,
+    })).rejects.toThrow(/only http/i);
+    await expect(addPdfExternalLink(bytes,{
+      pageNumber:1,url:'file:///etc/passwd',x:0.1,y:0.1,width:0.3,height:0.1,
+    })).rejects.toThrow(/only http/i);
+  });
+
+  it('writes a PDF PageLabels number tree',async()=>{
+    const bytes=await setPdfPageLabels(await sample(5),[
+      {startPage:1,style:'roman-lower'},
+      {startPage:3,style:'decimal',prefix:'A-',startNumber:10},
+    ]);
+    const pdf=await PDFDocument.load(bytes);
+    const labels=pdf.catalog.lookupMaybe(PDFName.of('PageLabels'),PDFDict);
+    const nums=labels?.lookupMaybe(PDFName.of('Nums'),PDFArray);
+    expect(nums?.size()).toBe(4);
+  });
+
+  it('edits and reads PDF document properties',async()=>{
+    const bytes=await setPdfDocumentProperties(await sample(1),{
+      title:'MALENJO test',
+      author:'Student',
+      subject:'PDF properties',
+      keywords:['local','document'],
+      creator:'MALENJO Unit Test',
+    });
+    const properties=await getPdfDocumentProperties(bytes);
+    expect(properties.title).toBe('MALENJO test');
+    expect(properties.author).toBe('Student');
+    expect(properties.subject).toBe('PDF properties');
+    expect(properties.keywords).toEqual(expect.arrayContaining(['local','document']));
+    expect(properties.creator).toBe('MALENJO Unit Test');
   });
 
   it('rejects unsafe form/comment/attachment inputs',async()=>{
