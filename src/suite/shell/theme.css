@@ -200,3 +200,9 @@
 .pdf-feature-list span{font-size:8px;color:#7895a9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pdf-edit-form>button svg{vertical-align:-2px;margin-right:4px}
 
+.pdf-field-flags{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.pdf-field-flags label{display:flex;flex-direction:row;align-items:center;gap:5px;margin:0;color:#8ba5b7}
+.pdf-field-flags input{width:auto}
+.pdf-form-inventory span{display:flex;flex-direction:column;gap:2px;white-space:normal}
+.pdf-form-inventory span strong{font-size:8px;color:#bcd1df;font-weight:600}
+.pdf-form-inventory span em{font-size:7px;color:#6f8ca0;font-style:normal;line-height:1.35}
