@@ -90,3 +90,15 @@ GitHub Actions CI **#292** on the pass-2B implementation head passed all four jo
 The Windows provider job produced a Tesseract pack with **144 inventoried runtime files**, started the pinned Stirling core with the reviewed local Tesseract data path, successfully completed the Tesseract OCR PDF operation, required a positive forced-OSD dry-run verdict (`method=osd`, `detectedByOsd >= 1`), and then completed the PDF-producing Auto Rotate operation. Repair and Compress remained green in the same isolated local-provider environment.
 
 This is integration evidence only. It does not remove the Tesseract DLL redistribution release gate and does not make the PDF module complete.
+
+
+## Direct Tesseract control truth
+
+The pinned Stirling OCR controller accepts a broad request model because OCRmyPDF can provide deskew/clean/sidecar/render/image-removal features. Its direct Tesseract fallback actually consumes only the input PDF, selected languages and OCR type.
+
+MALENJO therefore filters the runtime OCR form when the resolved provider is Tesseract and exposes only:
+- `fileInput`;
+- `languages`;
+- `ocrType`.
+
+`sidecar`, `deskew`, `rotatePages`, `clean`, `cleanFinal`, `ocrRenderType` and `removeImagesAfter` are not advertised as Tesseract-backed controls. Auto-rotation remains a separate reviewed Tesseract OSD operation.
