@@ -52,8 +52,14 @@ export function attachRecoveredWorkingCopy(
 
 export function clearRecoveredWorkingCopy(session: DocumentSession): DocumentSession {
   if (!session.recoveryBytes && session.recoveredAt === undefined) return session;
-  const { recoveryBytes: _bytes, recoveredAt: _recoveredAt, ...rest } = session;
-  return rest;
+  return {
+    id: session.id,
+    document: session.document,
+    dirty: session.dirty,
+    saving: session.saving,
+    openedAt: session.openedAt,
+    lastSavedAt: session.lastSavedAt,
+  };
 }
 
 export function markDocumentSaved(
