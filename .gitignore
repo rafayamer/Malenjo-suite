@@ -22,3 +22,8 @@ backups/
 provider-packs/stirling-core/stirling-pdf.jar
 provider-packs/stirling-core/manifest.json
 .build/stirling-core/
+
+# Generated qpdf provider pack
+provider-packs/qpdf/bin/
+provider-packs/qpdf/manifest.json
+.build/qpdf/
