@@ -1023,7 +1023,7 @@ export async function inspectPdfDocumentProperties(bytes:Uint8Array):Promise<Pdf
     title:pdf.getTitle()??'',
     author:pdf.getAuthor()??'',
     subject:pdf.getSubject()??'',
-    keywords:(pdf.getKeywords()??'').split(/[,;]\s*/).map((value)=>value.trim()).filter(Boolean),
+    keywords:(pdf.getKeywords()??'').split(/[\s,;]+/).map((value)=>value.trim()).filter(Boolean),
     creator:pdf.getCreator()??'',
     producer:pdf.getProducer()??'',
     language:langText,
