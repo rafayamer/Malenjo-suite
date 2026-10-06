@@ -63,6 +63,24 @@ describe('PDF provider capability resolver',()=>{
     }
   });
 
+  it('enables OCR and scanned-page auto-rotate only when reviewed Tesseract is available',()=>{
+    const tesseract:PdfProviderComponentStatus={
+      id:'tesseract',
+      available:true,
+      version:'5.5.3',
+      executable:'C:\\MALENJO\\providers\\tesseract\\tesseract.exe',
+      source:'bundled',
+      message:'ready',
+    };
+    for(const path of ['/api/v1/misc/ocr-pdf','/api/v1/misc/auto-rotate-pdf']){
+      const result=resolvePdfProviderCapability(operation(path),[tesseract]);
+      expect(result.available).toBe(true);
+      expect(result.providerId).toBe('tesseract');
+      expect(result.providerVersion).toBe('5.5.3');
+      expect(result.componentPack).toBe('tesseract-windows-x64');
+    }
+  });
+
   it('does not turn absent OCR/Office/proprietary providers into operational tools',()=>{
     expect(resolvePdfProviderCapability(operation('/api/v1/misc/ocr-pdf'),[]).available).toBe(false);
     expect(resolvePdfProviderCapability(operation('/api/v1/convert/pdf-to-word'),[]).available).toBe(false);
