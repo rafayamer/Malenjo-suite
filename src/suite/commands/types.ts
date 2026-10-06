@@ -14,6 +14,7 @@ export type DocumentCommandId =
   | 'security'
   | 'properties'
   | 'attach'
+  | 'add-form-field'
   | 'flatten-form'
   | 'header-footer'
   | 'bates'
