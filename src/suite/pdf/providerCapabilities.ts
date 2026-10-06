@@ -136,7 +136,13 @@ export function resolvePdfProviderCapability(
     return coreCapability('WeasyPrint remains optional and unapproved as a bundled pack');
   }
 
-  if(matches('replace-invert-pdf','replaceInvertPdf','scanner-effect','scannerEffect','pdf-to-vector','pdfToVector','vector-to-pdf','vectorToPdf')){
+  if(matches('scanner-effect','scannerEffect')){
+    return coreCapability('Pinned Stirling endpoint gating patched to its existing Java/PDFBox implementation');
+  }
+  if(matches('replace-invert-pdf','replaceInvertPdf')){
+    return coreCapability('CMYK color-space conversion stays unavailable until a reviewed non-Ghostscript provider exists');
+  }
+  if(matches('pdf-to-vector','pdfToVector','vector-to-pdf','vectorToPdf')){
     return unavailable('ghostscript','Ghostscript-only Stirling operation');
   }
 
@@ -193,6 +199,18 @@ function fieldsForResolvedCapability(
   operation:PdfProviderOperation,
   resolved:PdfProviderCapability,
 ):PdfProviderOperation['fields']{
+  if(
+    resolved.providerId==='stirling-core'
+    && operationMatches(operation,'replace-invert-pdf','replaceInvertPdf')
+  ){
+    return operation.fields.map((field)=>field.name==='replaceAndInvertOption'&&field.enumValues
+      ? {
+          ...field,
+          enumValues:field.enumValues.filter((value)=>value!=='COLOR_SPACE_CONVERSION'),
+          description:'Java/PDFBox modes only. CMYK color-space conversion remains unavailable because the pinned implementation shells out to Ghostscript.',
+        }
+      : field);
+  }
   if(
     resolved.providerId==='tesseract'
     && operationMatches(operation,'ocr-pdf','ocrPdf','processPdfWithOCR')
