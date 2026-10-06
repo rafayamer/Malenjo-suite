@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   createDocumentSession,
+  cycleDocumentSessionId,
   markDocumentDirty,
   markDocumentSaved,
   markDocumentSaving,
+  reorderDocumentSessions,
   setDocumentDirty,
 } from './session';
 import type { LibraryDocument } from './types';
