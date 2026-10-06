@@ -7,6 +7,10 @@ describe('MALENJO module registry', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  it('marks Help / Support complete only after its operational module implementation', () => {
+    expect(modules.find((module) => module.id === 'help')?.status).toBe('complete');
+  });
+
   it('contains the mandatory document workspaces', () => {
     const ids = new Set(modules.map((module) => module.id));
     for (const id of ['files', 'pdf', 'word', 'spreadsheet', 'presentation', 'ocr', 'ai', 'security']) {
