@@ -309,7 +309,7 @@ fn parse_tesseract_version(output: &str) -> Option<String> {
         let line = line.trim();
         line.strip_prefix("tesseract ")
             .and_then(|rest| rest.split_whitespace().next())
-            .map(str::to_string)
+            .map(|version| version.trim_start_matches('v').to_string())
     })
 }
 
@@ -800,8 +800,8 @@ mod tests {
     #[test]
     fn tesseract_version_parser_requires_tesseract_banner() {
         assert_eq!(
-            parse_tesseract_version("tesseract 5.5.3\n leptonica-1.86.0"),
-            Some("5.5.3".into())
+            parse_tesseract_version("tesseract v5.5.3.20260724\n leptonica-1.87.0"),
+            Some("5.5.3.20260724".into())
         );
         assert_eq!(parse_tesseract_version("unknown 5.5.3"), None);
     }
