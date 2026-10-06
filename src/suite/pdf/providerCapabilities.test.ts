@@ -111,6 +111,11 @@ describe('PDF provider capability resolver',()=>{
       capability:resolvePdfProviderCapability(operation('/api/v1/misc/ocr-pdf'),[]),
     }],[tesseract]);
     expect(resolved.fields.map((field)=>field.name)).toEqual(['fileInput','languages','ocrType']);
+    expect(resolved.fields.find((field)=>field.name==='languages')).toEqual(expect.objectContaining({
+      kind:'string',
+      enumValues:['eng'],
+      defaultValue:'eng',
+    }));
     expect(resolved.capability.providerId).toBe('tesseract');
   });
 
