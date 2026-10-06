@@ -43,6 +43,7 @@ describe('Windows PDF provider packaging contract',()=>{
     const windows=text('scripts/build-stirling-core.ps1');
     const linux=text('scripts/build-stirling-core.sh');
     const patch=text('third_party/stirling-pdf/patches/0001-malenjo-java-effect-alternatives.patch');
+    const attributes=text('.gitattributes');
 
     expect(windows).toContain('0001-malenjo-java-effect-alternatives.patch');
     expect(windows).toContain('git config core.autocrlf false');
@@ -52,6 +53,7 @@ describe('Windows PDF provider packaging contract',()=>{
     expect(linux).toContain('git apply --check');
     expect(patch).toContain('addEndpointAlternative("replace-invert-pdf", "Java")');
     expect(patch).toContain('addEndpointAlternative("scanner-effect", "Java")');
+    expect(attributes).toContain('*.patch text eol=lf');
   });
 
   it('retains qpdf transitive notices in the generated component pack',()=>{
