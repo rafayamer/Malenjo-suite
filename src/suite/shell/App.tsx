@@ -382,6 +382,7 @@ export default function App() {
         session={session}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
+        onWorkingCopyChange={(bytes,dirty)=>persistWorkingCopy(session.id,bytes,dirty)}
       />;
     }
     if (route === 'presentation') {
@@ -390,6 +391,7 @@ export default function App() {
         session={session}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
+        onWorkingCopyChange={(bytes,dirty)=>persistWorkingCopy(session.id,bytes,dirty)}
       />;
     }
 
