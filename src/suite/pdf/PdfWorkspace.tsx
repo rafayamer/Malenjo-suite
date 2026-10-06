@@ -36,9 +36,12 @@ import {
 } from './editor';
 import {
   clearPdfForm,
+  createPdfFormField,
   flattenPdfForm,
   listPdfFormFields,
+  setPdfFormFieldFlags,
   setPdfFormFieldValue,
+  type PdfCreateFormFieldType,
   type PdfFormFieldDescriptor,
   type PdfFormValue,
 } from './forms';
@@ -121,6 +124,18 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [shapeOverlay, setShapeOverlay] = useState({ x:0.12, y:0.68, width:0.35, height:0.08, mode:'highlight' as 'highlight'|'outline' });
   const [formFields, setFormFields] = useState<PdfFormFieldDescriptor[]>([]);
   const [formDrafts, setFormDrafts] = useState<Record<string, PdfFormValue>>({});
+  const [formFlagDrafts, setFormFlagDrafts] = useState<Record<string,{required:boolean;readOnly:boolean}>>({});
+  const [newFormField, setNewFormField] = useState({
+    type:'text' as PdfCreateFormFieldType,
+    name:'',
+    x:0.12,
+    y:0.75,
+    width:0.38,
+    height:0.05,
+    required:false,
+    readOnly:false,
+    options:'Option 1, Option 2',
+  });
   const [formsLoading, setFormsLoading] = useState(false);
   const formsPanelRef = useRef<HTMLDivElement>(null);
   const scrollFps = useScrollFps(scrollRef);
@@ -476,6 +491,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     if (!sourceBytes) {
       setFormFields([]);
       setFormDrafts({});
+      setFormFlagDrafts({});
       return;
     }
 
@@ -485,12 +501,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         if (cancelled) return;
         setFormFields(fields);
         const drafts: Record<string, PdfFormValue> = {};
+        const flags: Record<string,{required:boolean;readOnly:boolean}> = {};
         for (const field of fields) {
           if (typeof field.value === 'boolean') drafts[field.name] = field.value;
           else if (Array.isArray(field.value)) drafts[field.name] = [...field.value];
           else drafts[field.name] = field.value ?? '';
+          flags[field.name] = { required:field.required, readOnly:field.readOnly };
         }
         setFormDrafts(drafts);
+        setFormFlagDrafts(flags);
       })
       .catch((reason) => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason));
@@ -510,6 +529,41 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       (bytes) => setPdfFormFieldValue(bytes, field.name, draft),
       currentPage,
     );
+  }
+
+
+  async function applyFormFieldFlags(field: PdfFormFieldDescriptor) {
+    const flags = formFlagDrafts[field.name];
+    if (!flags) return;
+    await mutate(
+      `Updated form properties for "${field.name}".`,
+      (bytes) => setPdfFormFieldFlags(bytes, field.name, flags),
+      currentPage,
+    );
+  }
+
+  async function addPreparedFormField() {
+    const options = newFormField.options
+      .split(',')
+      .map((value)=>value.trim())
+      .filter(Boolean);
+    await mutate(
+      `Created ${newFormField.type} form field "${newFormField.name}".`,
+      (bytes) => createPdfFormField(bytes, {
+        type:newFormField.type,
+        name:newFormField.name,
+        pageNumber:currentPage,
+        x:newFormField.x,
+        y:newFormField.y,
+        width:newFormField.width,
+        height:newFormField.height,
+        required:newFormField.required,
+        readOnly:newFormField.readOnly,
+        options,
+      }),
+      currentPage,
+    );
+    setNewFormField((current)=>({...current,name:''}));
   }
 
   async function clearFormFields() {
@@ -832,11 +886,43 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             {(field.type === 'button' || field.type === 'signature' || field.type === 'unknown') && <div className="pdf-form-unsupported">
               {field.type === 'signature' ? 'Use MALENJO Sign for cryptographic signature fields.' : field.type === 'button' ? 'Button actions are not editable form values.' : 'Unsupported form field type.'}
             </div>}
-            {!['button','signature','unknown'].includes(field.type) && <button
-              disabled={field.readOnly || mutating}
-              onClick={()=>void applyFormField(field)}
-            >Apply field</button>}
+            <div className="pdf-form-flags">
+              <label><input type="checkbox" checked={formFlagDrafts[field.name]?.required ?? field.required} disabled={mutating} onChange={(event)=>setFormFlagDrafts((current)=>({...current,[field.name]:{required:event.target.checked,readOnly:current[field.name]?.readOnly ?? field.readOnly}}))}/> Required</label>
+              <label><input type="checkbox" checked={formFlagDrafts[field.name]?.readOnly ?? field.readOnly} disabled={mutating} onChange={(event)=>setFormFlagDrafts((current)=>({...current,[field.name]:{required:current[field.name]?.required ?? field.required,readOnly:event.target.checked}}))}/> Read-only</label>
+            </div>
+            <div className="pdf-form-actions">
+              {!['button','signature','unknown'].includes(field.type) && <button
+                disabled={field.readOnly || mutating}
+                onClick={()=>void applyFormField(field)}
+              >Apply value</button>}
+              <button disabled={mutating} onClick={()=>void applyFormFieldFlags(field)}>Apply properties</button>
+            </div>
           </div>)}
+
+          <div className="pdf-form-preparer">
+            <b>Prepare form · current page {currentPage}</b>
+            <label>Field type<select value={newFormField.type} onChange={(event)=>setNewFormField({...newFormField,type:event.target.value as PdfCreateFormFieldType})}>
+              <option value="text">Text field</option>
+              <option value="checkbox">Checkbox</option>
+              <option value="dropdown">Dropdown</option>
+              <option value="option-list">Option list</option>
+            </select></label>
+            <label>Field name<input value={newFormField.name} onChange={(event)=>setNewFormField({...newFormField,name:event.target.value})} placeholder="for example student.name"/></label>
+            {(newFormField.type==='dropdown'||newFormField.type==='option-list')&&<label>Options<input value={newFormField.options} onChange={(event)=>setNewFormField({...newFormField,options:event.target.value})} placeholder="Option 1, Option 2"/></label>}
+            <div className="pdf-coordinate-grid">
+              <label>X<input type="number" min="0" max="1" step="0.01" value={newFormField.x} onChange={(event)=>setNewFormField({...newFormField,x:Number(event.target.value)})}/></label>
+              <label>Y<input type="number" min="0" max="1" step="0.01" value={newFormField.y} onChange={(event)=>setNewFormField({...newFormField,y:Number(event.target.value)})}/></label>
+              <label>W<input type="number" min="0.01" max="1" step="0.01" value={newFormField.width} onChange={(event)=>setNewFormField({...newFormField,width:Number(event.target.value)})}/></label>
+              <label>H<input type="number" min="0.01" max="1" step="0.01" value={newFormField.height} onChange={(event)=>setNewFormField({...newFormField,height:Number(event.target.value)})}/></label>
+            </div>
+            <div className="pdf-form-flags">
+              <label><input type="checkbox" checked={newFormField.required} onChange={(event)=>setNewFormField({...newFormField,required:event.target.checked})}/> Required</label>
+              <label><input type="checkbox" checked={newFormField.readOnly} onChange={(event)=>setNewFormField({...newFormField,readOnly:event.target.checked})}/> Read-only</label>
+            </div>
+            <button disabled={mutating||!newFormField.name.trim()} onClick={()=>void addPreparedFormField()}>Add interactive field</button>
+            <small>Coordinates use normalized 0–1 page space. Visual drag placement is a later Acrobat-class interaction pass.</small>
+          </div>
+
           {!!formFields.length && <div className="pdf-form-actions">
             <button disabled={mutating} onClick={()=>void clearFormFields()}>Clear editable fields</button>
             <button disabled={mutating} onClick={()=>void flattenFormFields()}>Flatten form</button>
