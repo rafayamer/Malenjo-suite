@@ -329,11 +329,13 @@ Still required includes the full NSIS/MSIX paths, component packs, custom/standa
 
 The distribution/component-pack section still requires core/Office/OCR/AI/CAD/DICOM/enterprise pack manifests, checksums, optional downloads, offline deployment, cleanup, size budgets and CI size regression gates.
 
-### Settings / Account / Help — FOUNDATION
+### Settings / Account — FOUNDATION; Help / Support — COMPLETE
 
-These are registered shell modules, not full source-complete systems.
+Settings and Account remain registered foundations and are not source-complete.
 
-Unified settings, diagnostics/support, account/device identity and related enterprise policy surfaces remain incomplete.
+Help / Support is the first module promoted to `complete` after its full registered feature tree was implemented and traced: searchable guides/troubleshooting, About identity/version/edition, explicit provider diagnostics, privacy-redacted copy/export diagnostics in browser and Tauri, native bounded/sanitized bundle writing, third-party notice access, accessibility states and frontend/Rust regression tests. See `docs/audits/COMPLETE-MODULE-HELP-SUPPORT.md`.
+
+This promotion does not close global logging issue #101: the source requirement that every *other* module emit the complete structured log schema remains separate work.
 
 ## Commercial-source override for the current student build
 
