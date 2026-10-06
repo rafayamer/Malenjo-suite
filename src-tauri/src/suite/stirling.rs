@@ -27,6 +27,16 @@ fn process_slot() -> &'static Mutex<Option<Child>> {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct StirlingComponentStatus {
+    pub id: String,
+    pub ready: bool,
+    pub version: Option<String>,
+    pub source: String,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StirlingCoreStatus {
     pub installed: bool,
     pub running: bool,
@@ -35,6 +45,7 @@ pub struct StirlingCoreStatus {
     pub base_url: String,
     pub version: Option<String>,
     pub message: String,
+    pub components: Vec<StirlingComponentStatus>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -129,20 +140,73 @@ fn find_named_file(root: &Path, filename: &str, depth: usize) -> Option<PathBuf>
     None
 }
 
-fn qpdf_bin_dir(app: &AppHandle) -> Option<PathBuf> {
+fn qpdf_executable(app: &AppHandle) -> Option<PathBuf> {
+    let filename = if cfg!(windows) { "qpdf.exe" } else { "qpdf" };
     let development = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../provider-packs/qpdf/runtime");
-    if let Some(exe) = find_named_file(&development, if cfg!(windows) { "qpdf.exe" } else { "qpdf" }, 6) {
-        return exe.parent().map(Path::to_path_buf);
+    if let Some(exe) = find_named_file(&development, filename, 6) {
+        return Some(exe);
     }
 
     if let Ok(resource_dir) = app.path().resource_dir() {
         let packaged = resource_dir.join("provider-packs/qpdf/runtime");
-        if let Some(exe) = find_named_file(&packaged, if cfg!(windows) { "qpdf.exe" } else { "qpdf" }, 6) {
-            return exe.parent().map(Path::to_path_buf);
+        if let Some(exe) = find_named_file(&packaged, filename, 6) {
+            return Some(exe);
         }
     }
     None
+}
+
+fn qpdf_bin_dir(app: &AppHandle) -> Option<PathBuf> {
+    qpdf_executable(app).and_then(|exe| exe.parent().map(Path::to_path_buf))
+}
+
+fn qpdf_component_status(app: &AppHandle) -> StirlingComponentStatus {
+    let Some(exe) = qpdf_executable(app) else {
+        return StirlingComponentStatus {
+            id: "qpdf".into(),
+            ready: false,
+            version: None,
+            source: "provider-pack".into(),
+            detail: "qpdf provider pack is not installed.".into(),
+        };
+    };
+
+    let output = Command::new(&exe)
+        .arg("--version")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output();
+    match output {
+        Ok(output) if output.status.success() => {
+            let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let version = text
+                .split_whitespace()
+                .find(|part| part.chars().next().is_some_and(|ch| ch.is_ascii_digit()))
+                .map(str::to_owned);
+            StirlingComponentStatus {
+                id: "qpdf".into(),
+                ready: true,
+                version,
+                source: "provider-pack".into(),
+                detail: format!("qpdf is available from {}.", exe.display()),
+            }
+        }
+        Ok(output) => StirlingComponentStatus {
+            id: "qpdf".into(),
+            ready: false,
+            version: None,
+            source: "provider-pack".into(),
+            detail: format!("qpdf exited with status {}.", output.status),
+        },
+        Err(error) => StirlingComponentStatus {
+            id: "qpdf".into(),
+            ready: false,
+            version: None,
+            source: "provider-pack".into(),
+            detail: format!("Unable to execute qpdf: {error}"),
+        },
+    }
 }
 
 fn provider_path(app: &AppHandle) -> OsString {
@@ -330,6 +394,7 @@ pub async fn stirling_core_status(app: AppHandle) -> StirlingCoreStatus {
         base_url: STIRLING_BASE_URL.into(),
         version: health.as_ref().and_then(version_from_health),
         message,
+        components: vec![qpdf_component_status(&app)],
     }
 }
 
