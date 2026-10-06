@@ -162,3 +162,7 @@
 .pdf-edit-note{border:1px solid #28435a;background:#0a1c2a;color:#7895a9;border-radius:7px;padding:8px;font-size:9px;line-height:1.45;margin-bottom:12px}
 .pdf-notice.error{border-color:#6b3030;background:#2b1619;color:#efb6b6}
 
+
+.status.partial{border-color:#315f78;background:#0c2636;color:#7dc7ef}
+.status.foundation{border-color:#675b35;background:#2a2417;color:#d6c37d}
+.status.complete{border-color:#245b49;background:#0d2d25;color:#67ddb2}
