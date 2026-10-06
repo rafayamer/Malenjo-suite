@@ -222,20 +222,20 @@ No module is complete merely because its navigation entry exists. Completion req
 | Accessibility | Help / Support | labels, role=status, focus-visible treatment, reduced-motion handling, keyboard-native details/controls | code audit + build | Complete |
 | Module completion gate | Registry | `help` is the only module promoted by this change; audit defines completion boundary | `COMPLETE-MODULE-HELP-SUPPORT.md`, registry test | Complete |
 
-## Complete module — Home
+## Home correction — CasualOffice OSS structure
 
 | Requirement | Component | Implementation | Evidence | Status |
 |---|---|---|---|---|
-| OSS-derived office start center | Home / shell | MALENJO adaptation of MIT `satnaing/shadcn-admin` dashboard composition; WPS screenshot used only as composition benchmark | `third_party/shadcn-admin/PROVENANCE.md`, Home audit | Complete |
-| Six-to-nine primary actions | Home launcher | eight operational launcher actions: Open, Document, Spreadsheet, Presentation, PDF, Scan, OCR, Malenjo AI | `model.ts`, model tests | Complete |
-| Recent documents | Home / Files | canonical desktop library + browser-session library, recent ordering, unavailable-state handling and real open pipeline | `HomeWorkspace.tsx`, model tests | Complete |
-| Starred documents | Home state | versioned, bounded local starred-document state with pruning and accessible toggle controls | `model.ts`, `storage.ts`, tests | Complete |
-| Pinned locations | Home / native file boundary | desktop folder pins + native picker rooted at pin; no background crawling; browser/Codespaces honest unavailable state | `api.ts`, Home UI | Complete |
-| Continue work | Home / document sessions | existing shared MALENJO sessions shown with saved/dirty/saving state and direct activation | `HomeWorkspace.tsx`, component baseline | Complete |
-| Update notice | Home / updater boundary | package version shown; updater explicitly marked non-operational; no update network request or false current-state claim | component baseline | Complete |
-| Student/classroom state | Home / Account boundary | local-only/not-connected state; no sign-in requirement, billing, premium or upsell UI | component baseline | Complete |
-| Accessibility / visual baseline | Home UI | native controls, visible focus, tabs/tabpanel semantics, role=status, reduced motion, responsive structural baseline | `HOME-START-CENTER.md`, component test | Complete |
-| Failure recovery | Home state/library | malformed persisted state and storage-write denial recover without blanking shell; library/open errors surface notices | model tests + implementation CI #211 | Complete |
-| Legal / dependency review | Home UI design source | MIT notice/provenance retained; no new npm/Rust dependency; no WPS proprietary assets copied | `THIRD_PARTY_NOTICES.md`, provenance | Complete |
-| Module completion gate | Registry | `home` promoted only after implementation CI #211 passed; registry test permits only Home + Help complete | registry test; final-head CI required before merge | Complete |
-
+| Truthful OSS structural source | Home / shell | source-adapted Apache-2.0 CasualOffice launcher components and layout; prior shadcn claim removed | `CasualOfficeUi.tsx`, `third_party/casualoffice/PROVENANCE.md` | Re-verification pending |
+| Six-to-nine primary actions | Home launcher | eight operational source-adapted ActionCards: Open, Document, Spreadsheet, Presentation, PDF, Scan, OCR, Malenjo AI | `model.ts`, model tests | Implemented |
+| Recent documents | Home / Files | canonical desktop/browser library, CasualOffice-style search + segmented type filter + time groups | `HomeWorkspace.tsx`, model tests | Implemented |
+| Starred documents | Home state | separate Pinned group using bounded versioned MALENJO star state | `model.ts`, UI | Implemented |
+| Recent file context actions | Home UI | source-adapted overflow/context menu for Open, Pin/Unpin and Files/Library routing | `CasualOfficeUi.tsx`, `HomeWorkspace.tsx` | Implemented |
+| Pinned locations | Home / native file boundary | Windows/Tauri folder pins + native picker rooted at pin; no background crawl; browser honest fallback | `api.ts`, Home UI | Implemented |
+| Continue work | Home / sessions | existing shared document sessions with saved/dirty/saving state and direct activation | `HomeWorkspace.tsx` | Implemented |
+| Update notice | Home / updater boundary | local package version; updater explicitly non-operational; no update network request | component baseline | Implemented |
+| Student/classroom state | Home / Account boundary | not-connected/local-only status; no premium, billing or sign-in gate | component baseline | Implemented |
+| Accessibility / structural baseline | Home UI | native controls, segmented tabs, focus-visible, reduced motion, executable structural test | `HOME-START-CENTER.md`, component test | Implemented |
+| Failure recovery | Home state/library | malformed state/storage denial and library/open errors recover with notice instead of blank shell | model tests | Implemented |
+| Legal review | Home UI source | CasualOffice Apache-2.0 license/provenance retained; no WPS proprietary assets; shadcn notice removed | third-party notices | Implemented |
+| Module completion gate | Registry | Home deliberately demoted during correction; may return to complete only after corrected CI | registry test + issue #139 | Re-verification pending |
