@@ -8,13 +8,20 @@ import { workspaceForDocument } from '../files/route';
 import {
   createDocumentSession,
   markDocumentDirty,
+  cycleDocumentSessionId,
   markDocumentSaved,
   markDocumentSaving,
+  reorderDocumentSessions,
   setDocumentDirty,
   type DocumentSession,
 } from '../files/session';
 import type { LibraryDocument } from '../files/types';
-import { addLibraryDocumentsByPaths, isDesktopRuntime, saveAsLibraryDocument } from '../files/api';
+import {
+  addLibraryDocumentsByPaths,
+  chooseAndAddDocuments,
+  isDesktopRuntime,
+  saveAsLibraryDocument,
+} from '../files/api';
 import { markBrowserDocumentOpened, registerBrowserFiles } from '../files/browserStore';
 import PdfWorkspace from '../pdf/PdfWorkspace';
 import OfficeWorkspace from '../office/OfficeWorkspace';
@@ -44,6 +51,7 @@ export default function App() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [workspaceNotices, setWorkspaceNotices] = useState<Record<string,string>>({});
   const commandControllersRef = useRef(new Map<string, DocumentCommandController>());
+  const browserOpenInputRef = useRef<HTMLInputElement>(null);
   const module = modules.find((item) => item.id === active) ?? modules[0];
   const groups = useMemo(() => ['Core','Create','Intelligence','Enterprise','System'] as const, []);
 
@@ -75,6 +83,41 @@ export default function App() {
     setSessions((current) => [...current, session]);
     setActiveSessionId(session.id);
     setActive(workspaceForDocument(document.kind));
+  }
+
+  function openBrowserFiles(files: Iterable<File>) {
+    const documents = registerBrowserFiles(files);
+    documents.forEach((document) => openFromLibrary(markBrowserDocumentOpened(document)));
+  }
+
+  async function openDocumentsFromPicker() {
+    if (!isDesktopRuntime()) {
+      browserOpenInputRef.current?.click();
+      return;
+    }
+
+    try {
+      const result = await chooseAndAddDocuments();
+      if (!result) return;
+      result.documents.forEach(openFromLibrary);
+      if (result.errors.length) {
+        setWorkspaceNotices((current) => ({
+          ...current,
+          __open: `${result.errors.length} selected file(s) could not be opened.`,
+        }));
+      }
+    } catch (error) {
+      setWorkspaceNotices((current) => ({ ...current, __open: String(error) }));
+    }
+  }
+
+  function reorderSessions(draggedId: string, targetId: string) {
+    setSessions((current) => reorderDocumentSessions(current, draggedId, targetId));
+  }
+
+  function cycleSession(direction: 1 | -1) {
+    const nextId = cycleDocumentSessionId(sessions, activeSessionId, direction);
+    if (nextId) activateSession(nextId);
   }
 
   function updateSession(sessionId: string, updater: (session: DocumentSession) => DocumentSession) {
@@ -205,6 +248,16 @@ export default function App() {
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'o') {
+        event.preventDefault();
+        void openDocumentsFromPicker();
+        return;
+      }
+      if (event.ctrlKey && event.key === 'Tab') {
+        event.preventDefault();
+        cycleSession(event.shiftKey ? -1 : 1);
+        return;
+      }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         setCommandOpen(true);
@@ -230,8 +283,7 @@ export default function App() {
     setDropActive(false);
     const files = Array.from(event.dataTransfer.files);
     if (!files.length) return;
-    const documents = registerBrowserFiles(files);
-    documents.forEach((document) => openFromLibrary(markBrowserDocumentOpened(document)));
+    openBrowserFiles(files);
   }
 
   function closeCommandPalette() {
@@ -244,6 +296,7 @@ export default function App() {
     : [];
 
   const commandItems: CommandPaletteItem[] = [
+    { id:'open-documents', label:'Open document(s)…', group:'File', keywords:'open import multiple files tabs ctrl o', detail:'Ctrl/Cmd+O', run:()=>{ void openDocumentsFromPicker(); } },
     { id:'go-home', label:'Home', group:'Navigation', keywords:'start dashboard', run:()=>selectModule('home') },
     { id:'go-files', label:'Open Files / Library', group:'Navigation', keywords:'open import documents', run:()=>selectModule('files') },
     { id:'go-scan', label:'Scan document', group:'Tools', keywords:'camera capture scanner', run:()=>selectModule('scanner') },
@@ -368,9 +421,23 @@ export default function App() {
       onDrop={handleBrowserDrop}
     >
       {dropActive && <div className="global-drop-overlay"><FolderOpen size={34}/><b>Drop files to open in MALENJO</b><span>{isDesktopRuntime() ? 'They will be added to the persistent local library.' : 'They will open as temporary Codespaces/browser sessions.'}</span></div>}
+      <input
+        ref={browserOpenInputRef}
+        className="visually-hidden"
+        type="file"
+        multiple
+        accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.webp,.tif,.tiff,.bmp,.dxf,.dwg,.dcm,.dicom"
+        onChange={(event) => {
+          if (event.target.files) openBrowserFiles(event.target.files);
+          event.target.value = '';
+        }}
+      />
       <header className="topbar">
         <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);setCommandOpen(true);}} placeholder="Search files, tools and commands"/><kbd>Ctrl K</kbd></div>
-        <button className="command" onClick={()=>setCommandOpen(true)}><Command size={17}/> Commands</button>
+        <div className="topbar-actions">
+          <button className="command" onClick={()=>void openDocumentsFromPicker()}><FolderOpen size={17}/> Open</button>
+          <button className="command" onClick={()=>setCommandOpen(true)}><Command size={17}/> Commands</button>
+        </div>
       </header>
 
       <DocumentTabs
@@ -384,6 +451,7 @@ export default function App() {
           closeSessions(sessions.slice(index + 1).map((session) => session.id));
         }}
         onCloseAll={() => closeSessions(sessions.map((session) => session.id))}
+        onReorder={reorderSessions}
       />
 
       <CommandPalette
