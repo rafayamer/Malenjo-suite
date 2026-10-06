@@ -359,7 +359,7 @@ function ModuleView({
         <h2>{document ? document.name : `${module.name} capability is not feature-complete yet`}</h2>
         <p>{document
           ? <>This file has its own persistent MALENJO tab/session. The remaining engine-specific commands for <strong>{module.engine}</strong> must be implemented before this workspace is feature-complete.</>
-          : <>This module is registered in the shell, but the full master-README feature tree has not yet been implemented. Current registry status reflects vertical-slice readiness, not Adobe/Foxit-class completeness.</>}</p>
+          : <>This module is registered in the shell, but the full master-README feature tree has not yet been implemented. Registry status distinguishes foundation/partial/adapter/planned/complete; no module is marked complete until its master-spec feature tree and acceptance tests are complete.</>}</p>
         <div className="notice"><ShieldCheck size={18}/>External engines must pass license, security, offline and fidelity tests before permanent integration.</div>
       </div>
     </div>
