@@ -39,7 +39,7 @@ export interface PdfProviderComponentStatus{
   available:boolean;
   version?:string|null;
   executable?:string|null;
-  source:'bundled'|'system'|'core'|'unavailable';
+  source:'bundled'|'configured'|'system'|'core'|'unavailable';
   message:string;
 }
 
