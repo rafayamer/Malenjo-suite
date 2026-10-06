@@ -1,51 +1,31 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Bot,
-  CircleCheck,
-  Clock3,
-  FileSpreadsheet,
-  FileText,
-  FolderOpen,
-  MapPin,
-  Plus,
-  Presentation,
-  RefreshCw,
-  ScanLine,
-  Search,
-  ShieldCheck,
-  Sparkles,
-  Star,
-  Workflow,
+  Bot, FileSpreadsheet, FileText, FolderOpen, MapPin, MoreHorizontal,
+  Presentation, ScanLine, Search, ShieldCheck, Sparkles, Star, Workflow,
 } from 'lucide-react';
 import packageJson from '../../../package.json';
 import type { ModuleId } from '../core/types';
-import {
-  isDesktopRuntime,
-  listLibraryDocuments,
-  openLibraryDocument,
-} from '../files/api';
+import { isDesktopRuntime, listLibraryDocuments, openLibraryDocument } from '../files/api';
 import { listBrowserDocuments, markBrowserDocumentOpened } from '../files/browserStore';
 import type { DocumentSession } from '../files/session';
 import type { LibraryDocument } from '../files/types';
 import { browsePinnedFolder, choosePinnedFolder } from './api';
 import {
-  HOME_PRIMARY_ACTIONS,
-  addPinnedLocation,
-  homeDocumentsForView,
-  pruneMissingStarredDocuments,
-  removePinnedLocation,
-  toggleStarredDocument,
-  type HomePinnedLocation,
-  type HomeStateV1,
-  type HomeView,
+  HOME_PRIMARY_ACTIONS, addPinnedLocation, groupRecentDocuments,
+  matchesHomeFileFilter, pruneMissingStarredDocuments, removePinnedLocation,
+  sortRecentDocuments, toggleStarredDocument,
+  type HomeFileFilter, type HomePinnedLocation, type HomeStateV1,
 } from './model';
 import { loadHomeState, saveHomeState } from './storage';
+import {
+  OfficeActionCard, OfficeContextMenu, OfficeRecentCard,
+  OfficeSearchInput, OfficeSegmentedFilter,
+} from './CasualOfficeUi';
 
 /**
- * The information architecture for this start center adapts the MIT-licensed
- * satnaing/shadcn-admin dashboard composition (header/search + main + tabs +
- * cards) pinned in third_party/shadcn-admin/PROVENANCE.md. MALENJO retains its
- * own navigation, brand, document model and dark visual system.
+ * Home launcher structure is source-adapted from CasualOffice/desktop
+ * (Apache-2.0), pinned in third_party/casualoffice/PROVENANCE.md.
+ * MALENJO keeps its own shell, document/session model and product branding.
  */
 interface Props {
   sessions: DocumentSession[];
@@ -57,313 +37,310 @@ interface Props {
   onOpenCommandPalette(): void;
 }
 
-const ACTION_ICONS = {
-  open:FolderOpen,
-  document:FileText,
-  spreadsheet:FileSpreadsheet,
-  presentation:Presentation,
-  pdf:FileText,
-  scan:ScanLine,
-  ocr:Search,
-  ai:Sparkles,
+const ACTION_ICONS={
+  open:FolderOpen, document:FileText, spreadsheet:FileSpreadsheet,
+  presentation:Presentation, pdf:FileText, scan:ScanLine, ocr:Search, ai:Sparkles,
 } as const;
 
-function dateLabel(timestamp: number | null): string {
-  if (!timestamp) return 'Added to library';
-  const date=new Date(timestamp);
-  const today=new Date();
-  const sameDay=date.getFullYear()===today.getFullYear()
-    && date.getMonth()===today.getMonth()
-    && date.getDate()===today.getDate();
-  return sameDay
-    ? new Intl.DateTimeFormat(undefined,{hour:'numeric',minute:'2-digit'}).format(date)
-    : new Intl.DateTimeFormat(undefined,{dateStyle:'medium'}).format(date);
+const FILTERS:Array<{value:HomeFileFilter;label:string}>=[
+  {value:'all',label:'All'},
+  {value:'pdf',label:'PDF'},
+  {value:'documents',label:'Documents'},
+  {value:'sheets',label:'Sheets'},
+  {value:'slides',label:'Slides'},
+  {value:'images',label:'Images'},
+  {value:'other',label:'Other'},
+];
+
+function actionTone(id:string):'document'|'sheets'|'slides'|'pdf'|'scan'|'ai'|'neutral'{
+  if(id==='document')return 'document';
+  if(id==='spreadsheet')return 'sheets';
+  if(id==='presentation')return 'slides';
+  if(id==='pdf')return 'pdf';
+  if(id==='scan'||id==='ocr')return 'scan';
+  if(id==='ai')return 'ai';
+  return 'neutral';
 }
 
-function typeLabel(document: LibraryDocument): string {
-  return document.kind==='docx' ? 'DOCX'
-    : document.kind==='xlsx' ? 'XLSX'
-      : document.kind==='pptx' ? 'PPTX'
-        : document.kind.toUpperCase();
+function fileTone(document:LibraryDocument):'document'|'sheets'|'slides'|'pdf'|'image'|'other'{
+  if(document.kind==='docx')return 'document';
+  if(document.kind==='xlsx')return 'sheets';
+  if(document.kind==='pptx')return 'slides';
+  if(document.kind==='pdf')return 'pdf';
+  if(document.kind==='image')return 'image';
+  return 'other';
 }
 
-function updateState(
-  current: HomeStateV1,
-  next: HomeStateV1,
-  setState: (value: HomeStateV1)=>void,
-  setNotice: (value:string)=>void,
-): void {
+function typeLabel(document:LibraryDocument):string{
+  if(document.kind==='docx')return 'DOCX';
+  if(document.kind==='xlsx')return 'XLSX';
+  if(document.kind==='pptx')return 'PPTX';
+  return document.kind.toUpperCase();
+}
+
+function timeLabel(timestamp:number|null):string{
+  if(!timestamp)return 'Added to library';
+  const now=Date.now();
+  const delta=Math.max(0,now-timestamp);
+  const mins=Math.floor(delta/60000);
+  if(mins<1)return 'Just now';
+  if(mins<60)return `${mins} min ago`;
+  const hours=Math.floor(mins/60);
+  if(hours<24)return `${hours} hr${hours===1?'':'s'} ago`;
+  const days=Math.floor(hours/24);
+  if(days<7)return `${days} day${days===1?'':'s'} ago`;
+  return new Intl.DateTimeFormat(undefined,{dateStyle:'medium'}).format(new Date(timestamp));
+}
+
+function saveState(next:HomeStateV1,setState:(state:HomeStateV1)=>void,setNotice:(value:string)=>void){
   setState(next);
   const result=saveHomeState(next);
-  if (!result.ok && result.error) setNotice(result.error);
-  else if (current.activeView!==next.activeView) setNotice('');
+  if(!result.ok&&result.error)setNotice(result.error);
 }
 
 export default function HomeWorkspace({
-  sessions,
-  activeSessionId,
-  onSelectModule,
-  onActivateSession,
-  onOpenDocument,
-  onOpenDocuments,
-  onOpenCommandPalette,
-}: Props) {
+  sessions,activeSessionId,onSelectModule,onActivateSession,onOpenDocument,
+  onOpenDocuments,onOpenCommandPalette,
+}:Props){
   const desktop=isDesktopRuntime();
   const [documents,setDocuments]=useState<LibraryDocument[]>([]);
   const [state,setState]=useState<HomeStateV1>(()=>loadHomeState());
   const [query,setQuery]=useState('');
+  const [filter,setFilter]=useState<HomeFileFilter>('all');
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
   const [notice,setNotice]=useState('');
+  const [menuDocumentId,setMenuDocumentId]=useState<string|null>(null);
 
   const loadDocuments=useCallback(async()=>{
     setLoading(true);
-    try {
-      const next=desktop ? await listLibraryDocuments() : listBrowserDocuments();
+    try{
+      const next=desktop?await listLibraryDocuments():listBrowserDocuments();
       setDocuments(next);
       setState((current)=>{
         const pruned=pruneMissingStarredDocuments(current,next);
-        if (pruned!==current) saveHomeState(pruned);
+        if(pruned!==current)saveHomeState(pruned);
         return pruned;
       });
       setNotice('');
-    } catch(reason) {
+    }catch(reason){
       setDocuments([]);
       setNotice(`Home could not load the document library: ${reason instanceof Error?reason.message:String(reason)}`);
-    } finally {
-      setLoading(false);
-    }
+    }finally{setLoading(false);}
   },[desktop]);
 
-  useEffect(()=>{ void loadDocuments(); },[loadDocuments,sessions.length]);
+  useEffect(()=>{void loadDocuments();},[loadDocuments,sessions.length]);
 
-  const visibleDocuments=useMemo(
-    ()=>state.activeView==='locations'
-      ? []
-      : homeDocumentsForView(documents,state,state.activeView,query),
-    [documents,state,query],
-  );
+  const searched=useMemo(()=>{
+    const terms=query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return sortRecentDocuments(documents).filter((document)=>{
+      if(!matchesHomeFileFilter(document,filter))return false;
+      if(!terms.length)return true;
+      const haystack=[document.name,document.extension,document.kind,document.locationLabel].join(' ').toLowerCase();
+      return terms.every((term)=>haystack.includes(term));
+    });
+  },[documents,filter,query]);
 
-  const continueSessions=useMemo(
-    ()=>[...sessions].sort((a,b)=>b.openedAt-a.openedAt).slice(0,4),
-    [sessions],
-  );
+  const pinnedDocuments=useMemo(()=>{
+    const byId=new Map(searched.map((document)=>[document.id,document]));
+    return state.starredDocumentIds.map((id)=>byId.get(id)).filter((document):document is LibraryDocument=>Boolean(document));
+  },[searched,state.starredDocumentIds]);
 
-  function setView(view: HomeView) {
-    updateState(state,{...state,activeView:view},setState,setNotice);
-    setQuery('');
+  const recentGroups=useMemo(()=>{
+    const pinned=new Set(state.starredDocumentIds);
+    return groupRecentDocuments(searched.filter((document)=>!pinned.has(document.id)));
+  },[searched,state.starredDocumentIds]);
+
+  const continueSessions=useMemo(()=>[...sessions].sort((a,b)=>b.openedAt-a.openedAt).slice(0,4),[sessions]);
+
+  function toggleStar(documentId:string){
+    saveState(toggleStarredDocument(state,documentId),setState,setNotice);
+    setMenuDocumentId(null);
   }
 
-  function toggleStar(documentId: string) {
-    const next=toggleStarredDocument(state,documentId);
-    updateState(state,next,setState,setNotice);
-  }
-
-  async function openDocument(document: LibraryDocument) {
-    if (!document.available) {
-      setNotice(`“${document.name}” is no longer available at its indexed location. Open Files / Library to refresh or remove the entry.`);
+  async function openDocument(document:LibraryDocument){
+    setMenuDocumentId(null);
+    if(!document.available){
+      setNotice(`“${document.name}” is no longer available at its indexed location. Use Files / Library to refresh it.`);
       return;
     }
     setBusy(true);
-    try {
-      const opened=desktop
-        ? await openLibraryDocument(document.id)
-        : markBrowserDocumentOpened(document);
+    try{
+      const opened=desktop?await openLibraryDocument(document.id):markBrowserDocumentOpened(document);
       onOpenDocument(opened);
-    } catch(reason) {
+    }catch(reason){
       setNotice(`Unable to open “${document.name}”: ${reason instanceof Error?reason.message:String(reason)}`);
       await loadDocuments();
-    } finally {
-      setBusy(false);
-    }
+    }finally{setBusy(false);}
   }
 
-  async function addPinnedFolder() {
-    if (!desktop) {
+  async function addPinnedFolder(){
+    if(!desktop){
       setNotice('Pinned local folders are available in the Windows desktop runtime. Browser/Codespaces files remain session-only.');
       return;
     }
-    try {
+    try{
       const location=await choosePinnedFolder();
-      if (!location) return;
-      const next=addPinnedLocation(state,location);
-      updateState(state,next,setState,setNotice);
+      if(!location)return;
+      saveState(addPinnedLocation(state,location),setState,setNotice);
       setNotice(`Pinned ${location.label} to Home.`);
-    } catch(reason) {
+    }catch(reason){
       setNotice(`Unable to pin this folder: ${reason instanceof Error?reason.message:String(reason)}`);
     }
   }
 
-  async function browseLocation(location: HomePinnedLocation) {
+  async function browseLocation(location:HomePinnedLocation){
     setBusy(true);
-    try {
+    try{
       const result=await browsePinnedFolder(location);
-      if (!result) return;
-      if (!result.documents.length && result.errors.length) {
-        setNotice(`No documents were opened from ${location.label}; ${result.errors.length} selected file(s) were rejected.`);
-        return;
-      }
-      for (const document of result.documents) {
+      if(!result)return;
+      for(const document of result.documents){
         const opened=await openLibraryDocument(document.id);
         onOpenDocument(opened);
       }
-      if (result.errors.length) {
-        setNotice(`Opened ${result.documents.length} document(s); ${result.errors.length} selected file(s) could not be added.`);
-      }
-    } catch(reason) {
+      if(result.errors.length)setNotice(`Opened ${result.documents.length} document(s); ${result.errors.length} selected file(s) could not be added.`);
+    }catch(reason){
       setNotice(`Unable to browse ${location.label}: ${reason instanceof Error?reason.message:String(reason)}`);
-    } finally {
-      setBusy(false);
-    }
+    }finally{setBusy(false);}
   }
 
-  function removeLocation(id: string) {
-    const next=removePinnedLocation(state,id);
-    updateState(state,next,setState,setNotice);
+  function removeLocation(id:string){
+    saveState(removePinnedLocation(state,id),setState,setNotice);
   }
 
-  return <div className="content home-start-center">
-    <header className="home-welcome">
+  function renderDocumentCard(document:LibraryDocument,pinned:boolean){
+    return <div className="ml-home-recent-wrap" key={document.id}>
+      <OfficeRecentCard
+        name={document.name}
+        path={document.locationLabel}
+        time={timeLabel(document.lastOpenedMs??document.addedMs)}
+        kindLabel={typeLabel(document)}
+        tone={fileTone(document)}
+        pinned={pinned}
+        unavailable={!document.available}
+        disabled={!document.available||busy}
+        onClick={()=>void openDocument(document)}
+      />
+      <button
+        className="ml-home-more"
+        aria-label={`More actions for ${document.name}`}
+        aria-expanded={menuDocumentId===document.id}
+        onClick={()=>setMenuDocumentId((current)=>current===document.id?null:document.id)}
+      ><MoreHorizontal size={15}/></button>
+      {menuDocumentId===document.id&&<OfficeContextMenu
+        className="ml-home-file-menu"
+        items={[
+          {label:'Open',disabled:!document.available,onSelect:()=>void openDocument(document)},
+          {label:pinned?'Unpin from Home':'Pin to Home',onSelect:()=>toggleStar(document.id)},
+          {label:'Open Files / Library',onSelect:()=>{setMenuDocumentId(null);onSelectModule('files');}},
+        ]}
+      />}
+    </div>;
+  }
+
+  return <div className="content home-start-center ml-co-launcher">
+    <header className="ml-co-home-head">
       <div>
         <p className="eyebrow">MALENJO START CENTER</p>
-        <h1>Home</h1>
-        <p>Open recent work, start a document task, or jump into a local workspace. Heavy providers stay off until a feature needs them.</p>
+        <h1>Welcome to Malenjo Suite</h1>
+        <p>Open something, or start a local document task.</p>
       </div>
-      <div className="home-local-badge"><ShieldCheck size={17}/><span><b>Local-first</b><small>{desktop?'Windows desktop runtime':'Browser / Codespaces session'}</small></span></div>
+      <div className="ml-home-runtime"><ShieldCheck size={16}/><span><b>Local-first</b><small>{desktop?'Windows desktop':'Browser / Codespaces'}</small></span></div>
     </header>
 
-    <section className="home-launcher" aria-labelledby="home-launcher-title">
-      <div className="home-section-title">
-        <div><h2 id="home-launcher-title">Start</h2><p>High-frequency document actions</p></div>
-        <button className="home-search-button" onClick={onOpenCommandPalette}><Search size={14}/>Search everything <kbd>Ctrl K</kbd></button>
-      </div>
-      <div className="home-launcher-grid">
-        {HOME_PRIMARY_ACTIONS.map((action)=>{
-          const Icon=ACTION_ICONS[action.id as keyof typeof ACTION_ICONS] ?? FileText;
-          return <button
-            key={action.id}
-            className={`home-launch-tile ${action.id}`}
-            onClick={()=>action.opensFiles ? void onOpenDocuments() : action.target && onSelectModule(action.target)}
-          >
-            <span className="home-launch-icon"><Icon size={24}/></span>
-            <span><b>{action.label}</b><small>{action.detail}</small></span>
-          </button>;
-        })}
-      </div>
-      <div className="home-secondary-actions" aria-label="Additional Home actions">
-        <button onClick={()=>onSelectModule('files')}><FolderOpen size={14}/>Files / Library</button>
-        <button onClick={()=>setView('recent')}><Clock3 size={14}/>Recent</button>
-        <button onClick={()=>setView('starred')}><Star size={14}/>Starred</button>
-        <button onClick={()=>setView('locations')}><MapPin size={14}/>Pinned locations</button>
-        <button onClick={()=>onSelectModule('automation')}><Workflow size={14}/>New workflow</button>
-      </div>
+    <section className="ml-co-actions" aria-label="Start a document task">
+      {HOME_PRIMARY_ACTIONS.map((action)=>{
+        const Icon=ACTION_ICONS[action.id as keyof typeof ACTION_ICONS]??FileText;
+        return <OfficeActionCard
+          key={action.id}
+          title={action.label}
+          subtitle={action.detail}
+          icon={<Icon size={21}/>} 
+          tone={actionTone(action.id)}
+          dashed={action.id==='open'}
+          onClick={()=>action.opensFiles?void onOpenDocuments():action.target&&onSelectModule(action.target)}
+        />;
+      })}
     </section>
 
-    {continueSessions.length>0 && <section className="home-continue" aria-labelledby="continue-title">
-      <div className="home-section-title"><div><h2 id="continue-title">Continue working</h2><p>Open MALENJO document sessions keep independent state.</p></div></div>
-      <div className="home-continue-grid">
+    <div className="ml-home-shortcuts" aria-label="Home shortcuts">
+      <button onClick={onOpenCommandPalette}><Search size={13}/>Search everything <kbd>Ctrl K</kbd></button>
+      <button onClick={()=>onSelectModule('files')}><FolderOpen size={13}/>Files / Library</button>
+      <button onClick={()=>onSelectModule('automation')}><Workflow size={13}/>New workflow</button>
+      <span>{desktop?'Local Windows files':'Session files'} · network optional</span>
+    </div>
+
+    {continueSessions.length>0&&<section className="ml-home-section" aria-labelledby="ml-home-continue-title">
+      <div className="ml-co-section-head"><div><h2 id="ml-home-continue-title">Continue working</h2><p>Existing MALENJO tabs keep independent editor state.</p></div></div>
+      <div className="ml-home-session-grid">
         {continueSessions.map((session)=><button
           key={session.id}
-          className={session.id===activeSessionId?'home-continue-card active':'home-continue-card'}
+          className={session.id===activeSessionId?'ml-home-session active':'ml-home-session'}
           onClick={()=>onActivateSession(session.id)}
-        >
-          <FileText size={18}/>
-          <span><b>{session.document.name}</b><small>{typeLabel(session.document)} · {session.saving?'Saving…':session.dirty?'Unsaved changes':'Saved'}</small></span>
-          <em>{dateLabel(session.openedAt)}</em>
-        </button>)}
+        ><FileText size={18}/><span><b>{session.document.name}</b><small>{typeLabel(session.document)} · {session.saving?'Saving…':session.dirty?'Unsaved changes':'Saved'}</small></span></button>)}
       </div>
     </section>}
 
-    <div className="home-dashboard-grid">
-      <section className="home-work-panel" aria-label="Home documents and pinned locations">
-        <div className="home-work-head">
-          <div className="home-tabs" role="tablist" aria-label="Home document views">
-            {(['recent','starred','locations'] as HomeView[]).map((view)=><button
-              key={view}
-              role="tab"
-              aria-selected={state.activeView===view}
-              className={state.activeView===view?'active':''}
-              onClick={()=>setView(view)}
-            >{view==='locations'?'Locations':view[0].toUpperCase()+view.slice(1)}</button>)}
-          </div>
-          {state.activeView!=='locations'
-            ? <label className="home-filter"><Search size={14}/><span className="visually-hidden">Filter Home documents</span><input value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Filter documents"/></label>
-            : <button className="home-add-location" disabled={busy} onClick={()=>void addPinnedFolder()}><Plus size={14}/>Pin folder</button>}
+    <section className="ml-home-section ml-co-files" aria-labelledby="ml-home-files-title">
+      <div className="ml-co-recent-head">
+        <div><h2 id="ml-home-files-title">Your files</h2><p>Recent and pinned items from the canonical MALENJO library.</p></div>
+        <div className="ml-co-recent-tools">
+          <OfficeSearchInput value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Search recent…" aria-label="Search recent MALENJO files"/>
+          <OfficeSegmentedFilter<HomeFileFilter> aria-label="Filter recent files by type" value={filter} onChange={setFilter} options={FILTERS}/>
         </div>
+      </div>
 
-        <div className="home-work-content" role="tabpanel" aria-live="polite">
-          {state.activeView==='locations'
-            ? <div className="home-location-list">
-                {desktop && state.pinnedLocations.map((location)=><article key={location.id} className="home-location-card">
-                  <span className="home-location-icon"><FolderOpen size={19}/></span>
-                  <div><b>{location.label}</b><small title={location.path}>{location.path}</small></div>
-                  <button disabled={busy} onClick={()=>void browseLocation(location)}>Browse & open</button>
-                  <button className="text-action" onClick={()=>removeLocation(location.id)}>Remove</button>
-                </article>)}
-                {!desktop && <article className="home-location-card unavailable">
-                  <span className="home-location-icon"><FolderOpen size={19}/></span>
-                  <div><b>Browser session</b><small>Local folder pins are not exposed by browser/Codespaces. Session files remain available through Files / Library.</small></div>
-                  <button onClick={()=>onSelectModule('files')}>View files</button>
-                </article>}
-                {desktop && !state.pinnedLocations.length && <div className="home-empty-state"><MapPin size={25}/><b>No pinned folders yet</b><span>Pin frequently used document folders. Browsing a pin opens a native file picker rooted at that folder; MALENJO does not scan the folder in the background.</span><button onClick={()=>void addPinnedFolder()}><Plus size={14}/>Pin a folder</button></div>}
-              </div>
-            : loading
-              ? <div className="home-empty-state"><RefreshCw size={24}/><b>Loading library…</b></div>
-              : visibleDocuments.length
-                ? <div className="home-document-list" role="table" aria-label={state.activeView==='recent'?'Recent documents':'Starred documents'}>
-                    {visibleDocuments.map((document)=>{
-                      const starred=state.starredDocumentIds.includes(document.id);
-                      return <div key={document.id} className={document.available?'home-document-row':'home-document-row unavailable'} role="row">
-                        <button className="home-document-open" disabled={!document.available||busy} onClick={()=>void openDocument(document)}>
-                          <span className={`home-file-badge ${document.kind}`}>{typeLabel(document).slice(0,4)}</span>
-                          <span><b>{document.name}</b><small>{document.locationLabel}</small></span>
-                        </button>
-                        <span className="home-document-date">{dateLabel(document.lastOpenedMs ?? document.addedMs)}</span>
-                        <button
-                          className={starred?'home-star active':'home-star'}
-                          aria-label={starred?`Remove ${document.name} from starred`:`Add ${document.name} to starred`}
-                          aria-pressed={starred}
-                          onClick={()=>toggleStar(document.id)}
-                        ><Star size={16} fill={starred?'currentColor':'none'}/></button>
-                      </div>;
-                    })}
-                  </div>
-                : <div className="home-empty-state">
-                    {state.activeView==='starred'?<Star size={25}/>:<Clock3 size={25}/>}
-                    <b>{state.activeView==='starred'?'No starred documents':'No recent documents'}</b>
-                    <span>{query?'No document matches this filter.':'Open a local document and it will appear here.'}</span>
-                    <button onClick={()=>void onOpenDocuments()}><FolderOpen size={14}/>Open documents</button>
-                  </div>}
-        </div>
+      {loading?<div className="ml-co-empty">Loading recent files…</div>:<>
+        {pinnedDocuments.length>0&&<div className="ml-co-recent-group">
+          <div className="ml-co-group-head"><h3>Pinned</h3><span>{pinnedDocuments.length}</span></div>
+          <div className="ml-co-recent-grid">{pinnedDocuments.map((document)=>renderDocumentCard(document,true))}</div>
+        </div>}
+        {recentGroups.map((group)=><div className="ml-co-recent-group" key={group.label}>
+          <div className="ml-co-group-head"><h3>{group.label}</h3><span>{group.documents.length}</span></div>
+          <div className="ml-co-recent-grid">{group.documents.map((document)=>renderDocumentCard(document,false))}</div>
+        </div>)}
+        {!pinnedDocuments.length&&!recentGroups.length&&<div className="ml-co-empty">
+          <ClockEmpty/>
+          <b>{query?'No recent files match that search.':'No recent files yet.'}</b>
+          <span>{query?'Change the search or file-type filter.':'Open a local document to get started.'}</span>
+          <button onClick={()=>void onOpenDocuments()}><FolderOpen size={14}/>Open file</button>
+        </div>}
+      </>}
+    </section>
 
-        <footer className="home-work-footer">
-          <span>{documents.length} library document{documents.length===1?'':'s'}</span>
-          <button className="text-action" onClick={()=>onSelectModule('files')}>View full library</button>
-        </footer>
-      </section>
+    <section className="ml-home-section" aria-labelledby="ml-home-locations-title">
+      <div className="ml-co-section-head">
+        <div><h2 id="ml-home-locations-title">Pinned locations</h2><p>Shortcuts to folders you use often. MALENJO does not crawl them in the background.</p></div>
+        <button className="ml-home-pin-folder" onClick={()=>void addPinnedFolder()} disabled={busy}><MapPin size={13}/>Pin folder</button>
+      </div>
+      <div className="ml-home-location-grid">
+        {desktop&&state.pinnedLocations.map((location)=><article className="ml-home-location" key={location.id}>
+          <FolderOpen size={18}/><div><b>{location.label}</b><small title={location.path}>{location.path}</small></div>
+          <button disabled={busy} onClick={()=>void browseLocation(location)}>Browse & open</button>
+          <button className="text-action" onClick={()=>removeLocation(location.id)}>Remove</button>
+        </article>)}
+        {!desktop&&<article className="ml-home-location muted"><FolderOpen size={18}/><div><b>Browser session</b><small>Native folder pins are available only in the Windows desktop runtime.</small></div><button onClick={()=>onSelectModule('files')}>View files</button></article>}
+        {desktop&&!state.pinnedLocations.length&&<div className="ml-home-location-empty">No pinned folders yet.</div>}
+      </div>
+    </section>
 
-      <aside className="home-info-rail" aria-label="Home status and notices">
-        <section className="home-info-card system">
-          <div className="home-info-icon"><CircleCheck size={18}/></div>
-          <div><p className="eyebrow">SYSTEM</p><h3>Ready for local work</h3><dl>
-            <div><dt>Runtime</dt><dd>{desktop?'Desktop':'Browser'}</dd></div>
-            <div><dt>Open tabs</dt><dd>{sessions.length}</dd></div>
-            <div><dt>Library</dt><dd>{loading?'…':documents.length}</dd></div>
-          </dl></div>
-        </section>
+    <section className="ml-home-status-row" aria-label="Home service status">
+      <div><ShieldCheck size={15}/><span><b>System</b><small>{documents.length} library item{documents.length===1?'':'s'} · {sessions.length} tab{sessions.length===1?'':'s'} open</small></span></div>
+      <div><Search size={15}/><span><b>Updates</b><small>Malenjo Suite {packageJson.version} · updater not operational yet</small></span></div>
+      <div><Bot size={15}/><span><b>Student Hub</b><small>Not connected · local work remains available</small></span></div>
+    </section>
 
-        <section className="home-info-card">
-          <div className="home-info-icon"><RefreshCw size={18}/></div>
-          <div><p className="eyebrow">UPDATES</p><h3>Malenjo Suite {packageJson.version}</h3><p>The updater module is not operational yet. Home does not contact an update server or claim that this build is current.</p><button onClick={()=>onSelectModule('help')}>About this build</button></div>
-        </section>
+    <footer className="ml-co-shortcut-footer">
+      <span><kbd>Ctrl</kbd>+<kbd>O</kbd> Open</span>
+      <span><kbd>Ctrl</kbd>+<kbd>K</kbd> Search</span>
+      <span><kbd>Ctrl</kbd>+<kbd>Tab</kbd> Next document</span>
+      <button className="text-action" onClick={()=>onSelectModule('help')}>About this build</button>
+    </footer>
 
-        <section className="home-info-card">
-          <div className="home-info-icon"><Bot size={18}/></div>
-          <div><p className="eyebrow">STUDENT HUB</p><h3>Local-only session</h3><p>No classroom account provider is connected. Local documents and workspaces remain available without sign-in.</p><button onClick={()=>onSelectModule('account')}>Account status</button></div>
-        </section>
-      </aside>
-    </div>
-
-    {notice && <div className="home-status" role="status">{notice}</div>}
+    {notice&&<div className="home-status" role="status">{notice}</div>}
   </div>;
+}
+
+function ClockEmpty(){
+  return <span className="ml-co-empty-glyph" aria-hidden="true">◷</span>;
 }
