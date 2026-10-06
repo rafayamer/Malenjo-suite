@@ -271,5 +271,20 @@ No module is complete merely because its navigation entry exists. Completion req
 | qpdf operation smoke | Windows CI | Repair + Compress invoked over `127.0.0.1:28970`; generated valid fixture validated by qpdf; PDF output signatures checked | CI #269 (`37490673818`) | Verified |
 | Module completion | Registry | PDF explicitly remains `partial` | registry test | Correct |
 
-| Stirling PATH isolation | Native provider boundary | child PATH contains only reviewed/configured qpdf; user PATH is not inherited | Rust regression test + review | Implemented; CI pending |
-| OpenAPI provider-name normalization | PDF capability resolver | slash/camelCase/spaced names resolve to the same provider gate | provider capability tests | Implemented; CI pending |
+| Stirling PATH isolation | Native provider boundary | child PATH contains only reviewed/configured qpdf; user PATH is not inherited | Rust regression test + review | Verified in PR #145 / CI #275 |
+| OpenAPI provider-name normalization | PDF capability resolver | slash/camelCase/spaced names resolve to the same provider gate | provider capability tests | Verified in PR #145 / CI #275 |
+
+
+## PDF completion pass 2B — Tesseract OCR provider
+
+| Requirement | Component | Implementation | Evidence | Status |
+|---|---|---|---|---|
+| Pinned OCR runtime | Tesseract provider pack | official 5.5.3 Windows x64 installer, exact SHA-256 | builder + `third_party/tesseract/PROVENANCE.md` | Implemented; CI pending |
+| Offline OCR data | Tesseract models | exact tessdata_fast commit; eng/osd Git blob identity verification | builder + provenance | Implemented; CI pending |
+| No runtime model download | Provider packaging | installer not executed; pinned model data staged before runtime | builder/audit | Implemented |
+| Provider isolation | Tauri/Rust | reviewed qpdf + Tesseract dirs only on child PATH; local `TESSDATA_PREFIX` | `stirling.rs`, packaging tests | Implemented; CI pending |
+| Provider capability truth | PDF contract | native Tesseract readiness overrides pending status only when executable + eng/osd exist | `stirlingCore.ts`, resolver tests | Implemented; CI pending |
+| OCR operation smoke | Windows CI | `ocr-pdf` force-OCR using eng; PDF output checked | workflow | CI pending |
+| Auto Rotate smoke | Windows CI | `auto-rotate-pdf` OSD path available with pinned osd data; PDF output checked | workflow | CI pending |
+| Tesseract redistribution | Legal/provenance | Apache core/model licenses retained; exact installer runtime DLL mapping still required | provider matrix + audit | Integration-only; release gate pending |
+| Module completion | Registry | PDF remains `partial`; #143 remains open | registry + issue gate | Correct |
