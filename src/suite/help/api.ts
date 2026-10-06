@@ -1,4 +1,5 @@
 import { getVersion } from '@tauri-apps/api/app';
+import packageJson from '../../../package.json';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
 import { getLocalAiStatus } from '../ai/api';
@@ -26,8 +27,8 @@ export interface SupportRuntimeSnapshot {
   providers: ProviderDiagnostic[];
 }
 
-const WEB_VERSION = '0.1.0';
-const BUILD_ID = 'student-noncommercial';
+const WEB_VERSION = packageJson.version;
+const BUILD_ID = `student-noncommercial/${import.meta.env.MODE}`;
 
 function normalizedError(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
