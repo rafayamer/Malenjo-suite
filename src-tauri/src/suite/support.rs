@@ -4,7 +4,11 @@ use std::{fs, path::PathBuf};
 const MAX_SUPPORT_BUNDLE_BYTES: usize = 1024 * 1024;
 
 fn sensitive_key(key: &str) -> bool {
-    let normalized = key.to_ascii_lowercase().replace(['-', '_', ' '], "");
+    let normalized = key
+        .to_ascii_lowercase()
+        .replace('-', "")
+        .replace('_', "")
+        .replace(' ', "");
     if normalized.ends_with("included") {
         return false;
     }
