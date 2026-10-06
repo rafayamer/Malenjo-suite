@@ -20,7 +20,36 @@ import {
 import type { LibraryDocument } from './types';
 
 interface Props {
-  onOpen(document: LibraryDocument): void;
+  onOpen(document: LibraryDocument, sourceFile?: File): void;
+}
+
+function kindForFile(name: string): LibraryDocument['kind'] {
+  const extension = name.split('.').pop()?.toLowerCase() ?? '';
+  if (extension === 'pdf') return 'pdf';
+  if (extension === 'docx') return 'docx';
+  if (extension === 'xlsx') return 'xlsx';
+  if (extension === 'pptx') return 'pptx';
+  if (['png','jpg','jpeg','webp','tif','tiff','bmp'].includes(extension)) return 'image';
+  if (['dxf','dwg'].includes(extension)) return 'cad';
+  if (['dcm','dicom'].includes(extension)) return 'dicom';
+  return 'other';
+}
+
+function browserDocument(file: File): LibraryDocument {
+  const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
+  const opened = Date.now();
+  return {
+    id: `browser-${crypto.randomUUID()}`,
+    name: file.name,
+    extension,
+    kind: kindForFile(file.name),
+    sizeBytes: file.size,
+    modifiedMs: file.lastModified || opened,
+    addedMs: opened,
+    lastOpenedMs: opened,
+    available: true,
+    locationLabel: 'Browser / Codespaces session',
+  };
 }
 
 function formatBytes(bytes: number): string {
@@ -94,6 +123,18 @@ export default function FileLibrary({ onOpen }: Props) {
     } finally {
       setBusy(false);
     }
+  }
+
+
+  function openBrowserFiles(files: FileList | null) {
+    if (!files?.length) return;
+    const accepted = Array.from(files).filter((file) => file.size > 0 && file.size <= 512 * 1024 * 1024);
+    for (const file of accepted) onOpen(browserDocument(file), file);
+    setNotice(
+      accepted.length === files.length
+        ? `Opened ${accepted.length} browser document(s) in MALENJO tabs.`
+        : `Opened ${accepted.length} document(s); empty or >512 MB files were skipped.`,
+    );
   }
 
   async function openDocument(document: LibraryDocument) {
