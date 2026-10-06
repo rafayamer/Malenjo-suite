@@ -45,7 +45,9 @@ describe('Windows PDF provider packaging contract',()=>{
     const patch=text('third_party/stirling-pdf/patches/0001-malenjo-java-effect-alternatives.patch');
 
     expect(windows).toContain('0001-malenjo-java-effect-alternatives.patch');
+    expect(windows).toContain('git config core.autocrlf false');
     expect(windows).toContain('git apply --check');
+    expect(linux).toContain('git config core.autocrlf false');
     expect(linux).toContain('0001-malenjo-java-effect-alternatives.patch');
     expect(linux).toContain('git apply --check');
     expect(patch).toContain('addEndpointAlternative("replace-invert-pdf", "Java")');
