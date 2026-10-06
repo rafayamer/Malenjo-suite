@@ -1,4 +1,9 @@
 import type { LibraryDocument, LibraryDocumentKind } from './types';
+import {
+  deletePersistedBrowserDocument,
+  loadPersistedBrowserDocuments,
+  persistBrowserDocument,
+} from './recovery';
 
 const entries = new Map<string, LibraryDocument>();
 
@@ -47,8 +52,17 @@ export function registerBrowserFiles(files: FileList | File[]): LibraryDocument[
       ephemeral: true,
     };
     entries.set(id, document);
+    void persistBrowserDocument(document);
     return document;
   });
+}
+
+export async function hydrateBrowserStore(): Promise<LibraryDocument[]> {
+  const persisted = await loadPersistedBrowserDocuments();
+  for (const document of persisted) {
+    if (!entries.has(document.id)) entries.set(document.id, document);
+  }
+  return listBrowserDocuments();
 }
 
 export function listBrowserDocuments(): LibraryDocument[] {
@@ -60,9 +74,12 @@ export function markBrowserDocumentOpened(document: LibraryDocument): LibraryDoc
   if (!current) return document;
   const next = { ...current, lastOpenedMs: Date.now() };
   entries.set(document.id, next);
+  void persistBrowserDocument(next);
   return next;
 }
 
 export function removeBrowserDocument(document: LibraryDocument): boolean {
-  return entries.delete(document.id);
+  const removed = entries.delete(document.id);
+  void deletePersistedBrowserDocument(document.id);
+  return removed;
 }
