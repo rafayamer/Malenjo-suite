@@ -191,3 +191,7 @@
 .pdf-coordinate-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}.pdf-coordinate-grid label{display:block}.pdf-coordinate-grid input{margin-top:3px}
 .pdf-edit-form small{display:block;color:#667f92;font-size:8px;line-height:1.4;margin-top:6px}
 
+.command-palette-results button:disabled{opacity:.46;cursor:not-allowed;background:#08151f;color:#6f8797}
+.command-palette-results button:disabled:hover{background:#08151f}
+.command-palette-results button:disabled small{color:#8c7452}
+
