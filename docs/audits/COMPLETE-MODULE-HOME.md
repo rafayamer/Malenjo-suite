@@ -4,7 +4,7 @@
 
 **Module:** Home  
 **Tracking issue:** #134  
-**Target registry state:** `complete` only after final-head and post-merge CI pass.
+**Registry state:** `complete` after implementation CI #211 passed. Final-head and post-merge `main` CI remain mandatory merge/release evidence.
 
 ## Source contract
 
@@ -146,6 +146,10 @@ Executable semantic baseline: `src/suite/home/HomeWorkspace.test.tsx`.
 - storage failure recovery.
 
 `src/suite/home/HomeWorkspace.test.tsx` server-renders the major Home state and verifies launcher count, tab semantics, continue-work state, honest updater/account states and absence of WPS/premium/ad content.
+
+## CI gate
+
+Implementation head `06aa772f1fed86b9532a62f888079d920c158d8d` passed CI #211 (`37453190343`): frontend typecheck/tests/build, Windows Rust check/tests and Codespaces/Linux validation/check/tests. The registry promotion and final documentation commits require a fresh final-head CI before merge; post-merge `main` CI is also required.
 
 ## Completion boundary
 
