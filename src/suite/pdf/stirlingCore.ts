@@ -287,6 +287,14 @@ export function parseStirlingOpenApi(document:unknown):PdfProviderOperation[]{
   return operations.sort((left,right)=>left.summary.localeCompare(right.summary));
 }
 
+interface NativeStirlingComponentStatus{
+  id:string;
+  ready:boolean;
+  version?:string|null;
+  source:string;
+  detail:string;
+}
+
 interface NativeStirlingStatus{
   installed:boolean;
   running:boolean;
@@ -295,6 +303,7 @@ interface NativeStirlingStatus{
   baseUrl:string;
   version?:string|null;
   message:string;
+  components:NativeStirlingComponentStatus[];
 }
 
 function normalizeStatus(status:NativeStirlingStatus):PdfProviderStatus{
@@ -306,6 +315,7 @@ function normalizeStatus(status:NativeStirlingStatus):PdfProviderStatus{
     endpoint:status.baseUrl,
     version:status.version,
     message:status.message,
+    components:status.components,
   };
 }
 
@@ -313,6 +323,7 @@ export async function stirlingCoreStatus():Promise<PdfProviderStatus>{
   if(!isTauri())return {
     installed:false,running:false,endpoint:'http://127.0.0.1:28970',
     message:'The local PDF provider runs only inside the Windows/Tauri desktop runtime.',
+    components:[],
   };
   return normalizeStatus(await invoke<NativeStirlingStatus>('stirling_core_status'));
 }
