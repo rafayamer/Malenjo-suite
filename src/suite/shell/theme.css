@@ -212,3 +212,9 @@
 .pdf-form-inventory span{display:flex;flex-direction:column;gap:2px;white-space:normal}
 .pdf-form-inventory span strong{font-size:8px;color:#bcd1df;font-weight:600}
 .pdf-form-inventory span em{font-size:7px;color:#6f8ca0;font-style:normal;line-height:1.35}
+
+.pdf-label-range{border:1px solid #1a374c;background:#071722;border-radius:7px;padding:8px;margin:7px 0}
+.pdf-label-range>button{margin-top:6px}
+.pdf-property-dates{display:grid;grid-template-columns:1fr;gap:5px;margin:8px 0}
+.pdf-property-dates span{display:flex;justify-content:space-between;gap:8px;color:#6e8ba0;font-size:8px}
+.pdf-property-dates b{color:#afc5d3;font-weight:500;overflow:hidden;text-overflow:ellipsis}
