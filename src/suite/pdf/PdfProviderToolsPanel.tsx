@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2, ChevronDown, FileOutput, Play, RefreshCw, Search,
-  ServerCog, SquareStop, TriangleAlert,
+  ServerCog, Square, TriangleAlert,
 } from 'lucide-react';
 import type {
   PdfProviderInputFile,
@@ -100,7 +100,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     setBusy(true);setError('');
     try{
       const next=await provider.start();setStatus(next);
-      const catalog=await loadPdfProviderOperations();setOperations(catalog);
+      const catalog=await provider.listOperations();setOperations(catalog);
       setNotice(`Loaded ${catalog.length} local PDF API operations.`);
     }catch(reason){setError(reason instanceof Error?reason.message:String(reason));await refresh(false);}
     finally{setBusy(false);}
@@ -205,7 +205,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     </header>
     <div className="stirling-provider-actions">
       <button disabled={busy||Boolean(status?.running)} onClick={()=>void startProvider()}><Play size={14}/>Start local provider</button>
-      <button disabled={busy||!status?.running} onClick={()=>void stopProvider()}><SquareStop size={14}/>Stop</button>
+      <button disabled={busy||!status?.running} onClick={()=>void stopProvider()}><Square size={14}/>Stop</button>
       <button disabled={busy} onClick={()=>void refresh(Boolean(status?.running))}><RefreshCw size={14}/>Refresh</button>
     </div>
     <p className="stirling-provider-message">{status?.message??'Checking local provider…'}</p>
