@@ -256,3 +256,16 @@ No module is complete merely because its navigation entry exists. Completion req
 | Executable validation | CI | frontend, Windows Rust, Codespaces/Linux + Windows Stirling pack build/smoke | CI #243 (`37469066584`) | **Verified** |
 | Module completion | Registry | PDF remains `partial`; no promotion in this pass | #141 / PR #142 | Correct |
 
+
+
+## PDF completion pass 2A — capability truth and qpdf
+
+| Requirement | Component | Implementation | Evidence | Status |
+|---|---|---|---|---|
+| Exact dependency classification | PDF providers | #143 provider/legal matrix records selected/rejected providers and fallbacks | `PDF-PROVIDER-MATRIX-PASS2.md` | In progress |
+| MALENJO capability truth | PDF contract | per-operation availability/provider/version/pack/disabled reason/fallback/legal reference | `backend.ts`, `providerCapabilities.ts`, tests | Implemented |
+| qpdf redistribution | Component pack | qpdf 12.4.2 Apache-2.0 official Windows x64 ZIP, exact SHA-256, retained license/NOTICE | builder + `third_party/qpdf/` | Implemented; CI pending |
+| Local-only provider injection | Tauri/Rust | qpdf path prepended only to on-demand Stirling child PATH | `stirling.rs` | Implemented; CI pending |
+| No false operational tools | PDF provider UI | unavailable external-only operations are disabled with provider reason | resolver + provider panel tests/build | Implemented; CI pending |
+| qpdf operation smoke | Windows CI | Repair + Compress invoked over `127.0.0.1:28970`; PDF output signature checked | `.github/workflows/ci.yml` | CI pending |
+| Module completion | Registry | PDF explicitly remains `partial` | registry test | Correct |
