@@ -1,7 +1,7 @@
 import type { SuiteModule } from '../core/types';
 
 export const modules: SuiteModule[] = [
-  { id:'home', name:'Home', description:'Recent work, quick actions and system health.', status:'complete', featureFlag:'core', engine:'MALENJO shell', group:'Core' },
+  { id:'home', name:'Home', description:'Recent work, quick actions and system health.', status:'foundation', featureFlag:'core', engine:'MALENJO shell', group:'Core' },
   { id:'files', name:'Files / Library', description:'One local-first document library across every workspace.', status:'partial', featureFlag:'core', engine:'MALENJO document model', group:'Core' },
   { id:'pdf', name:'PDF Workspace', description:'Fast document-first PDF viewing surface with local rendering.', status:'partial', featureFlag:'core', engine:'PDF.js 6.4.299 + MALENJO native adapter', group:'Create' },
   { id:'word', name:'Document Workspace', description:'Word-like editing with OOXML fidelity tracking.', status:'partial', featureFlag:'wordEditor', engine:'Tiptap + docx4j/POI adapter', group:'Create' },
