@@ -1,4 +1,4 @@
-import { PDFArray, PDFDocument, PDFName, StandardFonts, degrees, rgb } from 'pdf-lib';
+import { PDFArray, PDFDocument, PDFName, PDFNumber, PDFString, StandardFonts, degrees, rgb } from 'pdf-lib';
 
 function requirePage(pageNumber:number,pageCount:number):number{
   if(!Number.isInteger(pageNumber)||pageNumber<1||pageNumber>pageCount){
@@ -578,4 +578,203 @@ export async function setPdfPageBox(
     }
   }
   return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+}
+
+
+export interface PdfExternalLinkSpec {
+  pageNumber:number;
+  url:string;
+  x:number;
+  y:number;
+  width:number;
+  height:number;
+}
+
+function linkRect(
+  pageSize:{width:number;height:number},
+  xValue:number,
+  yValue:number,
+  widthValue:number,
+  heightValue:number,
+):[number,number,number,number]{
+  const x=normalized(xValue,'Link X');
+  const y=normalized(yValue,'Link Y');
+  const widthFraction=normalized(widthValue,'Link width');
+  const heightFraction=normalized(heightValue,'Link height');
+  if(widthFraction<=0||heightFraction<=0||x+widthFraction>1||y+heightFraction>1){
+    throw new Error('Link rectangle must have positive size and remain inside the page.');
+  }
+  const left=x*pageSize.width;
+  const bottom=y*pageSize.height;
+  return [left,bottom,left+widthFraction*pageSize.width,bottom+heightFraction*pageSize.height];
+}
+
+function safeExternalUrl(value:string):string{
+  const trimmed=value.trim().slice(0,2048);
+  if(!trimmed)throw new Error('Link URL is empty.');
+  let parsed:URL;
+  try{ parsed=new URL(trimmed); }catch{ throw new Error('Enter a valid absolute link URL.'); }
+  if(!['https:','http:','mailto:'].includes(parsed.protocol)){
+    throw new Error('Only http, https and mailto links are allowed.');
+  }
+  return parsed.toString();
+}
+
+function pageAnnots(pdf:PDFDocument,pageIndex:number):PDFArray{
+  const page=pdf.getPage(pageIndex);
+  const key=PDFName.of('Annots');
+  let annots=page.node.lookupMaybe(key,PDFArray);
+  if(!annots){
+    annots=pdf.context.obj([]);
+    page.node.set(key,annots);
+  }
+  return annots;
+}
+
+export async function addPdfExternalLink(
+  bytes:Uint8Array,
+  spec:PdfExternalLinkSpec,
+):Promise<Uint8Array>{
+  const pdf=await load(bytes);
+  const pageIndex=requirePage(spec.pageNumber,pdf.getPageCount());
+  const page=pdf.getPage(pageIndex);
+  const rect=linkRect(page.getSize(),spec.x,spec.y,spec.width,spec.height);
+  const action=pdf.context.obj({
+    S:PDFName.of('URI'),
+    URI:PDFString.of(safeExternalUrl(spec.url)),
+  });
+  const annotation=pdf.context.obj({
+    Type:PDFName.of('Annot'),
+    Subtype:PDFName.of('Link'),
+    Rect:rect,
+    Border:[0,0,0],
+    A:action,
+    F:4,
+  });
+  pageAnnots(pdf,pageIndex).push(pdf.context.register(annotation));
+  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+}
+
+export interface PdfInternalPageLinkSpec {
+  pageNumber:number;
+  targetPageNumber:number;
+  x:number;
+  y:number;
+  width:number;
+  height:number;
+}
+
+export async function addPdfInternalPageLink(
+  bytes:Uint8Array,
+  spec:PdfInternalPageLinkSpec,
+):Promise<Uint8Array>{
+  const pdf=await load(bytes);
+  const sourceIndex=requirePage(spec.pageNumber,pdf.getPageCount());
+  const targetIndex=requirePage(spec.targetPageNumber,pdf.getPageCount());
+  const page=pdf.getPage(sourceIndex);
+  const target=pdf.getPage(targetIndex);
+  const rect=linkRect(page.getSize(),spec.x,spec.y,spec.width,spec.height);
+  const annotation=pdf.context.obj({
+    Type:PDFName.of('Annot'),
+    Subtype:PDFName.of('Link'),
+    Rect:rect,
+    Border:[0,0,0],
+    Dest:[target.ref,PDFName.of('Fit')],
+    F:4,
+  });
+  pageAnnots(pdf,sourceIndex).push(pdf.context.register(annotation));
+  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+}
+
+export type PdfPageLabelStyle='decimal'|'roman-upper'|'roman-lower'|'letters-upper'|'letters-lower';
+
+export interface PdfPageLabelSpec {
+  startPage:number;
+  style:PdfPageLabelStyle;
+  prefix?:string;
+  startNumber?:number;
+}
+
+function pageLabelStyleName(style:PdfPageLabelStyle):PDFName{
+  switch(style){
+    case 'decimal': return PDFName.of('D');
+    case 'roman-upper': return PDFName.of('R');
+    case 'roman-lower': return PDFName.of('r');
+    case 'letters-upper': return PDFName.of('A');
+    case 'letters-lower': return PDFName.of('a');
+  }
+}
+
+export async function setPdfPageLabels(
+  bytes:Uint8Array,
+  specs:PdfPageLabelSpec[],
+):Promise<Uint8Array>{
+  const pdf=await load(bytes);
+  if(!specs.length)throw new Error('Add at least one page-label range.');
+  const pageCount=pdf.getPageCount();
+  const sorted=[...specs].sort((a,b)=>a.startPage-b.startPage);
+  const seen=new Set<number>();
+  const nums=pdf.context.obj([]);
+
+  for(const spec of sorted){
+    const pageIndex=requirePage(spec.startPage,pageCount);
+    if(seen.has(pageIndex))throw new Error(`Duplicate page-label range at page ${spec.startPage}.`);
+    seen.add(pageIndex);
+    const startNumber=spec.startNumber??1;
+    if(!Number.isInteger(startNumber)||startNumber<1||startNumber>999_999_999){
+      throw new Error('Page-label start number must be an integer between 1 and 999,999,999.');
+    }
+    const prefix=(spec.prefix??'').replace(/[\u0000-\u001F]/g,' ').slice(0,120);
+    const dict=pdf.context.obj({
+      S:pageLabelStyleName(spec.style),
+      ...(prefix ? {P:PDFString.of(prefix)} : {}),
+      ...(startNumber!==1 ? {St:PDFNumber.of(startNumber)} : {}),
+    });
+    nums.push(PDFNumber.of(pageIndex));
+    nums.push(dict);
+  }
+
+  pdf.catalog.set(PDFName.of('PageLabels'),pdf.context.obj({Nums:nums}));
+  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+}
+
+export interface PdfDocumentProperties {
+  title?:string;
+  author?:string;
+  subject?:string;
+  keywords?:string[];
+  creator?:string;
+}
+
+function propertyText(value:string|undefined,max=1000):string{
+  return (value??'').replace(/[\u0000-\u001F]/g,' ').trim().slice(0,max);
+}
+
+export async function setPdfDocumentProperties(
+  bytes:Uint8Array,
+  properties:PdfDocumentProperties,
+):Promise<Uint8Array>{
+  const pdf=await load(bytes);
+  pdf.setTitle(propertyText(properties.title));
+  pdf.setAuthor(propertyText(properties.author));
+  pdf.setSubject(propertyText(properties.subject));
+  pdf.setKeywords((properties.keywords??[])
+    .map((item)=>propertyText(item,160))
+    .filter(Boolean)
+    .slice(0,64));
+  pdf.setCreator(propertyText(properties.creator)||'MALENJO PDF Workspace');
+  pdf.setProducer('MALENJO PDF Workspace');
+  pdf.setModificationDate(new Date());
+  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+}
+
+export async function getPdfDocumentProperties(bytes:Uint8Array):Promise<Required<PdfDocumentProperties>>{
+  const pdf=await load(bytes);
+  return {
+    title:pdf.getTitle()??'',
+    author:pdf.getAuthor()??'',
+    subject:pdf.getSubject()??'',
+    keywords:(pdf.getKeywords()??'').split(/[;,]/).map((item)=>item.trim()).filter(Boolean),
+    creator:pdf.getCreator()??'',
+  };
 }
