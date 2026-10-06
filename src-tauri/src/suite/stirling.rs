@@ -13,7 +13,7 @@ use tauri::{AppHandle, Manager};
 const STIRLING_PORT: u16 = 28970;
 const STIRLING_BASE_URL: &str = "http://127.0.0.1:28970";
 const STIRLING_HEALTH_PATH: &str = "/api/v1/info/health";
-const STIRLING_OPENAPI_PATH: &str = "/v3/api-docs";
+const STIRLING_OPENAPI_PATH: &str = "/v1/api-docs";
 const START_TIMEOUT: Duration = Duration::from_secs(75);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
 const MAX_INPUT_BYTES: usize = 512 * 1024 * 1024;
