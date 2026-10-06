@@ -31,7 +31,7 @@ export const CANONICAL_COMMAND_PALETTE_EXAMPLES: CanonicalCommandPaletteExample[
   {
     phrase: 'OCR this document',
     target: 'ocr',
-    detail: 'Open the OCR workspace for the current or selected document.',
+    detail: 'Open the OCR workspace to choose a document for OCR.',
     keywords: 'recognize searchable text ocr document',
   },
   {
@@ -42,7 +42,7 @@ export const CANONICAL_COMMAND_PALETTE_EXAMPLES: CanonicalCommandPaletteExample[
   {
     phrase: 'Add signature',
     target: 'sign',
-    detail: 'Open the Sign workspace to place or validate supported PDF signatures.',
+    detail: 'Open the Sign workspace to choose a PDF and place or validate supported signatures.',
     keywords: 'signature certificate sign pdf',
   },
   {
@@ -53,7 +53,7 @@ export const CANONICAL_COMMAND_PALETTE_EXAMPLES: CanonicalCommandPaletteExample[
   {
     phrase: 'Remove metadata',
     target: 'metadata',
-    detail: 'Open Metadata Studio to review and apply supported metadata sanitization.',
+    detail: 'Open Metadata Studio to choose a document, review metadata and apply supported sanitization.',
     keywords: 'remove metadata sanitize privacy exif xmp pdf ooxml',
   },
   {
