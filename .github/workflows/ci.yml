@@ -131,7 +131,7 @@ jobs:
           $tesseract = Get-ChildItem "provider-packs/tesseract/runtime" -Recurse -File -Filter "tesseract.exe" | Select-Object -First 1
           if (-not $tesseract) { throw "Tesseract provider pack did not contain tesseract.exe." }
           $version = (& $tesseract.FullName --version 2>&1 | Out-String)
-          if ($LASTEXITCODE -ne 0 -or $version -notmatch "tesseract 5\.5\.3") {
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch "tesseract v?5\.5\.3") {
             throw "Tesseract provider pack failed its executable smoke check."
           }
           $sbom = Get-Content "provider-packs/tesseract/sbom.cdx.json" -Raw | ConvertFrom-Json
