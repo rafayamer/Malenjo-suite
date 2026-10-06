@@ -18,6 +18,10 @@ import {
   Paperclip,
   ListChecks,
   FileCheck2,
+  PanelRightClose,
+  PanelRightOpen,
+  Sparkles,
+  ShieldCheck,
 } from 'lucide-react';
 import type { DocumentSession } from '../files/session';
 import type { RegisterDocumentCommands } from '../commands/types';
@@ -77,12 +81,20 @@ import {
   type PdfLeftPanelId,
 } from './leftNavigation';
 import { pdfCriticalPassReady, pdfPageSchedule } from './renderPriority';
+import {
+  DOCUMENT_INSPECTOR_LABELS,
+  DOCUMENT_INSPECTOR_SHORTCUT,
+  DOCUMENT_INSPECTOR_TABS,
+  isDocumentInspectorToggleShortcut,
+  type DocumentInspectorTab,
+} from '../shell/inspector';
 
 interface Props {
   session: DocumentSession | null;
   active: boolean;
   notice: string;
   onBackToFiles(): void;
+  onNavigateModule?(id:'ai'|'security'|'sign'): void;
   onDirtyChange?(dirty:boolean): void;
   onSavingChange?(saving:boolean): void;
   registerCommands?: RegisterDocumentCommands;
@@ -109,7 +121,7 @@ function PdfLeftPanelIcon({id}:{id:PdfLeftPanelId}) {
   return <ListChecks size={17}/>;
 }
 
-export default function PdfWorkspace({ session, active, notice, onBackToFiles, onDirtyChange, onSavingChange, registerCommands }: Props) {
+export default function PdfWorkspace({ session, active, notice, onBackToFiles, onNavigateModule, onDirtyChange, onSavingChange, registerCommands }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const appendInputRef = useRef<HTMLInputElement>(null);
@@ -148,6 +160,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [searchResults, setSearchResults] = useState<Array<{page:number;excerpt:string}>>([]);
   const [leftPanel, setLeftPanel] = useState<PdfLeftPanelId>(DEFAULT_PDF_LEFT_PANEL);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
+  const [inspectorTab, setInspectorTab] = useState<DocumentInspectorTab>('properties');
+  const [inspectorHidden, setInspectorHidden] = useState(false);
   const [textOverlay, setTextOverlay] = useState({ text:'', x:0.12, y:0.82, size:12 });
   const [shapeOverlay, setShapeOverlay] = useState({ x:0.12, y:0.68, width:0.35, height:0.08, mode:'highlight' as 'highlight'|'outline' });
   const [commentDraft, setCommentDraft] = useState({ text:'', author:'MALENJO User', x:0.86, y:0.86 });
@@ -873,13 +887,33 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           disabledReason:!pdf ? 'No PDF is loaded.' : 'Wait for the current PDF edit to finish.',
           run:()=>printDocument(),
         },
+        {
+          id:'toggle-inspector',
+          label:inspectorHidden ? 'Show right inspector' : 'Hide right inspector',
+          keywords:'inspector properties panel right sidebar focus canvas',
+          detail:DOCUMENT_INSPECTOR_SHORTCUT,
+          enabled:true,
+          run:()=>setInspectorHidden((value)=>!value),
+        },
       ],
     });
     return () => registerCommands(null);
   }, [
     session, registerCommands, sourceBytes, pdf, dirty, mutating, historyRevision, formFields.length,
     headerFooterDraft, batesDraft, pageBoxDraft, formDraft, currentPage, pageCount, selectedPages,
+    inspectorHidden,
   ]);
+
+  useEffect(() => {
+    if (!active) return;
+    function onInspectorShortcut(event: KeyboardEvent) {
+      if (!isDocumentInspectorToggleShortcut(event)) return;
+      event.preventDefault();
+      setInspectorHidden((value)=>!value);
+    }
+    window.addEventListener('keydown', onInspectorShortcut);
+    return () => window.removeEventListener('keydown', onInspectorShortcut);
+  }, [active]);
 
   const zoomLabel = fitMode === 'width'
     ? 'Fit width'
@@ -889,6 +923,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
   const thumbnailsRenderAllowed = forceRenderAll
     || pdfCriticalPassReady(currentPage, pageCount, renderedPages);
+  const pdfLayoutClass = [
+    'pdf-layout',
+    leftPanelCollapsed ? 'left-panel-collapsed' : '',
+    inspectorHidden ? 'inspector-hidden' : '',
+  ].filter(Boolean).join(' ');
 
   return <div className="pdf-workspace">
     <input
@@ -953,6 +992,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         <button disabled={!pdf} onClick={() => setFitMode('width')}>Width</button>
         <button disabled={!pdf} onClick={() => setFitMode('page')}>Page</button>
         <button disabled={!pdf} onClick={() => setRotation((value) => rotatePdfClockwise(value))} title="Rotate view clockwise"><RotateCw size={16}/></button>
+        <button
+          disabled={!pdf}
+          onClick={()=>setInspectorHidden((value)=>!value)}
+          aria-label={inspectorHidden?'Show right inspector':'Hide right inspector'}
+          title={`${inspectorHidden?'Show':'Hide'} right inspector · ${DOCUMENT_INSPECTOR_SHORTCUT}`}
+        >{inspectorHidden?<PanelRightOpen size={16}/>:<PanelRightClose size={16}/>}</button>
       </div>
     </div>
 
@@ -971,7 +1016,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       <small>For multi-document work in Codespaces, add several files from Files / Library first.</small>
     </div>}
 
-    {pdf && <div className={leftPanelCollapsed ? 'pdf-layout left-panel-collapsed' : 'pdf-layout'}>
+    {pdf && <div className={pdfLayoutClass}>
       <aside className={leftPanelCollapsed ? 'pdf-left-shell collapsed' : 'pdf-left-shell'} aria-label="PDF navigation rail and panel">
         <nav className="pdf-left-rail" aria-label="PDF navigation">
           {PDF_LEFT_PANEL_ITEMS.map((item)=><button
@@ -1088,7 +1133,26 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         </div>
       </div>
 
-      <aside className="pdf-inspector">
+      {!inspectorHidden&&<aside className="pdf-inspector" aria-label="Contextual document inspector">
+        <div className="pdf-inspector-tabs" role="tablist" aria-label="Document inspector">
+          {DOCUMENT_INSPECTOR_TABS.map((tab)=><button
+            key={tab}
+            role="tab"
+            aria-selected={inspectorTab===tab}
+            className={inspectorTab===tab?'active':''}
+            onClick={()=>setInspectorTab(tab)}
+            title={DOCUMENT_INSPECTOR_LABELS[tab]}
+          >{DOCUMENT_INSPECTOR_LABELS[tab]}</button>)}
+          <button
+            className="pdf-inspector-hide"
+            aria-label="Hide right inspector"
+            title={`Hide inspector · ${DOCUMENT_INSPECTOR_SHORTCUT}`}
+            onClick={()=>setInspectorHidden(true)}
+          ><PanelRightClose size={14}/></button>
+        </div>
+
+        {inspectorTab==='properties'&&<>
+        <div className="pdf-inspector-context"><b>Page {currentPage}</b><span>{selectedPageNumbers.length} selected · {dirty?'modified':'original'}</span></div>
         <div className="pdf-pane-title">Document</div>
         <dl>
           <div><dt>Name</dt><dd title={sourceName}>{sourceName}</dd></div>
@@ -1255,7 +1319,44 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         <div className="pdf-security-note">
           Rendering is local. PDF JavaScript evaluation is disabled in the MALENJO PDF.js adapter.
         </div>
-      </aside>
+        </>}
+
+        {inspectorTab==='ai'&&<div className="pdf-inspector-tab-body">
+          <div className="pdf-inspector-callout">
+            <Sparkles size={18}/>
+            <b>Malenjo AI</b>
+            <p>The current PDF remains open in its tab. Open the local AI workspace to choose this document as a source and use the existing grounded/citation workflow.</p>
+            <button onClick={()=>onNavigateModule?.('ai')} disabled={!onNavigateModule}>Open Malenjo AI</button>
+          </div>
+        </div>}
+
+        {inspectorTab==='security'&&<div className="pdf-inspector-tab-body">
+          <div className="pdf-inspector-callout">
+            <ShieldCheck size={18}/>
+            <b>Security</b>
+            <p>PDF JavaScript execution is disabled here. Sanitization, CDR/redaction, watermark, encryption and malware workflows remain in Security Center.</p>
+            <button onClick={()=>onNavigateModule?.('security')} disabled={!onNavigateModule}>Open Security Center</button>
+          </div>
+        </div>}
+
+        {inspectorTab==='comments'&&<div className="pdf-inspector-tab-body">
+          <div className="pdf-inspector-callout">
+            <MessageSquare size={18}/>
+            <b>Comments</b>
+            <p>Comment authoring is already operational in the PDF left navigation and writes real /Text annotations.</p>
+            <button onClick={()=>{setLeftPanel('comments');setLeftPanelCollapsed(false);}}>Open Comments panel</button>
+          </div>
+        </div>}
+
+        {inspectorTab==='sign'&&<div className="pdf-inspector-tab-body">
+          <div className="pdf-inspector-callout">
+            <FileCheck2 size={18}/>
+            <b>Sign</b>
+            <p>{formFields.filter((field)=>field.type==='signature').length} signature field(s) detected in the current working copy. Cryptographic validation and signed-copy operations use MALENJO Sign.</p>
+            <button onClick={()=>onNavigateModule?.('sign')} disabled={!onNavigateModule}>Open Sign workspace</button>
+          </div>
+        </div>}
+      </aside>}
     </div>}
   </div>;
 }
