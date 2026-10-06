@@ -73,6 +73,36 @@ describe('Stirling open-core PDF integration contract',()=>{
     expect(health.fields[0]).toEqual(expect.objectContaining({name:'verbose',kind:'boolean',location:'query'}));
   });
 
+
+  it('resolves component parameter and requestBody references instead of dropping provider fields',()=>{
+    const api={
+      components:{
+        parameters:{
+          Quality:{name:'quality',in:'query',required:false,schema:{type:'integer',default:80}},
+        },
+        requestBodies:{
+          Upload:{required:true,content:{'multipart/form-data':{schema:{
+            type:'object',required:['fileInput'],properties:{fileInput:{type:'string',format:'binary'}},
+          }}}},
+        },
+      },
+      paths:{
+        '/api/v1/convert/example':{
+          post:{
+            operationId:'convertExample',
+            parameters:[{$ref:'#/components/parameters/Quality'}],
+            requestBody:{$ref:'#/components/requestBodies/Upload'},
+          },
+        },
+      },
+    };
+    const operation=parseStirlingOpenApi(api)[0];
+    expect(operation.fields).toEqual([
+      expect.objectContaining({name:'quality',kind:'integer',location:'query',defaultValue:80}),
+      expect.objectContaining({name:'fileInput',kind:'file',required:true,location:'form'}),
+    ]);
+  });
+
   it('recognizes PDF output by content type or signature',()=>{
     expect(responseIsPdf({status:200,contentType:'application/pdf',bytes:[]})).toBe(true);
     expect(responseIsPdf({status:200,contentType:'application/octet-stream',bytes:[37,80,68,70,45]})).toBe(true);
