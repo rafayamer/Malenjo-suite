@@ -2,18 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
-  Download,
   FileText,
-  FolderOpen,
   Minus,
   Plus,
-  Printer,
   RotateCw,
   Search,
   Square,
   Type,
-  Undo2,
-  Redo2,
   MessageSquare,
   Paperclip,
   ListChecks,
@@ -88,13 +83,21 @@ import {
   isDocumentInspectorToggleShortcut,
   type DocumentInspectorTab,
 } from '../shell/inspector';
+import {
+  PDF_TASK_CATEGORIES,
+  PDF_TASK_CATEGORY_LABELS,
+  PDF_TASK_CATEGORY_SHORTCUTS,
+  movePdfTaskCategory,
+  pdfTaskCategoryFromShortcut,
+  type PdfTaskCategory,
+} from './taskToolbar';
 
 interface Props {
   session: DocumentSession | null;
   active: boolean;
   notice: string;
   onBackToFiles(): void;
-  onNavigateModule?(id:'ai'|'security'|'sign'): void;
+  onNavigateModule?(id:'ai'|'security'|'sign'|'scanner'|'automation'): void;
   onDirtyChange?(dirty:boolean): void;
   onSavingChange?(saving:boolean): void;
   registerCommands?: RegisterDocumentCommands;
@@ -109,6 +112,14 @@ function formatBytes(bytes: number): string {
 function editedName(name:string,suffix='edited'):string{
   const base=name.replace(/\.pdf$/i,'')||'MALENJO-document';
   return `${base}-${suffix}.pdf`;
+}
+
+interface PdfToolbarAction {
+  id:string;
+  label:string;
+  enabled:boolean;
+  disabledReason?:string;
+  run():void|Promise<void>;
 }
 
 function PdfLeftPanelIcon({id}:{id:PdfLeftPanelId}) {
@@ -162,6 +173,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<DocumentInspectorTab>('properties');
   const [inspectorHidden, setInspectorHidden] = useState(false);
+  const [taskCategory, setTaskCategory] = useState<PdfTaskCategory>('home');
   const [textOverlay, setTextOverlay] = useState({ text:'', x:0.12, y:0.82, size:12 });
   const [shapeOverlay, setShapeOverlay] = useState({ x:0.12, y:0.68, width:0.35, height:0.08, mode:'highlight' as 'highlight'|'outline' });
   const [commentDraft, setCommentDraft] = useState({ text:'', author:'MALENJO User', x:0.86, y:0.86 });
@@ -895,13 +907,101 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           enabled:true,
           run:()=>setInspectorHidden((value)=>!value),
         },
+        {
+          id:'pdf-text-place',
+          label:'Place configured text on current PDF page',
+          keywords:'pdf edit add text place text',
+          detail:textOverlay.text.trim()?'Uses text and coordinates from Properties inspector':'Enter text in the Properties inspector first',
+          enabled:!!sourceBytes&&!mutating&&!!textOverlay.text.trim(),
+          disabledReason:!sourceBytes?'No PDF is loaded.':!textOverlay.text.trim()?'Enter text in the Properties inspector first.':'Wait for the current PDF edit to finish.',
+          run:()=>mutate('Added permanent text to the PDF.',bytes=>addPdfTextOverlay(bytes,{pageNumber:currentPage,...textOverlay}),currentPage),
+        },
+        {
+          id:'pdf-rectangle-add',
+          label:`Add configured ${shapeOverlay.mode} rectangle`,
+          keywords:'pdf edit highlight outline rectangle shape',
+          detail:'Uses geometry from Properties inspector',
+          enabled:!!sourceBytes&&!mutating,
+          disabledReason:!sourceBytes?'No PDF is loaded.':'Wait for the current PDF edit to finish.',
+          run:()=>mutate(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage),
+        },
+        {
+          id:'pdf-pages-remove',
+          label:`Delete ${operationPages.length} selected PDF page${operationPages.length===1?'':'s'}`,
+          keywords:'pdf organize delete remove pages',
+          detail:'Permanent working-copy page removal; Undo is available before export',
+          enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,
+          disabledReason:operationPages.length>=pageCount?'A PDF must retain at least one page.':!sourceBytes?'No PDF is loaded.':'Wait for the current PDF edit to finish.',
+          run:()=>mutate(`Deleted ${operationPages.length} selected page(s).`,bytes=>operationPages.length===1?deletePdfPage(bytes,operationPages[0]):deletePdfPages(bytes,operationPages),Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length))),
+        },
+        {
+          id:'pdf-page-copy',
+          label:'Duplicate selected PDF page',
+          keywords:'pdf organize duplicate copy page',
+          detail:'Requires exactly one selected page',
+          enabled:!!sourceBytes&&!mutating&&operationPages.length===1,
+          disabledReason:operationPages.length!==1?'Select exactly one page.':!sourceBytes?'No PDF is loaded.':'Wait for the current PDF edit to finish.',
+          run:()=>mutate(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1),
+        },
+        {
+          id:'pdf-pages-turn',
+          label:'Rotate selected PDF pages permanently',
+          keywords:'pdf organize rotate pages',
+          detail:`${operationPages.length} selected page(s)`,
+          enabled:!!sourceBytes&&!mutating,
+          disabledReason:!sourceBytes?'No PDF is loaded.':'Wait for the current PDF edit to finish.',
+          run:()=>mutate(`Permanently rotated ${operationPages.length} selected page(s) by 90°.`,bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),operationPages[0]),
+        },
+        {
+          id:'pdf-pages-extract',
+          label:'Extract selected PDF pages',
+          keywords:'pdf organize extract pages export',
+          detail:`${operationPages.length} selected page(s)`,
+          enabled:!!sourceBytes&&!mutating,
+          disabledReason:!sourceBytes?'No PDF is loaded.':'Wait for the current PDF edit to finish.',
+          run:()=>extractSelected(),
+        },
+        {
+          id:'pdf-document-split',
+          label:'Split PDF after current page',
+          keywords:'pdf organize split document',
+          detail:`Split after page ${currentPage}`,
+          enabled:!!sourceBytes&&!mutating&&currentPage<pageCount,
+          disabledReason:currentPage>=pageCount?'Move before the final page to split the PDF.':!sourceBytes?'No PDF is loaded.':'Wait for the current PDF edit to finish.',
+          run:()=>splitCurrent(),
+        },
+        {
+          id:'pdf-comments-open',
+          label:'Open PDF Comments panel',
+          keywords:'pdf comment annotations notes',
+          detail:'Open the persistent Comments panel',
+          enabled:true,
+          run:()=>openLeftPanel('comments'),
+        },
+        {
+          id:'pdf-comment-create',
+          label:'Add configured PDF comment',
+          keywords:'pdf comment annotation note add',
+          detail:commentDraft.text.trim()?'Uses comment text from Comments panel':'Enter comment text in the Comments panel first',
+          enabled:!!sourceBytes&&!mutating&&!!commentDraft.text.trim(),
+          disabledReason:!sourceBytes?'No PDF is loaded.':!commentDraft.text.trim()?'Enter comment text in the Comments panel first.':'Wait for the current PDF edit to finish.',
+          run:()=>addComment(),
+        },
+        {
+          id:'pdf-signatures-open',
+          label:'Open PDF signature fields panel',
+          keywords:'pdf signatures sign fields',
+          detail:`${formFields.filter((field)=>field.type==='signature').length} signature field(s) detected`,
+          enabled:true,
+          run:()=>openLeftPanel('signatures'),
+        },
       ],
     });
     return () => registerCommands(null);
   }, [
     session, registerCommands, sourceBytes, pdf, dirty, mutating, historyRevision, formFields.length,
     headerFooterDraft, batesDraft, pageBoxDraft, formDraft, currentPage, pageCount, selectedPages,
-    inspectorHidden,
+    inspectorHidden, textOverlay, shapeOverlay, commentDraft,
   ]);
 
   useEffect(() => {
@@ -914,6 +1014,21 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     window.addEventListener('keydown', onInspectorShortcut);
     return () => window.removeEventListener('keydown', onInspectorShortcut);
   }, [active]);
+
+  useEffect(() => {
+    if (!active) return;
+    function onTaskShortcut(event: KeyboardEvent) {
+      const target=event.target as HTMLElement|null;
+      if(target?.closest('input,textarea,[contenteditable="true"]'))return;
+      const category=pdfTaskCategoryFromShortcut(event);
+      if(!category)return;
+      event.preventDefault();
+      setTaskCategory(category);
+      window.requestAnimationFrame(()=>document.getElementById(`${domIdPrefix}-task-${category}`)?.focus());
+    }
+    window.addEventListener('keydown',onTaskShortcut);
+    return()=>window.removeEventListener('keydown',onTaskShortcut);
+  },[active,domIdPrefix]);
 
   const zoomLabel = fitMode === 'width'
     ? 'Fit width'
@@ -928,6 +1043,78 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     leftPanelCollapsed ? 'left-panel-collapsed' : '',
     inspectorHidden ? 'inspector-hidden' : '',
   ].filter(Boolean).join(' ');
+
+  const configureProperties=()=>{
+    setInspectorTab('properties');
+    setInspectorHidden(false);
+  };
+  const openLeftPanel=(panel:PdfLeftPanelId)=>{
+    setLeftPanel(panel);
+    setLeftPanelCollapsed(false);
+  };
+  const navigateAction=(label:string,id:'ai'|'security'|'sign'|'scanner'|'automation'):PdfToolbarAction=>({
+    id:`navigate-${id}`,
+    label,
+    enabled:!!onNavigateModule,
+    disabledReason:onNavigateModule?undefined:'Suite navigation is unavailable in this workspace.',
+    run:()=>onNavigateModule?.(id),
+  });
+  const taskActions:Record<PdfTaskCategory,PdfToolbarAction[]>={
+    home:[
+      {id:'files',label:'Files',enabled:true,run:onBackToFiles},
+      {id:'open',label:'Open PDF',enabled:!session,disabledReason:session?'Open additional documents from Files / Library so they receive their own tabs.':undefined,run:()=>fileInputRef.current?.click()},
+      {id:'export',label:'Export',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:exportCurrent},
+      {id:'print',label:'Print',enabled:!!pdf&&!mutating,disabledReason:!pdf?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:printDocument},
+      {id:'inspector',label:inspectorHidden?'Show inspector':'Hide inspector',enabled:true,run:()=>setInspectorHidden((value)=>!value)},
+    ],
+    edit:[
+      {id:'undo',label:'Undo',enabled:!!historyRef.current&&!mutating&&canUndoPdfHistory(historyRef.current),disabledReason:mutating?'Wait for the current PDF edit to finish.':'There is no PDF edit to undo.',run:undoEdit},
+      {id:'redo',label:'Redo',enabled:!!historyRef.current&&!mutating&&canRedoPdfHistory(historyRef.current),disabledReason:mutating?'Wait for the current PDF edit to finish.':'There is no PDF edit to redo.',run:redoEdit},
+      {id:'place-text',label:'Place text',enabled:!!sourceBytes&&!mutating&&!!textOverlay.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!textOverlay.text.trim()?'Enter text in the Properties inspector first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate('Added permanent text to the PDF.',bytes=>addPdfTextOverlay(bytes,{pageNumber:currentPage,...textOverlay}),currentPage)},
+      {id:'rectangle',label:shapeOverlay.mode==='highlight'?'Highlight rectangle':'Outline rectangle',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage)},
+      {id:'configure-edit',label:'Edit settings',enabled:true,run:configureProperties},
+    ],
+    convert:[],
+    organize:[
+      {id:'turn-pages',label:'Rotate selected',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate(`Permanently rotated ${operationPages.length} selected page(s) by 90°.`,bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),operationPages[0])},
+      {id:'remove-pages',label:`Delete ${operationPages.length} page${operationPages.length===1?'':'s'}`,enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length>=pageCount?'A PDF must retain at least one page.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate(`Deleted ${operationPages.length} selected page(s).`,bytes=>operationPages.length===1?deletePdfPage(bytes,operationPages[0]):deletePdfPages(bytes,operationPages),Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length)))},
+      {id:'copy-page',label:'Duplicate page',enabled:!!sourceBytes&&!mutating&&operationPages.length===1,disabledReason:operationPages.length!==1?'Select exactly one page.':mutating?'Wait for the current PDF edit to finish.':!sourceBytes?'No PDF is loaded.':undefined,run:()=>mutate(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)},
+      {id:'extract-pages',label:'Extract selected',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:extractSelected},
+      {id:'split',label:'Split here',enabled:!!sourceBytes&&!mutating&&currentPage<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':currentPage>=pageCount?'Move before the final page to split the PDF.':mutating?'Wait for the current PDF edit to finish.':undefined,run:splitCurrent},
+      {id:'insert',label:'Insert PDF…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>insertInputRef.current?.click()},
+      {id:'append',label:'Append PDF…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>appendInputRef.current?.click()},
+      {id:'blank',label:'Blank after',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate(`Inserted a blank page after page ${currentPage}.`,bytes=>insertBlankPdfPage(bytes,currentPage),currentPage+1)},
+      {id:'earlier',label:'Move earlier',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&currentPage>1,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':currentPage<=1?'The first page cannot move earlier.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate('Moved page earlier.',bytes=>movePdfPage(bytes,currentPage,currentPage-1),currentPage-1)},
+      {id:'later',label:'Move later',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&currentPage<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':currentPage>=pageCount?'The final page cannot move later.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)},
+    ],
+    comment:[
+      {id:'comments-panel',label:'Comments panel',enabled:true,run:()=>openLeftPanel('comments')},
+      {id:'add-comment',label:'Add comment',enabled:!!sourceBytes&&!mutating&&!!commentDraft.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!commentDraft.text.trim()?'Enter comment text in the Comments panel first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addComment},
+    ],
+    sign:[
+      navigateAction('Open Sign workspace','sign'),
+      {id:'signatures-panel',label:'Signature fields',enabled:true,run:()=>openLeftPanel('signatures')},
+    ],
+    protect:[
+      navigateAction('Open Security Center','security'),
+    ],
+    forms:[
+      {id:'add-form-field',label:`Add ${formDraft.type} field`,enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addFormField},
+      {id:'flatten-form',label:'Flatten fields',enabled:!!sourceBytes&&!mutating&&formFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:flattenForm},
+      {id:'configure-forms',label:'Form settings',enabled:true,run:configureProperties},
+    ],
+    ai:[navigateAction('Open Malenjo AI','ai')],
+    scan:[navigateAction('Open Scanner','scanner')],
+    automate:[navigateAction('Open Automation Studio','automation')],
+  };
+  const activeTaskActions=taskActions[taskCategory];
+  const primaryTaskActions=activeTaskActions.slice(0,6);
+  const overflowTaskActions=activeTaskActions.slice(6);
+  const taskActionTitle=(action:PdfToolbarAction)=>action.enabled?action.label:`${action.label} — ${action.disabledReason??'Unavailable'}`;
+  const focusTaskCategory=(category:PdfTaskCategory)=>{
+    setTaskCategory(category);
+    window.requestAnimationFrame(()=>document.getElementById(`${domIdPrefix}-task-${category}`)?.focus());
+  };
 
   return <div className="pdf-workspace">
     <input
@@ -961,43 +1148,78 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       onChange={(event)=>void attachDocuments(event)}
     />
 
-    <div className="pdf-toolbar">
-      <div className="pdf-toolbar-group">
-        <button onClick={onBackToFiles} title="Back to MALENJO Files"><FolderOpen size={16}/> Files</button>
-        <button disabled={!!session} onClick={() => fileInputRef.current?.click()} title={session ? "Use Files / Library to open another PDF in a new tab" : "Open a temporary PDF in this workspace"}><FileText size={16}/> Open PDF</button>
-        <button disabled={!pdf||mutating} onClick={() => void exportCurrent()} title="Export current PDF bytes"><Download size={16}/> Export</button>
-        <button disabled={!historyRef.current||mutating||!canUndoPdfHistory(historyRef.current)} onClick={()=>void undoEdit()} title="Undo PDF edit (Ctrl+Z)"><Undo2 size={16}/> Undo</button>
-        <button disabled={!historyRef.current||mutating||!canRedoPdfHistory(historyRef.current)} onClick={()=>void redoEdit()} title="Redo PDF edit (Ctrl+Y / Ctrl+Shift+Z)"><Redo2 size={16}/> Redo</button>
-        <button disabled={!pdf||mutating} onClick={printDocument} title="Print rendered PDF pages"><Printer size={16}/> Print</button>
+    <div className="pdf-task-toolbar">
+      <div className="pdf-task-categories" role="tablist" aria-label="PDF task categories">
+        {PDF_TASK_CATEGORIES.map((category)=><button
+          id={`${domIdPrefix}-task-${category}`}
+          key={category}
+          role="tab"
+          aria-selected={taskCategory===category}
+          aria-controls={`${domIdPrefix}-task-tools`}
+          aria-keyshortcuts={PDF_TASK_CATEGORY_SHORTCUTS[category]}
+          tabIndex={taskCategory===category?0:-1}
+          className={taskCategory===category?'active':''}
+          title={`${PDF_TASK_CATEGORY_LABELS[category]} · ${PDF_TASK_CATEGORY_SHORTCUTS[category]}`}
+          onClick={()=>setTaskCategory(category)}
+          onKeyDown={(event)=>{
+            if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+            event.preventDefault();
+            focusTaskCategory(movePdfTaskCategory(taskCategory,event.key as 'ArrowLeft'|'ArrowRight'|'Home'|'End'));
+          }}
+        >{PDF_TASK_CATEGORY_LABELS[category]}</button>)}
       </div>
 
-      <div className="pdf-toolbar-group pdf-page-nav">
-        <button disabled={!pdf || currentPage <= 1} onClick={() => goToPage(currentPage - 1)} aria-label="Previous page"><ChevronLeft size={16}/></button>
-        <input
-          aria-label="Current PDF page"
-          disabled={!pdf}
-          value={pdf ? currentPage : ''}
-          onChange={(event) => setCurrentPage(clampPdfPage(Number(event.target.value), pageCount))}
-          onBlur={() => goToPage(currentPage)}
-          onKeyDown={(event) => { if (event.key === 'Enter') goToPage(currentPage); }}
-        />
-        <span>/ {pageCount || '—'}</span>
-        <button disabled={!pdf || currentPage >= pageCount} onClick={() => goToPage(currentPage + 1)} aria-label="Next page"><ChevronRight size={16}/></button>
-      </div>
+      <div id={`${domIdPrefix}-task-tools`} className="pdf-context-toolbar" role="toolbar" aria-label={`${PDF_TASK_CATEGORY_LABELS[taskCategory]} PDF tools`}>
+        <div className="pdf-task-actions">
+          {primaryTaskActions.map((action)=><button
+            key={action.id}
+            disabled={!action.enabled}
+            title={taskActionTitle(action)}
+            aria-label={taskActionTitle(action)}
+            onClick={()=>{void action.run();}}
+          >{action.label}</button>)}
+          {!activeTaskActions.length&&<span className="pdf-task-empty">No operational {PDF_TASK_CATEGORY_LABELS[taskCategory].toLowerCase()} commands are available in this build yet. Use Ctrl+K to discover available document actions.</span>}
+          {overflowTaskActions.length>0&&<details className="pdf-task-overflow">
+            <summary aria-label={`More ${PDF_TASK_CATEGORY_LABELS[taskCategory]} tools`}>More</summary>
+            <div>
+              {overflowTaskActions.map((action)=><button
+                key={action.id}
+                disabled={!action.enabled}
+                title={taskActionTitle(action)}
+                aria-label={taskActionTitle(action)}
+                onClick={()=>{void action.run();}}
+              >{action.label}</button>)}
+            </div>
+          </details>}
+        </div>
 
-      <div className="pdf-toolbar-group">
-        <button disabled={!pdf} onClick={() => { setFitMode('custom'); setZoom((value) => stepPdfZoom(value, -1)); }} aria-label="Zoom out"><Minus size={16}/></button>
-        <button className="pdf-zoom-label" disabled={!pdf} onClick={() => setFitMode((mode) => mode === 'width' ? 'page' : 'width')}>{zoomLabel}</button>
-        <button disabled={!pdf} onClick={() => { setFitMode('custom'); setZoom((value) => stepPdfZoom(value, 1)); }} aria-label="Zoom in"><Plus size={16}/></button>
-        <button disabled={!pdf} onClick={() => setFitMode('width')}>Width</button>
-        <button disabled={!pdf} onClick={() => setFitMode('page')}>Page</button>
-        <button disabled={!pdf} onClick={() => setRotation((value) => rotatePdfClockwise(value))} title="Rotate view clockwise"><RotateCw size={16}/></button>
-        <button
-          disabled={!pdf}
-          onClick={()=>setInspectorHidden((value)=>!value)}
-          aria-label={inspectorHidden?'Show right inspector':'Hide right inspector'}
-          title={`${inspectorHidden?'Show':'Hide'} right inspector · ${DOCUMENT_INSPECTOR_SHORTCUT}`}
-        >{inspectorHidden?<PanelRightOpen size={16}/>:<PanelRightClose size={16}/>}</button>
+        <div className="pdf-view-controls">
+          <div className="pdf-toolbar-group pdf-page-nav">
+            <button disabled={!pdf || currentPage <= 1} onClick={() => goToPage(currentPage - 1)} aria-label="Previous page"><ChevronLeft size={16}/></button>
+            <input
+              aria-label="Current PDF page"
+              disabled={!pdf}
+              value={pdf ? currentPage : ''}
+              onChange={(event) => setCurrentPage(clampPdfPage(Number(event.target.value), pageCount))}
+              onBlur={() => goToPage(currentPage)}
+              onKeyDown={(event) => { if (event.key === 'Enter') goToPage(currentPage); }}
+            />
+            <span>/ {pageCount || '—'}</span>
+            <button disabled={!pdf || currentPage >= pageCount} onClick={() => goToPage(currentPage + 1)} aria-label="Next page"><ChevronRight size={16}/></button>
+          </div>
+          <div className="pdf-toolbar-group">
+            <button disabled={!pdf} onClick={() => { setFitMode('custom'); setZoom((value) => stepPdfZoom(value, -1)); }} aria-label="Zoom out"><Minus size={16}/></button>
+            <button className="pdf-zoom-label" disabled={!pdf} onClick={() => setFitMode((mode) => mode === 'width' ? 'page' : 'width')} aria-label={`Zoom mode: ${zoomLabel}`}>{zoomLabel}</button>
+            <button disabled={!pdf} onClick={() => { setFitMode('custom'); setZoom((value) => stepPdfZoom(value, 1)); }} aria-label="Zoom in"><Plus size={16}/></button>
+            <button disabled={!pdf} onClick={() => setRotation((value) => rotatePdfClockwise(value))} aria-label="Rotate view clockwise" title="Rotate view clockwise"><RotateCw size={16}/></button>
+            <button
+              disabled={!pdf}
+              onClick={()=>setInspectorHidden((value)=>!value)}
+              aria-label={inspectorHidden?'Show right inspector':'Hide right inspector'}
+              title={`${inspectorHidden?'Show':'Hide'} right inspector · ${DOCUMENT_INSPECTOR_SHORTCUT}`}
+            >{inspectorHidden?<PanelRightOpen size={16}/>:<PanelRightClose size={16}/>}</button>
+          </div>
+        </div>
       </div>
     </div>
 

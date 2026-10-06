@@ -19,7 +19,17 @@ export type DocumentCommandId =
   | 'header-footer'
   | 'bates'
   | 'page-box'
-  | 'toggle-inspector';
+  | 'toggle-inspector'
+  | 'pdf-text-place'
+  | 'pdf-rectangle-add'
+  | 'pdf-pages-remove'
+  | 'pdf-page-copy'
+  | 'pdf-pages-turn'
+  | 'pdf-pages-extract'
+  | 'pdf-document-split'
+  | 'pdf-comments-open'
+  | 'pdf-comment-create'
+  | 'pdf-signatures-open';
 
 export interface DocumentCommandDescriptor {
   id: DocumentCommandId;

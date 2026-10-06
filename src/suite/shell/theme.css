@@ -355,3 +355,155 @@
   .pdf-inspector-tabs{grid-template-columns:repeat(5,minmax(0,1fr)) 26px}
   .pdf-inspector-tabs button{font-size:7px;padding-left:2px;padding-right:2px}
 }
+
+
+/* Source-truth UI 53.9A — broad PDF task categories above a focused command set */
+.pdf-task-toolbar{
+  min-height:82px;
+  border-bottom:1px solid #1c354a;
+  background:#081722;
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+}
+.pdf-task-categories{
+  min-height:32px;
+  display:flex;
+  align-items:stretch;
+  gap:1px;
+  padding:0 8px;
+  border-bottom:1px solid #173047;
+  overflow-x:auto;
+  overflow-y:hidden;
+  scrollbar-width:thin;
+  background:#07131f;
+}
+.pdf-task-categories button{
+  flex:0 0 auto;
+  border:0;
+  border-bottom:2px solid transparent;
+  background:transparent;
+  color:#7895a9;
+  padding:0 10px;
+  font-size:9px;
+  font-weight:650;
+  cursor:pointer;
+}
+.pdf-task-categories button:hover{background:#0d2232;color:#c9deeb}
+.pdf-task-categories button.active{
+  color:#e3f3fc;
+  border-bottom-color:#33d4e5;
+  background:#0c2233;
+}
+.pdf-task-categories button:focus-visible{
+  outline:2px solid #4aa8e8;
+  outline-offset:-2px;
+}
+.pdf-context-toolbar{
+  min-height:49px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:7px 10px;
+  min-width:0;
+}
+.pdf-task-actions{
+  min-width:0;
+  flex:1;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  overflow:hidden;
+}
+.pdf-task-actions>button,
+.pdf-task-overflow summary,
+.pdf-task-overflow>div button,
+.pdf-view-controls button{
+  height:34px;
+  border:1px solid #27465e;
+  background:#0d2235;
+  color:#bcd1e1;
+  border-radius:7px;
+  padding:0 10px;
+  cursor:pointer;
+  white-space:nowrap;
+  font-size:9px;
+}
+.pdf-task-actions>button:hover:not(:disabled),
+.pdf-task-overflow>div button:hover:not(:disabled),
+.pdf-view-controls button:hover:not(:disabled){
+  background:#12304a;
+  border-color:#376586;
+  color:white;
+}
+.pdf-task-actions>button:disabled,
+.pdf-task-overflow>div button:disabled,
+.pdf-view-controls button:disabled{
+  opacity:.4;
+  cursor:not-allowed;
+}
+.pdf-task-empty{
+  color:#728ca0;
+  font-size:9px;
+  line-height:1.35;
+  white-space:normal;
+}
+.pdf-task-overflow{position:relative;flex:0 0 auto}
+.pdf-task-overflow summary{
+  list-style:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-width:54px;
+}
+.pdf-task-overflow summary::-webkit-details-marker{display:none}
+.pdf-task-overflow[open] summary{background:#12304a;border-color:#376586;color:white}
+.pdf-task-overflow>div{
+  position:absolute;
+  top:39px;
+  right:0;
+  z-index:30;
+  min-width:175px;
+  max-width:240px;
+  padding:6px;
+  border:1px solid #294b64;
+  background:#081723;
+  border-radius:8px;
+  box-shadow:0 14px 34px #000b;
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
+.pdf-task-overflow>div button{
+  width:100%;
+  text-align:left;
+  justify-content:flex-start;
+}
+.pdf-view-controls{
+  flex:0 0 auto;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  padding-left:8px;
+  border-left:1px solid #1d3549;
+}
+.pdf-view-controls .pdf-toolbar-group{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.pdf-view-controls .pdf-page-nav input{
+  width:43px;
+  height:32px;
+  text-align:center;
+  border:1px solid #27465e;
+  background:#07141f;
+  color:#dce9f5;
+  border-radius:6px;
+  outline:0;
+}
+.pdf-view-controls .pdf-page-nav span{font-size:10px;color:#839bae;min-width:36px}
+.pdf-view-controls .pdf-zoom-label{min-width:64px}
+@media(max-width:1280px){
+  .pdf-task-categories button{padding:0 8px}
+  .pdf-context-toolbar{gap:6px}
+  .pdf-view-controls{gap:4px;padding-left:6px}
+}
+@media print{.pdf-task-toolbar{display:none!important}}

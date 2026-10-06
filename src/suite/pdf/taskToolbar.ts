@@ -1,0 +1,8 @@
+export const PDF_TASK_CATEGORIES = ['home','edit','convert','organize','comment','sign','protect','forms','ai','scan','automate'] as const;
+export type PdfTaskCategory = typeof PDF_TASK_CATEGORIES[number];
+export const PDF_TASK_CATEGORY_LABELS: Record<PdfTaskCategory,string> = {home:'Home',edit:'Edit',convert:'Convert',organize:'Organize',comment:'Comment',sign:'Sign',protect:'Protect',forms:'Forms',ai:'AI',scan:'Scan',automate:'Automate'};
+export const PDF_TASK_CATEGORY_SHORTCUTS: Record<PdfTaskCategory,string> = {home:'Alt+Shift+1',edit:'Alt+Shift+2',convert:'Alt+Shift+3',organize:'Alt+Shift+4',comment:'Alt+Shift+5',sign:'Alt+Shift+6',protect:'Alt+Shift+7',forms:'Alt+Shift+8',ai:'Alt+Shift+9',scan:'Alt+Shift+0',automate:'Alt+Shift+Minus'};
+const shortcutCode: Record<string,PdfTaskCategory> = {Digit1:'home',Digit2:'edit',Digit3:'convert',Digit4:'organize',Digit5:'comment',Digit6:'sign',Digit7:'protect',Digit8:'forms',Digit9:'ai',Digit0:'scan',Minus:'automate'};
+export interface PdfTaskShortcutEventLike {altKey:boolean;shiftKey:boolean;ctrlKey:boolean;metaKey:boolean;code:string}
+export function pdfTaskCategoryFromShortcut(event:PdfTaskShortcutEventLike):PdfTaskCategory|null {if(!event.altKey||!event.shiftKey||event.ctrlKey||event.metaKey)return null;return shortcutCode[event.code]??null;}
+export function movePdfTaskCategory(current:PdfTaskCategory,key:'ArrowLeft'|'ArrowRight'|'Home'|'End'):PdfTaskCategory {if(key==='Home')return PDF_TASK_CATEGORIES[0];if(key==='End')return PDF_TASK_CATEGORIES[PDF_TASK_CATEGORIES.length-1];const index=PDF_TASK_CATEGORIES.indexOf(current);const delta=key==='ArrowRight'?1:-1;return PDF_TASK_CATEGORIES[(index+delta+PDF_TASK_CATEGORIES.length)%PDF_TASK_CATEGORIES.length];}
