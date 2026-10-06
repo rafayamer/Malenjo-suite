@@ -162,8 +162,8 @@ $Manifest | ConvertTo-Json -Depth 10 | Set-Content -Path (Join-Path $PackDir 'ma
 
 $RootRef = "malenjo:tesseract-windows-x64@$Version"
 $EngineRef = "pkg:github/tesseract-ocr/tesseract@$Version"
-$EngRef = "pkg:github/tesseract-ocr/tessdata_fast@$TessdataCommit?file=eng.traineddata"
-$OsdRef = "pkg:github/tesseract-ocr/tessdata_fast@$TessdataCommit?file=osd.traineddata"
+$EngRef = "pkg:github/tesseract-ocr/tessdata_fast@${TessdataCommit}?file=eng.traineddata"
+$OsdRef = "pkg:github/tesseract-ocr/tessdata_fast@${TessdataCommit}?file=osd.traineddata"
 $Sbom = [ordered]@{
   bomFormat = 'CycloneDX'
   specVersion = '1.5'
