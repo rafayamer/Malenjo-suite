@@ -90,10 +90,14 @@ describe('PDF provider capability resolver',()=>{
   });
 
   it('exposes only controls implemented by the direct Tesseract OCR fallback',()=>{
-    const fields=[
+    const fields:PdfProviderOperation['fields']=[
       'fileInput','languages','sidecar','deskew','rotatePages','clean','cleanFinal','ocrType','ocrRenderType','removeImagesAfter',
     ].map((name)=>({
-      name,label:name,kind:(name==='fileInput'?'file':'string') as const,required:false,location:'form' as const,
+      name,
+      label:name,
+      kind:name==='fileInput'?'file':'string',
+      required:false,
+      location:'form',
     }));
     const [resolved]=applyPdfProviderCapabilities([{
       id:'processPdfWithOCR',
