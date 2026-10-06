@@ -96,7 +96,7 @@ export function sanitizeHomeState(value: unknown): HomeStateV1 {
         id:cleanString(item.id,180) || `pin-${pins.length + 1}`,
         label:cleanString(item.label,160) || locationLabelFromPath(path),
         path,
-        addedAt:Number.isFinite(item.addedAt) ? Math.max(0,Number(item.addedAt)) : 0,
+        addedAt:typeof item.addedAt === 'number' && Number.isFinite(item.addedAt) ? Math.max(0,item.addedAt) : 0,
       });
     }
   }
