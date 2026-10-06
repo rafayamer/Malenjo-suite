@@ -174,6 +174,31 @@ jobs:
           if ($patch.path -ne $patchPath -or $patch.sha256 -ne $patchHash) {
             throw "Stirling open-core effects patch provenance mismatch."
           }
+          $office = $manifest.embeddedOfficeConvert
+          if ($office.version -ne "0.2.2" -or $office.sourceCommit -ne "673aab8d6ac784524cd1d90141c95e74b9fd26ae" -or $office.license -ne "MIT") {
+            throw "Unexpected embedded Stirling Office Convert provenance."
+          }
+          $officeJars = @($office.jars.PSObject.Properties)
+          if ($officeJars.Count -ne 3) { throw "Expected exactly three embedded Office Convert JARs." }
+          foreach ($jarEntry in $officeJars) {
+            if ($jarEntry.Value -notmatch "^[0-9a-f]{64}$") {
+              throw "Embedded Office Convert JAR hash is invalid: $($jarEntry.Name)"
+            }
+          }
+          foreach ($notice in @(
+            "stirling-pdf-LICENSE.txt",
+            "stirling-office-convert-LICENSE.txt",
+            "stirling-office-convert-DEPENDENCIES.md",
+            "stirling-dependency-licenses.json"
+          )) {
+            if (!(Test-Path (Join-Path "provider-packs/stirling-core/malenjo-notices" $notice))) {
+              throw "Required Stirling core notice/report missing: $notice"
+            }
+          }
+          $licenseText = Get-Content "provider-packs/stirling-core/malenjo-notices/stirling-dependency-licenses.json" -Raw
+          if ($licenseText.Length -lt 1000 -or $licenseText -notmatch "stirling-office-convert") {
+            throw "Generated Stirling dependency-license report does not contain the embedded Office converter."
+          }
       - name: Smoke-test local Windows PDF provider
         shell: pwsh
         run: |
@@ -196,7 +221,8 @@ jobs:
             "-jar", $jar,
             "--server.address=127.0.0.1",
             "--server.port=28970",
-            "--spring.main.banner-mode=off"
+            "--spring.main.banner-mode=off",
+            "--system.stirlingOfficeConversion=true"
           ) -PassThru -NoNewWindow
           try {
             $healthy = $false
@@ -223,7 +249,11 @@ jobs:
               "/api/v1/misc/ocr-pdf",
               "/api/v1/misc/auto-rotate-pdf",
               "/api/v1/misc/scanner-effect",
-              "/api/v1/misc/replace-invert-pdf"
+              "/api/v1/misc/replace-invert-pdf",
+              "/api/v1/convert/file/pdf",
+              "/api/v1/convert/pdf/word",
+              "/api/v1/convert/pdf/presentation",
+              "/api/v1/convert/pdf/text"
             )) {
               if (!$api.paths.PSObject.Properties.Name.Contains($requiredPath)) {
                 throw "Expected qpdf-backed operation $requiredPath to be present."
@@ -235,6 +265,42 @@ jobs:
             ./scripts/write-valid-pdf-smoke-fixture.ps1 -OutputPath $fixture
             & $qpdf.FullName --check $fixture
             if ($LASTEXITCODE -ne 0) { throw "Generated PDF smoke fixture failed qpdf validation." }
+
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            function Assert-ZipEntry([string]$Path, [string]$Entry) {
+              $zip = [System.IO.Compression.ZipFile]::OpenRead($Path)
+              try {
+                if (-not ($zip.Entries | Where-Object { $_.FullName -eq $Entry })) {
+                  throw "Expected ZIP entry '$Entry' missing from $Path"
+                }
+              } finally {
+                $zip.Dispose()
+              }
+            }
+
+            $officeText = Join-Path (Resolve-Path ".build/provider-smoke") "office-input.txt"
+            Set-Content -Path $officeText -Value "MALENJO embedded Office Convert smoke test" -Encoding utf8
+            $officePdfOut = Join-Path (Resolve-Path ".build/provider-smoke") "office-to-pdf.pdf"
+            & $curl --fail --silent --show-error -o $officePdfOut -F "fileInput=@$officeText;type=text/plain" "http://127.0.0.1:28970/api/v1/convert/file/pdf"
+            if ($LASTEXITCODE -ne 0) { throw "Embedded Office text-to-PDF operation smoke failed." }
+
+            $docxOut = Join-Path (Resolve-Path ".build/provider-smoke") "pdf-to-word.docx"
+            & $curl --fail --silent --show-error -o $docxOut -F "fileInput=@$fixture;type=application/pdf" -F "outputFormat=docx" "http://127.0.0.1:28970/api/v1/convert/pdf/word"
+            if ($LASTEXITCODE -ne 0) { throw "Embedded Office PDF-to-DOCX operation smoke failed." }
+            Assert-ZipEntry $docxOut "word/document.xml"
+
+            $pptxOut = Join-Path (Resolve-Path ".build/provider-smoke") "pdf-to-presentation.pptx"
+            & $curl --fail --silent --show-error -o $pptxOut -F "fileInput=@$fixture;type=application/pdf" -F "outputFormat=pptx" "http://127.0.0.1:28970/api/v1/convert/pdf/presentation"
+            if ($LASTEXITCODE -ne 0) { throw "Embedded Office PDF-to-PPTX operation smoke failed." }
+            Assert-ZipEntry $pptxOut "ppt/presentation.xml"
+
+            $rtfOut = Join-Path (Resolve-Path ".build/provider-smoke") "pdf-to-text.rtf"
+            & $curl --fail --silent --show-error -o $rtfOut -F "fileInput=@$fixture;type=application/pdf" -F "outputFormat=rtf" "http://127.0.0.1:28970/api/v1/convert/pdf/text"
+            if ($LASTEXITCODE -ne 0) { throw "Embedded Office PDF-to-RTF operation smoke failed." }
+            $rtfBytes = [System.IO.File]::ReadAllBytes($rtfOut)
+            if ($rtfBytes.Length -lt 5 -or [Text.Encoding]::ASCII.GetString($rtfBytes, 0, 5) -ne "{\rtf") {
+              throw "PDF-to-RTF output does not have an RTF header."
+            }
 
             $repairOut = Join-Path (Resolve-Path ".build/provider-smoke") "repair.pdf"
             & $curl --fail --silent --show-error -o $repairOut -F "fileInput=@$fixture;type=application/pdf" "http://127.0.0.1:28970/api/v1/misc/repair"
@@ -274,18 +340,24 @@ jobs:
             & $curl --fail --silent --show-error -o $rotateOut -F "fileInput=@$ocrFixture;type=application/pdf" -F "detectionMode=osd" -F "confidenceThreshold=0" -F "dryRun=false" -F "inferUndetected=false" "http://127.0.0.1:28970/api/v1/misc/auto-rotate-pdf"
             if ($LASTEXITCODE -ne 0) { throw "Tesseract auto-rotate PDF operation smoke failed." }
 
-            foreach ($output in @($repairOut, $compressOut, $replaceOut, $scannerOut, $ocrOut, $rotateOut)) {
+            foreach ($output in @($officePdfOut, $repairOut, $compressOut, $replaceOut, $scannerOut, $ocrOut, $rotateOut)) {
               $bytes = [System.IO.File]::ReadAllBytes($output)
               if ($bytes.Length -lt 5 -or [Text.Encoding]::ASCII.GetString($bytes, 0, 5) -ne "%PDF-") {
                 throw "Provider smoke output is not a PDF: $output"
               }
             }
+            $xmlDisabledOut = Join-Path (Resolve-Path ".build/provider-smoke") "xml-disabled.bin"
+            $xmlStatus = (& $curl --silent --show-error -o $xmlDisabledOut -w "%{http_code}" -F "fileInput=@$fixture;type=application/pdf" "http://127.0.0.1:28970/api/v1/convert/pdf/xml" | Out-String).Trim()
+            if ($xmlStatus -match "^2") {
+              throw "LibreOffice-only PDF-to-XML unexpectedly executed without a reviewed LibreOffice provider."
+            }
+
             $vectorDisabledOut = Join-Path (Resolve-Path ".build/provider-smoke") "vector-disabled.bin"
             $vectorStatus = (& $curl --silent --show-error -o $vectorDisabledOut -w "%{http_code}" -F "fileInput=@$fixture;type=application/pdf" -F "outputFormat=eps" "http://127.0.0.1:28970/api/v1/convert/pdf/vector" | Out-String).Trim()
             if ($vectorStatus -match "^2") {
               throw "Ghostscript-only PDF-to-vector unexpectedly executed without a reviewed Ghostscript provider."
             }
-            Write-Host "Reviewed local provider groups passed repair, compression, Java effects, OCR and auto-rotate localhost smoke tests; Ghostscript-only vector conversion remained unavailable."
+            Write-Host "Reviewed local provider groups passed embedded Office, repair, compression, Java effects, OCR and auto-rotate localhost smoke tests; LibreOffice-only XML and Ghostscript-only vector conversion remained unavailable."
           } finally {
             if (!$process.HasExited) { Stop-Process -Id $process.Id -Force }
           }
