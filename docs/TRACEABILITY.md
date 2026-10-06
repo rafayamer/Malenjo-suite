@@ -65,6 +65,19 @@ No module is complete merely because its navigation entry exists. Completion req
 | Unsupported selection contexts are not faked | PDF Workspace | text/image-specific controls explicitly remain separate requirements | audit | Implemented |
 | Detailed audit | Documentation | `docs/audits/UI-53.8A-RIGHT-INSPECTOR-SHELL.md` | canonical SHA/lines recorded | Implemented |
 
+## Source-truth UI 53.9A — PDF task categories / focused toolbar
+
+| Requirement | Component | Implementation | Test/evidence | Status |
+|---|---|---|---|---|
+| Canonical PDF task categories | PDF Workspace | exact Home / Edit / Convert / Organize / Comment / Sign / Protect / Forms / AI / Scan / Automate model in `taskToolbar.ts` | `taskToolbar.test.ts` exact-order regression | Implemented; CI pending |
+| Focused commands rather than every command at once | PDF Workspace | active category selects one bounded command set in `PdfWorkspace.tsx` | code audit + build | Implemented; CI pending |
+| Lower-frequency tools move to overflow | PDF Workspace | primary six actions + `More` disclosure for remaining category actions | code audit | Implemented; CI pending |
+| Explicit keyboard access | PDF Workspace | Alt+Shift category shortcuts + Arrow/Home/End roving category navigation | `taskToolbar.test.ts` | Implemented; CI pending |
+| Ctrl+K discoverability | Command bus / palette | searchable Edit/Organize/Comment/signature operations plus existing suite routes | command registration + build | Implemented; CI pending |
+| Accessibility labels and disabled reasons | PDF Workspace | tab/toolbar ARIA semantics, text labels, reason-bearing titles | source audit + build | Implemented; CI pending |
+| Unsupported tools are not faked | PDF Workspace | Convert empty-state and explicit audit boundary for missing object-edit tools | audit | Implemented |
+| Detailed audit | Documentation | `docs/audits/UI-53.9A-PDF-TASK-TOOLBAR.md` | canonical SHA/lines recorded | Implemented |
+
 ## Phase 1 traceability
 
 | Requirement | Component | Implementation | Test/evidence | Status |
