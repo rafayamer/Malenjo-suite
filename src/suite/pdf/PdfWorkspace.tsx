@@ -34,6 +34,14 @@ import {
   rotatePdfPagesPermanent,
   splitPdfAtPage,
 } from './editor';
+import {
+  clearPdfForm,
+  flattenPdfForm,
+  listPdfFormFields,
+  setPdfFormFieldValue,
+  type PdfFormFieldDescriptor,
+  type PdfFormValue,
+} from './forms';
 import { disposePdf, loadPdfBytes, type PdfLoadResult } from './engine';
 import {
   canRedoPdfHistory,
@@ -111,6 +119,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [searchResults, setSearchResults] = useState<Array<{page:number;excerpt:string}>>([]);
   const [textOverlay, setTextOverlay] = useState({ text:'', x:0.12, y:0.82, size:12 });
   const [shapeOverlay, setShapeOverlay] = useState({ x:0.12, y:0.68, width:0.35, height:0.08, mode:'highlight' as 'highlight'|'outline' });
+  const [formFields, setFormFields] = useState<PdfFormFieldDescriptor[]>([]);
+  const [formDrafts, setFormDrafts] = useState<Record<string, PdfFormValue>>({});
+  const [formsLoading, setFormsLoading] = useState(false);
+  const formsPanelRef = useRef<HTMLDivElement>(null);
   const scrollFps = useScrollFps(scrollRef);
   const domIdPrefix=session?.id??previewIdRef.current;
 
@@ -458,6 +470,59 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }
   }
 
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!sourceBytes) {
+      setFormFields([]);
+      setFormDrafts({});
+      return;
+    }
+
+    setFormsLoading(true);
+    void listPdfFormFields(sourceBytes)
+      .then((fields) => {
+        if (cancelled) return;
+        setFormFields(fields);
+        const drafts: Record<string, PdfFormValue> = {};
+        for (const field of fields) {
+          if (typeof field.value === 'boolean') drafts[field.name] = field.value;
+          else if (Array.isArray(field.value)) drafts[field.name] = [...field.value];
+          else drafts[field.name] = field.value ?? '';
+        }
+        setFormDrafts(drafts);
+      })
+      .catch((reason) => {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason));
+      })
+      .finally(() => {
+        if (!cancelled) setFormsLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [sourceBytes]);
+
+  async function applyFormField(field: PdfFormFieldDescriptor) {
+    const draft = formDrafts[field.name];
+    if (draft === undefined) return;
+    await mutate(
+      `Updated form field "${field.name}".`,
+      (bytes) => setPdfFormFieldValue(bytes, field.name, draft),
+      currentPage,
+    );
+  }
+
+  async function clearFormFields() {
+    if (!formFields.length) return;
+    await mutate('Cleared editable PDF form fields.', clearPdfForm, currentPage);
+  }
+
+  async function flattenFormFields() {
+    if (!formFields.length) return;
+    if (!window.confirm('Flatten all PDF form fields into page content? You can undo this change in the current MALENJO tab until the history entry is discarded.')) return;
+    await mutate('Flattened PDF form fields into page content.', flattenPdfForm, currentPage);
+  }
+
   async function exportCurrent(){
     if(!sourceBytes){
       setActionNotice('Open a PDF first.');
@@ -543,6 +608,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           run:()=>redoEdit(),
         },
         {
+          id:'forms',
+          label:'Open PDF forms',
+          keywords:'forms fields fill checkbox radio dropdown flatten',
+          detail:formFields.length ? `${formFields.length} interactive field(s) detected` : 'No interactive fields detected in this PDF',
+          enabled:formFields.length > 0 && !mutating,
+          disabledReason:mutating ? 'Wait for the current PDF edit to finish.' : 'This PDF has no interactive form fields.',
+          run:()=>formsPanelRef.current?.scrollIntoView({behavior:'smooth',block:'start'}),
+        },
+        {
           id:'print',
           label:'Print current PDF',
           keywords:'print printer ctrl p',
@@ -554,7 +628,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       ],
     });
     return () => registerCommands(null);
-  }, [session, registerCommands, sourceBytes, pdf, dirty, mutating, historyRevision]);
+  }, [session, registerCommands, sourceBytes, pdf, dirty, mutating, historyRevision, formFields.length]);
 
   const zoomLabel = fitMode === 'width'
     ? 'Fit width'
@@ -717,6 +791,57 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           </div>
           <button disabled={mutating} onClick={()=>void mutate(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage)}>Apply rectangle</button>
           <small>Coordinates are normalized 0–1 from the page’s bottom-left corner. A later visual drag/selection layer will replace manual coordinate entry.</small>
+        </div>
+
+
+        <div ref={formsPanelRef} className="pdf-pane-title">Forms <b>{formsLoading?'…':formFields.length}</b></div>
+        <div className="pdf-forms-panel">
+          {formsLoading && <p>Inspecting interactive form fields…</p>}
+          {!formsLoading && !formFields.length && <p>No AcroForm fields were detected in this PDF.</p>}
+          {formFields.map((field) => <div className="pdf-form-field" key={field.name}>
+            <div className="pdf-form-field-head">
+              <span><b>{field.name}</b><small>{field.type}{field.required?' · required':''}{field.readOnly?' · read-only':''}</small></span>
+            </div>
+            {field.type === 'text' && <input
+              disabled={field.readOnly || mutating}
+              value={String(formDrafts[field.name] ?? '')}
+              onChange={(event)=>setFormDrafts((current)=>({...current,[field.name]:event.target.value}))}
+            />}
+            {field.type === 'checkbox' && <label className="pdf-form-check"><input
+              type="checkbox"
+              disabled={field.readOnly || mutating}
+              checked={Boolean(formDrafts[field.name])}
+              onChange={(event)=>setFormDrafts((current)=>({...current,[field.name]:event.target.checked}))}
+            /> Checked</label>}
+            {(field.type === 'radio' || field.type === 'dropdown') && <select
+              disabled={field.readOnly || mutating}
+              value={Array.isArray(formDrafts[field.name]) ? String((formDrafts[field.name] as string[])[0] ?? '') : String(formDrafts[field.name] ?? '')}
+              onChange={(event)=>setFormDrafts((current)=>({...current,[field.name]:event.target.value}))}
+            >
+              <option value="">Choose…</option>
+              {field.options.map((option)=><option key={option} value={option}>{option}</option>)}
+            </select>}
+            {field.type === 'option-list' && <select
+              multiple
+              disabled={field.readOnly || mutating}
+              value={Array.isArray(formDrafts[field.name]) ? formDrafts[field.name] as string[] : []}
+              onChange={(event)=>setFormDrafts((current)=>({...current,[field.name]:Array.from(event.currentTarget.selectedOptions,(option)=>option.value)}))}
+            >
+              {field.options.map((option)=><option key={option} value={option}>{option}</option>)}
+            </select>}
+            {(field.type === 'button' || field.type === 'signature' || field.type === 'unknown') && <div className="pdf-form-unsupported">
+              {field.type === 'signature' ? 'Use MALENJO Sign for cryptographic signature fields.' : field.type === 'button' ? 'Button actions are not editable form values.' : 'Unsupported form field type.'}
+            </div>}
+            {!['button','signature','unknown'].includes(field.type) && <button
+              disabled={field.readOnly || mutating}
+              onClick={()=>void applyFormField(field)}
+            >Apply field</button>}
+          </div>)}
+          {!!formFields.length && <div className="pdf-form-actions">
+            <button disabled={mutating} onClick={()=>void clearFormFields()}>Clear editable fields</button>
+            <button disabled={mutating} onClick={()=>void flattenFormFields()}>Flatten form</button>
+          </div>}
+          <small>Form changes are written to the PDF bytes, enter the same per-tab Undo/Redo history as page edits, and are only persisted when you Export.</small>
         </div>
 
         <div className="pdf-pane-title">Page tools</div>
