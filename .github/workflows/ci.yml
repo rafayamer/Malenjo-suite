@@ -148,7 +148,11 @@ jobs:
             }
 
             New-Item -ItemType Directory -Force -Path ".build/provider-smoke" | Out-Null
-            $fixture = Resolve-Path "testing/suite/fixtures/pdf/javascript-action.pdf"
+            $fixture = Join-Path (Resolve-Path ".build/provider-smoke") "valid-one-page.pdf"
+            ./scripts/write-valid-pdf-smoke-fixture.ps1 -OutputPath $fixture
+            & $qpdf.FullName --check $fixture
+            if ($LASTEXITCODE -ne 0) { throw "Generated PDF smoke fixture failed qpdf validation." }
+
             $repairOut = Join-Path (Resolve-Path ".build/provider-smoke") "repair.pdf"
             & curl.exe --fail --silent --show-error -o $repairOut -F "fileInput=@$fixture;type=application/pdf" "http://127.0.0.1:28970/api/v1/misc/repair"
             if ($LASTEXITCODE -ne 0) { throw "qpdf repair operation smoke failed." }
