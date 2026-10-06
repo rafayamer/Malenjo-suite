@@ -5,7 +5,7 @@
 **Module:** Home  
 **Original completion issue:** #134  
 **Correction issue:** #139  
-**Registry state during correction:** `foundation` until corrected implementation CI and final-head verification pass.
+**Registry state after corrected implementation gate:** `complete` after CI #224 passed; final-head and post-merge `main` CI remain mandatory evidence.
 
 ## Why this correction exists
 
@@ -94,13 +94,6 @@ Home uses native MALENJO file pickers and canonical library APIs on Windows. No 
 
 ## Completion boundary
 
-The corrected Home module may return to `complete` only after:
-
-1. frontend typecheck/tests/build pass;
-2. Windows Rust check/tests pass;
-3. Codespaces/Linux validation passes;
-4. registry/traceability are promoted on the exact corrected tree;
-5. final-head CI passes;
-6. post-merge main CI passes.
+Corrected implementation CI #224 (`37457109215`) passed frontend typecheck/tests/build, Windows Rust check/tests, and Codespaces/Linux validation. Home was re-promoted only after that gate. Final-head CI on the promoted tree and post-merge `main` CI remain required before this correction is closed.
 
 This correction does not complete any destination module.
