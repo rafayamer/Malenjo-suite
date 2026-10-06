@@ -52,6 +52,19 @@ No module is complete merely because its navigation entry exists. Completion req
 | Neutral document-first canvas | PDF Workspace / theme | neutral dark gray/navy canvas + reduced page shadow | source-truth audit | Verified in PR #125 / CI #196 |
 | Detailed audit | Documentation | `docs/audits/UI-53.7-CENTRAL-CANVAS.md` | canonical SHA/lines recorded | Implemented |
 
+## Source-truth UI 53.8A — contextual right-inspector shell
+
+| Requirement | Component | Implementation | Test/evidence | Status |
+|---|---|---|---|---|
+| Canonical inspector tabs | Shell / PDF Workspace | Properties / AI / Security / Comments / Sign in `inspector.ts` and `PdfWorkspace.tsx` | `inspector.test.ts` exact-set regression | Verified in PR #127 / CI #200 |
+| Per-document inspector state | PDF Workspace | inspector tab/hidden state owned by each mounted PDF workspace | code audit; persistent mounted sessions from §53.5 | Verified in PR #127 / CI #200 |
+| Hide/show keyboard shortcut | Shell contract / PDF Workspace | `Ctrl/Cmd+Shift+.` via `isDocumentInspectorToggleShortcut` | shortcut unit tests | Verified in PR #127 / CI #200 |
+| Reclaim canvas width when hidden | PDF Workspace / theme | `inspector-hidden` grid removes the right column | build + source-truth audit | Verified in PR #127 / CI #200 |
+| Real PDF document/page context | PDF Workspace | page, selection count, document metadata, edit/history/view and existing operational controls | code audit | Verified in PR #127 / CI #200 |
+| Real suite actions from inspector | Shell / PDF Workspace | AI, Security and Sign navigate to existing workspaces; Comments opens existing PDF panel | build/code audit | Verified in PR #127 / CI #200 |
+| Unsupported selection contexts are not faked | PDF Workspace | text/image-specific controls explicitly remain separate requirements | audit | Implemented |
+| Detailed audit | Documentation | `docs/audits/UI-53.8A-RIGHT-INSPECTOR-SHELL.md` | canonical SHA/lines recorded | Implemented |
+
 ## Phase 1 traceability
 
 | Requirement | Component | Implementation | Test/evidence | Status |
