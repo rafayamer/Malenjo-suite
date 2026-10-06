@@ -44,3 +44,8 @@ CI extraction of the exact reviewed installer reports:
 - libcurl `8.21.0` with Schannel, zlib `1.3.2`, brotli `1.2.0`, zstd `1.5.7`, libidn2 `2.3.8`, libpsl `0.21.5`, libssh2 `1.11.1`, WinLDAP
 
 These runtime-reported versions improve the transitive audit input but do not by themselves prove the exact source package/license/notice mapping for every extracted DLL. The release gate remains open.
+
+
+## PDF output support files
+
+The pinned Stirling `ocr-pdf` path asks Tesseract to emit PDF output. MALENJO therefore stages the Tesseract-distributed `pdf.ttf`, `configs/`, and `tessconfigs/` support files from the exact reviewed installer alongside the separately pinned `eng` and `osd` model data. The Tesseract source describes the GlyphLessFont replacement as Apache-2.0 (Google copyright 2020). The pack builder fails if the PDF config/font support is absent.
