@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { Activity, Command, FilePlus2, FolderOpen, Search, ShieldCheck, Sparkles } from 'lucide-react';
+import { Activity, Command, FolderOpen, Search, ShieldCheck } from 'lucide-react';
 import { modules } from '../modules/registry';
 import type { ModuleId } from '../core/types';
 import FileLibrary from '../files/FileLibrary';
-import RecentDocuments from '../files/RecentDocuments';
 import { workspaceForDocument } from '../files/route';
 import {
   createDocumentSession,
@@ -34,17 +33,11 @@ import MetadataWorkspace from '../security/MetadataWorkspace';
 import SignWorkspace from '../security/SignWorkspace';
 import EnterpriseWorkspace from '../enterprise/EnterpriseWorkspace';
 import HelpWorkspace from '../help/HelpWorkspace';
+import HomeWorkspace from '../home/HomeWorkspace';
 import DocumentTabs from './DocumentTabs';
 import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
 import { CANONICAL_COMMAND_PALETTE_EXAMPLES } from './commandPaletteModel';
 import type { DocumentCommandController } from '../commands/types';
-
-const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
-  {label:'Open document', icon: FolderOpen, target:'files'},
-  {label:'New document', icon: FilePlus2, target:'word'},
-  {label:'Private AI', icon: Sparkles, target:'ai'},
-  {label:'Security scan', icon: ShieldCheck, target:'security'},
-];
 
 export default function App() {
   const [active, setActive] = useState<ModuleId>('home');
@@ -553,7 +546,15 @@ export default function App() {
       </div>}
 
       {!activeSession && (active === 'home'
-        ? <Home onSelect={selectModule} onOpen={openFromLibrary}/>
+        ? <HomeWorkspace
+            sessions={sessions}
+            activeSessionId={activeSessionId}
+            onSelectModule={selectModule}
+            onActivateSession={activateSession}
+            onOpenDocument={openFromLibrary}
+            onOpenDocuments={()=>void openDocumentsFromPicker()}
+            onOpenCommandPalette={()=>{setQuery('');setCommandOpen(true);}}
+          />
         : active === 'files'
           ? <FileLibrary onOpen={openFromLibrary}/>
           : active === 'scanner'
@@ -580,16 +581,6 @@ export default function App() {
                                 ? <HelpWorkspace openDocumentCount={sessions.length}/>
                                 : <ModuleView module={module} session={null} notice="" onSaveAs={async()=>{}} onBackToFiles={()=>selectModule('files')}/>)}
     </main>
-  </div>
-}
-
-function Home({onSelect,onOpen}:{onSelect:(id:ModuleId)=>void;onOpen:(document:LibraryDocument)=>void}) {
-  return <div className="content">
-    <div className="hero"><div><p className="eyebrow">LOCAL-FIRST DOCUMENT PLATFORM</p><h1>Your documents. One private workspace.</h1><p>MALENJO combines PDF, Office, OCR, private AI, signing, metadata, automation and enterprise tools behind one consistent desktop shell.</p></div><div className="hero-mark">M</div></div>
-    <div className="quick-grid">{quick.map(({label,icon:Icon,target})=><button key={label} onClick={()=>onSelect(target)}><Icon size={21}/><span>{label}</span></button>)}</div>
-    <div className="section-head"><div><h2>Workspaces</h2><p>Heavy engines are adapters and load only when a task needs them.</p></div><span className="pill">Student / classroom build</span></div>
-    <div className="module-grid">{modules.filter(item=>!['home','settings','account','help'].includes(item.id)).map(item=><button className="module-card" key={item.id} onClick={()=>onSelect(item.id)}><div className="card-top"><span className={'status '+item.status}>{item.status}</span><span>↗</span></div><h3>{item.name}</h3><p>{item.description}</p><footer>{item.engine}</footer></button>)}</div>
-    <RecentDocuments onOpen={onOpen} onViewAll={()=>onSelect('files')}/>
   </div>
 }
 

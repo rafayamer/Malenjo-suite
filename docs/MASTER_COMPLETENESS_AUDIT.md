@@ -329,13 +329,17 @@ Still required includes the full NSIS/MSIX paths, component packs, custom/standa
 
 The distribution/component-pack section still requires core/Office/OCR/AI/CAD/DICOM/enterprise pack manifests, checksums, optional downloads, offline deployment, cleanup, size budgets and CI size regression gates.
 
-### Settings / Account — FOUNDATION; Help / Support — COMPLETE
+### Home / Help & Support — COMPLETE; Settings / Account — FOUNDATION
 
-Settings and Account remain registered foundations and are not source-complete.
+Home and Help / Support are the first two registered modules promoted to `complete` after their complete module-specific source trees were implemented, traced and CI-verified.
 
-Help / Support is the first module promoted to `complete` after its full registered feature tree was implemented and traced: searchable guides/troubleshooting, About identity/version/edition, explicit provider diagnostics, privacy-redacted copy/export diagnostics in browser and Tauri, native bounded/sanitized bundle writing, third-party notice access, accessibility states and frontend/Rust regression tests. See `docs/audits/COMPLETE-MODULE-HELP-SUPPORT.md`.
+Home now provides an OSS-derived office start center with eight high-frequency launcher actions, canonical Recent/Starred document views, persistent pinned locations, continue-work sessions, honest update/classroom states, browser/Codespaces fallbacks, storage-failure recovery, accessibility semantics and legal provenance for the MIT dashboard design source. See `docs/audits/COMPLETE-MODULE-HOME.md`.
 
-This promotion does not close global logging issue #101: the source requirement that every *other* module emit the complete structured log schema remains separate work.
+Help / Support remains complete with searchable guides/troubleshooting, About identity/version/edition, explicit provider diagnostics, privacy-redacted copy/export diagnostics in browser and Tauri, native bounded/sanitized bundle writing, third-party notice access, accessibility states and frontend/Rust regression tests. See `docs/audits/COMPLETE-MODULE-HELP-SUPPORT.md`.
+
+Settings and Account remain registered foundations and are not source-complete. Home completion does not promote Files, Office, PDF, Scanner, OCR, AI, Automation, Updater or Student Hub/account capabilities.
+
+Help completion also does not close global logging issue #101: the source requirement that every *other* module emit the complete structured log schema remains separate work.
 
 ## Commercial-source override for the current student build
 

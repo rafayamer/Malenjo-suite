@@ -222,3 +222,20 @@ No module is complete merely because its navigation entry exists. Completion req
 | Accessibility | Help / Support | labels, role=status, focus-visible treatment, reduced-motion handling, keyboard-native details/controls | code audit + build | Complete |
 | Module completion gate | Registry | `help` is the only module promoted by this change; audit defines completion boundary | `COMPLETE-MODULE-HELP-SUPPORT.md`, registry test | Complete |
 
+## Complete module — Home
+
+| Requirement | Component | Implementation | Evidence | Status |
+|---|---|---|---|---|
+| OSS-derived office start center | Home / shell | MALENJO adaptation of MIT `satnaing/shadcn-admin` dashboard composition; WPS screenshot used only as composition benchmark | `third_party/shadcn-admin/PROVENANCE.md`, Home audit | Complete |
+| Six-to-nine primary actions | Home launcher | eight operational launcher actions: Open, Document, Spreadsheet, Presentation, PDF, Scan, OCR, Malenjo AI | `model.ts`, model tests | Complete |
+| Recent documents | Home / Files | canonical desktop library + browser-session library, recent ordering, unavailable-state handling and real open pipeline | `HomeWorkspace.tsx`, model tests | Complete |
+| Starred documents | Home state | versioned, bounded local starred-document state with pruning and accessible toggle controls | `model.ts`, `storage.ts`, tests | Complete |
+| Pinned locations | Home / native file boundary | desktop folder pins + native picker rooted at pin; no background crawling; browser/Codespaces honest unavailable state | `api.ts`, Home UI | Complete |
+| Continue work | Home / document sessions | existing shared MALENJO sessions shown with saved/dirty/saving state and direct activation | `HomeWorkspace.tsx`, component baseline | Complete |
+| Update notice | Home / updater boundary | package version shown; updater explicitly marked non-operational; no update network request or false current-state claim | component baseline | Complete |
+| Student/classroom state | Home / Account boundary | local-only/not-connected state; no sign-in requirement, billing, premium or upsell UI | component baseline | Complete |
+| Accessibility / visual baseline | Home UI | native controls, visible focus, tabs/tabpanel semantics, role=status, reduced motion, responsive structural baseline | `HOME-START-CENTER.md`, component test | Complete |
+| Failure recovery | Home state/library | malformed persisted state and storage-write denial recover without blanking shell; library/open errors surface notices | model tests + implementation CI #211 | Complete |
+| Legal / dependency review | Home UI design source | MIT notice/provenance retained; no new npm/Rust dependency; no WPS proprietary assets copied | `THIRD_PARTY_NOTICES.md`, provenance | Complete |
+| Module completion gate | Registry | `home` promoted only after implementation CI #211 passed; registry test permits only Home + Help complete | registry test; final-head CI required before merge | Complete |
+

@@ -7,8 +7,9 @@ describe('MALENJO module registry', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('marks Help / Support complete only after its operational module implementation', () => {
-    expect(modules.find((module) => module.id === 'help')?.status).toBe('complete');
+  it('marks only source-verified modules complete', () => {
+    const complete = modules.filter((module) => module.status === 'complete').map((module) => module.id).sort();
+    expect(complete).toEqual(['help', 'home']);
   });
 
   it('contains the mandatory document workspaces', () => {

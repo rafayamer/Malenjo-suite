@@ -26,6 +26,14 @@ This file is the **in-product notice destination for the current source tree**. 
 | zeroize | 1.8.x | MIT OR Apache-2.0 |
 | sha2 | 0.10.x | MIT OR Apache-2.0 |
 
+## UI/design source adaptations
+
+| Component | Pinned source | License | MALENJO use |
+|---|---|---|---|
+| satnaing/shadcn-admin | `e16c87f213a5ba5e45964e9b67c792105ec74d26` | MIT | Home start-center dashboard information architecture and responsive card/tab/search composition; no upstream app/auth runtime is bundled. |
+
+The upstream MIT notice and MALENJO-specific provenance are retained under `third_party/shadcn-admin/`.
+
 ## Optional external engines/adapters
 
 MALENJO may call locally installed tools such as Ollama, llama.cpp, PaddleOCR/Python, ClamAV, pyHanko, Temporal and Kopia through product-owned adapter boundaries. Their executable/model/package licenses are reviewed independently from this source notice before bundling or redistribution. Availability in Help diagnostics does **not** mean the engine is bundled.
