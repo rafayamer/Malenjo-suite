@@ -68,8 +68,9 @@ import {
 } from './layout';
 import PdfPageCanvas from './PdfPageCanvas';
 import PdfThumbnail from './PdfThumbnail';
-import StirlingToolsPanel from './StirlingToolsPanel';
-import type { StirlingToolCategory } from './stirlingCore';
+import PdfProviderToolsPanel from './PdfProviderToolsPanel';
+import { defaultPdfToolProvider } from './defaultProvider';
+import type { PdfProviderToolCategory } from './backend';
 import { useScrollFps } from './useScrollFps';
 import {
   DEFAULT_PDF_LEFT_PANEL,
@@ -1062,7 +1063,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     disabledReason:onNavigateModule?undefined:'Suite navigation is unavailable in this workspace.',
     run:()=>onNavigateModule?.(id),
   });
-  const providerCategory = taskCategory === 'ai' ? null : taskCategory as StirlingToolCategory;
+  const providerCategory = taskCategory === 'ai' ? null : taskCategory as PdfProviderToolCategory;
   const providerAction:PdfToolbarAction={
     id:'local-provider-tools',
     label:'Local tools',
@@ -1241,7 +1242,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       </div>
     </div>
 
-    {providerPanelOpen&&providerCategory&&<StirlingToolsPanel
+    {providerPanelOpen&&providerCategory&&<PdfProviderToolsPanel
+      provider={defaultPdfToolProvider}
       sourceBytes={sourceBytes}
       sourceName={sourceName}
       category={providerCategory}
