@@ -84,8 +84,9 @@ jobs:
           if ($manifest.sha256 -ne "db87077e683630c1217e0e8f9a20a9749d952ab676e881c3689187763a5de25d") {
             throw "Unexpected qpdf source checksum."
           }
-          $qpdf = Resolve-Path "provider-packs/qpdf/bin/qpdf.exe"
-          $version = (& $qpdf --version 2>&1 | Out-String)
+          $qpdf = Get-ChildItem "provider-packs/qpdf/runtime" -Recurse -File -Filter "qpdf.exe" | Select-Object -First 1
+          if (-not $qpdf) { throw "qpdf provider pack did not contain qpdf.exe." }
+          $version = (& $qpdf.FullName --version 2>&1 | Out-String)
           if ($LASTEXITCODE -ne 0 -or $version -notmatch "12\.4\.2") {
             throw "qpdf provider pack failed its executable smoke check."
           }
@@ -107,8 +108,9 @@ jobs:
         shell: pwsh
         run: |
           $jar = Resolve-Path "provider-packs/stirling-core/stirling-pdf.jar"
-          $qpdfBin = Resolve-Path "provider-packs/qpdf/bin"
-          $env:PATH = "$qpdfBin;$env:PATH"
+          $qpdf = Get-ChildItem "provider-packs/qpdf/runtime" -Recurse -File -Filter "qpdf.exe" | Select-Object -First 1
+          if (-not $qpdf) { throw "qpdf runtime executable was not found." }
+          $env:PATH = "$($qpdf.Directory.FullName);$env:PATH"
           $env:STIRLING_FLAVOR = "core"
           $env:DISABLE_ADDITIONAL_FEATURES = "true"
           $env:ENABLE_SAAS = "false"
