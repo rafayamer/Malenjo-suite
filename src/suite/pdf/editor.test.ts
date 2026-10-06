@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { PDFDocument } from 'pdf-lib';
+import { PDFArray, PDFDict, PDFDocument, PDFName } from 'pdf-lib';
 import {
-  appendPdf, deletePdfPage, duplicatePdfPage, extractPdfPage,
-  insertBlankPdfPage, movePdfPage, rotatePdfPagePermanent,
+  addPdfCheckBox, addPdfCommentAnnotation, addPdfRectangleOverlay, addPdfTextField, addPdfTextOverlay, appendPdf, attachFileToPdf,
+  deletePdfPage, deletePdfPages, duplicatePdfPage, extractPdfPage, extractPdfPages, flattenPdfForm, insertBlankPdfPage,
+  insertPdfAfter, listPdfFormFields, movePdfPage, rotatePdfPagePermanent, rotatePdfPagesPermanent, splitPdfAtPage,
 } from './editor';
 
 async function sample(pages=3):Promise<Uint8Array>{
@@ -30,6 +31,39 @@ describe('PDF mutation core',()=>{
     expect(await count(await insertBlankPdfPage(bytes,1))).toBe(3);
   });
 
+  it('batch deletes, rotates and extracts selected pages',async()=>{
+    const source=await sample(4);
+    expect(await count(await deletePdfPages(source,[2,4]))).toBe(2);
+    await expect(deletePdfPages(source,[1,2,3,4])).rejects.toThrow(/at least one page/i);
+
+    const rotated=await rotatePdfPagesPermanent(source,[1,3]);
+    const rotatedPdf=await PDFDocument.load(rotated);
+    expect(rotatedPdf.getPage(0).getRotation().angle).toBe(90);
+    expect(rotatedPdf.getPage(1).getRotation().angle).toBe(0);
+    expect(rotatedPdf.getPage(2).getRotation().angle).toBe(90);
+
+    const extracted=await extractPdfPages(source,[4,2]);
+    const extractedPdf=await PDFDocument.load(extracted);
+    expect(extractedPdf.getPageCount()).toBe(2);
+    expect(extractedPdf.getPage(0).getSize().width).toBe(301);
+    expect(extractedPdf.getPage(1).getSize().width).toBe(303);
+  });
+
+  it('inserts another PDF at the active location and splits at a page boundary',async()=>{
+    const source=await sample(3);
+    const inserted=await insertPdfAfter(source,await sample(2),1);
+    const insertedPdf=await PDFDocument.load(inserted);
+    expect(insertedPdf.getPageCount()).toBe(5);
+    expect(insertedPdf.getPage(0).getSize().width).toBe(300);
+    expect(insertedPdf.getPage(1).getSize().width).toBe(300);
+    expect(insertedPdf.getPage(3).getSize().width).toBe(301);
+
+    const [left,right]=await splitPdfAtPage(source,2);
+    expect(await count(left)).toBe(2);
+    expect(await count(right)).toBe(1);
+    await expect(splitPdfAtPage(source,3)).rejects.toThrow(/before the last/i);
+  });
+
   it('moves pages and permanently rotates a page',async()=>{
     const bytes=await sample(3);
     const moved=await movePdfPage(bytes,1,3);
@@ -39,5 +73,64 @@ describe('PDF mutation core',()=>{
     const rotated=await rotatePdfPagePermanent(bytes,1);
     const rotatedPdf=await PDFDocument.load(rotated);
     expect(rotatedPdf.getPage(0).getRotation().angle).toBe(90);
+  });
+  it('adds permanent text and rectangle overlays without changing page count',async()=>{
+    const bytes=await sample(2);
+    const withText=await addPdfTextOverlay(bytes,{pageNumber:1,text:'MALENJO note',x:0.1,y:0.8,size:12});
+    expect(await count(withText)).toBe(2);
+    const withHighlight=await addPdfRectangleOverlay(withText,{pageNumber:1,x:0.1,y:0.7,width:0.3,height:0.08,mode:'highlight'});
+    expect(await count(withHighlight)).toBe(2);
+  });
+
+  it('creates a real PDF text-comment annotation',async()=>{
+    const bytes=await addPdfCommentAnnotation(await sample(1),{
+      pageNumber:1,
+      text:'Review this clause',
+      author:'Student Reviewer',
+      x:0.2,
+      y:0.75,
+    });
+    const pdf=await PDFDocument.load(bytes);
+    const annots=pdf.getPage(0).node.lookupMaybe(PDFName.of('Annots'),PDFArray);
+    expect(annots).toBeDefined();
+    expect(annots?.size()).toBe(1);
+  });
+
+  it('creates AcroForm fields and can flatten them',async()=>{
+    let bytes=await addPdfTextField(await sample(1),{
+      pageNumber:1,name:'student_name',x:0.1,y:0.75,width:0.5,height:0.08,defaultValue:'Rafay',
+    });
+    bytes=await addPdfCheckBox(bytes,{
+      pageNumber:1,name:'approved',x:0.1,y:0.62,size:0.06,checked:true,
+    });
+    expect(await listPdfFormFields(bytes)).toEqual(['student_name','approved']);
+    const flattened=await flattenPdfForm(bytes);
+    expect(await listPdfFormFields(flattened)).toEqual([]);
+  });
+
+  it('embeds an attachment into the PDF name tree',async()=>{
+    const bytes=await attachFileToPdf(await sample(1),{
+      name:'notes.txt',
+      bytes:new TextEncoder().encode('MALENJO attachment test'),
+      mimeType:'text/plain',
+      description:'Synthetic test attachment',
+    });
+    const pdf=await PDFDocument.load(bytes);
+    const names=pdf.catalog.lookupMaybe(PDFName.of('Names'),PDFDict);
+    const embedded=names?.lookupMaybe(PDFName.of('EmbeddedFiles'),PDFDict);
+    expect(embedded).toBeDefined();
+  });
+
+  it('rejects unsafe form/comment/attachment inputs',async()=>{
+    const bytes=await sample(1);
+    await expect(addPdfCommentAnnotation(bytes,{pageNumber:1,text:'',x:0.2,y:0.2})).rejects.toThrow(/empty/i);
+    await expect(addPdfTextField(bytes,{pageNumber:1,name:'x',x:0.9,y:0.1,width:0.2,height:0.1})).rejects.toThrow(/inside the page/i);
+    await expect(attachFileToPdf(bytes,{name:'empty.bin',bytes:new Uint8Array()})).rejects.toThrow(/empty/i);
+  });
+
+  it('rejects overlay coordinates outside the page',async()=>{
+    const bytes=await sample(1);
+    await expect(addPdfRectangleOverlay(bytes,{pageNumber:1,x:0.9,y:0.1,width:0.2,height:0.2})).rejects.toThrow(/inside the page/i);
+    await expect(addPdfTextOverlay(bytes,{pageNumber:1,text:'x',x:1.1,y:0.2,size:12})).rejects.toThrow(/between 0 and 1/i);
   });
 });

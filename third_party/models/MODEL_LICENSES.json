@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-10-05",
+  "purpose": "Explicitly reviewed local development models for MALENJO student/classroom testing. Inclusion here does not bundle model weights.",
+  "models": [
+    {
+      "provider": "ollama",
+      "tag": "qwen3:0.6b",
+      "displayName": "Qwen3 0.6B",
+      "approximateDownloadBytes": 523000000,
+      "expectedDigestPrefix": "7df6b6e09427",
+      "license": "Apache-2.0",
+      "upstreamModel": "Qwen/Qwen3-0.6B",
+      "upstreamUrl": "https://huggingface.co/Qwen/Qwen3-0.6B",
+      "providerUrl": "https://ollama.com/library/qwen3:0.6b",
+      "notes": "Development-only default chosen for small Codespaces footprint. Model weights are not committed to this repository."
+    }
+  ]
+}
