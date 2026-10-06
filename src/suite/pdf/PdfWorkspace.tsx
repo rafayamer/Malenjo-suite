@@ -70,6 +70,12 @@ import {
 import PdfPageCanvas from './PdfPageCanvas';
 import PdfThumbnail from './PdfThumbnail';
 import { useScrollFps } from './useScrollFps';
+import {
+  DEFAULT_PDF_LEFT_PANEL,
+  PDF_LEFT_PANEL_ITEMS,
+  pdfLeftPanelItem,
+  type PdfLeftPanelId,
+} from './leftNavigation';
 
 interface Props {
   session: DocumentSession | null;
@@ -90,6 +96,16 @@ function formatBytes(bytes: number): string {
 function editedName(name:string,suffix='edited'):string{
   const base=name.replace(/\.pdf$/i,'')||'MALENJO-document';
   return `${base}-${suffix}.pdf`;
+}
+
+function PdfLeftPanelIcon({id}:{id:PdfLeftPanelId}) {
+  if (id === 'pages') return <FileText size={17}/>;
+  if (id === 'attachments') return <Paperclip size={17}/>;
+  if (id === 'signatures') return <FileCheck2 size={17}/>;
+  if (id === 'comments') return <MessageSquare size={17}/>;
+  if (id === 'search') return <Search size={17}/>;
+  if (id === 'layers') return <Square size={17}/>;
+  return <ListChecks size={17}/>;
 }
 
 export default function PdfWorkspace({ session, active, notice, onBackToFiles, onDirtyChange, onSavingChange, registerCommands }: Props) {
@@ -128,6 +144,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<Array<{page:number;excerpt:string}>>([]);
+  const [leftPanel, setLeftPanel] = useState<PdfLeftPanelId>(DEFAULT_PDF_LEFT_PANEL);
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [textOverlay, setTextOverlay] = useState({ text:'', x:0.12, y:0.82, size:12 });
   const [shapeOverlay, setShapeOverlay] = useState({ x:0.12, y:0.68, width:0.35, height:0.08, mode:'highlight' as 'highlight'|'outline' });
   const [commentDraft, setCommentDraft] = useState({ text:'', author:'MALENJO User', x:0.86, y:0.86 });
@@ -941,26 +959,96 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       <small>For multi-document work in Codespaces, add several files from Files / Library first.</small>
     </div>}
 
-    {pdf && <div className="pdf-layout">
-      <aside className="pdf-thumbnails" aria-label="PDF page thumbnails">
-        <div className="pdf-pane-title"><span>Pages</span><b>{pageCount}</b></div>
-        <div className="pdf-selection-bar">
-          <span>{selectedPageNumbers.length || 1} selected</span>
-          <button onClick={()=>{setSelectedPages(new Set(Array.from({length:pageCount},(_,index)=>index+1)));selectionAnchorRef.current=1;}}>All</button>
-          <button onClick={()=>{setSelectedPages(new Set([currentPage]));selectionAnchorRef.current=currentPage;}}>Current</button>
-        </div>
-        <div className="pdf-thumbnail-list">
-          {Array.from({ length: pageCount }, (_, index) => index + 1).map((page) =>
-            <PdfThumbnail
-              key={page}
-              document={pdf.document}
-              pageNumber={page}
-              active={page === currentPage}
-              selected={selectedPages.has(page)}
-              onSelect={selectThumbnail}
-            />
-          )}
-        </div>
+    {pdf && <div className={leftPanelCollapsed ? 'pdf-layout left-panel-collapsed' : 'pdf-layout'}>
+      <aside className={leftPanelCollapsed ? 'pdf-left-shell collapsed' : 'pdf-left-shell'} aria-label="PDF navigation rail and panel">
+        <nav className="pdf-left-rail" aria-label="PDF navigation">
+          {PDF_LEFT_PANEL_ITEMS.map((item)=><button
+            key={item.id}
+            className={leftPanel===item.id?'active':''}
+            aria-pressed={leftPanel===item.id}
+            aria-label={item.label}
+            title={item.label}
+            onClick={()=>{setLeftPanel(item.id);setLeftPanelCollapsed(false);}}
+          ><PdfLeftPanelIcon id={item.id}/></button>)}
+          <button
+            className="pdf-left-collapse"
+            aria-label={leftPanelCollapsed?'Expand PDF navigation panel':'Collapse PDF navigation panel'}
+            title={leftPanelCollapsed?'Expand panel':'Collapse panel'}
+            onClick={()=>setLeftPanelCollapsed((value)=>!value)}
+          >{leftPanelCollapsed?<ChevronRight size={17}/>:<ChevronLeft size={17}/>}</button>
+        </nav>
+
+        {!leftPanelCollapsed&&<section className="pdf-left-panel" aria-label={`${pdfLeftPanelItem(leftPanel).label} panel`}>
+          <div className="pdf-left-panel-title">
+            <b>{pdfLeftPanelItem(leftPanel).label}</b>
+            <span>{pdfLeftPanelItem(leftPanel).description}</span>
+          </div>
+
+          {leftPanel==='pages'&&<div className="pdf-left-panel-body pdf-pages-panel">
+            <div className="pdf-selection-bar">
+              <span>{selectedPageNumbers.length || 1} selected</span>
+              <button onClick={()=>{setSelectedPages(new Set(Array.from({length:pageCount},(_,index)=>index+1)));selectionAnchorRef.current=1;}}>All</button>
+              <button onClick={()=>{setSelectedPages(new Set([currentPage]));selectionAnchorRef.current=currentPage;}}>Current</button>
+            </div>
+            <div className="pdf-thumbnail-list">
+              {Array.from({ length: pageCount }, (_, index) => index + 1).map((page) =>
+                <PdfThumbnail
+                  key={page}
+                  document={pdf.document}
+                  pageNumber={page}
+                  active={page === currentPage}
+                  selected={selectedPages.has(page)}
+                  onSelect={selectThumbnail}
+                />
+              )}
+            </div>
+          </div>}
+
+          {leftPanel==='search'&&<div className="pdf-left-panel-body">
+            <div className="pdf-find">
+              <div><Search size={14}/><input value={searchQuery} onChange={(event)=>setSearchQuery(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter')void searchPdf();}} placeholder="Search PDF text"/></div>
+              <button disabled={searching||!searchQuery.trim()} onClick={()=>void searchPdf()}>{searching?'Searching…':'Find'}</button>
+              {!!searchResults.length&&<div className="pdf-search-results">{searchResults.map((result)=><button key={result.page} onClick={()=>goToPage(result.page)}><b>Page {result.page}</b><span>{result.excerpt}</span></button>)}</div>}
+            </div>
+          </div>}
+
+          {leftPanel==='comments'&&<div className="pdf-left-panel-body">
+            <div className="pdf-edit-form">
+              <label><MessageSquare size={13}/> Sticky-note comment<textarea value={commentDraft.text} onChange={(event)=>setCommentDraft({...commentDraft,text:event.target.value})} placeholder="Comment text"/></label>
+              <label>Author<input value={commentDraft.author} onChange={(event)=>setCommentDraft({...commentDraft,author:event.target.value})}/></label>
+              <div className="pdf-coordinate-grid">
+                <label>X<input type="number" min="0" max="1" step="0.01" value={commentDraft.x} onChange={(event)=>setCommentDraft({...commentDraft,x:Number(event.target.value)})}/></label>
+                <label>Y<input type="number" min="0" max="1" step="0.01" value={commentDraft.y} onChange={(event)=>setCommentDraft({...commentDraft,y:Number(event.target.value)})}/></label>
+              </div>
+              <button disabled={mutating||!commentDraft.text.trim()} onClick={()=>void addComment()}>Add PDF comment</button>
+              <small>Creates a real PDF /Text annotation and participates in this tab's Undo/Redo history.</small>
+            </div>
+          </div>}
+
+          {leftPanel==='attachments'&&<div className="pdf-left-panel-body">
+            <div className="pdf-edit-form">
+              <button disabled={mutating} onClick={()=>attachmentInputRef.current?.click()}><Paperclip size={13}/> Embed file attachment…</button>
+              <small>Embedding is operational. Existing-attachment inventory/extraction is a separate PDF feature requirement and is not presented as complete here.</small>
+            </div>
+          </div>}
+
+          {leftPanel==='signatures'&&<div className="pdf-left-panel-body">
+            <div className="pdf-feature-list">
+              <b>{formFields.filter((field)=>field.type==='signature').length} signature field{formFields.filter((field)=>field.type==='signature').length===1?'':'s'}</b>
+              {formFields.filter((field)=>field.type==='signature').slice(0,24).map((field)=><span key={field.name}><strong>{field.name}</strong><em>{field.readOnly?'read-only':'interactive'}</em></span>)}
+              {!formFields.some((field)=>field.type==='signature')&&<span>No AcroForm signature fields detected in the current working copy.</span>}
+            </div>
+            <div className="pdf-left-info">Cryptographic validation and signed-copy workflows remain in MALENJO Sign. This panel only reports signature fields already present in the PDF.</div>
+          </div>}
+
+          {(leftPanel==='bookmarks'||leftPanel==='layers')&&<div className="pdf-left-panel-body">
+            <div className="pdf-left-info">
+              {leftPanel==='bookmarks'
+                ? 'Bookmark discovery/authoring is not yet wired on current main. The canonical navigation slot is present without fake controls; bookmark functionality remains a separately traceable PDF requirement.'
+                : 'Optional-content/layer discovery is not yet wired on current main. The canonical navigation slot is present without pretending layer controls are operational.'}
+            </div>
+          </div>}
+        </section>}
       </aside>
 
       <div ref={scrollRef} className="pdf-scroll">
@@ -996,13 +1084,6 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           <div><dt>View</dt><dd>{fitMode === 'custom' ? `${Math.round(zoom * 100)}%` : fitMode} · {rotation}°</dd></div>
         </dl>
 
-        <div className="pdf-pane-title">Find in document</div>
-        <div className="pdf-find">
-          <div><Search size={14}/><input value={searchQuery} onChange={(event)=>setSearchQuery(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter')void searchPdf();}} placeholder="Search PDF text"/></div>
-          <button disabled={searching||!searchQuery.trim()} onClick={()=>void searchPdf()}>{searching?'Searching…':'Find'}</button>
-          {!!searchResults.length&&<div className="pdf-search-results">{searchResults.map((result)=><button key={result.page} onClick={()=>goToPage(result.page)}><b>Page {result.page}</b><span>{result.excerpt}</span></button>)}</div>}
-        </div>
-
         <div className="pdf-pane-title">Edit current page</div>
         <div className="pdf-edit-form">
           <label><Type size={13}/> Add text<textarea value={textOverlay.text} onChange={(event)=>setTextOverlay({...textOverlay,text:event.target.value})} placeholder="Text to place on the current page"/></label>
@@ -1022,18 +1103,6 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           </div>
           <button disabled={mutating} onClick={()=>void mutate(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage)}>Apply rectangle</button>
           <small>Coordinates are normalized 0–1 from the page’s bottom-left corner. A later visual drag/selection layer will replace manual coordinate entry.</small>
-        </div>
-
-        <div className="pdf-pane-title">Comments</div>
-        <div className="pdf-edit-form">
-          <label><MessageSquare size={13}/> Sticky-note comment<textarea value={commentDraft.text} onChange={(event)=>setCommentDraft({...commentDraft,text:event.target.value})} placeholder="Comment text"/></label>
-          <label>Author<input value={commentDraft.author} onChange={(event)=>setCommentDraft({...commentDraft,author:event.target.value})}/></label>
-          <div className="pdf-coordinate-grid">
-            <label>X<input type="number" min="0" max="1" step="0.01" value={commentDraft.x} onChange={(event)=>setCommentDraft({...commentDraft,x:Number(event.target.value)})}/></label>
-            <label>Y<input type="number" min="0" max="1" step="0.01" value={commentDraft.y} onChange={(event)=>setCommentDraft({...commentDraft,y:Number(event.target.value)})}/></label>
-          </div>
-          <button disabled={mutating||!commentDraft.text.trim()} onClick={()=>void addComment()}>Add PDF comment</button>
-          <small>This creates a real PDF /Text annotation. PDF.js canvas rendering does not yet provide a visual annotation layer, but the comment is embedded in the exported document and participates in Undo/Redo.</small>
         </div>
 
         <div className="pdf-pane-title">Forms</div>
@@ -1086,12 +1155,6 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           </div>
           <button disabled={mutating||!formFields.length} onClick={()=>void flattenForm()}><FileCheck2 size={13}/> Flatten form fields</button>
           <small>Text, checkbox, radio, dropdown and option-list fields are real AcroForm structures. Required/read-only flags are stored in the field. Flattening paints appearances and removes interactivity; Undo remains available in this tab until export/close.</small>
-        </div>
-
-        <div className="pdf-pane-title">Attachments</div>
-        <div className="pdf-edit-form">
-          <button disabled={mutating} onClick={()=>attachmentInputRef.current?.click()}><Paperclip size={13}/> Embed file attachment…</button>
-          <small>Embedded attachments are stored inside the PDF. MALENJO currently limits each new attachment to 50 MB; attachment listing/removal is a later completeness item.</small>
         </div>
 
         <div className="pdf-pane-title">Headers / footers</div>
