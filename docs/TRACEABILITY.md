@@ -29,6 +29,18 @@ No module is complete merely because its navigation entry exists. Completion req
 | Keyboard tab switching | Shell shortcuts | Ctrl+Tab / Ctrl+Shift+Tab | `session.test.ts` cycle coverage | Implemented |
 | Detailed audit | Documentation | `docs/audits/UI-53.5-DOCUMENT-TABS.md` | canonical README SHA recorded | Implemented |
 
+## Source-truth UI 53.6 — left navigation rail / panel
+
+| Requirement | Component | Implementation | Test/evidence | Status |
+|---|---|---|---|---|
+| Narrow icon rail + expandable panel | PDF Workspace | 58 px icon rail + 224 px expandable panel in `PdfWorkspace.tsx` / `theme.css` | `leftNavigation.test.ts`; source-truth audit | Implemented; CI pending |
+| Canonical PDF panel set | PDF Workspace | Pages / Bookmarks / Attachments / Layers / Signatures / Comments / Search model in `leftNavigation.ts` | exact-set regression test | Implemented; CI pending |
+| Operational existing panel functions | PDF Workspace | Pages thumbnails/selection, Search, Comments, attachment embed, signature-field inventory | existing PDF tests + new navigation regression | Implemented; CI pending |
+| Honest unsupported nested features | PDF Workspace | Bookmarks/Layers render explicit unavailable state; no fake controls | audit/code review | Implemented |
+| Collapsible suite navigation | Shell | application sidebar collapse to 60 px rail | build/typecheck + audit | Implemented; CI pending |
+| Collapsible PDF navigation | PDF Workspace | independent panel collapse to 58 px rail | build/typecheck + audit | Implemented; CI pending |
+| Detailed audit | Documentation | `docs/audits/UI-53.6-LEFT-NAVIGATION.md` | canonical README SHA + lines recorded | Implemented |
+
 ## Phase 1 traceability
 
 | Requirement | Component | Implementation | Test/evidence | Status |
