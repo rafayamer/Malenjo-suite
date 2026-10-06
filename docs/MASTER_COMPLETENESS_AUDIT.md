@@ -333,78 +333,15 @@ Still required includes the full NSIS/MSIX paths, component packs, custom/standa
 
 The distribution/component-pack section still requires core/Office/OCR/AI/CAD/DICOM/enterprise pack manifests, checksums, optional downloads, offline deployment, cleanup, size budgets and CI size regression gates.
 
-### Home / Help & Support — COMPLETE; Settings / Account — FOUNDATION
+### Home — COMPLETE AFTER OSS-STRUCTURE CORRECTION
 
-Home and Help / Support are the first two registered modules promoted to `complete` after their complete module-specific source trees were implemented, traced and CI-verified.
+Home's functional feature tree remains implemented, but its earlier `complete` promotion relied on an inaccurate UI-source provenance claim: the merged structure did not actually follow `satnaing/shadcn-admin` closely enough.
 
-Home now provides an OSS-derived office start center with eight high-frequency launcher actions, canonical Recent/Starred document views, persistent pinned locations, continue-work sessions, honest update/classroom states, browser/Codespaces fallbacks, storage-failure recovery, accessibility semantics and legal provenance for the MIT dashboard design source. See `docs/audits/COMPLETE-MODULE-HOME.md`.
+Correction #139 replaces that with a source-level adaptation of the Apache-2.0 `CasualOffice/desktop` launcher at commit `39fe70960462a9f16ea4f1e9aaa8b963d5da6ef1`. Adapted source components now cover action cards, recent-file cards, search, segmented filtering, context menus and Office-style recent grouping.
 
-Help / Support remains complete with searchable guides/troubleshooting, About identity/version/edition, explicit provider diagnostics, privacy-redacted copy/export diagnostics in browser and Tauri, native bounded/sanitized bundle writing, third-party notice access, accessibility states and frontend/Rust regression tests. See `docs/audits/COMPLETE-MODULE-HELP-SUPPORT.md`.
+Home was deliberately demoted during correction and re-promoted only after corrected implementation CI #224 passed frontend typecheck/tests/build, Windows Rust check/tests and Codespaces/Linux validation. Final-head and post-merge CI remain required evidence for the correction merge.
 
-Settings and Account remain registered foundations and are not source-complete. Home completion does not promote Files, Office, PDF, Scanner, OCR, AI, Automation, Updater or Student Hub/account capabilities.
-
-Help completion also does not close global logging issue #101: the source requirement that every *other* module emit the complete structured log schema remains separate work.
-
-## Commercial-source override for the current student build
-
-The canonical source contains commercial Free/Pro/Enterprise pricing, trial and billing requirements.
-
-The current user instruction overrides monetization for this build:
-
-- personal/student/classroom use;
-- no business/profit requirement;
-- no paid upsell UI;
-- no regional pricing;
-- no paid trial counters.
-
-The underlying architecture may preserve technical account, entitlement and policy hooks so a future legally reviewed edition can use them, but the current build must not reintroduce monetization merely because it exists in the older source contract.
-
-## Immediate architectural correction program
-
-Before claiming later phases are complete, MALENJO must use this sequence:
-
-1. **Shell completeness** — multi-document sessions, common command bus, task categories, Ctrl+K, inspector/rail contracts, recovery.
-2. **PDF completeness** — full command inventory and mutation/edit history architecture.
-3. **Office completeness** — rich editors plus round-trip fidelity providers/corpus.
-4. **Scanner/OCR completeness** — device/model packaging and full operational controls.
-5. **AI completeness** — all source capabilities, model manager, hardware/resource UX and policy.
-6. **Sign/Metadata/Security completeness** — full operational submodules and trust/privacy UX.
-7. **Invoice implementation**.
-8. **Enterprise identity/RBAC completeness**.
-9. **DMS/Automation/Backup completeness**.
-10. **CAD/DICOM/Watermark/PQC/TPM/anti-tamper**.
-11. **Settings/Account/Help completeness**.
-12. **Installer/updater/uninstaller/component packs**.
-13. **Windows fidelity/performance/security/accessibility/release qualification**.
-
-## Definition of a real operational button
-
-A command/button is not considered implemented merely because it is rendered.
-
-It must have:
-
-- enabled/disabled rules;
-- real handler;
-- correct document/context binding;
-- undo/redo behavior when mutating content;
-- dirty/save/recovery behavior where applicable;
-- progress/cancellation for long tasks;
-- error state;
-- audit/security behavior where applicable;
-- keyboard/accessibility semantics;
-- test coverage;
-- traceability entry.
-
-Unimplemented master features should not masquerade as working controls.
-
-## Completion rule
-
-No future issue, milestone, module badge or user-facing status may call a module `complete` unless its source-of-truth feature manifest reaches full traced coverage or contains an explicit user-approved/legal/technical exclusion.
-
-
-## Completion pass 2B — shell drag/drop and PDF content tools
-
-Implemented on `feat/shell-pdf-completeness-pass-2-final` on top of PR #33:
+This correction does not affect the incomplete status of Home destination modules.
 
 ### Shell / Files
 - Tauri webview native file-drop handling adds dropped paths through the persistent MALENJO library command;

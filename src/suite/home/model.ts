@@ -5,6 +5,7 @@ export const HOME_STATE_SCHEMA_VERSION = 1 as const;
 export const HOME_STORAGE_KEY = 'malenjo.home.state.v1';
 
 export type HomeView = 'recent' | 'starred' | 'locations';
+export type HomeFileFilter = 'all' | 'pdf' | 'documents' | 'sheets' | 'slides' | 'images' | 'other';
 
 export interface HomePinnedLocation {
   id: string;
@@ -40,14 +41,14 @@ export const HOME_PRIMARY_ACTIONS: HomePrimaryAction[] = [
 ];
 
 export const HOME_VISUAL_BASELINE = {
-  source: 'satnaing/shadcn-admin',
-  sourceCommit: 'e16c87f213a5ba5e45964e9b67c792105ec74d26',
-  license: 'MIT',
+  source: 'CasualOffice/desktop',
+  sourceCommit: '39fe70960462a9f16ea4f1e9aaa8b963d5da6ef1',
+  license: 'Apache-2.0',
   primaryActionCount: 8,
-  views: ['recent','starred','locations'] as const,
-  rightRailCards: ['system','updates','student-hub'] as const,
-  desktopColumns: 2,
-  compactBreakpointPx: 1120,
+  launcherPattern: 'greeting + action cards + recent files + search + segmented filter + pinning',
+  recentGroups: ['Pinned','Today','Yesterday','Earlier this week','Earlier'] as const,
+  fileFilters: ['all','pdf','documents','sheets','slides','images','other'] as const,
+  compactBreakpointPx: 980,
 } as const;
 
 export function defaultHomeState(): HomeStateV1 {
@@ -170,6 +171,46 @@ export function homeDocumentsForView(
     const haystack=[document.name,document.extension,document.kind,document.locationLabel].join(' ').toLocaleLowerCase();
     return terms.every((term)=>haystack.includes(term));
   }).slice(0,50);
+}
+
+
+export function matchesHomeFileFilter(document: LibraryDocument, filter: HomeFileFilter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'pdf') return document.kind === 'pdf';
+  if (filter === 'documents') return document.kind === 'docx';
+  if (filter === 'sheets') return document.kind === 'xlsx';
+  if (filter === 'slides') return document.kind === 'pptx';
+  if (filter === 'images') return document.kind === 'image';
+  return ['cad','dicom','other'].includes(document.kind);
+}
+
+export type HomeRecentGroup = 'Today' | 'Yesterday' | 'Earlier this week' | 'Earlier';
+
+export function recentGroupFor(timestamp: number, now = Date.now()): HomeRecentGroup {
+  const value = new Date(timestamp);
+  const current = new Date(now);
+  const startToday = new Date(current.getFullYear(), current.getMonth(), current.getDate()).getTime();
+  const startYesterday = startToday - 24 * 60 * 60 * 1000;
+  const startWeek = startToday - 6 * 24 * 60 * 60 * 1000;
+  if (value.getTime() >= startToday) return 'Today';
+  if (value.getTime() >= startYesterday) return 'Yesterday';
+  if (value.getTime() >= startWeek) return 'Earlier this week';
+  return 'Earlier';
+}
+
+export function groupRecentDocuments(
+  documents: LibraryDocument[],
+  now = Date.now(),
+): Array<{ label: HomeRecentGroup; documents: LibraryDocument[] }> {
+  const order: HomeRecentGroup[] = ['Today','Yesterday','Earlier this week','Earlier'];
+  const buckets = new Map<HomeRecentGroup, LibraryDocument[]>(order.map((label) => [label, []]));
+  for (const document of sortRecentDocuments(documents)) {
+    const timestamp = document.lastOpenedMs ?? document.addedMs ?? document.modifiedMs;
+    buckets.get(recentGroupFor(timestamp, now))!.push(document);
+  }
+  return order
+    .map((label) => ({ label, documents: buckets.get(label)! }))
+    .filter((group) => group.documents.length > 0);
 }
 
 export function pruneMissingStarredDocuments(

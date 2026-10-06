@@ -7,7 +7,7 @@ MALENJO Suite is a **local-first Windows document workspace** being built from t
 ## What is implemented now
 
 - Unified MALENJO desktop shell and dark navy / electric-blue visual system.
-- Complete Home start center using an MIT-licensed open-source dashboard composition: office-style launcher, Recent/Starred work, pinned locations, continue-work sessions and honest local update/classroom states.
+- Complete Home start center source-adapted from Apache-2.0 `CasualOffice/desktop`: office launcher action cards, recent search/type filtering/time grouping, pinned work, context actions, pinned locations, continue-work sessions and honest local update/classroom states.
 - Full module navigation for Files, DMS, PDF, Office, Scanner, OCR, local AI, Sign, Invoice, Metadata, Automation, Security, CAD, DICOM, Administration, Backup, Settings, Account and Help.
 - Real PDF workspace with PDF.js 6.4.299, thumbnails, page navigation, zoom/fit, rotation, print/export paths, and local performance telemetry.
 - DOCX, XLSX and PPTX workspaces with explicit OOXML fidelity warnings and exact-copy export for untouched documents.

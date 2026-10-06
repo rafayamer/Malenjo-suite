@@ -5,8 +5,11 @@ import {
   HOME_VISUAL_BASELINE,
   addPinnedLocation,
   defaultHomeState,
+  groupRecentDocuments,
   homeDocumentsForView,
+  matchesHomeFileFilter,
   pruneMissingStarredDocuments,
+  recentGroupFor,
   sanitizeHomeState,
   toggleStarredDocument,
 } from './model';
@@ -35,15 +38,45 @@ describe('Home module model',()=>{
       'open','document','spreadsheet','presentation','pdf','scan','ocr','ai',
     ]);
     expect(HOME_VISUAL_BASELINE).toEqual({
-      source:'satnaing/shadcn-admin',
-      sourceCommit:'e16c87f213a5ba5e45964e9b67c792105ec74d26',
-      license:'MIT',
+      source:'CasualOffice/desktop',
+      sourceCommit:'39fe70960462a9f16ea4f1e9aaa8b963d5da6ef1',
+      license:'Apache-2.0',
       primaryActionCount:8,
-      views:['recent','starred','locations'],
-      rightRailCards:['system','updates','student-hub'],
-      desktopColumns:2,
-      compactBreakpointPx:1120,
+      launcherPattern:'greeting + action cards + recent files + search + segmented filter + pinning',
+      recentGroups:['Pinned','Today','Yesterday','Earlier this week','Earlier'],
+      fileFilters:['all','pdf','documents','sheets','slides','images','other'],
+      compactBreakpointPx:980,
     });
+  });
+
+
+  it('matches the CasualOffice recent-file filter pattern across MALENJO file types',()=>{
+    const pdf=document('pdf','File.pdf',1,1);
+    const docx={...document('doc','File.docx',1,1),kind:'docx' as const,extension:'docx'};
+    const sheet={...document('sheet','File.xlsx',1,1),kind:'xlsx' as const,extension:'xlsx'};
+    expect(matchesHomeFileFilter(pdf,'pdf')).toBe(true);
+    expect(matchesHomeFileFilter(docx,'documents')).toBe(true);
+    expect(matchesHomeFileFilter(sheet,'sheets')).toBe(true);
+    expect(matchesHomeFileFilter(pdf,'documents')).toBe(false);
+    expect(matchesHomeFileFilter(sheet,'all')).toBe(true);
+  });
+
+  it('groups recent files into the Office-style time buckets used by the OSS launcher',()=>{
+    const now=new Date(2026,9,6,12,0,0).getTime();
+    const today=now-60_000;
+    const yesterday=now-25*60*60*1000;
+    const week=now-3*24*60*60*1000;
+    const old=now-20*24*60*60*1000;
+    expect(recentGroupFor(today,now)).toBe('Today');
+    expect(recentGroupFor(yesterday,now)).toBe('Yesterday');
+    expect(recentGroupFor(week,now)).toBe('Earlier this week');
+    expect(recentGroupFor(old,now)).toBe('Earlier');
+    const groups=groupRecentDocuments([
+      document('a','A.pdf',today,today),
+      document('b','B.pdf',yesterday,yesterday),
+      document('c','C.pdf',old,old),
+    ],now);
+    expect(groups.map((group)=>group.label)).toEqual(['Today','Yesterday','Earlier']);
   });
 
   it('sanitizes corrupted persistent state and deduplicates pinned locations',()=>{

@@ -31,9 +31,9 @@ This file is the **in-product notice destination for the current source tree**. 
 | Component | Pinned source | License | MALENJO use |
 |---|---|---|---|
 | Stirling-Tools/Stirling-PDF open core | `25220cbdbde2d526cebf173b94357884e180b8c1` | MIT outside root-LICENSE restricted directories | Primary MALENJO UI/UX and PDF workflow upstream baseline. Restricted proprietary/saas/engine/desktop/cloud/portal/prototypes paths are excluded from copying. |
-| satnaing/shadcn-admin | `e16c87f213a5ba5e45964e9b67c792105ec74d26` | MIT | Historical Home start-center dashboard composition used before Stirling was designated the preferred upstream baseline. |
+| CasualOffice/desktop | `39fe70960462a9f16ea4f1e9aaa8b963d5da6ef1` | Apache-2.0 | Home launcher structure and adapted source components: action cards, recent-file cards, search, segmented filtering, context menu, Office-Backstage grouping/pinning. |
 
-Upstream license/provenance are retained under `third_party/stirling-pdf/` and `third_party/shadcn-admin/`. Stirling is open-core; its restricted directories are governed by separate non-MIT licenses and are not copied into MALENJO.
+Upstream license/provenance are retained under `third_party/stirling-pdf/` and `third_party/casualoffice/`. Stirling is open-core; its restricted directories are governed by separate non-MIT licenses and are not copied into MALENJO. The earlier shadcn-admin Home attribution was removed by correction issue #139 because that repository was not actually the structural source used by the corrected Home implementation.
 
 ## Optional external engines/adapters
 
