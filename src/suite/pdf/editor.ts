@@ -382,3 +382,200 @@ export async function attachFileToPdf(bytes:Uint8Array,spec:PdfAttachmentSpec):P
   });
   return Uint8Array.from(await pdf.save({useObjectStreams:false}));
 }
+
+
+export type PdfTextAlign='left'|'center'|'right';
+
+function renderedTemplate(template:string,pageNumber:number,pageCount:number):string{
+  const date=new Date().toLocaleDateString('en-CA');
+  return template
+    .replace(/\{page\}/gi,String(pageNumber))
+    .replace(/\{pages\}/gi,String(pageCount))
+    .replace(/\{date\}/gi,date)
+    .replace(/[\u0000-\u001F]/g,' ')
+    .trim()
+    .slice(0,500);
+}
+
+function textX(
+  width:number,
+  textWidth:number,
+  margin:number,
+  align:PdfTextAlign,
+):number{
+  if(align==='center')return Math.max(margin,(width-textWidth)/2);
+  if(align==='right')return Math.max(margin,width-margin-textWidth);
+  return margin;
+}
+
+export interface PdfHeaderFooterSpec {
+  pageNumbers?:number[];
+  header?:string;
+  footer?:string;
+  fontSize?:number;
+  margin?:number;
+  headerAlign?:PdfTextAlign;
+  footerAlign?:PdfTextAlign;
+}
+
+export async function addPdfHeaderFooter(
+  bytes:Uint8Array,
+  spec:PdfHeaderFooterSpec,
+):Promise<Uint8Array>{
+  const pdf=await load(bytes);
+  const pageCount=pdf.getPageCount();
+  const indices=spec.pageNumbers?.length
+    ? requirePages(spec.pageNumbers,pageCount)
+    : pdf.getPageIndices();
+  const fontSize=spec.fontSize??9;
+  if(!Number.isFinite(fontSize)||fontSize<4||fontSize>72){
+    throw new Error('Header/footer font size must be between 4 and 72 points.');
+  }
+  const margin=spec.margin??24;
+  if(!Number.isFinite(margin)||margin<0||margin>180){
+    throw new Error('Header/footer margin must be between 0 and 180 points.');
+  }
+  const headerTemplate=(spec.header??'').trim();
+  const footerTemplate=(spec.footer??'').trim();
+  if(!headerTemplate&&!footerTemplate)throw new Error('Enter header or footer text.');
+  const font=await pdf.embedFont(StandardFonts.Helvetica);
+
+  for(const index of indices){
+    const page=pdf.getPage(index);
+    const pageNumber=index+1;
+    const {width,height}=page.getSize();
+    if(headerTemplate){
+      const text=renderedTemplate(headerTemplate,pageNumber,pageCount);
+      const textWidth=font.widthOfTextAtSize(text,fontSize);
+      page.drawText(text,{
+        x:textX(width,textWidth,margin,spec.headerAlign??'center'),
+        y:Math.max(0,height-margin-fontSize),
+        size:fontSize,
+        font,
+        color:rgb(0.16,0.2,0.24),
+      });
+    }
+    if(footerTemplate){
+      const text=renderedTemplate(footerTemplate,pageNumber,pageCount);
+      const textWidth=font.widthOfTextAtSize(text,fontSize);
+      page.drawText(text,{
+        x:textX(width,textWidth,margin,spec.footerAlign??'center'),
+        y:Math.max(0,margin),
+        size:fontSize,
+        font,
+        color:rgb(0.16,0.2,0.24),
+      });
+    }
+  }
+  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+}
+
+export type PdfBatesPosition=
+  |'top-left'|'top-center'|'top-right'
+  |'bottom-left'|'bottom-center'|'bottom-right';
+
+export interface PdfBatesSpec {
+  pageNumbers?:number[];
+  prefix?:string;
+  suffix?:string;
+  startNumber?:number;
+  digits?:number;
+  fontSize?:number;
+  margin?:number;
+  position?:PdfBatesPosition;
+}
+
+export async function addPdfBatesNumbers(
+  bytes:Uint8Array,
+  spec:PdfBatesSpec,
+):Promise<Uint8Array>{
+  const pdf=await load(bytes);
+  const pageCount=pdf.getPageCount();
+  const indices=spec.pageNumbers?.length
+    ? requirePages(spec.pageNumbers,pageCount)
+    : pdf.getPageIndices();
+  const start=spec.startNumber??1;
+  const digits=spec.digits??6;
+  const fontSize=spec.fontSize??9;
+  const margin=spec.margin??24;
+  if(!Number.isInteger(start)||start<0||start>999_999_999){
+    throw new Error('Bates start number must be an integer between 0 and 999,999,999.');
+  }
+  if(!Number.isInteger(digits)||digits<1||digits>12){
+    throw new Error('Bates digit count must be between 1 and 12.');
+  }
+  if(!Number.isFinite(fontSize)||fontSize<4||fontSize>72){
+    throw new Error('Bates font size must be between 4 and 72 points.');
+  }
+  if(!Number.isFinite(margin)||margin<0||margin>180){
+    throw new Error('Bates margin must be between 0 and 180 points.');
+  }
+  const prefix=(spec.prefix??'').replace(/[\u0000-\u001F]/g,' ').slice(0,80);
+  const suffix=(spec.suffix??'').replace(/[\u0000-\u001F]/g,' ').slice(0,80);
+  const position=spec.position??'bottom-right';
+  const [vertical,horizontal]=position.split('-') as ['top'|'bottom',PdfTextAlign];
+  const font=await pdf.embedFont(StandardFonts.Helvetica);
+
+  indices.forEach((index,sequence)=>{
+    const page=pdf.getPage(index);
+    const {width,height}=page.getSize();
+    const serial=String(start+sequence).padStart(digits,'0');
+    const text=`${prefix}${serial}${suffix}`;
+    const textWidth=font.widthOfTextAtSize(text,fontSize);
+    page.drawText(text,{
+      x:textX(width,textWidth,margin,horizontal),
+      y:vertical==='top' ? Math.max(0,height-margin-fontSize) : Math.max(0,margin),
+      size:fontSize,
+      font,
+      color:rgb(0.12,0.16,0.2),
+    });
+  });
+
+  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+}
+
+export type PdfPageBoxKind='crop'|'trim'|'bleed'|'art';
+
+export interface PdfPageBoxSpec {
+  pageNumbers?:number[];
+  box:PdfPageBoxKind;
+  top:number;
+  right:number;
+  bottom:number;
+  left:number;
+}
+
+export async function setPdfPageBox(
+  bytes:Uint8Array,
+  spec:PdfPageBoxSpec,
+):Promise<Uint8Array>{
+  const pdf=await load(bytes);
+  const indices=spec.pageNumbers?.length
+    ? requirePages(spec.pageNumbers,pdf.getPageCount())
+    : pdf.getPageIndices();
+  const margins=[
+    ['top',spec.top],['right',spec.right],['bottom',spec.bottom],['left',spec.left],
+  ] as const;
+  for(const [label,value] of margins){
+    if(!Number.isFinite(value)||value<0||value>720){
+      throw new Error(`Page-box ${label} margin must be between 0 and 720 points.`);
+    }
+  }
+
+  for(const index of indices){
+    const page=pdf.getPage(index);
+    const media=page.getMediaBox();
+    const x=media.x+spec.left;
+    const y=media.y+spec.bottom;
+    const width=media.width-spec.left-spec.right;
+    const height=media.height-spec.top-spec.bottom;
+    if(width<=1||height<=1)throw new Error('Page-box margins leave no usable page area.');
+    switch(spec.box){
+      case 'crop': page.setCropBox(x,y,width,height); break;
+      case 'trim': page.setTrimBox(x,y,width,height); break;
+      case 'bleed': page.setBleedBox(x,y,width,height); break;
+      case 'art': page.setArtBox(x,y,width,height); break;
+    }
+  }
+  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+}
