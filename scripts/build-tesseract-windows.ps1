@@ -57,6 +57,18 @@ $tesseract = Get-ChildItem $ExtractDir -Recurse -File -Filter 'tesseract.exe' | 
 if (!$tesseract) { throw 'Extracted installer did not contain tesseract.exe.' }
 Copy-Item (Join-Path $tesseract.Directory.FullName '*') $RuntimeDir -Recurse -Force
 
+$pdfFont = Get-ChildItem $ExtractDir -Recurse -File -Filter 'pdf.ttf' | Select-Object -First 1
+if (!$pdfFont) { throw 'Extracted Tesseract installer did not contain pdf.ttf required for PDF output.' }
+Copy-Item $pdfFont.FullName (Join-Path $TessdataDir 'pdf.ttf') -Force
+foreach($supportDirName in @('configs','tessconfigs')){
+  $supportDir = Join-Path $pdfFont.Directory.FullName $supportDirName
+  if (!(Test-Path $supportDir)) { throw "Extracted Tesseract installer is missing tessdata/$supportDirName." }
+  Copy-Item $supportDir (Join-Path $TessdataDir $supportDirName) -Recurse -Force
+}
+if (!(Test-Path (Join-Path $TessdataDir 'configs/pdf'))) {
+  throw 'Tesseract PDF output config was not staged into the offline tessdata pack.'
+}
+
 $bundledTesseract = Get-ChildItem $RuntimeDir -Recurse -File -Filter 'tesseract.exe' | Select-Object -First 1
 if (!$bundledTesseract) { throw 'Tesseract runtime executable was not produced.' }
 $versionOutput = (& $bundledTesseract.FullName --version 2>&1 | Out-String)
