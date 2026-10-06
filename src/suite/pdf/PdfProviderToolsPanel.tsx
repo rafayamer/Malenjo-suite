@@ -29,6 +29,8 @@ function defaultFieldValue(field:PdfProviderOperationField):string{
 function operationHaystack(operation:PdfProviderOperation):string{
   return [
     operation.summary,operation.description,operation.id,operation.path,...operation.tags,
+    operation.capability.implementation,operation.capability.providerId,
+    operation.capability.disabledReason??'',operation.capability.fallback??'',
     ...operation.fields.flatMap((field)=>[field.name,field.label,field.description??'']),
   ].join(' ').toLowerCase();
 }
@@ -79,7 +81,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
 
   useEffect(()=>{
     if(selectedId&&filtered.some((operation)=>operation.id===selectedId))return;
-    setSelectedId(filtered[0]?.id??'');
+    setSelectedId(filtered.find((operation)=>operation.capability.available)?.id??filtered[0]?.id??'');
   },[filtered,selectedId]);
 
   useEffect(()=>{
@@ -101,7 +103,8 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     try{
       const next=await provider.start();setStatus(next);
       const catalog=await provider.listOperations();setOperations(catalog);
-      setNotice(`Loaded ${catalog.length} local PDF API operations.`);
+      const available=catalog.filter((operation)=>operation.capability.available).length;
+      setNotice(`Loaded ${catalog.length} local PDF API operations; ${available} are available through reviewed providers/fallbacks.`);
     }catch(reason){setError(reason instanceof Error?reason.message:String(reason));await refresh(false);}
     finally{setBusy(false);}
   }
@@ -117,6 +120,10 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
 
   async function runSelected(){
     if(!selected||busy)return;
+    if(!selected.capability.available){
+      setError(selected.capability.disabledReason??'This PDF operation has no reviewed local provider.');
+      return;
+    }
     setBusy(true);setError('');setNotice('');
     try{
       const fields:Array<{name:string;value:string}>=[];
@@ -216,12 +223,19 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         <label className="stirling-all-categories"><input type="checkbox" checked={allCategories} onChange={(event)=>setAllCategories(event.target.checked)}/>All categories</label>
         <span>{filtered.length} operation{filtered.length===1?'':'s'}</span>
       </div>
-      <label className="stirling-operation-select"><span>Tool</span><span className="select-wrap"><select value={selectedId} onChange={(event)=>setSelectedId(event.target.value)}>{filtered.map((operation)=><option key={operation.id} value={operation.id}>{operation.summary}</option>)}</select><ChevronDown size={13}/></span></label>
+      <label className="stirling-operation-select"><span>Tool</span><span className="select-wrap"><select value={selectedId} onChange={(event)=>setSelectedId(event.target.value)}>{filtered.map((operation)=><option key={operation.id} value={operation.id} disabled={!operation.capability.available}>{operation.summary}{operation.capability.available?'':' — unavailable'}</option>)}</select><ChevronDown size={13}/></span></label>
       {selected&&<div className="stirling-operation">
         <div className="stirling-operation-title"><div><b>{selected.summary}</b><small>{selected.method} {selected.path}</small></div><span>{selected.category}</span></div>
         {selected.description&&<p>{selected.description}</p>}
+        <p className={selected.capability.available?'stirling-provider-message':'stirling-error'}>
+          <b>{selected.capability.available?'Implementation':'Unavailable'}:</b> {selected.capability.implementation}
+          {selected.capability.providerVersion?` · ${selected.capability.providerVersion}`:''}
+          {selected.capability.componentPack?` · ${selected.capability.componentPack}`:''}
+          {!selected.capability.available&&selected.capability.disabledReason?` — ${selected.capability.disabledReason}`:''}
+          {selected.capability.fallback?` · Fallback: ${selected.capability.fallback}`:''}
+        </p>
         <div className="stirling-fields">{selected.fields.map(renderField)}</div>
-        <button className="stirling-run" disabled={busy} onClick={()=>void runSelected()}><FileOutput size={15}/>{busy?'Running locally…':`Run ${selected.summary}`}</button>
+        <button className="stirling-run" disabled={busy||!selected.capability.available} onClick={()=>void runSelected()}><FileOutput size={15}/>{busy?'Running locally…':selected.capability.available?`Run ${selected.summary}`:'Provider unavailable'}</button>
       </div>}
       {!filtered.length&&<div className="stirling-empty">No local provider operation matches this task category/search.</div>}
     </div>}
