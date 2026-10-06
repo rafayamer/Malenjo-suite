@@ -36,6 +36,17 @@ pub struct StirlingCoreStatus {
     pub message: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StirlingComponentStatus {
+    pub id: String,
+    pub available: bool,
+    pub version: Option<String>,
+    pub executable: Option<String>,
+    pub source: String,
+    pub message: String,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StirlingFormField {
@@ -129,6 +140,137 @@ fn stirling_jar_path(app: &AppHandle) -> Option<PathBuf> {
     candidate_jar_paths(app)
         .into_iter()
         .find(|path| path.is_file())
+}
+
+fn qpdf_candidates(app: &AppHandle) -> Vec<(String, String)> {
+    let mut candidates = Vec::new();
+
+    if let Ok(value) = env::var("MALENJO_QPDF_BIN") {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            let configured = PathBuf::from(trimmed);
+            if configured.is_file() {
+                candidates.push((configured.to_string_lossy().to_string(), "configured".into()));
+            }
+        }
+    }
+
+    let development = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../provider-packs/qpdf/runtime/bin/qpdf.exe");
+    if development.is_file() {
+        candidates.push((development.to_string_lossy().to_string(), "bundled".into()));
+    }
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let bundled = resource_dir.join("provider-packs/qpdf/runtime/bin/qpdf.exe");
+        if bundled.is_file() {
+            candidates.push((bundled.to_string_lossy().to_string(), "bundled".into()));
+        }
+    }
+
+    candidates
+}
+
+fn parse_qpdf_version(output: &str) -> Option<String> {
+    output
+        .split_whitespace()
+        .find(|token| {
+            let mut chars = token.chars();
+            chars.next().is_some_and(|ch| ch.is_ascii_digit())
+                && token.chars().any(|ch| ch == '.')
+        })
+        .map(|token| token.trim_matches(|ch: char| !ch.is_ascii_digit() && ch != '.').to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn available_qpdf(app: &AppHandle) -> Option<(String, String, String)> {
+    for (candidate, source) in qpdf_candidates(app) {
+        let output = Command::new(&candidate)
+            .arg("--version")
+            .stdin(Stdio::null())
+            .output();
+        let Ok(output) = output else {
+            continue;
+        };
+        if !output.status.success() {
+            continue;
+        }
+        let combined = format!(
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        if let Some(version) = parse_qpdf_version(&combined) {
+            return Some((candidate, source, version));
+        }
+    }
+    None
+}
+
+fn qpdf_component_status(app: &AppHandle) -> StirlingComponentStatus {
+    if let Some((executable, source, version)) = available_qpdf(app) {
+        let supported = version
+            .split('.')
+            .next()
+            .and_then(|major| major.parse::<u32>().ok())
+            .is_some_and(|major| major >= 12);
+        if supported {
+            return StirlingComponentStatus {
+                id: "qpdf".into(),
+                available: true,
+                version: Some(version.clone()),
+                executable: Some(executable),
+                source,
+                message: format!("qpdf {version} is available for local PDF repair/compression."),
+            };
+        }
+        return StirlingComponentStatus {
+            id: "qpdf".into(),
+            available: false,
+            version: Some(version.clone()),
+            executable: Some(executable),
+            source,
+            message: format!("qpdf {version} is below the pinned Stirling minimum 12.0.0."),
+        };
+    }
+
+    StirlingComponentStatus {
+        id: "qpdf".into(),
+        available: false,
+        version: None,
+        executable: None,
+        source: "unavailable".into(),
+        message: "The approved qpdf component pack is not installed.".into(),
+    }
+}
+
+fn configure_provider_path(command: &mut Command, app: &AppHandle) -> Result<(), String> {
+    let paths = if let Some((executable, _source, _version)) = available_qpdf(app) {
+        let executable_path = PathBuf::from(executable);
+        let parent = executable_path
+            .parent()
+            .ok_or_else(|| "qpdf executable has no parent directory.".to_string())?;
+        vec![parent.to_path_buf()]
+    } else {
+        Vec::new()
+    };
+
+    let joined = env::join_paths(paths)
+        .map_err(|error| format!("Unable to construct reviewed local provider PATH: {error}"))?;
+    command.env("PATH", joined);
+    Ok(())
+}
+
+#[cfg(test)]
+fn configure_provider_path_for_test(command: &mut Command, executable: Option<&Path>) -> Result<(), String> {
+    let paths = executable
+        .and_then(Path::parent)
+        .map(|parent| vec![parent.to_path_buf()])
+        .unwrap_or_default();
+    let joined = env::join_paths(paths)
+        .map_err(|error| format!("Unable to construct reviewed local provider PATH: {error}"))?;
+    command.env("PATH", joined);
+    Ok(())
 }
 
 fn api_client() -> Result<Client, String> {
@@ -232,6 +374,7 @@ fn spawn_core(java: &str, jar: &Path, app: &AppHandle) -> Result<(), String> {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
+    configure_provider_path(&mut command, app)?;
     suppress_windows_console(&mut command);
 
     let child = command
@@ -277,6 +420,11 @@ pub async fn stirling_core_status(app: AppHandle) -> StirlingCoreStatus {
         version: health.as_ref().and_then(version_from_health),
         message,
     }
+}
+
+#[tauri::command]
+pub async fn stirling_core_components(app: AppHandle) -> Vec<StirlingComponentStatus> {
+    vec![qpdf_component_status(&app)]
 }
 
 #[tauri::command]
@@ -456,7 +604,11 @@ pub async fn stirling_core_request(
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_api_path, MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, STIRLING_BASE_URL, STIRLING_PORT};
+    use super::{
+        configure_provider_path_for_test, parse_qpdf_version, validate_api_path, MAX_INPUT_BYTES,
+        MAX_OUTPUT_BYTES, STIRLING_BASE_URL, STIRLING_PORT,
+    };
+    use std::process::Command;
 
     #[test]
     fn stirling_proxy_accepts_only_local_v1_paths() {
@@ -467,6 +619,25 @@ mod tests {
         assert!(validate_api_path("https://example.com/api/v1/test").is_err());
         assert!(validate_api_path("/api/v1/../admin").is_err());
         assert!(validate_api_path("/v3/api-docs").is_err());
+    }
+
+    #[test]
+    fn qpdf_version_parser_requires_a_numeric_version_token() {
+        assert_eq!(parse_qpdf_version("qpdf version 12.4.2"), Some("12.4.2".into()));
+        assert_eq!(parse_qpdf_version("qpdf version unknown"), None);
+    }
+
+    #[test]
+    fn provider_path_does_not_inherit_unreviewed_system_tools() {
+        let mut command = Command::new("java");
+        configure_provider_path_for_test(&mut command, None).unwrap();
+        let path = command
+            .get_envs()
+            .find(|(key, _)| *key == "PATH")
+            .and_then(|(_, value)| value)
+            .map(|value| value.to_string_lossy().to_string())
+            .unwrap_or_default();
+        assert!(path.is_empty());
     }
 
     #[test]

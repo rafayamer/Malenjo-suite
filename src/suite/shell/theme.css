@@ -652,3 +652,13 @@
 .pdf-workspace.presentation-mode .pdf-stage{min-width:100%;min-height:100%;padding:12px;justify-content:center}
 .pdf-view-controls button.active{background:#163a57;border-color:#3b7ca6;color:#fff}
 @media(max-width:1000px){.pdf-stage.two{grid-template-columns:max-content}}
+
+
+.stirling-component-details{margin:6px 0 9px;border:1px solid #233b4d;border-radius:8px;background:#0b1821}
+.stirling-component-details>summary{cursor:pointer;padding:7px 9px;color:#9db5c5;font-size:8px;text-transform:uppercase;letter-spacing:.06em}
+.stirling-components{display:flex;align-items:stretch;gap:7px;flex-wrap:wrap;padding:0 8px 8px}
+.stirling-component{display:flex;align-items:center;gap:6px;min-width:150px;max-width:260px;border:1px solid #593b32;background:#251713;color:#d9977a;border-radius:7px;padding:6px 8px}
+.stirling-component.ready{border-color:#245745;background:#09271f;color:#58d0a2}
+.stirling-component span,.stirling-component b,.stirling-component small{display:block;min-width:0}
+.stirling-component b{font-size:8px;text-transform:uppercase;letter-spacing:.06em}
+.stirling-component small{margin-top:1px;color:#7997aa;font-size:7px;max-width:230px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

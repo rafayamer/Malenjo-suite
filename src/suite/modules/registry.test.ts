@@ -12,6 +12,10 @@ describe('MALENJO module registry', () => {
     expect(complete).toEqual(['help', 'home']);
   });
 
+  it('keeps PDF partial until the canonical #39/#81 completion gate is actually satisfied', () => {
+    expect(modules.find((module) => module.id === 'pdf')?.status).toBe('partial');
+  });
+
   it('contains the mandatory document workspaces', () => {
     const ids = new Set(modules.map((module) => module.id));
     for (const id of ['files', 'pdf', 'word', 'spreadsheet', 'presentation', 'ocr', 'ai', 'security']) {

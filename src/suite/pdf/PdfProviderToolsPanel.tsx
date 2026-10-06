@@ -4,6 +4,7 @@ import {
   ServerCog, Square, TriangleAlert,
 } from 'lucide-react';
 import type {
+  PdfProviderComponentStatus,
   PdfProviderInputFile,
   PdfProviderOperation,
   PdfProviderOperationField,
@@ -29,6 +30,8 @@ function defaultFieldValue(field:PdfProviderOperationField):string{
 function operationHaystack(operation:PdfProviderOperation):string{
   return [
     operation.summary,operation.description,operation.id,operation.path,...operation.tags,
+    operation.capability.implementation,operation.capability.providerId,
+    operation.capability.disabledReason??'',operation.capability.fallback??'',
     ...operation.fields.flatMap((field)=>[field.name,field.label,field.description??'']),
   ].join(' ').toLowerCase();
 }
@@ -40,6 +43,7 @@ function providerFilename(name:string):string{
 
 export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,category,onApplyPdf}:Props){
   const [status,setStatus]=useState<PdfProviderStatus|null>(null);
+  const [components,setComponents]=useState<PdfProviderComponentStatus[]>([]);
   const [operations,setOperations]=useState<PdfProviderOperation[]>([]);
   const [search,setSearch]=useState('');
   const [selectedId,setSelectedId]=useState('');
@@ -54,8 +58,8 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   const refresh=async(loadCatalog=false)=>{
     setError('');
     try{
-      const next=await provider.status();
-      setStatus(next);
+      const [next,nextComponents]=await Promise.all([provider.status(),provider.componentStatus()]);
+      setStatus(next);setComponents(nextComponents);
       if(loadCatalog&&next.running){
         const catalog=await provider.listOperations();
         setOperations(catalog);
@@ -79,7 +83,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
 
   useEffect(()=>{
     if(selectedId&&filtered.some((operation)=>operation.id===selectedId))return;
-    setSelectedId(filtered[0]?.id??'');
+    setSelectedId(filtered.find((operation)=>operation.capability.available)?.id??filtered[0]?.id??'');
   },[filtered,selectedId]);
 
   useEffect(()=>{
@@ -100,8 +104,10 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     setBusy(true);setError('');
     try{
       const next=await provider.start();setStatus(next);
-      const catalog=await provider.listOperations();setOperations(catalog);
-      setNotice(`Loaded ${catalog.length} local PDF API operations.`);
+      const [catalog,nextComponents]=await Promise.all([provider.listOperations(),provider.componentStatus()]);
+      setOperations(catalog);setComponents(nextComponents);
+      const available=catalog.filter((operation)=>operation.capability.available).length;
+      setNotice(`Loaded ${catalog.length} local PDF API operations; ${available} are available through reviewed providers/fallbacks.`);
     }catch(reason){setError(reason instanceof Error?reason.message:String(reason));await refresh(false);}
     finally{setBusy(false);}
   }
@@ -117,6 +123,10 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
 
   async function runSelected(){
     if(!selected||busy)return;
+    if(!selected.capability.available){
+      setError(selected.capability.disabledReason??'This PDF operation has no reviewed local provider.');
+      return;
+    }
     setBusy(true);setError('');setNotice('');
     try{
       const fields:Array<{name:string;value:string}>=[];
@@ -141,7 +151,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       }
       const response=await provider.run(selected,fields,files);
       if(provider.responseIsPdf(response)){
-        await onApplyPdf(`Stirling core: ${selected.summary}`,Uint8Array.from(response.bytes));
+        await onApplyPdf(`Local PDF core: ${selected.summary}`,Uint8Array.from(response.bytes));
         setNotice(`${selected.summary} completed and was applied to the current MALENJO working copy.`);
       }else{
         const saved=await provider.saveResponse(response,sourceName.replace(/\.pdf$/i,'')||'malenjo-output');
@@ -209,6 +219,15 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       <button disabled={busy} onClick={()=>void refresh(Boolean(status?.running))}><RefreshCw size={14}/>Refresh</button>
     </div>
     <p className="stirling-provider-message">{status?.message??'Checking local provider…'}</p>
+    {!!components.length&&<details className="stirling-component-details">
+      <summary>{components.filter((component)=>component.available).length}/{components.length} reviewed provider components available</summary>
+      <div className="stirling-components" aria-label="Local PDF component status">
+        {components.map((component)=><div key={component.id} className={component.available?'stirling-component ready':'stirling-component'}>
+          {component.available?<CheckCircle2 size={13}/>:<TriangleAlert size={13}/>}
+          <span><b>{component.id}</b><small>{component.version??component.message}</small></span>
+        </div>)}
+      </div>
+    </details>}
     {!status?.installed&&<p className="stirling-provider-help">Windows development pack: <code>powershell -ExecutionPolicy Bypass -File scripts/build-stirling-core.ps1</code>. The provider runs on 127.0.0.1 only and never starts at MALENJO launch.</p>}
     {status?.running&&<div className="stirling-catalog">
       <div className="stirling-catalog-filter">
@@ -216,12 +235,19 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         <label className="stirling-all-categories"><input type="checkbox" checked={allCategories} onChange={(event)=>setAllCategories(event.target.checked)}/>All categories</label>
         <span>{filtered.length} operation{filtered.length===1?'':'s'}</span>
       </div>
-      <label className="stirling-operation-select"><span>Tool</span><span className="select-wrap"><select value={selectedId} onChange={(event)=>setSelectedId(event.target.value)}>{filtered.map((operation)=><option key={operation.id} value={operation.id}>{operation.summary}</option>)}</select><ChevronDown size={13}/></span></label>
+      <label className="stirling-operation-select"><span>Tool</span><span className="select-wrap"><select value={selectedId} onChange={(event)=>setSelectedId(event.target.value)}>{filtered.map((operation)=><option key={operation.id} value={operation.id} disabled={!operation.capability.available}>{operation.summary}{operation.capability.available?'':' — unavailable'}</option>)}</select><ChevronDown size={13}/></span></label>
       {selected&&<div className="stirling-operation">
         <div className="stirling-operation-title"><div><b>{selected.summary}</b><small>{selected.method} {selected.path}</small></div><span>{selected.category}</span></div>
         {selected.description&&<p>{selected.description}</p>}
+        <p className={selected.capability.available?'stirling-provider-message':'stirling-error'}>
+          <b>{selected.capability.available?'Implementation':'Unavailable'}:</b> {selected.capability.implementation}
+          {selected.capability.providerVersion?` · ${selected.capability.providerVersion}`:''}
+          {selected.capability.componentPack?` · ${selected.capability.componentPack}`:''}
+          {!selected.capability.available&&selected.capability.disabledReason?` — ${selected.capability.disabledReason}`:''}
+          {selected.capability.fallback?` · Fallback: ${selected.capability.fallback}`:''}
+        </p>
         <div className="stirling-fields">{selected.fields.map(renderField)}</div>
-        <button className="stirling-run" disabled={busy} onClick={()=>void runSelected()}><FileOutput size={15}/>{busy?'Running locally…':`Run ${selected.summary}`}</button>
+        <button className="stirling-run" disabled={busy||!selected.capability.available} onClick={()=>void runSelected()}><FileOutput size={15}/>{busy?'Running locally…':selected.capability.available?`Run ${selected.summary}`:'Provider unavailable'}</button>
       </div>}
       {!filtered.length&&<div className="stirling-empty">No local provider operation matches this task category/search.</div>}
     </div>}

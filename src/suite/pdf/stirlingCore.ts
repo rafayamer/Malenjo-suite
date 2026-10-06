@@ -2,6 +2,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
 import {
   PDF_PROVIDER_CONTRACT_VERSION,
+  type PdfProviderComponentStatus,
   type PdfProviderInputFile,
   type PdfProviderOperation,
   type PdfProviderOperationField,
@@ -10,6 +11,11 @@ import {
   type PdfProviderToolCategory,
   type PdfToolProvider,
 } from './backend';
+import {
+  PASS2_PENDING_COMPONENTS,
+  applyPdfProviderCapabilities,
+  resolvePdfProviderCapability,
+} from './providerCapabilities';
 
 export const STIRLING_OPEN_CORE_PIN='25220cbdbde2d526cebf173b94357884e180b8c1';
 
@@ -281,10 +287,20 @@ export function parseStirlingOpenApi(document:unknown):PdfProviderOperation[]{
         tags,
         fields:operationFields(document,rawPathItem,operation),
         category:categoryForOperation(operation,path),
+        capability:resolvePdfProviderCapability({id:operationId,path,summary},[]),
       });
     }
   }
   return operations.sort((left,right)=>left.summary.localeCompare(right.summary));
+}
+
+interface NativeStirlingComponentStatus{
+  id:string;
+  available:boolean;
+  version?:string|null;
+  executable?:string|null;
+  source:'bundled'|'configured'|'system'|'unavailable';
+  message:string;
 }
 
 interface NativeStirlingStatus{
@@ -327,10 +343,26 @@ export async function stopStirlingCore():Promise<boolean>{
   return invoke<boolean>('stirling_core_stop');
 }
 
+export async function stirlingCoreComponentStatus():Promise<PdfProviderComponentStatus[]>{
+  if(!isTauri())return [
+    {id:'qpdf',available:false,source:'unavailable',message:'The approved qpdf pack is available only in the Windows/Tauri runtime.'},
+    ...PASS2_PENDING_COMPONENTS,
+  ];
+  const native=await invoke<NativeStirlingComponentStatus[]>('stirling_core_components');
+  const byId=new Map(native.map((item)=>[item.id,item] as const));
+  return [
+    byId.get('qpdf')??{id:'qpdf',available:false,source:'unavailable',message:'qpdf status was not reported by the native boundary.'},
+    ...PASS2_PENDING_COMPONENTS,
+  ];
+}
+
 export async function loadPdfProviderOperations():Promise<PdfProviderOperation[]>{
   if(!isTauri())return [];
-  const document=await invoke<unknown>('stirling_core_openapi');
-  return parseStirlingOpenApi(document);
+  const [document,components]=await Promise.all([
+    invoke<unknown>('stirling_core_openapi'),
+    stirlingCoreComponentStatus(),
+  ]);
+  return applyPdfProviderCapabilities(parseStirlingOpenApi(document),components);
 }
 
 export async function runPdfProviderOperation(
@@ -434,6 +466,7 @@ export const stirlingCorePdfProvider:PdfToolProvider={
   start:startStirlingCore,
   stop:stopStirlingCore,
   listOperations:loadPdfProviderOperations,
+  componentStatus:stirlingCoreComponentStatus,
   run:runPdfProviderOperation,
   responseIsPdf,
   saveResponse:savePdfProviderResponse,

@@ -256,3 +256,20 @@ No module is complete merely because its navigation entry exists. Completion req
 | Executable validation | CI | frontend, Windows Rust, Codespaces/Linux + Windows Stirling pack build/smoke | CI #243 (`37469066584`) | **Verified** |
 | Module completion | Registry | PDF remains `partial`; no promotion in this pass | #141 / PR #142 | Correct |
 
+
+
+## PDF completion pass 2A — capability truth and qpdf
+
+| Requirement | Component | Implementation | Evidence | Status |
+|---|---|---|---|---|
+| Exact dependency classification | PDF providers | #143 provider/legal matrix records selected/rejected providers and fallbacks | `PDF-PROVIDER-MATRIX-PASS2.md` | In progress |
+| MALENJO capability truth | PDF contract | per-operation availability/provider/version/pack/disabled reason/fallback/legal reference | `backend.ts`, `providerCapabilities.ts`, tests | Implemented |
+| qpdf redistribution | Component pack | qpdf 12.4.2 official MSVC x64 ZIP, exact SHA-256; qpdf + exact static libjpeg-turbo/OpenSSL/zlib obligations retained; generated runtime inventory + CycloneDX 1.5 SBOM | builder + `third_party/qpdf/` + CI #269 | Integration verified; MSVC redist release gate pending |
+| Local-only provider injection | Tauri/Rust | qpdf path prepended only to on-demand Stirling child PATH | `stirling.rs` | Verified in PR #145 / CI #269 |
+| Stable installed resource paths | Tauri packaging | explicit source→target resource mapping for Stirling/qpdf; generated qpdf layout matches Rust lookup | `tauri.conf.json`, `providerPackaging.test.ts` | Implemented; installed-package smoke still pending |
+| No false operational tools | PDF provider UI | unavailable external-only operations are disabled with provider reason | resolver + provider panel tests/build | Verified in PR #145 / CI #269 |
+| qpdf operation smoke | Windows CI | Repair + Compress invoked over `127.0.0.1:28970`; generated valid fixture validated by qpdf; PDF output signatures checked | CI #269 (`37490673818`) | Verified |
+| Module completion | Registry | PDF explicitly remains `partial` | registry test | Correct |
+
+| Stirling PATH isolation | Native provider boundary | child PATH contains only reviewed/configured qpdf; user PATH is not inherited | Rust regression test + review | Implemented; CI pending |
+| OpenAPI provider-name normalization | PDF capability resolver | slash/camelCase/spaced names resolve to the same provider gate | provider capability tests | Implemented; CI pending |
