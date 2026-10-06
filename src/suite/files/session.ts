@@ -7,6 +7,8 @@ export interface DocumentSession {
   saving: boolean;
   openedAt: number;
   lastSavedAt: number | null;
+  recoveryBytes?: Uint8Array;
+  recoveredAt?: number;
 }
 
 export function createDocumentSession(document: LibraryDocument, openedAt = Date.now()): DocumentSession {
@@ -34,10 +36,31 @@ export function markDocumentSaving(session: DocumentSession, saving = true): Doc
   return { ...session, saving };
 }
 
+export function attachRecoveredWorkingCopy(
+  session: DocumentSession,
+  bytes: Uint8Array,
+  recoveredAt: number,
+): DocumentSession {
+  return {
+    ...session,
+    recoveryBytes: Uint8Array.from(bytes),
+    recoveredAt,
+    dirty: true,
+    saving: false,
+  };
+}
+
+export function clearRecoveredWorkingCopy(session: DocumentSession): DocumentSession {
+  if (!session.recoveryBytes && session.recoveredAt === undefined) return session;
+  const { recoveryBytes: _bytes, recoveredAt: _recoveredAt, ...rest } = session;
+  return rest;
+}
+
 export function markDocumentSaved(
   session: DocumentSession,
   document: LibraryDocument = session.document,
   savedAt = Date.now(),
 ): DocumentSession {
-  return { ...session, document, dirty: false, saving: false, lastSavedAt: savedAt };
+  const cleared = clearRecoveredWorkingCopy(session);
+  return { ...cleared, document, dirty: false, saving: false, lastSavedAt: savedAt };
 }
