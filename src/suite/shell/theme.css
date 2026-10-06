@@ -503,7 +503,6 @@
 .pdf-view-controls .pdf-zoom-label{min-width:64px}
 @media(max-width:1280px){
   .pdf-task-categories button{padding:0 8px}
-  .pdf-task-actions>button:nth-of-type(n+5){display:none}
   .pdf-context-toolbar{gap:6px}
   .pdf-view-controls{gap:4px;padding-left:6px}
 }
