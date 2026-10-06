@@ -15,9 +15,10 @@ This repository contains the **Phase 0–7 executable foundation**. This is not 
 | Sign/Metadata/Security | Phase 6 merged and tree-equivalent CI-verified | Windows ClamAV/pyHanko matrix + persistent secret-store provider |
 | DMS/Automation/Admin/Backup | Phase 7 merged and tree-equivalent CI-verified | Windows Temporal/Kopia matrix + identity-provider binding |
 | CAD/DICOM | Adapter boundary | optional-pack proof of concept |
+| Help / Support | **Complete module** | maintain against future source changes; release-level SBOM/logging remain separate |
 | Packaging | Configured developer targets | signing, SBOM, installer QA, update manifests |
 
-Do not mark a module complete until its acceptance criteria and traceability entries in the master guide pass.
+Do not mark a module complete until its acceptance criteria and traceability entries in the master guide pass. Help / Support is currently the first and only module that has passed that gate.
 
 ## Phase 1 evidence — document library
 
