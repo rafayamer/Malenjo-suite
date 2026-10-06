@@ -57,7 +57,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       const next=await provider.status();
       setStatus(next);
       if(loadCatalog&&next.running){
-        const catalog=await loadPdfProviderOperations();
+        const catalog=await provider.listOperations();
         setOperations(catalog);
       }
     }catch(reason){setError(reason instanceof Error?reason.message:String(reason));}
@@ -139,7 +139,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         if(field.required&&!value.trim())throw new Error(`${field.label} is required.`);
         if(value.trim()||field.kind==='boolean')fields.push({name:field.name,value});
       }
-      const response=await runPdfProviderOperation(selected,fields,files);
+      const response=await provider.run(selected,fields,files);
       if(provider.responseIsPdf(response)){
         await onApplyPdf(`Stirling core: ${selected.summary}`,Uint8Array.from(response.bytes));
         setNotice(`${selected.summary} completed and was applied to the current MALENJO working copy.`);
