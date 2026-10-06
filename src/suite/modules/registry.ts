@@ -22,5 +22,5 @@ export const modules: SuiteModule[] = [
   { id:'backup', name:'Backup / DR', description:'Verified backup, restore and disaster-recovery orchestration.', status:'partial', featureFlag:'backup', engine:'MALENJO verified backup + Kopia adapter', group:'System' },
   { id:'settings', name:'Settings', description:'One settings system for the entire suite.', status:'foundation', featureFlag:'core', engine:'MALENJO settings', group:'System' },
   { id:'account', name:'Account', description:'Student/local account identity and device profile.', status:'foundation', featureFlag:'core', engine:'MALENJO account', group:'System' },
-  { id:'help', name:'Help / Support', description:'Diagnostics, guides and troubleshooting information.', status:'foundation', featureFlag:'core', engine:'MALENJO diagnostics', group:'System' }
+  { id:'help', name:'Help / Support', description:'Diagnostics, guides and troubleshooting information.', status:'complete', featureFlag:'core', engine:'MALENJO diagnostics', group:'System' }
 ];
