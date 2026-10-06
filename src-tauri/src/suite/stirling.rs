@@ -148,7 +148,10 @@ fn qpdf_candidates(app: &AppHandle) -> Vec<(String, String)> {
     if let Ok(value) = env::var("MALENJO_QPDF_BIN") {
         let trimmed = value.trim();
         if !trimmed.is_empty() {
-            candidates.push((trimmed.to_string(), "system".into()));
+            let configured = PathBuf::from(trimmed);
+            if configured.is_file() {
+                candidates.push((configured.to_string_lossy().to_string(), "configured".into()));
+            }
         }
     }
 
@@ -165,10 +168,6 @@ fn qpdf_candidates(app: &AppHandle) -> Vec<(String, String)> {
         }
     }
 
-    if cfg!(windows) {
-        candidates.push(("qpdf.exe".into(), "system".into()));
-    }
-    candidates.push(("qpdf".into(), "system".into()));
     candidates
 }
 
@@ -245,24 +244,31 @@ fn qpdf_component_status(app: &AppHandle) -> StirlingComponentStatus {
     }
 }
 
-fn prepend_qpdf_path(command: &mut Command, app: &AppHandle) -> Result<(), String> {
-    let Some((executable, source, _version)) = available_qpdf(app) else {
-        return Ok(());
+fn configure_provider_path(command: &mut Command, app: &AppHandle) -> Result<(), String> {
+    let paths = if let Some((executable, _source, _version)) = available_qpdf(app) {
+        let executable_path = PathBuf::from(executable);
+        let parent = executable_path
+            .parent()
+            .ok_or_else(|| "qpdf executable has no parent directory.".to_string())?;
+        vec![parent.to_path_buf()]
+    } else {
+        Vec::new()
     };
-    if source != "bundled" {
-        return Ok(());
-    }
 
-    let executable_path = PathBuf::from(executable);
-    let parent = executable_path
-        .parent()
-        .ok_or_else(|| "Bundled qpdf executable has no parent directory.".to_string())?;
-    let mut paths = vec![parent.to_path_buf()];
-    if let Some(existing) = env::var_os("PATH") {
-        paths.extend(env::split_paths(&existing));
-    }
     let joined = env::join_paths(paths)
-        .map_err(|error| format!("Unable to construct local provider PATH: {error}"))?;
+        .map_err(|error| format!("Unable to construct reviewed local provider PATH: {error}"))?;
+    command.env("PATH", joined);
+    Ok(())
+}
+
+#[cfg(test)]
+fn configure_provider_path_for_test(command: &mut Command, executable: Option<&Path>) -> Result<(), String> {
+    let paths = executable
+        .and_then(Path::parent)
+        .map(|parent| vec![parent.to_path_buf()])
+        .unwrap_or_default();
+    let joined = env::join_paths(paths)
+        .map_err(|error| format!("Unable to construct reviewed local provider PATH: {error}"))?;
     command.env("PATH", joined);
     Ok(())
 }
@@ -368,7 +374,7 @@ fn spawn_core(java: &str, jar: &Path, app: &AppHandle) -> Result<(), String> {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    prepend_qpdf_path(&mut command, app)?;
+    configure_provider_path(&mut command, app)?;
     suppress_windows_console(&mut command);
 
     let child = command
@@ -599,9 +605,10 @@ pub async fn stirling_core_request(
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_qpdf_version, validate_api_path, MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, STIRLING_BASE_URL,
-        STIRLING_PORT,
+        configure_provider_path_for_test, parse_qpdf_version, validate_api_path, MAX_INPUT_BYTES,
+        MAX_OUTPUT_BYTES, STIRLING_BASE_URL, STIRLING_PORT,
     };
+    use std::process::Command;
 
     #[test]
     fn stirling_proxy_accepts_only_local_v1_paths() {
@@ -618,6 +625,19 @@ mod tests {
     fn qpdf_version_parser_requires_a_numeric_version_token() {
         assert_eq!(parse_qpdf_version("qpdf version 12.4.2"), Some("12.4.2".into()));
         assert_eq!(parse_qpdf_version("qpdf version unknown"), None);
+    }
+
+    #[test]
+    fn provider_path_does_not_inherit_unreviewed_system_tools() {
+        let mut command = Command::new("java");
+        configure_provider_path_for_test(&mut command, None).unwrap();
+        let path = command
+            .get_envs()
+            .find(|(key, _)| *key == "PATH")
+            .and_then(|(_, value)| value)
+            .map(|value| value.to_string_lossy().to_string())
+            .unwrap_or_default();
+        assert!(path.is_empty());
     }
 
     #[test]
