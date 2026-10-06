@@ -196,3 +196,16 @@ No module is complete merely because its navigation entry exists. Completion req
 | Audit integration | Enterprise services | Phase 6 audit writer reused | code review | Implemented |
 | Audit retention | Administration | archive expired events, retain active JSONL | implementation/docs | Implemented |
 | Shared settings/permissions | Enterprise policy | one versioned local policy used across enterprise modules | UI/native contract | Implemented |
+
+## Source-truth UI 53.10 — global command palette
+
+| Requirement | Component | Implementation | Evidence | Status |
+|---|---|---|---|---|
+| Ctrl+K suite-wide action/search surface | Shell / command palette | existing global shortcut + shared palette retained and expanded | `CommandPalette.tsx`, `App.tsx`, audit | Verified |
+| Search actions | Shell / document command bus | registered workspaces, canonical aliases and active-document commands indexed | `App.tsx`, `commandPaletteModel.ts` | Verified |
+| Search documents | Files / Library + shell | desktop library + browser-session library indexed; open tabs remain switchable; unavailable files disabled | `App.tsx`, model tests | Verified |
+| Search settings | Settings / shell | dedicated searchable Settings destination and setting icon/type | `App.tsx`, `CommandPalette.tsx` | Verified |
+| Canonical example discoverability | Shell | every §53.10 example resolves to a real destination or an explicit disabled unavailable state | `commandPaletteModel.ts`, `commandPaletteModel.test.ts` | Verified |
+| No fake unsupported operations | Shell | compression, PDF-to-Word, password protection and invoice creation are disabled discovery entries only | audit + tests | Verified |
+| Detailed audit | Documentation | `docs/audits/UI-53.10-GLOBAL-COMMAND-PALETTE.md` | source SHA/lines and completion boundary recorded | Implemented |
+
