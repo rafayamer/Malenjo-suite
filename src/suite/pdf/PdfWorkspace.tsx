@@ -1178,7 +1178,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             aria-label={taskActionTitle(action)}
             onClick={()=>{void action.run();}}
           >{action.label}</button>)}
-          {!activeTaskActions.length&&<span className="pdf-task-empty">No operational {PDF_TASK_CATEGORY_LABELS[taskCategory].toLowerCase()} commands are wired on current main yet. Use Ctrl+K to discover available document actions.</span>}
+          {!activeTaskActions.length&&<span className="pdf-task-empty">No operational {PDF_TASK_CATEGORY_LABELS[taskCategory].toLowerCase()} commands are available in this build yet. Use Ctrl+K to discover available document actions.</span>}
           {overflowTaskActions.length>0&&<details className="pdf-task-overflow">
             <summary aria-label={`More ${PDF_TASK_CATEGORY_LABELS[taskCategory]} tools`}>More</summary>
             <div>
