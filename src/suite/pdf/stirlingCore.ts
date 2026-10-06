@@ -348,12 +348,24 @@ export async function stirlingCoreComponentStatus():Promise<PdfProviderComponent
     {id:'qpdf',available:false,source:'unavailable',message:'The approved qpdf pack is available only in the Windows/Tauri runtime.'},
     ...PASS2_PENDING_COMPONENTS,
   ];
+
   const native=await invoke<NativeStirlingComponentStatus[]>('stirling_core_components');
-  const byId=new Map(native.map((item)=>[item.id,item] as const));
-  return [
-    byId.get('qpdf')??{id:'qpdf',available:false,source:'unavailable',message:'qpdf status was not reported by the native boundary.'},
-    ...PASS2_PENDING_COMPONENTS,
-  ];
+  const byId=new Map<string,PdfProviderComponentStatus>(
+    PASS2_PENDING_COMPONENTS.map((item)=>[item.id,item]),
+  );
+  for(const component of native)byId.set(component.id,component);
+  if(!byId.has('qpdf')){
+    byId.set('qpdf',{
+      id:'qpdf',available:false,source:'unavailable',
+      message:'qpdf status was not reported by the native boundary.',
+    });
+  }
+
+  const ordered=['qpdf',...PASS2_PENDING_COMPONENTS.map((item)=>item.id)];
+  for(const component of native){
+    if(!ordered.includes(component.id))ordered.push(component.id);
+  }
+  return [...new Set(ordered)].map((id)=>byId.get(id)!).filter(Boolean);
 }
 
 export async function loadPdfProviderOperations():Promise<PdfProviderOperation[]>{
