@@ -41,8 +41,13 @@ if ($LASTEXITCODE -ne 0 -or $VersionOutput -notmatch [regex]::Escape($Version)) 
 }
 
 New-Item -ItemType Directory -Force -Path $LicenseDir | Out-Null
-Copy-Item (Join-Path $Root 'third_party/qpdf/LICENSE.txt') (Join-Path $LicenseDir 'LICENSE.txt') -Force
-Copy-Item (Join-Path $Root 'third_party/qpdf/NOTICE.md') (Join-Path $LicenseDir 'NOTICE.md') -Force
+Copy-Item (Join-Path $Root 'third_party/qpdf/LICENSE.txt') (Join-Path $LicenseDir 'qpdf-LICENSE.txt') -Force
+Copy-Item (Join-Path $Root 'third_party/qpdf/NOTICE.md') (Join-Path $LicenseDir 'qpdf-NOTICE.md') -Force
+Copy-Item (Join-Path $Root 'third_party/qpdf/DEPENDENCIES.md') (Join-Path $LicenseDir 'DEPENDENCIES.md') -Force
+Copy-Item (Join-Path $Root 'third_party/qpdf/deps/libjpeg-turbo-LICENSE.md') (Join-Path $LicenseDir 'libjpeg-turbo-LICENSE.md') -Force
+Copy-Item (Join-Path $Root 'third_party/qpdf/deps/libjpeg-turbo-README.ijg') (Join-Path $LicenseDir 'libjpeg-turbo-README.ijg') -Force
+Copy-Item (Join-Path $Root 'third_party/qpdf/deps/openssl-LICENSE.txt') (Join-Path $LicenseDir 'openssl-LICENSE.txt') -Force
+Copy-Item (Join-Path $Root 'third_party/qpdf/deps/zlib-LICENSE.txt') (Join-Path $LicenseDir 'zlib-LICENSE.txt') -Force
 
 $RelativeExecutable = [IO.Path]::GetRelativePath($RuntimeDir, $BundledQpdf.FullName).Replace('\','/')
 $Manifest = [ordered]@{
@@ -56,7 +61,13 @@ $Manifest = [ordered]@{
   sha256 = $ExpectedSha256
   executable = "runtime/$RelativeExecutable"
   license = 'Apache-2.0'
-  redistribution = 'approved-with-notices'
+  redistribution = 'integration-approved-release-gated'
+  embeddedDependencies = @(
+    @{ id = 'libjpeg-turbo'; version = '3.2.0#1'; license = 'IJG + BSD-3-Clause' },
+    @{ id = 'openssl'; version = '3.6.4#1'; license = 'Apache-2.0' },
+    @{ id = 'zlib'; version = '1.3.2#2'; license = 'Zlib' }
+  )
+  releaseGate = 'Capture exact runtime file inventory/SBOM and verify Microsoft Visual C++ runtime files against applicable redistributable terms.'
   architecture = 'windows-x86_64'
   operations = @('repair', 'compress-pdf')
   reviewedAt = '2026-10-06'
