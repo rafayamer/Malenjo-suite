@@ -23,6 +23,26 @@ export interface PdfProviderOperationField{
   location:'query'|'form';
 }
 
+export interface PdfProviderCapability{
+  available:boolean;
+  implementation:string;
+  providerId:string;
+  providerVersion?:string|null;
+  componentPack?:string|null;
+  disabledReason?:string|null;
+  fallback?:string|null;
+  legalReference:string;
+}
+
+export interface PdfProviderComponentStatus{
+  id:string;
+  available:boolean;
+  version?:string|null;
+  executable?:string|null;
+  source:'bundled'|'system'|'core'|'unavailable';
+  message:string;
+}
+
 export interface PdfProviderOperation{
   id:string;
   path:string;
@@ -32,6 +52,7 @@ export interface PdfProviderOperation{
   tags:string[];
   fields:PdfProviderOperationField[];
   category:PdfProviderToolCategory;
+  capability:PdfProviderCapability;
 }
 
 export interface PdfProviderInputFile{
@@ -68,6 +89,7 @@ export interface PdfToolProvider{
   start():Promise<PdfProviderStatus>;
   stop():Promise<boolean>;
   listOperations():Promise<PdfProviderOperation[]>;
+  componentStatus():Promise<PdfProviderComponentStatus[]>;
   run(
     operation:Pick<PdfProviderOperation,'path'|'method'>,
     fields:Array<{name:string;value:string}>,
