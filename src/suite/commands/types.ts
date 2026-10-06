@@ -12,7 +12,8 @@ export type DocumentCommandId =
   | 'automate'
   | 'version-history'
   | 'security'
-  | 'properties';
+  | 'properties'
+  | 'forms';
 
 export interface DocumentCommandDescriptor {
   id: DocumentCommandId;
