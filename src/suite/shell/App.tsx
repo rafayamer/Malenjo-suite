@@ -237,7 +237,7 @@ export default function App() {
         const documents = isDesktopRuntime()
           ? await listLibraryDocuments()
           : listBrowserDocuments();
-        if (!cancelled) setPaletteDocuments(documents.filter((document) => document.available));
+        if (!cancelled) setPaletteDocuments(documents);
       } catch {
         if (!cancelled) setPaletteDocuments([]);
       }
