@@ -11,6 +11,8 @@ interface Props {
   availableWidth: number;
   availableHeight: number;
   forceRender: boolean;
+  renderAllowed: boolean;
+  eager: boolean;
   domIdPrefix: string;
   onVisible(pageNumber: number): void;
   onRendered(pageNumber: number): void;
@@ -25,6 +27,8 @@ export default function PdfPageCanvas({
   availableWidth,
   availableHeight,
   forceRender,
+  renderAllowed,
+  eager,
   domIdPrefix,
   onVisible,
   onRendered,
@@ -56,6 +60,7 @@ export default function PdfPageCanvas({
   }, [onVisible, pageNumber]);
 
   useEffect(() => {
+    if (!renderAllowed || (!eager && !visible)) return;
     let cancelled = false;
     void document.getPage(pageNumber).then((page) => {
       if (cancelled) return;
@@ -63,7 +68,7 @@ export default function PdfPageCanvas({
       setBaseSize({ width: viewport.width, height: viewport.height });
     });
     return () => { cancelled = true; };
-  }, [document, pageNumber, rotation]);
+  }, [document, eager, pageNumber, renderAllowed, rotation, visible]);
 
   const scale = useMemo(() => effectivePdfScale(
     baseSize.width,
@@ -80,7 +85,7 @@ export default function PdfPageCanvas({
   }), [baseSize.height, baseSize.width, scale]);
 
   useEffect(() => {
-    if (!visible && !forceRender) return;
+    if (!forceRender && (!renderAllowed || (!eager && !visible))) return;
 
     let cancelled = false;
     let renderTask: ReturnType<Awaited<ReturnType<PDFDocumentProxy['getPage']>>['render']> | null = null;
@@ -124,7 +129,7 @@ export default function PdfPageCanvas({
       cancelled = true;
       renderTask?.cancel();
     };
-  }, [document, forceRender, onRendered, pageNumber, rotation, scale, visible]);
+  }, [document, eager, forceRender, onRendered, pageNumber, renderAllowed, rotation, scale, visible]);
 
   return <div
     ref={shellRef}
