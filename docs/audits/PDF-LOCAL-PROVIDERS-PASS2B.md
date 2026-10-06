@@ -102,3 +102,13 @@ MALENJO therefore filters the runtime OCR form when the resolved provider is Tes
 - `ocrType`.
 
 `sidecar`, `deskew`, `rotatePages`, `clean`, `cleanFinal`, `ocrRenderType` and `removeImagesAfter` are not advertised as Tesseract-backed controls. Auto-rotation remains a separate reviewed Tesseract OSD operation.
+
+
+## Configured-provider provenance hardening
+
+Review hardening requires configured provider paths to remain truthful after Stirling changes its child working directory:
+
+- `MALENJO_QPDF_BIN` and `MALENJO_TESSERACT_BIN` are accepted only as existing files and canonicalized before their parent directories enter the child PATH;
+- `MALENJO_TESSDATA_DIR` is accepted only when both reviewed runtime-required model filenames are present and is canonicalized before `TESSDATA_PREFIX` is set;
+- if a configured tessdata directory overrides a bundled Tesseract executable, the combined provider source is reported as `configured`, so the frontend does not claim the immutable bundled component pack supplied the active models;
+- the direct Tesseract OCR UI exposes the reviewed English model as scalar `languages=eng`, matching Stirling multipart semantics instead of serializing an array as one JSON form value.
