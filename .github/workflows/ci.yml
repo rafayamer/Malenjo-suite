@@ -280,10 +280,12 @@ jobs:
                 throw "Provider smoke output is not a PDF: $output"
               }
             }
-            if ($api.paths.PSObject.Properties.Name.Contains("/api/v1/convert/pdf/vector") -or $api.paths.PSObject.Properties.Name.Contains("/api/v1/convert/vector/pdf")) {
-              throw "Ghostscript-only vector endpoints must not be advertised as operational without Ghostscript."
+            $vectorDisabledOut = Join-Path (Resolve-Path ".build/provider-smoke") "vector-disabled.bin"
+            $vectorStatus = (& $curl --silent --show-error -o $vectorDisabledOut -w "%{http_code}" -F "fileInput=@$fixture;type=application/pdf" -F "outputFormat=eps" "http://127.0.0.1:28970/api/v1/convert/pdf/vector" | Out-String).Trim()
+            if ($vectorStatus -match "^2") {
+              throw "Ghostscript-only PDF-to-vector unexpectedly executed without a reviewed Ghostscript provider."
             }
-            Write-Host "Reviewed local provider groups passed repair, compression, Java effects, OCR and auto-rotate localhost smoke tests."
+            Write-Host "Reviewed local provider groups passed repair, compression, Java effects, OCR and auto-rotate localhost smoke tests; Ghostscript-only vector conversion remained unavailable."
           } finally {
             if (!$process.HasExited) { Stop-Process -Id $process.Id -Force }
           }
