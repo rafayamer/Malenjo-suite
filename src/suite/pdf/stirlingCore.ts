@@ -433,8 +433,8 @@ export const stirlingCorePdfProvider:PdfToolProvider={
   status:stirlingCoreStatus,
   start:startStirlingCore,
   stop:stopStirlingCore,
-  listOperations:loadStirlingOperations,
-  run:runStirlingOperation,
+  listOperations:loadPdfProviderOperations,
+  run:runPdfProviderOperation,
   responseIsPdf,
-  saveResponse:saveStirlingResponse,
+  saveResponse:savePdfProviderResponse,
 };
