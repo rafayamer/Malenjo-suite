@@ -276,3 +276,82 @@
   outline:1px solid #4aa8e8;
   outline-offset:2px;
 }
+
+
+/* Source-truth UI 53.8A — docked contextual right inspector */
+.pdf-layout.inspector-hidden{grid-template-columns:282px minmax(0,1fr)}
+.pdf-layout.left-panel-collapsed.inspector-hidden{grid-template-columns:58px minmax(0,1fr)}
+.pdf-inspector{min-width:0}
+.pdf-inspector-tabs{
+  position:sticky;
+  top:0;
+  z-index:4;
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr)) 30px;
+  align-items:stretch;
+  border-bottom:1px solid #1d3549;
+  background:#081723f5;
+  backdrop-filter:blur(8px);
+}
+.pdf-inspector-tabs button{
+  min-width:0;
+  border:0;
+  border-right:1px solid #173047;
+  background:transparent;
+  color:#708ca1;
+  padding:9px 3px 8px;
+  font-size:8px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  cursor:pointer;
+}
+.pdf-inspector-tabs button:hover{background:#0d2639;color:#d6eaf6}
+.pdf-inspector-tabs button.active{background:#102d43;color:#e3f4ff;box-shadow:inset 0 -2px 0 #33d4e5}
+.pdf-inspector-tabs .pdf-inspector-hide{
+  display:grid;
+  place-items:center;
+  padding:0;
+  color:#89a5b8;
+}
+.pdf-inspector-context{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:8px 10px;
+  border-bottom:1px solid #173047;
+  background:#091b29;
+}
+.pdf-inspector-context b{color:#c7dce8;font-size:10px}
+.pdf-inspector-context span{color:#6e899d;font-size:8px;text-align:right}
+.pdf-inspector-tab-body{padding:10px}
+.pdf-inspector-callout{
+  border:1px solid #24445e;
+  background:#091b29;
+  border-radius:8px;
+  padding:11px;
+  color:#91aabd;
+}
+.pdf-inspector-callout>svg{color:#51c8f4;margin-bottom:7px}
+.pdf-inspector-callout b{display:block;color:#d5e7f2;font-size:11px}
+.pdf-inspector-callout p{margin:7px 0 10px;font-size:9px;line-height:1.55}
+.pdf-inspector-callout button{
+  width:100%;
+  border:1px solid #2c5774;
+  background:#0d2639;
+  color:#cce0ec;
+  border-radius:6px;
+  padding:7px 8px;
+  font-size:9px;
+  cursor:pointer;
+}
+.pdf-inspector-callout button:hover:not(:disabled){background:#12334c;border-color:#3f769a;color:white}
+.pdf-inspector-callout button:disabled{opacity:.45;cursor:not-allowed}
+
+@media(max-width:1320px){
+  .pdf-layout.inspector-hidden{grid-template-columns:254px minmax(0,1fr)}
+  .pdf-layout.left-panel-collapsed.inspector-hidden{grid-template-columns:54px minmax(0,1fr)}
+  .pdf-inspector-tabs{grid-template-columns:repeat(5,minmax(0,1fr)) 26px}
+  .pdf-inspector-tabs button{font-size:7px;padding-left:2px;padding-right:2px}
+}
