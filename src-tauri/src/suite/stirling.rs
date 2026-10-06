@@ -783,8 +783,8 @@ mod tests {
     #[test]
     fn provider_path_contains_only_explicit_reviewed_directories() {
         let mut command = Command::new("java");
-        let first = PathBuf::from(r"C:\\MALENJO\\providers\\qpdf\\bin");
-        let second = PathBuf::from(r"C:\\MALENJO\\providers\\tesseract\\bin");
+        let first = PathBuf::from("reviewed-provider-qpdf/bin");
+        let second = PathBuf::from("reviewed-provider-tesseract/bin");
         set_reviewed_provider_path(&mut command, vec![second.clone(), first.clone(), first.clone()]).unwrap();
         let path = command
             .get_envs()
