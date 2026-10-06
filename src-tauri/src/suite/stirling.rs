@@ -150,7 +150,9 @@ fn qpdf_candidates(app: &AppHandle) -> Vec<(String, String)> {
         if !trimmed.is_empty() {
             let configured = PathBuf::from(trimmed);
             if configured.is_file() {
-                candidates.push((configured.to_string_lossy().to_string(), "configured".into()));
+                if let Ok(canonical) = configured.canonicalize() {
+                    candidates.push((canonical.to_string_lossy().to_string(), "configured".into()));
+                }
             }
         }
     }
@@ -252,7 +254,9 @@ fn tesseract_candidates(app: &AppHandle) -> Vec<(String, String)> {
         if !trimmed.is_empty() {
             let configured = PathBuf::from(trimmed);
             if configured.is_file() {
-                candidates.push((configured.to_string_lossy().to_string(), "configured".into()));
+                if let Ok(canonical) = configured.canonicalize() {
+                    candidates.push((canonical.to_string_lossy().to_string(), "configured".into()));
+                }
             }
         }
     }
@@ -291,13 +295,18 @@ fn parse_tesseract_version(output: &str) -> Option<String> {
     }
 }
 
-fn tesseract_data_dir(executable: &str) -> Option<PathBuf> {
+fn tesseract_data_dir(executable: &str) -> Option<(PathBuf, bool)> {
     if let Ok(value) = env::var("MALENJO_TESSDATA_DIR") {
-        let configured = PathBuf::from(value.trim());
-        if configured.join("eng.traineddata").is_file()
-            && configured.join("osd.traineddata").is_file()
-        {
-            return Some(configured);
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            let configured = PathBuf::from(trimmed);
+            if configured.join("eng.traineddata").is_file()
+                && configured.join("osd.traineddata").is_file()
+            {
+                if let Ok(canonical) = configured.canonicalize() {
+                    return Some((canonical, true));
+                }
+            }
         }
     }
 
@@ -307,8 +316,12 @@ fn tesseract_data_dir(executable: &str) -> Option<PathBuf> {
     if let Some(runtime) = parent.parent() {
         candidates.push(runtime.join("tessdata"));
     }
-    candidates.into_iter().find(|path| {
-        path.join("eng.traineddata").is_file() && path.join("osd.traineddata").is_file()
+    candidates.into_iter().find_map(|path| {
+        if path.join("eng.traineddata").is_file() && path.join("osd.traineddata").is_file() {
+            Some((path, false))
+        } else {
+            None
+        }
     })
 }
 
@@ -332,10 +345,15 @@ fn available_tesseract(app: &AppHandle) -> Option<(String, String, String, PathB
         let Some(version) = parse_tesseract_version(&combined) else {
             continue;
         };
-        let Some(tessdata) = tesseract_data_dir(&candidate) else {
+        let Some((tessdata, tessdata_configured)) = tesseract_data_dir(&candidate) else {
             continue;
         };
-        return Some((candidate, source, version, tessdata));
+        let resolved_source = if tessdata_configured {
+            "configured".to_string()
+        } else {
+            source
+        };
+        return Some((candidate, resolved_source, version, tessdata));
     }
     None
 }
