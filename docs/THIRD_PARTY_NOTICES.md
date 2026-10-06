@@ -39,9 +39,9 @@ Upstream license/provenance are retained under `third_party/stirling-pdf/` and `
 
 | Component | Reviewed version | License | Packaging status |
 |---|---:|---|---|
-| qpdf | 12.4.2 | Apache-2.0 | Approved Windows x64 local component pack; official release ZIP checksum-pinned. License and NOTICE retained under `third_party/qpdf/`. |
+| qpdf | 12.4.2 | Apache-2.0; static libjpeg-turbo/OpenSSL/zlib obligations recorded | Integration-approved Windows x64 component pack; final distributable release remains gated on exact runtime/SBOM + Microsoft runtime redistributable check. |
 
-The qpdf pack is injected only into the on-demand local Stirling child process and is never added to the user or machine PATH. Generated binaries are excluded from Git; release packaging must reproduce the checksum-verified pack and include it in the SBOM/provenance set.
+The qpdf pack is injected only into the on-demand local Stirling child process and is never added to the user or machine PATH. Generated binaries are excluded from Git. Exact qpdf build evidence and retained static-dependency licenses are under `third_party/qpdf/`; release packaging must reproduce the checksum-verified pack, capture its exact file inventory in the SBOM, and complete the Microsoft runtime redistributable check.
 
 ## Optional external engines/adapters
 
