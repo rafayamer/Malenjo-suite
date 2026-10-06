@@ -17,6 +17,8 @@ import {
   PanelRightOpen,
   Sparkles,
   ShieldCheck,
+  Maximize2,
+  MonitorPlay,
 } from 'lucide-react';
 import type { DocumentSession } from '../files/session';
 import type { RegisterDocumentCommands } from '../commands/types';
@@ -68,6 +70,10 @@ import {
 } from './layout';
 import PdfPageCanvas from './PdfPageCanvas';
 import PdfThumbnail from './PdfThumbnail';
+import PdfProviderToolsPanel from './PdfProviderToolsPanel';
+import { defaultPdfToolProvider } from './defaultProvider';
+import type { PdfProviderToolCategory } from './backend';
+import { pdfViewPages, type PdfViewMode } from './viewMode';
 import { useScrollFps } from './useScrollFps';
 import {
   DEFAULT_PDF_LEFT_PANEL,
@@ -133,6 +139,7 @@ function PdfLeftPanelIcon({id}:{id:PdfLeftPanelId}) {
 }
 
 export default function PdfWorkspace({ session, active, notice, onBackToFiles, onNavigateModule, onDirtyChange, onSavingChange, registerCommands }: Props) {
+  const workspaceRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const appendInputRef = useRef<HTMLInputElement>(null);
@@ -156,6 +163,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [fitMode, setFitMode] = useState<PdfFitMode>('width');
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
+  const [viewMode, setViewMode] = useState<PdfViewMode>('continuous');
+  const [presentationMode, setPresentationMode] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mutating, setMutating] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -174,6 +184,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [inspectorTab, setInspectorTab] = useState<DocumentInspectorTab>('properties');
   const [inspectorHidden, setInspectorHidden] = useState(false);
   const [taskCategory, setTaskCategory] = useState<PdfTaskCategory>('home');
+  const [providerPanelOpen, setProviderPanelOpen] = useState(false);
   const [textOverlay, setTextOverlay] = useState({ text:'', x:0.12, y:0.82, size:12 });
   const [shapeOverlay, setShapeOverlay] = useState({ x:0.12, y:0.68, width:0.35, height:0.08, mode:'highlight' as 'highlight'|'outline' });
   const [commentDraft, setCommentDraft] = useState({ text:'', author:'MALENJO User', x:0.86, y:0.86 });
@@ -1036,6 +1047,33 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       ? 'Fit page'
       : `${Math.round(zoom * 100)}%`;
 
+  const viewPages=pdfViewPages(viewMode,currentPage,pageCount);
+
+  useEffect(()=>{
+    function onFullscreenChange(){
+      const active=Boolean(document.fullscreenElement);
+      setFullscreen(active);
+      if(!active)setPresentationMode(false);
+    }
+    document.addEventListener('fullscreenchange',onFullscreenChange);
+    return()=>document.removeEventListener('fullscreenchange',onFullscreenChange);
+  },[]);
+
+  const toggleFullscreen=async(presentation=false)=>{
+    const element=workspaceRef.current;
+    if(!element)return;
+    if(document.fullscreenElement){
+      await document.exitFullscreen();
+      return;
+    }
+    setPresentationMode(presentation);
+    if(presentation){
+      setViewMode('single');
+      setFitMode('page');
+    }
+    await element.requestFullscreen();
+  };
+
   const thumbnailsRenderAllowed = forceRenderAll
     || pdfCriticalPassReady(currentPage, pageCount, renderedPages);
   const pdfLayoutClass = [
@@ -1059,6 +1097,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     disabledReason:onNavigateModule?undefined:'Suite navigation is unavailable in this workspace.',
     run:()=>onNavigateModule?.(id),
   });
+  const providerCategory = taskCategory === 'ai' ? null : taskCategory as PdfProviderToolCategory;
+  const providerAction:PdfToolbarAction={
+    id:'local-provider-tools',
+    label:'Local tools',
+    enabled:true,
+    run:()=>setProviderPanelOpen((value)=>!value),
+  };
+
   const taskActions:Record<PdfTaskCategory,PdfToolbarAction[]>={
     home:[
       {id:'files',label:'Files',enabled:true,run:onBackToFiles},
@@ -1066,6 +1112,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'export',label:'Export',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:exportCurrent},
       {id:'print',label:'Print',enabled:!!pdf&&!mutating,disabledReason:!pdf?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:printDocument},
       {id:'inspector',label:inspectorHidden?'Show inspector':'Hide inspector',enabled:true,run:()=>setInspectorHidden((value)=>!value)},
+      providerAction,
     ],
     edit:[
       {id:'undo',label:'Undo',enabled:!!historyRef.current&&!mutating&&canUndoPdfHistory(historyRef.current),disabledReason:mutating?'Wait for the current PDF edit to finish.':'There is no PDF edit to undo.',run:undoEdit},
@@ -1073,8 +1120,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'place-text',label:'Place text',enabled:!!sourceBytes&&!mutating&&!!textOverlay.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!textOverlay.text.trim()?'Enter text in the Properties inspector first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate('Added permanent text to the PDF.',bytes=>addPdfTextOverlay(bytes,{pageNumber:currentPage,...textOverlay}),currentPage)},
       {id:'rectangle',label:shapeOverlay.mode==='highlight'?'Highlight rectangle':'Outline rectangle',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage)},
       {id:'configure-edit',label:'Edit settings',enabled:true,run:configureProperties},
+      providerAction,
     ],
-    convert:[],
+    convert:[providerAction],
     organize:[
       {id:'turn-pages',label:'Rotate selected',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate(`Permanently rotated ${operationPages.length} selected page(s) by 90°.`,bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),operationPages[0])},
       {id:'remove-pages',label:`Delete ${operationPages.length} page${operationPages.length===1?'':'s'}`,enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length>=pageCount?'A PDF must retain at least one page.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate(`Deleted ${operationPages.length} selected page(s).`,bytes=>operationPages.length===1?deletePdfPage(bytes,operationPages[0]):deletePdfPages(bytes,operationPages),Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length)))},
@@ -1086,26 +1134,31 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'blank',label:'Blank after',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate(`Inserted a blank page after page ${currentPage}.`,bytes=>insertBlankPdfPage(bytes,currentPage),currentPage+1)},
       {id:'earlier',label:'Move earlier',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&currentPage>1,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':currentPage<=1?'The first page cannot move earlier.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate('Moved page earlier.',bytes=>movePdfPage(bytes,currentPage,currentPage-1),currentPage-1)},
       {id:'later',label:'Move later',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&currentPage<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':currentPage>=pageCount?'The final page cannot move later.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)},
+      providerAction,
     ],
     comment:[
       {id:'comments-panel',label:'Comments panel',enabled:true,run:()=>openLeftPanel('comments')},
       {id:'add-comment',label:'Add comment',enabled:!!sourceBytes&&!mutating&&!!commentDraft.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!commentDraft.text.trim()?'Enter comment text in the Comments panel first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addComment},
+      providerAction,
     ],
     sign:[
       navigateAction('Open Sign workspace','sign'),
       {id:'signatures-panel',label:'Signature fields',enabled:true,run:()=>openLeftPanel('signatures')},
+      providerAction,
     ],
     protect:[
       navigateAction('Open Security Center','security'),
+      providerAction,
     ],
     forms:[
       {id:'add-form-field',label:`Add ${formDraft.type} field`,enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addFormField},
       {id:'flatten-form',label:'Flatten fields',enabled:!!sourceBytes&&!mutating&&formFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:flattenForm},
       {id:'configure-forms',label:'Form settings',enabled:true,run:configureProperties},
+      providerAction,
     ],
     ai:[navigateAction('Open Malenjo AI','ai')],
-    scan:[navigateAction('Open Scanner','scanner')],
-    automate:[navigateAction('Open Automation Studio','automation')],
+    scan:[navigateAction('Open Scanner','scanner'),providerAction],
+    automate:[navigateAction('Open Automation Studio','automation'),providerAction],
   };
   const activeTaskActions=taskActions[taskCategory];
   const primaryTaskActions=activeTaskActions.slice(0,6);
@@ -1116,7 +1169,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     window.requestAnimationFrame(()=>document.getElementById(`${domIdPrefix}-task-${category}`)?.focus());
   };
 
-  return <div className="pdf-workspace">
+  return <div ref={workspaceRef} className={`pdf-workspace${presentationMode?' presentation-mode':''}`}>
     <input
       ref={fileInputRef}
       className="visually-hidden"
@@ -1160,7 +1213,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           tabIndex={taskCategory===category?0:-1}
           className={taskCategory===category?'active':''}
           title={`${PDF_TASK_CATEGORY_LABELS[category]} · ${PDF_TASK_CATEGORY_SHORTCUTS[category]}`}
-          onClick={()=>setTaskCategory(category)}
+          onClick={()=>{setTaskCategory(category);if(category==='ai')setProviderPanelOpen(false);}}
           onKeyDown={(event)=>{
             if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
             event.preventDefault();
@@ -1211,7 +1264,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             <button disabled={!pdf} onClick={() => { setFitMode('custom'); setZoom((value) => stepPdfZoom(value, -1)); }} aria-label="Zoom out"><Minus size={16}/></button>
             <button className="pdf-zoom-label" disabled={!pdf} onClick={() => setFitMode((mode) => mode === 'width' ? 'page' : 'width')} aria-label={`Zoom mode: ${zoomLabel}`}>{zoomLabel}</button>
             <button disabled={!pdf} onClick={() => { setFitMode('custom'); setZoom((value) => stepPdfZoom(value, 1)); }} aria-label="Zoom in"><Plus size={16}/></button>
+            <button disabled={!pdf} onClick={() => {setFitMode('custom');setZoom(1);}} aria-label="Actual size" title="Actual size">100%</button>
+            <button disabled={!pdf} className={viewMode==='single'?'active':''} onClick={()=>setViewMode('single')} aria-label="Single page view" title="Single page">1</button>
+            <button disabled={!pdf} className={viewMode==='continuous'?'active':''} onClick={()=>setViewMode('continuous')} aria-label="Continuous page view" title="Continuous">↕</button>
+            <button disabled={!pdf} className={viewMode==='two'?'active':''} onClick={()=>setViewMode('two')} aria-label="Two-page view" title="Two page">2</button>
             <button disabled={!pdf} onClick={() => setRotation((value) => rotatePdfClockwise(value))} aria-label="Rotate view clockwise" title="Rotate view clockwise"><RotateCw size={16}/></button>
+            <button disabled={!pdf} onClick={()=>void toggleFullscreen(false)} aria-label={fullscreen?'Exit full screen':'Full screen'} title={fullscreen?'Exit full screen':'Full screen'}><Maximize2 size={16}/></button>
+            <button disabled={!pdf} onClick={()=>void toggleFullscreen(true)} aria-label="Presentation mode" title="Presentation mode"><MonitorPlay size={16}/></button>
             <button
               disabled={!pdf}
               onClick={()=>setInspectorHidden((value)=>!value)}
@@ -1222,6 +1281,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         </div>
       </div>
     </div>
+
+    {providerPanelOpen&&providerCategory&&<PdfProviderToolsPanel
+      provider={defaultPdfToolProvider}
+      sourceBytes={sourceBytes}
+      sourceName={sourceName}
+      category={providerCategory}
+      onApplyPdf={(label,bytes)=>mutate(label,async()=>bytes,currentPage)}
+    />}
 
     {(notice || actionNotice) && <div className="pdf-notice">{notice || actionNotice}</div>}
     {error && <div className="pdf-notice error">{error}</div>}
@@ -1332,8 +1399,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       </aside>
 
       <div ref={scrollRef} className="pdf-scroll">
-        <div className="pdf-stage">
-          {Array.from({ length: pageCount }, (_, index) => index + 1).map((page) => {
+        <div className={`pdf-stage ${viewMode}`}>
+          {viewPages.map((page) => {
             const schedule = pdfPageSchedule(page, currentPage, pageCount, renderedPages);
             return <PdfPageCanvas
               key={page}

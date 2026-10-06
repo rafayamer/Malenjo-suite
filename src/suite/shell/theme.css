@@ -616,3 +616,39 @@
 @media(max-width:980px){.home-start-center{padding-left:24px;padding-right:24px}.ml-co-recent-head{align-items:flex-start;flex-direction:column}.ml-co-recent-tools{justify-content:flex-start;width:100%}.ml-home-status-row{grid-template-columns:1fr}.ml-home-runtime{display:none}}
 @media(prefers-reduced-motion:reduce){.ml-co-action-card,.ml-co-recent-card{transition:none}}
 
+/* Local Stirling open-core provider surface — PDF module.
+   Provider runs only on 127.0.0.1 and is started explicitly/on-demand. */
+.stirling-tools-panel{border-bottom:1px solid #173148;background:#071722;padding:12px 14px;display:grid;gap:10px;max-height:44vh;overflow:auto}
+.stirling-tools-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.stirling-tools-head h3{margin:2px 0 3px;color:#d7e7f1;font-size:13px}.stirling-tools-head>div:first-child>span{color:#69869a;font-size:8px;line-height:1.45}
+.stirling-provider-state{display:flex;align-items:center;gap:6px;border:1px solid #554d2c;background:#28230d;color:#dbb85f;border-radius:999px;padding:5px 8px;font-size:8px;white-space:nowrap}
+.stirling-provider-state.ready{border-color:#235845;background:#0a2a22;color:#59d0a4}
+.stirling-provider-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.stirling-provider-actions button,.stirling-run{display:flex;align-items:center;gap:6px;border:1px solid #285575;background:#0d2940;color:#9bd6f4;border-radius:7px;padding:6px 9px;cursor:pointer;font-size:8px}
+.stirling-provider-actions button:hover:not(:disabled),.stirling-run:hover:not(:disabled){background:#103550;border-color:#39799f;color:#dff2fb}.stirling-provider-actions button:disabled,.stirling-run:disabled{opacity:.45;cursor:not-allowed}
+.stirling-provider-message,.stirling-provider-help{margin:0;color:#718ea2;font-size:8px;line-height:1.5}.stirling-provider-help code{color:#9bc8dc;background:#0b2131;border:1px solid #1e435c;border-radius:4px;padding:2px 4px}
+.stirling-catalog{display:grid;gap:9px;border:1px solid #1c3a51;background:#081824;border-radius:9px;padding:10px}
+.stirling-catalog-filter{display:grid;grid-template-columns:minmax(180px,1fr) auto auto;align-items:center;gap:8px}.stirling-catalog-filter>label:first-child{display:flex;align-items:center;gap:6px;border:1px solid #22445d;background:#07141f;border-radius:7px;padding:6px 8px;color:#648399}.stirling-catalog-filter input[type=text]{flex:1;min-width:0;border:0;outline:0;background:transparent;color:#c9dce8;font-size:8px}.stirling-catalog-filter>span{color:#607e93;font-size:8px;white-space:nowrap}
+.stirling-all-categories,.stirling-active-file,.stirling-checkbox{display:flex!important;align-items:center!important;gap:6px!important;color:#7897aa!important;font-size:8px!important}.stirling-all-categories input,.stirling-active-file input,.stirling-checkbox input{accent-color:#2b8cff}
+.stirling-operation-select{display:grid;grid-template-columns:60px minmax(0,1fr);align-items:center;gap:8px;color:#7895a9;font-size:8px}.select-wrap{position:relative;display:block}.select-wrap select{width:100%;appearance:none;border:1px solid #244861;background:#0a1e2e;color:#c9dce7;border-radius:7px;padding:7px 28px 7px 8px;font-size:8px}.select-wrap svg{position:absolute;right:8px;top:50%;transform:translateY(-50%);pointer-events:none;color:#65849a}
+.stirling-operation{display:grid;gap:9px;border-top:1px solid #173148;padding-top:9px}.stirling-operation-title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.stirling-operation-title b,.stirling-operation-title small{display:block}.stirling-operation-title b{color:#cfe0e9;font-size:10px}.stirling-operation-title small{margin-top:2px;color:#5e7d93;font-size:7px}.stirling-operation-title>span{text-transform:uppercase;letter-spacing:.08em;color:#67bde7;font-size:7px;border:1px solid #28516b;border-radius:999px;padding:3px 6px}
+.stirling-operation>p{margin:0;color:#718da1;font-size:8px;line-height:1.45}
+.stirling-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.stirling-field{display:grid;gap:4px;align-content:start;color:#7996aa;font-size:8px}.stirling-field>span,.stirling-field>label>span{color:#8ba8ba;font-size:8px}.stirling-field input[type=text],.stirling-field input[type=number],.stirling-field input[type=file],.stirling-field select,.stirling-field textarea{width:100%;box-sizing:border-box;border:1px solid #22445d;background:#07141f;color:#c8dce7;border-radius:6px;padding:6px 7px;font:inherit}.stirling-field textarea{resize:vertical}.stirling-field small{color:#5e7d92;font-size:7px;line-height:1.35}.stirling-field>label{display:grid;gap:4px}
+.stirling-checkbox{grid-template-columns:auto 1fr}.stirling-checkbox small{grid-column:2}
+.stirling-run{justify-self:start;padding:7px 10px}.stirling-empty{padding:18px;border:1px dashed #24475f;border-radius:7px;text-align:center;color:#6a879a;font-size:8px}
+.stirling-notice,.stirling-error{border-radius:6px;padding:7px 9px;font-size:8px;line-height:1.4}.stirling-notice{border:1px solid #245b49;background:#0a2a22;color:#78d8b4}.stirling-error{border:1px solid #65353a;background:#2a1116;color:#ef9ca5}
+.stirling-tools-panel button:focus-visible,.stirling-tools-panel input:focus-visible,.stirling-tools-panel select:focus-visible,.stirling-tools-panel textarea:focus-visible{outline:2px solid #4aa8e8;outline-offset:2px}
+@media(max-width:1100px){.stirling-fields{grid-template-columns:1fr}.stirling-catalog-filter{grid-template-columns:1fr}.stirling-tools-head{flex-direction:column}}
+
+
+.pdf-stage.two{display:grid;grid-template-columns:repeat(2,max-content);align-items:start;justify-content:center}
+.pdf-stage.single{min-width:100%;min-height:100%;justify-content:flex-start}
+.pdf-workspace.presentation-mode .pdf-task-toolbar,
+.pdf-workspace.presentation-mode .pdf-left-shell,
+.pdf-workspace.presentation-mode .pdf-inspector,
+.pdf-workspace.presentation-mode .pdf-notice,
+.pdf-workspace.presentation-mode .stirling-tools-panel{display:none!important}
+.pdf-workspace.presentation-mode .pdf-layout{grid-template-columns:minmax(0,1fr)!important;height:100vh}
+.pdf-workspace.presentation-mode .pdf-scroll{background:#080b0e}
+.pdf-workspace.presentation-mode .pdf-stage{min-width:100%;min-height:100%;padding:12px;justify-content:center}
+.pdf-view-controls button.active{background:#163a57;border-color:#3b7ca6;color:#fff}
+@media(max-width:1000px){.pdf-stage.two{grid-template-columns:max-content}}

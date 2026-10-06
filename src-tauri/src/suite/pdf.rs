@@ -95,9 +95,56 @@ pub fn write_pdf_copy(destination: String, bytes: Vec<u8>) -> Result<bool, Strin
     Ok(true)
 }
 
+
+const MAX_PDF_TOOL_OUTPUT_BYTES: usize = 512 * 1024 * 1024;
+const PDF_TOOL_OUTPUT_EXTENSIONS: &[&str] = &[
+    "pdf", "zip", "png", "jpg", "jpeg", "webp", "tif", "tiff", "bmp",
+    "txt", "csv", "json", "xml", "html", "md",
+    "doc", "docx", "odt", "rtf",
+    "xls", "xlsx", "ods",
+    "ppt", "pptx", "odp", "bin",
+];
+
+fn validate_tool_output_destination(destination: &str) -> Result<PathBuf, String> {
+    let path = validate_destination(destination)?;
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(str::to_ascii_lowercase)
+        .ok_or_else(|| "PDF tool output destination requires a supported file extension.".to_string())?;
+    if !PDF_TOOL_OUTPUT_EXTENSIONS.iter().any(|allowed| *allowed == extension) {
+        return Err(format!("PDF tool output extension '.{extension}' is not allowed."));
+    }
+    Ok(path)
+}
+
+#[tauri::command]
+pub fn write_pdf_tool_output(destination: String, bytes: Vec<u8>) -> Result<bool, String> {
+    if bytes.is_empty() {
+        return Err("PDF tool output is empty.".into());
+    }
+    if bytes.len() > MAX_PDF_TOOL_OUTPUT_BYTES {
+        return Err("PDF tool output exceeds the 512 MB safety limit.".into());
+    }
+
+    let path = validate_tool_output_destination(&destination)?;
+    let temp = path.with_extension("malenjo-tool-output.tmp");
+    fs::write(&temp, &bytes)
+        .map_err(|error| format!("Unable to write PDF tool output: {error}"))?;
+
+    if path.exists() {
+        fs::remove_file(&path)
+            .map_err(|error| format!("Unable to replace PDF tool output: {error}"))?;
+    }
+    fs::rename(&temp, &path)
+        .map_err(|error| format!("Unable to finalize PDF tool output: {error}"))?;
+
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{validate_destination, validate_pdf_file, MAX_PDF_BYTES};
+    use super::{validate_destination, validate_pdf_file, validate_tool_output_destination, MAX_PDF_BYTES, MAX_PDF_TOOL_OUTPUT_BYTES};
     use std::{fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
 
     fn temp_path(name: &str) -> PathBuf {
@@ -132,5 +179,14 @@ mod tests {
     #[test]
     fn destination_requires_existing_parent() {
         assert!(validate_destination("").is_err());
+    }
+
+    #[test]
+    fn tool_output_blocks_executable_extensions() {
+        let allowed = temp_path("output.zip");
+        let blocked = temp_path("output.exe");
+        assert!(validate_tool_output_destination(allowed.to_string_lossy().as_ref()).is_ok());
+        assert!(validate_tool_output_destination(blocked.to_string_lossy().as_ref()).is_err());
+        assert_eq!(MAX_PDF_TOOL_OUTPUT_BYTES, 512 * 1024 * 1024);
     }
 }

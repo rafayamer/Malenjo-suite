@@ -18,13 +18,14 @@ use suite::{
     local_services::LocalServiceManager,
     office::{read_office_document, write_office_copy},
     ocr::{cancel_paddle_ocr, paddle_ocr_image, paddle_ocr_status},
-    pdf::{read_pdf_document, write_pdf_copy},
+    pdf::{read_pdf_document, write_pdf_copy, write_pdf_tool_output},
     security::{
         clamav_scan_document, clamav_status, clear_ephemeral_secret, list_audit_events,
         pyhanko_sign_copy, pyhanko_status, pyhanko_validate_document, record_audit_event,
         store_ephemeral_secret, SecurityState,
     },
     support::write_support_bundle,
+    stirling::{stirling_core_openapi, stirling_core_request, stirling_core_start, stirling_core_status, stirling_core_stop},
 };
 
 #[tauri::command]
@@ -61,6 +62,7 @@ pub fn run() {
             discard_staged_document,
             read_pdf_document,
             write_pdf_copy,
+            write_pdf_tool_output,
             read_office_document,
             write_office_copy,
             paddle_ocr_status,
@@ -98,7 +100,12 @@ pub fn run() {
             kopia_status,
             kopia_snapshot_app_state,
             kopia_restore_snapshot,
-            write_support_bundle
+            write_support_bundle,
+            stirling_core_status,
+            stirling_core_start,
+            stirling_core_stop,
+            stirling_core_openapi,
+            stirling_core_request
         ])
         .run(tauri::generate_context!())
         .expect("error while running MALENJO Suite");

@@ -36,7 +36,8 @@
       }
     },
     "resources": [
-      "../workers/paddleocr/worker.py"
+      "../workers/paddleocr/worker.py",
+      "../provider-packs/stirling-core"
     ]
   }
 }

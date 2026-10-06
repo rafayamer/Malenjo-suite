@@ -1,0 +1,479 @@
+use reqwest::{multipart, redirect::Policy, Client, Method};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::{
+    env,
+    path::{Path, PathBuf},
+    process::{Child, Command, Stdio},
+    sync::{Mutex, OnceLock},
+    time::{Duration, Instant},
+};
+use tauri::{AppHandle, Manager};
+
+const STIRLING_PORT: u16 = 28970;
+const STIRLING_BASE_URL: &str = "http://127.0.0.1:28970";
+const STIRLING_HEALTH_PATH: &str = "/api/v1/info/health";
+const STIRLING_OPENAPI_PATH: &str = "/v1/api-docs";
+const START_TIMEOUT: Duration = Duration::from_secs(75);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
+const MAX_INPUT_BYTES: usize = 512 * 1024 * 1024;
+const MAX_OUTPUT_BYTES: usize = 512 * 1024 * 1024;
+
+fn process_slot() -> &'static Mutex<Option<Child>> {
+    static SLOT: OnceLock<Mutex<Option<Child>>> = OnceLock::new();
+    SLOT.get_or_init(|| Mutex::new(None))
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StirlingCoreStatus {
+    pub installed: bool,
+    pub running: bool,
+    pub java: Option<String>,
+    pub jar_path: Option<String>,
+    pub base_url: String,
+    pub version: Option<String>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StirlingFormField {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StirlingInputFile {
+    pub field: String,
+    pub filename: String,
+    pub content_type: Option<String>,
+    pub bytes: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StirlingResponse {
+    pub status: u16,
+    pub content_type: Option<String>,
+    pub content_disposition: Option<String>,
+    pub bytes: Vec<u8>,
+}
+
+fn java_candidates(app: &AppHandle) -> Vec<String> {
+    let mut candidates = Vec::new();
+
+    if let Ok(value) = env::var("MALENJO_JAVA_BIN") {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            candidates.push(trimmed.to_string());
+        }
+    }
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let bundled = if cfg!(windows) {
+            resource_dir.join("runtime/java/bin/java.exe")
+        } else {
+            resource_dir.join("runtime/java/bin/java")
+        };
+        if bundled.is_file() {
+            candidates.push(bundled.to_string_lossy().to_string());
+        }
+    }
+
+    if cfg!(windows) {
+        candidates.push("java.exe".into());
+        candidates.push("java".into());
+    } else {
+        candidates.push("java".into());
+    }
+
+    candidates
+}
+
+fn available_java(app: &AppHandle) -> Option<String> {
+    java_candidates(app).into_iter().find(|candidate| {
+        Command::new(candidate)
+            .arg("-version")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
+    })
+}
+
+fn candidate_jar_paths(app: &AppHandle) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+
+    if let Ok(value) = env::var("MALENJO_STIRLING_JAR") {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            paths.push(PathBuf::from(trimmed));
+        }
+    }
+
+    paths.push(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../provider-packs/stirling-core/stirling-pdf.jar"),
+    );
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        paths.push(resource_dir.join("provider-packs/stirling-core/stirling-pdf.jar"));
+    }
+
+    paths
+}
+
+fn stirling_jar_path(app: &AppHandle) -> Option<PathBuf> {
+    candidate_jar_paths(app)
+        .into_iter()
+        .find(|path| path.is_file())
+}
+
+fn api_client() -> Result<Client, String> {
+    Client::builder()
+        .redirect(Policy::none())
+        .timeout(REQUEST_TIMEOUT)
+        .build()
+        .map_err(|error| format!("Unable to create local Stirling client: {error}"))
+}
+
+fn validate_api_path(path: &str) -> Result<String, String> {
+    if !path.starts_with("/api/v1/") {
+        return Err("Only Stirling core /api/v1/* paths may be called.".into());
+    }
+    if path.contains("://") || path.contains("..") || path.contains('\\') || path.contains('\0') {
+        return Err("Invalid Stirling API path.".into());
+    }
+    if path.len() > 512 {
+        return Err("Stirling API path is too long.".into());
+    }
+    Ok(format!("{STIRLING_BASE_URL}{path}"))
+}
+
+async fn health_payload() -> Option<Value> {
+    let client = api_client().ok()?;
+    let response = client
+        .get(format!("{STIRLING_BASE_URL}{STIRLING_HEALTH_PATH}"))
+        .send()
+        .await
+        .ok()?;
+    if !response.status().is_success() {
+        return None;
+    }
+    response.json::<Value>().await.ok()
+}
+
+async fn is_healthy() -> bool {
+    health_payload()
+        .await
+        .and_then(|value| value.get("status").and_then(Value::as_str).map(str::to_owned))
+        .is_some_and(|status| status.eq_ignore_ascii_case("UP"))
+}
+
+fn version_from_health(value: &Value) -> Option<String> {
+    ["version", "buildVersion", "implementationVersion"]
+        .iter()
+        .find_map(|key| value.get(*key).and_then(Value::as_str).map(str::to_owned))
+}
+
+fn process_running() -> bool {
+    let Ok(mut guard) = process_slot().lock() else {
+        return false;
+    };
+    let Some(child) = guard.as_mut() else {
+        return false;
+    };
+    match child.try_wait() {
+        Ok(None) => true,
+        Ok(Some(_)) | Err(_) => {
+            *guard = None;
+            false
+        }
+    }
+}
+
+#[cfg(windows)]
+fn suppress_windows_console(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn suppress_windows_console(_command: &mut Command) {}
+
+fn spawn_core(java: &str, jar: &Path, app: &AppHandle) -> Result<(), String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Unable to resolve MALENJO data directory: {error}"))?
+        .join("stirling-core");
+    std::fs::create_dir_all(&data_dir)
+        .map_err(|error| format!("Unable to create Stirling core data directory: {error}"))?;
+
+    let mut command = Command::new(java);
+    command
+        .arg("-Xms128m")
+        .arg("-Xmx1536m")
+        .arg("-jar")
+        .arg(jar)
+        .arg(format!("--server.address=127.0.0.1"))
+        .arg(format!("--server.port={STIRLING_PORT}"))
+        .arg("--spring.main.banner-mode=off")
+        .env("STIRLING_FLAVOR", "core")
+        .env("DISABLE_ADDITIONAL_FEATURES", "true")
+        .env("ENABLE_SAAS", "false")
+        .env("DOCKER_ENABLE_SECURITY", "false")
+        .env("SYSTEM_CUSTOMHTMLFILES", "false")
+        .env("STIRLING_HOME", &data_dir)
+        .current_dir(&data_dir)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    suppress_windows_console(&mut command);
+
+    let child = command
+        .spawn()
+        .map_err(|error| format!("Unable to start the local Stirling core provider: {error}"))?;
+
+    let mut guard = process_slot()
+        .lock()
+        .map_err(|_| "Unable to lock Stirling core process state.".to_string())?;
+    *guard = Some(child);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stirling_core_status(app: AppHandle) -> StirlingCoreStatus {
+    let jar = stirling_jar_path(&app);
+    let java = available_java(&app);
+    let health = health_payload().await;
+    let healthy = health
+        .as_ref()
+        .and_then(|value| value.get("status").and_then(Value::as_str))
+        .is_some_and(|value| value.eq_ignore_ascii_case("UP"));
+    let child_running = process_running();
+
+    let message = if healthy {
+        "Local Stirling open-core PDF provider is ready.".to_string()
+    } else if jar.is_none() {
+        "The local Stirling core provider pack is not installed. Build or install the reviewed core pack before using provider-backed PDF tools.".to_string()
+    } else if java.is_none() {
+        "The Stirling core pack is installed, but no Java 25 runtime is available.".to_string()
+    } else if child_running {
+        "The local Stirling core provider process is starting or unhealthy.".to_string()
+    } else {
+        "The local Stirling core provider is installed but stopped.".to_string()
+    };
+
+    StirlingCoreStatus {
+        installed: jar.is_some(),
+        running: healthy,
+        java,
+        jar_path: jar.map(|path| path.to_string_lossy().to_string()),
+        base_url: STIRLING_BASE_URL.into(),
+        version: health.as_ref().and_then(version_from_health),
+        message,
+    }
+}
+
+#[tauri::command]
+pub async fn stirling_core_start(app: AppHandle) -> Result<StirlingCoreStatus, String> {
+    if is_healthy().await {
+        return Ok(stirling_core_status(app).await);
+    }
+
+    if process_running() {
+        let started = Instant::now();
+        while started.elapsed() < START_TIMEOUT {
+            if is_healthy().await {
+                return Ok(stirling_core_status(app).await);
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+        return Err("The existing Stirling core process did not become healthy within 75 seconds.".into());
+    }
+
+    let jar = stirling_jar_path(&app)
+        .ok_or_else(|| "Stirling core provider pack is not installed.".to_string())?;
+    let java = available_java(&app)
+        .ok_or_else(|| "Java 25 is not available for the local Stirling core provider.".to_string())?;
+
+    spawn_core(&java, &jar, &app)?;
+
+    let started = Instant::now();
+    while started.elapsed() < START_TIMEOUT {
+        if is_healthy().await {
+            return Ok(stirling_core_status(app).await);
+        }
+
+        if !process_running() {
+            return Err("The local Stirling core provider exited before becoming healthy.".into());
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+
+    let _ = stirling_core_stop().await;
+    Err("The local Stirling core provider exceeded the 75 second startup timeout.".into())
+}
+
+#[tauri::command]
+pub async fn stirling_core_stop() -> Result<bool, String> {
+    let mut guard = process_slot()
+        .lock()
+        .map_err(|_| "Unable to lock Stirling core process state.".to_string())?;
+    let Some(child) = guard.as_mut() else {
+        return Ok(false);
+    };
+    let _ = child.kill();
+    let _ = child.wait();
+    *guard = None;
+    Ok(true)
+}
+
+#[tauri::command]
+pub async fn stirling_core_openapi(app: AppHandle) -> Result<Value, String> {
+    let _ = stirling_core_start(app).await?;
+    let client = api_client()?;
+    let response = client
+        .get(format!("{STIRLING_BASE_URL}{STIRLING_OPENAPI_PATH}"))
+        .send()
+        .await
+        .map_err(|error| format!("Unable to read local Stirling OpenAPI catalog: {error}"))?;
+    if !response.status().is_success() {
+        return Err(format!(
+            "Local Stirling OpenAPI catalog returned HTTP {}.",
+            response.status().as_u16()
+        ));
+    }
+    response
+        .json::<Value>()
+        .await
+        .map_err(|error| format!("Local Stirling OpenAPI catalog returned invalid JSON: {error}"))
+}
+
+#[tauri::command]
+pub async fn stirling_core_request(
+    app: AppHandle,
+    method: String,
+    path: String,
+    fields: Vec<StirlingFormField>,
+    files: Vec<StirlingInputFile>,
+) -> Result<StirlingResponse, String> {
+    let _ = stirling_core_start(app).await?;
+    let url = validate_api_path(&path)?;
+    let method = match method.to_ascii_uppercase().as_str() {
+        "GET" => Method::GET,
+        "POST" => Method::POST,
+        _ => return Err("Only GET and POST are allowed for local Stirling core requests.".into()),
+    };
+
+    let total_input = files
+        .iter()
+        .try_fold(0usize, |total, file| total.checked_add(file.bytes.len()))
+        .ok_or_else(|| "Stirling request input size overflow.".to_string())?;
+    if total_input > MAX_INPUT_BYTES {
+        return Err("Stirling request exceeds the 512 MB aggregate input safety limit.".into());
+    }
+    if files.iter().any(|file| file.field.len() > 128 || file.filename.len() > 512) {
+        return Err("Stirling request contains an invalid file field or filename.".into());
+    }
+    if fields.iter().any(|field| field.name.len() > 128 || field.value.len() > 1_000_000) {
+        return Err("Stirling request contains an invalid or oversized form field.".into());
+    }
+
+    let client = api_client()?;
+    let mut request = client.request(method.clone(), url);
+
+    if method == Method::POST {
+        let mut form = multipart::Form::new();
+        for field in fields {
+            form = form.text(field.name, field.value);
+        }
+        for file in files {
+            let mut part = multipart::Part::bytes(file.bytes).file_name(file.filename);
+            if let Some(content_type) = file.content_type {
+                part = part
+                    .mime_str(&content_type)
+                    .map_err(|error| format!("Invalid local Stirling upload content type: {error}"))?;
+            }
+            form = form.part(file.field, part);
+        }
+        request = request.multipart(form);
+    } else if !fields.is_empty() {
+        request = request.query(
+            &fields
+                .iter()
+                .map(|field| (field.name.as_str(), field.value.as_str()))
+                .collect::<Vec<_>>(),
+        );
+    }
+
+    let response = request
+        .send()
+        .await
+        .map_err(|error| format!("Local Stirling request failed: {error}"))?;
+
+    let status = response.status().as_u16();
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
+    let content_disposition = response
+        .headers()
+        .get(reqwest::header::CONTENT_DISPOSITION)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
+
+    if response.content_length().is_some_and(|length| length > MAX_OUTPUT_BYTES as u64) {
+        return Err("Local Stirling response exceeds the 512 MB output safety limit.".into());
+    }
+
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|error| format!("Unable to read local Stirling response: {error}"))?;
+    if bytes.len() > MAX_OUTPUT_BYTES {
+        return Err("Local Stirling response exceeds the 512 MB output safety limit.".into());
+    }
+
+    if !(200..300).contains(&status) {
+        let body = String::from_utf8_lossy(&bytes);
+        let compact = body.chars().take(2000).collect::<String>();
+        return Err(format!("Local Stirling tool returned HTTP {status}: {compact}"));
+    }
+
+    Ok(StirlingResponse {
+        status,
+        content_type,
+        content_disposition,
+        bytes: bytes.to_vec(),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{validate_api_path, MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, STIRLING_BASE_URL, STIRLING_PORT};
+
+    #[test]
+    fn stirling_proxy_accepts_only_local_v1_paths() {
+        assert_eq!(
+            validate_api_path("/api/v1/general/merge-pdfs").unwrap(),
+            format!("{STIRLING_BASE_URL}/api/v1/general/merge-pdfs")
+        );
+        assert!(validate_api_path("https://example.com/api/v1/test").is_err());
+        assert!(validate_api_path("/api/v1/../admin").is_err());
+        assert!(validate_api_path("/v3/api-docs").is_err());
+    }
+
+    #[test]
+    fn stirling_limits_and_port_are_fixed() {
+        assert_eq!(STIRLING_PORT, 28970);
+        assert_eq!(MAX_INPUT_BYTES, 512 * 1024 * 1024);
+        assert_eq!(MAX_OUTPUT_BYTES, 512 * 1024 * 1024);
+        assert_eq!(STIRLING_BASE_URL, "http://127.0.0.1:28970");
+    }
+}

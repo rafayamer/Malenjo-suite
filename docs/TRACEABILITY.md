@@ -239,3 +239,20 @@ No module is complete merely because its navigation entry exists. Completion req
 | Failure recovery | Home state/library | malformed state/storage denial and library/open errors recover with notice instead of blank shell | model tests | Implemented |
 | Legal review | Home UI source | CasualOffice Apache-2.0 license/provenance retained; no WPS proprietary assets; shadcn notice removed | third-party notices | Implemented |
 | Module completion gate | Registry | Home re-promoted only after corrected implementation CI #224 passed all three jobs | registry test + issue #139 | Complete |
+
+## PDF completion pass 1 — local Stirling open-core provider
+
+| Requirement | Component | Implementation | Evidence | Status |
+|---|---|---|---|---|
+| Local Windows PDF provider | Tauri/Rust | on-demand child process bound to `127.0.0.1:28970`, no app-launch autostart | `src-tauri/src/suite/stirling.rs`, CI #243 | Verified |
+| Stirling legal boundary | Provider pack | pinned open-core source, sparse build, restricted paths excluded, core flavor only | build scripts + `third_party/stirling-pdf/PROVENANCE.md`, Windows pack CI #243 | Verified |
+| MALENJO-owned provider contract | PDF core | versioned `PdfToolProvider` boundary; UI consumes MALENJO types | `backend.ts`, `defaultProvider.ts` | Implemented |
+| Broad Stirling tool coverage | PDF provider | 57 reviewed frontend tool surfaces + dynamic local OpenAPI `/api/v1/*` discovery | `stirlingCore.ts`, tests | Implemented |
+| Safe local proxy | Native security boundary | redirects disabled; local API path allowlist; request/response and field bounds | Rust tests, CI #243 | Verified |
+| Provider tool UI | PDF task categories | generic provider panel injected into Home/Edit/Convert/Organize/Comment/Sign/Protect/Forms/Scan/Automate | `PdfProviderToolsPanel.tsx`, `PdfWorkspace.tsx` | Implemented |
+| Provider PDF result history | PDF workspace | PDF responses re-enter existing `mutate()` / per-tab history path | code audit | Implemented |
+| Non-PDF output export | Native/File boundary | bounded native output writer + Save As flow | `pdf.rs`, provider client, CI #243 | Verified |
+| Single/continuous/two-page/fullscreen/presentation views | PDF view | MALENJO-owned view model and workspace controls | `viewMode.ts`, tests, workspace | Implemented |
+| Executable validation | CI | frontend, Windows Rust, Codespaces/Linux + Windows Stirling pack build/smoke | CI #243 (`37469066584`) | **Verified** |
+| Module completion | Registry | PDF remains `partial`; no promotion in this pass | #141 / PR #142 | Correct |
+
