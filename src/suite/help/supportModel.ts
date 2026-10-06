@@ -60,6 +60,12 @@ export interface SupportBundle {
 }
 
 const SENSITIVE_KEY = /(password|passwd|passphrase|secret|token|api.?key|private.?key|authorization|cookie|credential|ocr.?text|document.?content|document.?name|file.?path|full.?path)/i;
+
+function isSensitiveKey(key: string): boolean {
+  const normalized = key.toLowerCase().replace(/[-_\s]/g,'');
+  if (normalized.endsWith('included')) return false;
+  return SENSITIVE_KEY.test(key);
+}
 const WINDOWS_PATH = /\b[A-Za-z]:\\(?:[^\s"'<>|]+\\)*[^\s"'<>|]*/g;
 const POSIX_HOME_PATH = /(?:^|\s)(\/(?:home|Users)\/[^\s"'<>]+(?:\/[^\s"'<>]+)*)/g;
 const BEARER = /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi;
@@ -79,7 +85,7 @@ export function redactDiagnosticValue(value: unknown): unknown {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>).map(([key, nested]) => [
         key,
-        SENSITIVE_KEY.test(key) ? '[REDACTED]' : redactDiagnosticValue(nested),
+        isSensitiveKey(key) ? '[REDACTED]' : redactDiagnosticValue(nested),
       ]),
     );
   }
