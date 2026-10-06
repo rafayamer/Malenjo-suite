@@ -17,7 +17,10 @@ export type DocumentCommandId =
   | 'flatten-form'
   | 'header-footer'
   | 'bates'
-  | 'page-box';
+  | 'page-box'
+  | 'add-link'
+  | 'page-labels'
+  | 'document-properties';
 
 export interface DocumentCommandDescriptor {
   id: DocumentCommandId;
