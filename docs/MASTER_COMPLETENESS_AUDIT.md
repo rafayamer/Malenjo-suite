@@ -333,13 +333,13 @@ Still required includes the full NSIS/MSIX paths, component packs, custom/standa
 
 The distribution/component-pack section still requires core/Office/OCR/AI/CAD/DICOM/enterprise pack manifests, checksums, optional downloads, offline deployment, cleanup, size budgets and CI size regression gates.
 
-### Home — CORRECTION / RE-VERIFICATION
+### Home — COMPLETE AFTER OSS-STRUCTURE CORRECTION
 
 Home's functional feature tree remains implemented, but its earlier `complete` promotion relied on an inaccurate UI-source provenance claim: the merged structure did not actually follow `satnaing/shadcn-admin` closely enough.
 
 Correction #139 replaces that with a source-level adaptation of the Apache-2.0 `CasualOffice/desktop` launcher at commit `39fe70960462a9f16ea4f1e9aaa8b963d5da6ef1`. Adapted source components now cover action cards, recent-file cards, search, segmented filtering, context menus and Office-style recent grouping.
 
-During correction, registry status is deliberately `foundation`. Home may return to `complete` only after the corrected implementation, legal provenance, traceability, frontend/Windows/Codespaces CI, final-head CI and post-merge main CI all pass.
+Home was deliberately demoted during correction and re-promoted only after corrected implementation CI #224 passed frontend typecheck/tests/build, Windows Rust check/tests and Codespaces/Linux validation. Final-head and post-merge CI remain required evidence for the correction merge.
 
 This correction does not affect the incomplete status of Home destination modules.
 
