@@ -17,3 +17,8 @@ Thumbs.db
 models/
 cache/
 backups/
+
+# Generated local provider packs
+provider-packs/stirling-core/stirling-pdf.jar
+provider-packs/stirling-core/manifest.json
+.build/stirling-core/
