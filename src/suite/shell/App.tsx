@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type DragEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { Activity, Command, FilePlus2, FolderOpen, Search, ShieldCheck, Sparkles } from 'lucide-react';
 import { modules } from '../modules/registry';
 import type { ModuleId } from '../core/types';
@@ -26,6 +26,7 @@ import SignWorkspace from '../security/SignWorkspace';
 import EnterpriseWorkspace from '../enterprise/EnterpriseWorkspace';
 import DocumentTabs from './DocumentTabs';
 import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
+import type { DocumentCommandController } from '../commands/types';
 
 const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
   {label:'Open document', icon: FolderOpen, target:'files'},
@@ -42,6 +43,7 @@ export default function App() {
   const [sessions, setSessions] = useState<DocumentSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [workspaceNotices, setWorkspaceNotices] = useState<Record<string,string>>({});
+  const commandControllersRef = useRef(new Map<string, DocumentCommandController>());
   const module = modules.find((item) => item.id === active) ?? modules[0];
   const groups = useMemo(() => ['Core','Create','Intelligence','Enterprise','System'] as const, []);
 
@@ -83,6 +85,11 @@ export default function App() {
     updateSession(sessionId, (session) => setDocumentDirty(session, dirty));
   }
 
+  function registerSessionCommands(sessionId: string, controller: DocumentCommandController | null) {
+    if (controller) commandControllersRef.current.set(sessionId, controller);
+    else commandControllersRef.current.delete(sessionId);
+  }
+
   function closeSessions(sessionIds: string[]) {
     const remove = new Set(sessionIds);
     const targets = sessions.filter((session) => remove.has(session.id));
@@ -94,7 +101,10 @@ export default function App() {
     setSessions(remaining);
     setWorkspaceNotices((current) => {
       const next = { ...current };
-      sessionIds.forEach((id) => delete next[id]);
+      sessionIds.forEach((id) => {
+        delete next[id];
+        commandControllersRef.current.delete(id);
+      });
       return next;
     });
 
@@ -120,6 +130,7 @@ export default function App() {
     setWorkspaceNotices((current) => {
       const next = { ...current };
       delete next[sessionId];
+      commandControllersRef.current.delete(sessionId);
       return next;
     });
 
@@ -228,6 +239,10 @@ export default function App() {
     setQuery('');
   }
 
+  const activeDocumentCommands = activeSession
+    ? commandControllersRef.current.get(activeSession.id)?.list() ?? []
+    : [];
+
   const commandItems: CommandPaletteItem[] = [
     { id:'go-home', label:'Home', group:'Navigation', keywords:'start dashboard', run:()=>selectModule('home') },
     { id:'go-files', label:'Open Files / Library', group:'Navigation', keywords:'open import documents', run:()=>selectModule('files') },
@@ -250,6 +265,16 @@ export default function App() {
       run:()=>activateSession(session.id),
     })),
     ...(activeSession ? [
+      ...activeDocumentCommands.map((command) => ({
+        id:`active-command-${command.id}`,
+        label:command.label,
+        group:'Current document',
+        keywords:command.keywords,
+        detail:command.detail,
+        disabled:!command.enabled,
+        disabledReason:command.disabledReason,
+        run:()=>{ if(command.enabled) void command.run(); },
+      })),
       ...(!activeSession.document.browserFile && !['pdf','docx','xlsx','pptx'].includes(activeSession.document.kind) ? [{
         id:'active-save-as',
         label:`Save a copy of ${activeSession.document.name}`,
@@ -278,30 +303,37 @@ export default function App() {
         notice={notice}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty)=>markSessionDirty(session.id,dirty)}
+        registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
       />;
     }
     if (route === 'word') {
       return <OfficeWorkspace
         kind="docx"
         session={session}
+        active={session.id === activeSessionId}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
+        registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
       />;
     }
     if (route === 'spreadsheet') {
       return <OfficeWorkspace
         kind="xlsx"
         session={session}
+        active={session.id === activeSessionId}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
+        registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
       />;
     }
     if (route === 'presentation') {
       return <OfficeWorkspace
         kind="pptx"
         session={session}
+        active={session.id === activeSessionId}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
+        registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
       />;
     }
 

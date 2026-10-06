@@ -16,6 +16,7 @@ import {
   Redo2,
 } from 'lucide-react';
 import type { DocumentSession } from '../files/session';
+import type { RegisterDocumentCommands } from '../commands/types';
 import { isDesktopRuntime } from '../files/api';
 import { exportPdfBytes, readPdfDocumentBytes } from './api';
 import {
@@ -59,6 +60,7 @@ interface Props {
   notice: string;
   onBackToFiles(): void;
   onDirtyChange?(dirty:boolean): void;
+  registerCommands?: RegisterDocumentCommands;
 }
 
 function formatBytes(bytes: number): string {
@@ -72,7 +74,7 @@ function editedName(name:string,suffix='edited'):string{
   return `${base}-${suffix}.pdf`;
 }
 
-export default function PdfWorkspace({ session, active, notice, onBackToFiles, onDirtyChange }: Props) {
+export default function PdfWorkspace({ session, active, notice, onBackToFiles, onDirtyChange, registerCommands }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const appendInputRef = useRef<HTMLInputElement>(null);
@@ -507,6 +509,52 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       window.print();
     }, delay);
   }
+
+
+  useEffect(() => {
+    if (!session || !registerCommands) return;
+    registerCommands({
+      list: () => [
+        {
+          id:'export',
+          label:'Export current PDF',
+          keywords:'export download copy save as pdf',
+          detail:dirty ? 'Export edited PDF bytes as a new file' : 'Export a copy of the current PDF',
+          enabled:!!sourceBytes && !mutating,
+          disabledReason:!sourceBytes ? 'No PDF is loaded.' : mutating ? 'Wait for the current PDF edit to finish.' : undefined,
+          run:()=>exportCurrent(),
+        },
+        {
+          id:'undo',
+          label:'Undo PDF edit',
+          keywords:'undo ctrl z history',
+          detail:'Undo the most recent PDF mutation in this tab',
+          enabled:!!historyRef.current && !mutating && canUndoPdfHistory(historyRef.current),
+          disabledReason:mutating ? 'Wait for the current PDF edit to finish.' : 'There is no PDF edit to undo.',
+          run:()=>undoEdit(),
+        },
+        {
+          id:'redo',
+          label:'Redo PDF edit',
+          keywords:'redo ctrl y history',
+          detail:'Redo the next PDF mutation in this tab',
+          enabled:!!historyRef.current && !mutating && canRedoPdfHistory(historyRef.current),
+          disabledReason:mutating ? 'Wait for the current PDF edit to finish.' : 'There is no PDF edit to redo.',
+          run:()=>redoEdit(),
+        },
+        {
+          id:'print',
+          label:'Print current PDF',
+          keywords:'print printer ctrl p',
+          detail:'Render all pages and open the browser/system print path',
+          enabled:!!pdf && !mutating,
+          disabledReason:!pdf ? 'No PDF is loaded.' : 'Wait for the current PDF edit to finish.',
+          run:()=>printDocument(),
+        },
+      ],
+    });
+    return () => registerCommands(null);
+  }, [session, registerCommands, sourceBytes, pdf, dirty, mutating, historyRevision]);
 
   const zoomLabel = fitMode === 'width'
     ? 'Fit width'
