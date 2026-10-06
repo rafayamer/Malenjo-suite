@@ -60,7 +60,7 @@ export default function PdfPageCanvas({
   }, [onVisible, pageNumber]);
 
   useEffect(() => {
-    if (!renderAllowed || (!eager && !visible)) return;
+    if (!forceRender && (!renderAllowed || (!eager && !visible))) return;
     let cancelled = false;
     void document.getPage(pageNumber).then((page) => {
       if (cancelled) return;
@@ -68,7 +68,7 @@ export default function PdfPageCanvas({
       setBaseSize({ width: viewport.width, height: viewport.height });
     });
     return () => { cancelled = true; };
-  }, [document, eager, pageNumber, renderAllowed, rotation, visible]);
+  }, [document, eager, forceRender, pageNumber, renderAllowed, rotation, visible]);
 
   const scale = useMemo(() => effectivePdfScale(
     baseSize.width,
