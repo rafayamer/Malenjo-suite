@@ -356,6 +356,7 @@ export default function App() {
         notice={notice}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty)=>markSessionDirty(session.id,dirty)}
+        onSavingChange={(saving)=>updateSession(session.id,(current)=>markDocumentSaving(current,saving))}
         registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
       />;
     }
@@ -366,6 +367,7 @@ export default function App() {
         active={session.id === activeSessionId}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
+        onSavingChange={(saving)=>updateSession(session.id,(current)=>markDocumentSaving(current,saving))}
         registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
       />;
     }
@@ -376,6 +378,7 @@ export default function App() {
         active={session.id === activeSessionId}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
+        onSavingChange={(saving)=>updateSession(session.id,(current)=>markDocumentSaving(current,saving))}
         registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
       />;
     }
@@ -386,6 +389,7 @@ export default function App() {
         active={session.id === activeSessionId}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
+        onSavingChange={(saving)=>updateSession(session.id,(current)=>markDocumentSaving(current,saving))}
         registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
       />;
     }

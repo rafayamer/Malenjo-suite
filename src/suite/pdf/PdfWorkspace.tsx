@@ -77,6 +77,7 @@ interface Props {
   notice: string;
   onBackToFiles(): void;
   onDirtyChange?(dirty:boolean): void;
+  onSavingChange?(saving:boolean): void;
   registerCommands?: RegisterDocumentCommands;
 }
 
@@ -91,7 +92,7 @@ function editedName(name:string,suffix='edited'):string{
   return `${base}-${suffix}.pdf`;
 }
 
-export default function PdfWorkspace({ session, active, notice, onBackToFiles, onDirtyChange, registerCommands }: Props) {
+export default function PdfWorkspace({ session, active, notice, onBackToFiles, onDirtyChange, onSavingChange, registerCommands }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const appendInputRef = useRef<HTMLInputElement>(null);
@@ -694,17 +695,21 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setActionNotice('Open a PDF first.');
       return;
     }
+    onSavingChange?.(true);
     try{
       const name=dirty?editedName(sourceName):editedName(sourceName,'copy');
       const saved=await exportPdfBytes(name,sourceBytes);
       if(saved)setActionNotice(dirty?'Exported the edited PDF as a new file.':'Exported a PDF copy.');
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
+    }finally{
+      onSavingChange?.(false);
     }
   }
 
   async function extractSelected(){
     if(!sourceBytes)return;
+    onSavingChange?.(true);
     try{
       const pages=operationPages;
       const bytes=await extractPdfPages(sourceBytes,pages);
@@ -714,11 +719,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setActionNotice(`Extracted ${pages.length} selected page(s) as a new PDF.`);
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
+    }finally{
+      onSavingChange?.(false);
     }
   }
 
   async function splitCurrent(){
     if(!sourceBytes||currentPage>=pageCount)return;
+    onSavingChange?.(true);
     try{
       const [left,right]=await splitPdfAtPage(sourceBytes,currentPage);
       const base=sourceName.replace(/\.pdf$/i,'')||'MALENJO-document';
@@ -727,6 +735,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setActionNotice(`Split after page ${currentPage} and exported two PDFs.`);
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
+    }finally{
+      onSavingChange?.(false);
     }
   }
 

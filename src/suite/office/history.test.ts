@@ -44,6 +44,15 @@ describe('Office per-tab history',()=>{
     expect((currentOfficeHistory(history).model as DocxModel).paragraphs[0]).toBe('x');
   });
 
+  it('keeps histories independent across document tabs',()=>{
+    const tabA=recordOfficeHistory(createOfficeHistory(model('A0')),model('A1'));
+    const tabB=createOfficeHistory(model('B0'));
+    expect((currentOfficeHistory(tabA).model as DocxModel).paragraphs[0]).toBe('A1');
+    expect(currentOfficeHistory(tabA).dirty).toBe(true);
+    expect((currentOfficeHistory(tabB).model as DocxModel).paragraphs[0]).toBe('B0');
+    expect(currentOfficeHistory(tabB).dirty).toBe(false);
+  });
+
   it('preserves dirty state when the clean baseline is evicted',()=>{
     let history=createOfficeHistory(model('0'),3);
     history=recordOfficeHistory(history,model('1'));

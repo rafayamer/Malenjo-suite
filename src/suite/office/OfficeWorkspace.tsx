@@ -32,6 +32,7 @@ interface Props {
   active: boolean;
   onBackToFiles(): void;
   onDirtyChange?(dirty: boolean): void;
+  onSavingChange?(saving: boolean): void;
   registerCommands?: RegisterDocumentCommands;
 }
 
@@ -41,7 +42,7 @@ const kindMeta: Record<OfficeKind, { title: string; extension: string; icon: typ
   pptx: { title: 'Presentation', extension: 'pptx', icon: Presentation },
 };
 
-export default function OfficeWorkspace({ kind, session, active, onBackToFiles, onDirtyChange, registerCommands }: Props) {
+export default function OfficeWorkspace({ kind, session, active, onBackToFiles, onDirtyChange, onSavingChange, registerCommands }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const historyRef = useRef<OfficeHistory | null>(null);
   const [original, setOriginal] = useState<Uint8Array | null>(null);
@@ -162,6 +163,7 @@ export default function OfficeWorkspace({ kind, session, active, onBackToFiles, 
 
   async function exportDocument() {
     if (!original || !model) return;
+    onSavingChange?.(true);
     try {
       const bytes = dirty ? writeOffice(original, model) : exactCopy(original);
       const base = sourceName.replace(/\.[^.]+$/, '') || 'MALENJO-document';
@@ -172,6 +174,8 @@ export default function OfficeWorkspace({ kind, session, active, onBackToFiles, 
         : 'Exported an exact byte-preserving copy.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      onSavingChange?.(false);
     }
   }
 

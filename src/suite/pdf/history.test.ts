@@ -53,6 +53,15 @@ describe('PDF history',()=>{
     expect(Array.from(currentPdfHistoryEntry(history).bytes)).toEqual([4,4]);
   });
 
+  it('keeps histories independent across document tabs',()=>{
+    const tabA=recordPdfHistory(createPdfHistory(bytes(1),1),bytes(2),1,'A edit');
+    const tabB=createPdfHistory(bytes(9),1);
+    expect(Array.from(currentPdfHistoryEntry(tabA).bytes)).toEqual([2]);
+    expect(currentPdfHistoryEntry(tabA).dirty).toBe(true);
+    expect(Array.from(currentPdfHistoryEntry(tabB).bytes)).toEqual([9]);
+    expect(currentPdfHistoryEntry(tabB).dirty).toBe(false);
+  });
+
   it('keeps a single oversized current entry instead of losing history state',()=>{
     let history=createPdfHistory(bytes(1),1,{maxEntries:3,maxBytes:2});
     history=recordPdfHistory(history,bytes(7,7,7,7),1,'Large edit');
