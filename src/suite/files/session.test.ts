@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  attachRecoveredWorkingCopy,
   createDocumentSession,
   markDocumentDirty,
   markDocumentSaved,
+  clearRecoveredWorkingCopy,
   markDocumentSaving,
   setDocumentDirty,
 } from './session';
@@ -40,6 +42,20 @@ describe('document session state', () => {
     const clean = setDocumentDirty(dirty, false);
     expect(clean.dirty).toBe(false);
     expect(clean.lastSavedAt).toBeNull();
+  });
+
+  it('attaches and clears crash-recovery working copies without changing tab identity', () => {
+    const opened = createDocumentSession(document, 100);
+    const recovered = attachRecoveredWorkingCopy(opened, new Uint8Array([1,2,3]), 150);
+    expect(recovered.id).toBe(opened.id);
+    expect(recovered.dirty).toBe(true);
+    expect([...recovered.recoveryBytes!]).toEqual([1,2,3]);
+    expect(recovered.recoveredAt).toBe(150);
+
+    const cleared = clearRecoveredWorkingCopy(recovered);
+    expect(cleared.id).toBe(opened.id);
+    expect(cleared.recoveryBytes).toBeUndefined();
+    expect(cleared.recoveredAt).toBeUndefined();
   });
 
   it('tracks dirty, saving and saved states independently', () => {

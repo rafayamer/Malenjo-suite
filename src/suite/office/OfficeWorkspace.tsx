@@ -3,6 +3,7 @@ import { AlertTriangle, Download, FileText, FolderOpen, Printer, Table2, Present
 import type { DocumentSession } from '../files/session';
 import { isDesktopRuntime } from '../files/api';
 import { exportOfficeCopy, readOfficeDocument } from './api';
+import { useRegisterDocumentCommands } from '../shell/documentCommands';
 import {
   detectOfficeKind,
   exactCopy,
@@ -20,6 +21,7 @@ interface Props {
   session: DocumentSession | null;
   onBackToFiles(): void;
   onDirtyChange?(dirty: boolean): void;
+  onWorkingCopyChange?(bytes:Uint8Array | null, dirty:boolean): void;
 }
 
 const kindMeta: Record<OfficeKind, { title: string; extension: string; icon: typeof FileText }> = {
@@ -28,7 +30,7 @@ const kindMeta: Record<OfficeKind, { title: string; extension: string; icon: typ
   pptx: { title: 'Presentation', extension: 'pptx', icon: Presentation },
 };
 
-export default function OfficeWorkspace({ kind, session, onBackToFiles, onDirtyChange }: Props) {
+export default function OfficeWorkspace({ kind, session, onBackToFiles, onDirtyChange, onWorkingCopyChange }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [original, setOriginal] = useState<Uint8Array | null>(null);
   const [model, setModel] = useState<OfficeModel | null>(null);
@@ -68,6 +70,11 @@ export default function OfficeWorkspace({ kind, session, onBackToFiles, onDirtyC
         setOriginal(bytes);
         setModel(parseOffice(bytes));
         setSourceName(document.name);
+        if (recovered) {
+          setDirty(true);
+          onDirtyChange?.(true);
+          setNotice(`Recovered unsaved ${kind.toUpperCase()} working copy from ${session.recoveredAt ? new Date(session.recoveredAt).toLocaleString() : 'the previous session'}.`);
+        }
       })
       .catch((reason) => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason));
@@ -85,6 +92,19 @@ export default function OfficeWorkspace({ kind, session, onBackToFiles, onDirtyC
       onDirtyChange?.(true);
     }
   }
+
+  useEffect(() => {
+    if (!session || !dirty || !original || !model) return;
+    const timer = window.setTimeout(() => {
+      try {
+        onWorkingCopyChange?.(writeOffice(original, model), true);
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : String(reason));
+      }
+    }, 650);
+    return () => window.clearTimeout(timer);
+  }, [dirty, model, onWorkingCopyChange, original, session?.id]);
+
 
   async function openBrowserFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -126,6 +146,29 @@ export default function OfficeWorkspace({ kind, session, onBackToFiles, onDirtyC
       setError(reason instanceof Error ? reason.message : String(reason));
     }
   }
+
+  useRegisterDocumentCommands(
+    session?.id,
+    () => [
+      {
+        id:'export',
+        label:dirty ? `Export edited ${expectedExtension.toUpperCase()}` : `Export ${expectedExtension.toUpperCase()} copy`,
+        enabled:!!model && !loading,
+        shortcut:'Ctrl+Shift+S',
+        detail:dirty ? 'Serialize the current Office edits to a new OOXML copy.' : 'Export an exact copy of the current OOXML package.',
+        run:()=>exportDocument(),
+      },
+      {
+        id:'print',
+        label:`Print ${kindMeta[kind].title}`,
+        enabled:!!model && !loading,
+        shortcut:'Ctrl+P',
+        detail:'Print the current MALENJO Office workspace view.',
+        run:()=>window.print(),
+      },
+    ],
+    [session?.id, model, dirty, loading, expectedExtension, kind],
+  );
 
   const fidelity = dirty ? 'Edited · compatibility review required' : 'Untouched · exact-copy export available';
   const MetaIcon = kindMeta[kind].icon;
