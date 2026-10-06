@@ -299,7 +299,7 @@ interface NativeStirlingComponentStatus{
   available:boolean;
   version?:string|null;
   executable?:string|null;
-  source:'bundled'|'system'|'unavailable';
+  source:'bundled'|'configured'|'system'|'unavailable';
   message:string;
 }
 
