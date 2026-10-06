@@ -25,7 +25,10 @@ use suite::{
         store_ephemeral_secret, SecurityState,
     },
     support::write_support_bundle,
-    stirling::{stirling_core_openapi, stirling_core_request, stirling_core_start, stirling_core_status, stirling_core_stop},
+    stirling::{
+        stirling_core_components, stirling_core_openapi, stirling_core_request, stirling_core_start,
+        stirling_core_status, stirling_core_stop,
+    },
 };
 
 #[tauri::command]
@@ -102,6 +105,7 @@ pub fn run() {
             kopia_restore_snapshot,
             write_support_bundle,
             stirling_core_status,
+            stirling_core_components,
             stirling_core_start,
             stirling_core_stop,
             stirling_core_openapi,
