@@ -24,8 +24,10 @@ import type { RegisterDocumentCommands } from '../commands/types';
 import { isDesktopRuntime } from '../files/api';
 import { exportPdfBytes, readPdfDocumentBytes } from './api';
 import {
+  addPdfBatesNumbers,
   addPdfCheckBox,
   addPdfCommentAnnotation,
+  addPdfHeaderFooter,
   addPdfRectangleOverlay,
   addPdfTextField,
   addPdfTextOverlay,
@@ -40,6 +42,7 @@ import {
   movePdfPage,
   rotatePdfPagePermanent,
   rotatePdfPagesPermanent,
+  setPdfPageBox,
   splitPdfAtPage,
   flattenPdfForm,
   listPdfFormFields,
@@ -134,6 +137,33 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     size:0.05,
   });
   const [formFields, setFormFields] = useState<string[]>([]);
+  const [headerFooterDraft, setHeaderFooterDraft] = useState({
+    scope:'selected' as 'selected'|'all',
+    header:'',
+    footer:'Page {page} of {pages}',
+    fontSize:9,
+    margin:24,
+    headerAlign:'center' as 'left'|'center'|'right',
+    footerAlign:'center' as 'left'|'center'|'right',
+  });
+  const [batesDraft, setBatesDraft] = useState({
+    scope:'selected' as 'selected'|'all',
+    prefix:'CASE-',
+    suffix:'',
+    startNumber:1,
+    digits:6,
+    fontSize:9,
+    margin:24,
+    position:'bottom-right' as 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-center'|'bottom-right',
+  });
+  const [pageBoxDraft, setPageBoxDraft] = useState({
+    scope:'selected' as 'selected'|'all',
+    box:'crop' as 'crop'|'trim'|'bleed'|'art',
+    top:0,
+    right:0,
+    bottom:0,
+    left:0,
+  });
   const scrollFps = useScrollFps(scrollRef);
   const domIdPrefix=session?.id??previewIdRef.current;
 
@@ -533,6 +563,59 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     );
   }
 
+
+  function pagesForScope(scope:'selected'|'all'):number[]|undefined{
+    return scope==='selected' ? operationPages : undefined;
+  }
+
+  async function applyHeaderFooter(){
+    await mutate(
+      `Applied PDF header/footer to ${headerFooterDraft.scope==='selected' ? operationPages.length : pageCount} page(s).`,
+      (bytes)=>addPdfHeaderFooter(bytes,{
+        pageNumbers:pagesForScope(headerFooterDraft.scope),
+        header:headerFooterDraft.header,
+        footer:headerFooterDraft.footer,
+        fontSize:headerFooterDraft.fontSize,
+        margin:headerFooterDraft.margin,
+        headerAlign:headerFooterDraft.headerAlign,
+        footerAlign:headerFooterDraft.footerAlign,
+      }),
+      currentPage,
+    );
+  }
+
+  async function applyBates(){
+    await mutate(
+      `Applied Bates numbering to ${batesDraft.scope==='selected' ? operationPages.length : pageCount} page(s).`,
+      (bytes)=>addPdfBatesNumbers(bytes,{
+        pageNumbers:pagesForScope(batesDraft.scope),
+        prefix:batesDraft.prefix,
+        suffix:batesDraft.suffix,
+        startNumber:batesDraft.startNumber,
+        digits:batesDraft.digits,
+        fontSize:batesDraft.fontSize,
+        margin:batesDraft.margin,
+        position:batesDraft.position,
+      }),
+      currentPage,
+    );
+  }
+
+  async function applyPageBox(){
+    await mutate(
+      `Updated ${pageBoxDraft.box} box on ${pageBoxDraft.scope==='selected' ? operationPages.length : pageCount} page(s).`,
+      (bytes)=>setPdfPageBox(bytes,{
+        pageNumbers:pagesForScope(pageBoxDraft.scope),
+        box:pageBoxDraft.box,
+        top:pageBoxDraft.top,
+        right:pageBoxDraft.right,
+        bottom:pageBoxDraft.bottom,
+        left:pageBoxDraft.left,
+      }),
+      currentPage,
+    );
+  }
+
   async function searchPdf(){
     if(!pdf||!searchQuery.trim())return;
     const needle=searchQuery.trim().toLocaleLowerCase();
@@ -669,6 +752,33 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           run:()=>flattenForm(),
         },
         {
+          id:'header-footer',
+          label:'Apply PDF header / footer',
+          keywords:'header footer page number date stamp',
+          detail:headerFooterDraft.header||headerFooterDraft.footer||'Configure header/footer text in the PDF inspector',
+          enabled:!!sourceBytes && !mutating && !!(headerFooterDraft.header.trim()||headerFooterDraft.footer.trim()),
+          disabledReason:!sourceBytes ? 'No PDF is loaded.' : !(headerFooterDraft.header.trim()||headerFooterDraft.footer.trim()) ? 'Enter header or footer text in the PDF inspector.' : 'Wait for the current PDF edit to finish.',
+          run:()=>applyHeaderFooter(),
+        },
+        {
+          id:'bates',
+          label:'Apply Bates numbering',
+          keywords:'bates numbering sequence case stamp pages',
+          detail:`${batesDraft.prefix}${String(batesDraft.startNumber).padStart(batesDraft.digits,'0')}${batesDraft.suffix}`,
+          enabled:!!sourceBytes && !mutating,
+          disabledReason:!sourceBytes ? 'No PDF is loaded.' : 'Wait for the current PDF edit to finish.',
+          run:()=>applyBates(),
+        },
+        {
+          id:'page-box',
+          label:'Apply PDF page box',
+          keywords:'crop trim bleed art box margins',
+          detail:`${pageBoxDraft.box} box · ${pageBoxDraft.scope} pages`,
+          enabled:!!sourceBytes && !mutating,
+          disabledReason:!sourceBytes ? 'No PDF is loaded.' : 'Wait for the current PDF edit to finish.',
+          run:()=>applyPageBox(),
+        },
+        {
           id:'print',
           label:'Print current PDF',
           keywords:'print printer ctrl p',
@@ -680,7 +790,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       ],
     });
     return () => registerCommands(null);
-  }, [session, registerCommands, sourceBytes, pdf, dirty, mutating, historyRevision, formFields.length]);
+  }, [
+    session, registerCommands, sourceBytes, pdf, dirty, mutating, historyRevision, formFields.length,
+    headerFooterDraft, batesDraft, pageBoxDraft, currentPage, pageCount, selectedPages,
+  ]);
 
   const zoomLabel = fitMode === 'width'
     ? 'Fit width'
@@ -893,6 +1006,56 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         <div className="pdf-edit-form">
           <button disabled={mutating} onClick={()=>attachmentInputRef.current?.click()}><Paperclip size={13}/> Embed file attachment…</button>
           <small>Embedded attachments are stored inside the PDF. MALENJO currently limits each new attachment to 50 MB; attachment listing/removal is a later completeness item.</small>
+        </div>
+
+        <div className="pdf-pane-title">Headers / footers</div>
+        <div className="pdf-edit-form">
+          <label>Scope<select value={headerFooterDraft.scope} onChange={(event)=>setHeaderFooterDraft({...headerFooterDraft,scope:event.target.value as 'selected'|'all'})}><option value="selected">Selected pages</option><option value="all">All pages</option></select></label>
+          <label>Header<input value={headerFooterDraft.header} onChange={(event)=>setHeaderFooterDraft({...headerFooterDraft,header:event.target.value})} placeholder="Optional header · {page} {pages} {date}"/></label>
+          <label>Footer<input value={headerFooterDraft.footer} onChange={(event)=>setHeaderFooterDraft({...headerFooterDraft,footer:event.target.value})} placeholder="Page {page} of {pages}"/></label>
+          <div className="pdf-coordinate-grid">
+            <label>Pt<input type="number" min="4" max="72" step="1" value={headerFooterDraft.fontSize} onChange={(event)=>setHeaderFooterDraft({...headerFooterDraft,fontSize:Number(event.target.value)})}/></label>
+            <label>Margin<input type="number" min="0" max="180" step="1" value={headerFooterDraft.margin} onChange={(event)=>setHeaderFooterDraft({...headerFooterDraft,margin:Number(event.target.value)})}/></label>
+          </div>
+          <label>Header align<select value={headerFooterDraft.headerAlign} onChange={(event)=>setHeaderFooterDraft({...headerFooterDraft,headerAlign:event.target.value as 'left'|'center'|'right'})}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
+          <label>Footer align<select value={headerFooterDraft.footerAlign} onChange={(event)=>setHeaderFooterDraft({...headerFooterDraft,footerAlign:event.target.value as 'left'|'center'|'right'})}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
+          <button disabled={mutating||!(headerFooterDraft.header.trim()||headerFooterDraft.footer.trim())} onClick={()=>void applyHeaderFooter()}>Apply header / footer</button>
+          <small>Supported tokens: <code>{'{page}'}</code>, <code>{'{pages}'}</code>, <code>{'{date}'}</code>. This writes permanent PDF text and is tracked in Undo/Redo.</small>
+        </div>
+
+        <div className="pdf-pane-title">Bates numbering</div>
+        <div className="pdf-edit-form">
+          <label>Scope<select value={batesDraft.scope} onChange={(event)=>setBatesDraft({...batesDraft,scope:event.target.value as 'selected'|'all'})}><option value="selected">Selected pages</option><option value="all">All pages</option></select></label>
+          <div className="pdf-coordinate-grid">
+            <label>Prefix<input value={batesDraft.prefix} onChange={(event)=>setBatesDraft({...batesDraft,prefix:event.target.value})}/></label>
+            <label>Start<input type="number" min="0" max="999999999" step="1" value={batesDraft.startNumber} onChange={(event)=>setBatesDraft({...batesDraft,startNumber:Number(event.target.value)})}/></label>
+            <label>Digits<input type="number" min="1" max="12" step="1" value={batesDraft.digits} onChange={(event)=>setBatesDraft({...batesDraft,digits:Number(event.target.value)})}/></label>
+          </div>
+          <label>Suffix<input value={batesDraft.suffix} onChange={(event)=>setBatesDraft({...batesDraft,suffix:event.target.value})}/></label>
+          <label>Position<select value={batesDraft.position} onChange={(event)=>setBatesDraft({...batesDraft,position:event.target.value as typeof batesDraft.position})}>
+            <option value="top-left">Top left</option><option value="top-center">Top center</option><option value="top-right">Top right</option>
+            <option value="bottom-left">Bottom left</option><option value="bottom-center">Bottom center</option><option value="bottom-right">Bottom right</option>
+          </select></label>
+          <div className="pdf-coordinate-grid">
+            <label>Pt<input type="number" min="4" max="72" step="1" value={batesDraft.fontSize} onChange={(event)=>setBatesDraft({...batesDraft,fontSize:Number(event.target.value)})}/></label>
+            <label>Margin<input type="number" min="0" max="180" step="1" value={batesDraft.margin} onChange={(event)=>setBatesDraft({...batesDraft,margin:Number(event.target.value)})}/></label>
+          </div>
+          <button disabled={mutating} onClick={()=>void applyBates()}>Apply Bates numbers</button>
+          <small>Preview: <code>{batesDraft.prefix}{String(batesDraft.startNumber).padStart(Math.max(1,batesDraft.digits),'0')}{batesDraft.suffix}</code>. Numbering follows selected-page order when scope is Selected pages.</small>
+        </div>
+
+        <div className="pdf-pane-title">Page boxes</div>
+        <div className="pdf-edit-form">
+          <label>Scope<select value={pageBoxDraft.scope} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,scope:event.target.value as 'selected'|'all'})}><option value="selected">Selected pages</option><option value="all">All pages</option></select></label>
+          <label>Box<select value={pageBoxDraft.box} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,box:event.target.value as 'crop'|'trim'|'bleed'|'art'})}><option value="crop">Crop box</option><option value="trim">Trim box</option><option value="bleed">Bleed box</option><option value="art">Art box</option></select></label>
+          <div className="pdf-coordinate-grid">
+            <label>Top<input type="number" min="0" max="720" step="1" value={pageBoxDraft.top} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,top:Number(event.target.value)})}/></label>
+            <label>Right<input type="number" min="0" max="720" step="1" value={pageBoxDraft.right} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,right:Number(event.target.value)})}/></label>
+            <label>Bottom<input type="number" min="0" max="720" step="1" value={pageBoxDraft.bottom} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,bottom:Number(event.target.value)})}/></label>
+            <label>Left<input type="number" min="0" max="720" step="1" value={pageBoxDraft.left} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,left:Number(event.target.value)})}/></label>
+          </div>
+          <button disabled={mutating} onClick={()=>void applyPageBox()}>Apply page box</button>
+          <small>Margins are points inset from each page’s MediaBox. Invalid/inverted boxes are rejected; the operation is undoable before export.</small>
         </div>
 
         <div className="pdf-pane-title">Page tools</div>

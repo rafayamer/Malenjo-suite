@@ -14,7 +14,10 @@ export type DocumentCommandId =
   | 'security'
   | 'properties'
   | 'attach'
-  | 'flatten-form';
+  | 'flatten-form'
+  | 'header-footer'
+  | 'bates'
+  | 'page-box';
 
 export interface DocumentCommandDescriptor {
   id: DocumentCommandId;
