@@ -652,3 +652,11 @@
 .pdf-workspace.presentation-mode .pdf-stage{min-width:100%;min-height:100%;padding:12px;justify-content:center}
 .pdf-view-controls button.active{background:#163a57;border-color:#3b7ca6;color:#fff}
 @media(max-width:1000px){.pdf-stage.two{grid-template-columns:max-content}}
+
+
+.stirling-components{display:flex;align-items:stretch;gap:7px;flex-wrap:wrap}
+.stirling-component{display:flex;align-items:center;gap:6px;min-width:150px;border:1px solid #593b32;background:#251713;color:#d9977a;border-radius:7px;padding:6px 8px}
+.stirling-component.ready{border-color:#245745;background:#09271f;color:#58d0a2}
+.stirling-component span,.stirling-component b,.stirling-component small{display:block;min-width:0}
+.stirling-component b{font-size:8px;text-transform:uppercase;letter-spacing:.06em}
+.stirling-component small{margin-top:1px;color:#7997aa;font-size:7px;max-width:250px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
