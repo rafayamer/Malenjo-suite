@@ -16,6 +16,7 @@ $LicenseDir = Join-Path $RuntimeDir 'malenjo-notices'
 Remove-Item $BuildDir -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item $RuntimeDir -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item (Join-Path $PackDir 'manifest.json') -Force -ErrorAction SilentlyContinue
+Remove-Item (Join-Path $PackDir 'sbom.cdx.json') -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $BuildDir, $ExtractDir, $RuntimeDir | Out-Null
 
 Invoke-WebRequest -Uri $ReleaseUrl -OutFile $Archive -UseBasicParsing
@@ -49,6 +50,18 @@ Copy-Item (Join-Path $Root 'third_party/qpdf/deps/libjpeg-turbo-README.ijg') (Jo
 Copy-Item (Join-Path $Root 'third_party/qpdf/deps/openssl-LICENSE.txt') (Join-Path $LicenseDir 'openssl-LICENSE.txt') -Force
 Copy-Item (Join-Path $Root 'third_party/qpdf/deps/zlib-LICENSE.txt') (Join-Path $LicenseDir 'zlib-LICENSE.txt') -Force
 
+$RuntimeFiles = @(
+  Get-ChildItem -Path $RuntimeDir -Recurse -File |
+    Sort-Object FullName |
+    ForEach-Object {
+      [ordered]@{
+        path = [IO.Path]::GetRelativePath($RuntimeDir, $_.FullName).Replace('\','/')
+        size = $_.Length
+        sha256 = (Get-FileHash -Algorithm SHA256 -Path $_.FullName).Hash.ToLowerInvariant()
+      }
+    }
+)
+
 $RelativeExecutable = [IO.Path]::GetRelativePath($RuntimeDir, $BundledQpdf.FullName).Replace('\','/')
 $Manifest = [ordered]@{
   schemaVersion = 1
@@ -67,10 +80,63 @@ $Manifest = [ordered]@{
     @{ id = 'openssl'; version = '3.6.4#1'; license = 'Apache-2.0' },
     @{ id = 'zlib'; version = '1.3.2#2'; license = 'Zlib' }
   )
-  releaseGate = 'Capture exact runtime file inventory/SBOM and verify Microsoft Visual C++ runtime files against applicable redistributable terms.'
+  releaseGate = 'Verify Microsoft Visual C++ runtime files in the exact runtime inventory against applicable redistributable terms.'
   architecture = 'windows-x86_64'
   operations = @('repair', 'compress-pdf')
+  runtimeFiles = $RuntimeFiles
   reviewedAt = '2026-10-06'
 }
-$Manifest | ConvertTo-Json -Depth 4 | Set-Content -Path (Join-Path $PackDir 'manifest.json') -Encoding UTF8
-Write-Host "Built qpdf provider pack $Version at $PackDir"
+$Manifest | ConvertTo-Json -Depth 8 | Set-Content -Path (Join-Path $PackDir 'manifest.json') -Encoding UTF8
+
+$RootRef = "malenjo:qpdf-windows-x64@$Version"
+$QpdfRef = "pkg:github/qpdf/qpdf@$Version"
+$JpegRef = 'pkg:github/libjpeg-turbo/libjpeg-turbo@3.2.0'
+$OpenSslRef = 'pkg:github/openssl/openssl@3.6.4'
+$ZlibRef = 'pkg:github/madler/zlib@1.3.2'
+$Sbom = [ordered]@{
+  bomFormat = 'CycloneDX'
+  specVersion = '1.5'
+  version = 1
+  metadata = [ordered]@{
+    component = [ordered]@{
+      type = 'application'
+      'bom-ref' = $RootRef
+      name = 'MALENJO qpdf Windows provider pack'
+      version = $Version
+      properties = @(
+        @{ name = 'malenjo:sourceAsset'; value = $Asset },
+        @{ name = 'malenjo:sourceSha256'; value = $ExpectedSha256 },
+        @{ name = 'malenjo:runtimeFileCount'; value = [string]$RuntimeFiles.Count },
+        @{ name = 'malenjo:releaseGate'; value = $Manifest.releaseGate }
+      )
+    }
+  }
+  components = @(
+    [ordered]@{
+      type = 'application'; 'bom-ref' = $QpdfRef; name = 'qpdf'; version = $Version
+      licenses = @(@{ license = @{ id = 'Apache-2.0' } })
+      hashes = @(@{ alg = 'SHA-256'; content = $ExpectedSha256 })
+    },
+    [ordered]@{
+      type = 'library'; 'bom-ref' = $JpegRef; name = 'libjpeg-turbo'; version = '3.2.0'
+      licenses = @(@{ expression = 'IJG AND BSD-3-Clause' })
+    },
+    [ordered]@{
+      type = 'library'; 'bom-ref' = $OpenSslRef; name = 'OpenSSL'; version = '3.6.4'
+      licenses = @(@{ license = @{ id = 'Apache-2.0' } })
+    },
+    [ordered]@{
+      type = 'library'; 'bom-ref' = $ZlibRef; name = 'zlib'; version = '1.3.2'
+      licenses = @(@{ license = @{ id = 'Zlib' } })
+    }
+  )
+  dependencies = @(
+    @{ ref = $RootRef; dependsOn = @($QpdfRef) },
+    @{ ref = $QpdfRef; dependsOn = @($JpegRef, $OpenSslRef, $ZlibRef) },
+    @{ ref = $JpegRef; dependsOn = @() },
+    @{ ref = $OpenSslRef; dependsOn = @() },
+    @{ ref = $ZlibRef; dependsOn = @() }
+  )
+}
+$Sbom | ConvertTo-Json -Depth 10 | Set-Content -Path (Join-Path $PackDir 'sbom.cdx.json') -Encoding UTF8
+Write-Host "Built qpdf provider pack $Version at $PackDir with $($RuntimeFiles.Count) inventoried runtime files."

@@ -84,6 +84,24 @@ jobs:
           if ($manifest.sha256 -ne "db87077e683630c1217e0e8f9a20a9749d952ab676e881c3689187763a5de25d") {
             throw "Unexpected qpdf source checksum."
           }
+          if ($manifest.redistribution -ne "integration-approved-release-gated") {
+            throw "Unexpected qpdf redistribution state."
+          }
+          if (@($manifest.runtimeFiles).Count -lt 2) {
+            throw "qpdf runtime file inventory is missing or unexpectedly empty."
+          }
+          $sbom = Get-Content "provider-packs/qpdf/sbom.cdx.json" -Raw | ConvertFrom-Json
+          if ($sbom.bomFormat -ne "CycloneDX" -or $sbom.specVersion -ne "1.5" -or @($sbom.components).Count -ne 4) {
+            throw "qpdf component SBOM failed structural validation."
+          }
+          foreach ($notice in @(
+            "qpdf-LICENSE.txt", "qpdf-NOTICE.md", "libjpeg-turbo-LICENSE.md",
+            "libjpeg-turbo-README.ijg", "openssl-LICENSE.txt", "zlib-LICENSE.txt"
+          )) {
+            if (!(Test-Path (Join-Path "provider-packs/qpdf/runtime/malenjo-notices" $notice))) {
+              throw "Required qpdf pack notice missing: $notice"
+            }
+          }
           $qpdf = Get-ChildItem "provider-packs/qpdf/runtime" -Recurse -File -Filter "qpdf.exe" | Select-Object -First 1
           if (-not $qpdf) { throw "qpdf provider pack did not contain qpdf.exe." }
           $version = (& $qpdf.FullName --version 2>&1 | Out-String)

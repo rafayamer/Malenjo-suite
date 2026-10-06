@@ -50,8 +50,8 @@ Stirling remains bound to `127.0.0.1:28970`, has no application-launch autostart
 The Windows provider job now:
 
 1. builds qpdf from the exact reviewed release asset;
-2. verifies the manifest checksum/version;
-3. executes `qpdf --version`;
+2. verifies the manifest checksum/version, exact runtime file inventory and CycloneDX 1.5 component SBOM;
+3. verifies retained qpdf/libjpeg-turbo/OpenSSL/zlib notices and executes `qpdf --version`;
 4. builds the reviewed Stirling open-core JAR;
 5. starts it on loopback with the qpdf pack injected only into the child PATH;
 6. verifies health and OpenAPI;
@@ -66,7 +66,7 @@ This is executable operation-group evidence, not just endpoint discovery.
 
 Tauri resources use explicit source→target mappings so installed builds resolve both `provider-packs/stirling-core/` and `provider-packs/qpdf/` under stable resource paths. `providerPackaging.test.ts` guards the configured destination, qpdf generated layout and Rust packaged lookup from drifting apart.
 
-qpdf's open-source binary obligations are recorded, but qpdf is **integration-approved / release-gated**, not unconditionally release-approved. qpdf's Windows build uses CMake `InstallRequiredSystemLibraries`; before a MALENJO distributable, the generated runtime file inventory must be captured in the release SBOM and any Microsoft Visual C++ runtime files must be checked against the applicable Microsoft redistributable terms.
+qpdf's open-source binary obligations are recorded, but qpdf is **integration-approved / release-gated**, not unconditionally release-approved. qpdf's Windows build uses CMake `InstallRequiredSystemLibraries`; the pack builder now captures the exact generated runtime file inventory plus a CycloneDX component SBOM. Before a MALENJO distributable, any Microsoft Visual C++ runtime files present in that inventory must still be checked against the applicable Microsoft redistributable terms.
 
 ## Completion boundary
 
