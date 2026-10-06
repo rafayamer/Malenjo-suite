@@ -256,3 +256,17 @@ No module is complete merely because its navigation entry exists. Completion req
 | Executable validation | CI | frontend, Windows Rust, Codespaces/Linux + Windows Stirling pack build/smoke | CI #243 (`37469066584`) | **Verified** |
 | Module completion | Registry | PDF remains `partial`; no promotion in this pass | #141 / PR #142 | Correct |
 
+## PDF completion pass 2A — qpdf provider pack
+
+| Requirement | Component | Implementation | Evidence | Status |
+|---|---|---|---|---|
+| qpdf business-compatible provider | PDF provider pack | qpdf 12.4.2 official Windows x64 archive, Apache-2.0, exact digest pinned | `third_party/qpdf/`, pass-2 audit | Implemented; CI pending |
+| Supply-chain verification | Pack installer | download official release only; verify SHA-256 before extraction; verify runtime version | `scripts/install-qpdf-pack.ps1` | Implemented; CI pending |
+| Windows local integration | Tauri/Stirling boundary | prepend verified provider-pack executable directory only to local child PATH | `src-tauri/src/suite/stirling.rs` | Implemented; CI pending |
+| Provider diagnostics | MALENJO PDF contract | `PdfProviderStatus.components` reports qpdf ready/version/source/detail | Rust + TypeScript provider status | Implemented; CI pending |
+| Provider UI honesty | PDF workspace | component readiness displayed separately from core provider status | `PdfProviderToolsPanel.tsx` | Implemented; CI pending |
+| Release packaging | Tauri bundle | qpdf pack directory registered as resource; generated runtime/manifest gitignored | `tauri.conf.json`, `.gitignore` | Implemented |
+| Third-party notices | Legal/provenance | Apache-2.0 license, NOTICE, provenance and suite notice updated | `docs/THIRD_PARTY_NOTICES.md` | Implemented |
+| Windows validation | CI | install/version-check qpdf before Stirling build and localhost smoke | `.github/workflows/ci.yml` | Pending |
+| Remaining external providers | PDF completion | Tesseract/OCRmyPDF/LibreOffice/WeasyPrint/OpenCV/replacements remain tracked by #143 | pass-2 audit | Open |
+
