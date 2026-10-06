@@ -59,14 +59,14 @@ export default function App() {
     setActive(workspaceForDocument(session.document.kind));
   }
 
-  function openFromLibrary(document: LibraryDocument, sourceFile?: File) {
+  function openFromLibrary(document: LibraryDocument) {
     const existing = sessions.find((session) => session.document.id === document.id);
     if (existing) {
       activateSession(existing.id);
       return;
     }
 
-    const session = createDocumentSession(document, Date.now(), sourceFile);
+    const session = createDocumentSession(document, Date.now());
     setSessions((current) => [...current, session]);
     setActiveSessionId(session.id);
     setActive(workspaceForDocument(document.kind));
@@ -307,7 +307,7 @@ export default function App() {
   </div>
 }
 
-function Home({onSelect,onOpen}:{onSelect:(id:ModuleId)=>void;onOpen:(document:LibraryDocument, sourceFile?:File)=>void}) {
+function Home({onSelect,onOpen}:{onSelect:(id:ModuleId)=>void;onOpen:(document:LibraryDocument)=>void}) {
   return <div className="content">
     <div className="hero"><div><p className="eyebrow">LOCAL-FIRST DOCUMENT PLATFORM</p><h1>Your documents. One private workspace.</h1><p>MALENJO combines PDF, Office, OCR, private AI, signing, metadata, automation and enterprise tools behind one consistent desktop shell.</p></div><div className="hero-mark">M</div></div>
     <div className="quick-grid">{quick.map(({label,icon:Icon,target})=><button key={label} onClick={()=>onSelect(target)}><Icon size={21}/><span>{label}</span></button>)}</div>
