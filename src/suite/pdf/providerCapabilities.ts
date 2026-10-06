@@ -141,9 +141,24 @@ export function resolvePdfProviderCapability(
   }
 
   if(matches('ocr-pdf','ocrPdf')){
+    const tesseract=statuses.get('tesseract');
+    if(tesseract?.available){
+      return capability(true,'Direct Tesseract PDF OCR','tesseract',{
+        providerVersion:tesseract.version,
+        componentPack:tesseract.source==='bundled'?'tesseract-windows-x64':null,
+        fallback:'Advanced deskew/cleanup/sidecar controls require a separately reviewed provider and are not exposed by this implementation.',
+      });
+    }
     return externalCapability('Local OCR provider',['tesseract','ocrmypdf'],statuses);
   }
   if(matches('auto-rotate-pdf','autoRotatePdf')){
+    const tesseract=statuses.get('tesseract');
+    if(tesseract?.available){
+      return capability(true,'Stirling text orientation + Tesseract OSD','tesseract',{
+        providerVersion:tesseract.version,
+        componentPack:tesseract.source==='bundled'?'tesseract-windows-x64':null,
+      });
+    }
     return externalCapability('Tesseract orientation detection',['tesseract'],statuses);
   }
 
@@ -189,12 +204,37 @@ export function resolvePdfProviderCapability(
   return coreCapability();
 }
 
+function fieldsForResolvedProvider(
+  operation:PdfProviderOperation,
+  capability:PdfProviderCapability,
+):PdfProviderOperation['fields']{
+  if(capability.providerId!=='tesseract'||!operationMatches(operation,'ocr-pdf','ocrPdf')){
+    return operation.fields;
+  }
+
+  const supported=new Set(['fileInput','languages','ocrType']);
+  return operation.fields
+    .filter((field)=>supported.has(field.name))
+    .map((field)=>field.name==='languages'
+      ?{
+          ...field,
+          kind:'string' as const,
+          defaultValue:'eng',
+          description:'Tesseract language code(s). The MALENJO pack currently includes eng; additional reviewed data must be installed before use.',
+        }
+      :field);
+}
+
 export function applyPdfProviderCapabilities(
   operations:PdfProviderOperation[],
   components:PdfProviderComponentStatus[],
 ):PdfProviderOperation[]{
-  return operations.map((operation)=>({
-    ...operation,
-    capability:resolvePdfProviderCapability(operation,components),
-  }));
+  return operations.map((operation)=>{
+    const capability=resolvePdfProviderCapability(operation,components);
+    return {
+      ...operation,
+      fields:fieldsForResolvedProvider(operation,capability),
+      capability,
+    };
+  });
 }
