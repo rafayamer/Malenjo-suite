@@ -9,7 +9,7 @@ describe('MALENJO module registry', () => {
 
   it('marks only source-verified modules complete', () => {
     const complete = modules.filter((module) => module.status === 'complete').map((module) => module.id).sort();
-    expect(complete).toEqual(['help']);
+    expect(complete).toEqual(['help', 'home']);
   });
 
   it('contains the mandatory document workspaces', () => {
