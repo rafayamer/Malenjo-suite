@@ -28,3 +28,10 @@ provider-packs/qpdf/runtime/
 provider-packs/qpdf/manifest.json
 provider-packs/qpdf/sbom.cdx.json
 .build/qpdf/
+provider-packs/tesseract/runtime/
+provider-packs/tesseract/tessdata/
+provider-packs/tesseract/notices/
+provider-packs/tesseract/manifest.json
+provider-packs/tesseract/runtime-inventory.json
+provider-packs/tesseract/sbom.cdx.json
+.build/tesseract/
