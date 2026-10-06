@@ -56,6 +56,26 @@ describe('Windows PDF provider packaging contract',()=>{
     expect(attributes).toContain('*.patch text eol=lf');
   });
 
+  it('pins and ships the embedded Stirling Office Convert provider contract',()=>{
+    const windows=text('scripts/build-stirling-core.ps1');
+    const linux=text('scripts/build-stirling-core.sh');
+    const native=text('src-tauri/src/suite/stirling.rs');
+    const provenance=text('third_party/stirling-office-convert/PROVENANCE.md');
+
+    for(const source of [windows,linux]){
+      expect(source).toContain('0.2.2');
+      expect(source).toContain('673aab8d6ac784524cd1d90141c95e74b9fd26ae');
+      expect(source).toContain('stirling-office-convert-topdf');
+      expect(source).toContain('stirling-office-convert-legacy');
+      expect(source).toContain('checkLicense generateLicenseReport --no-parallel');
+      expect(source).toContain('stirling-dependency-licenses.json');
+      expect(source).toContain('stirling-office-convert-LICENSE.txt');
+    }
+    expect(native).toContain('--system.stirlingOfficeConversion=true');
+    expect(provenance).toContain('v0.2.2');
+    expect(provenance).toContain('673aab8d6ac784524cd1d90141c95e74b9fd26ae');
+  });
+
   it('retains qpdf transitive notices in the generated component pack',()=>{
     const builder=text('scripts/build-qpdf-windows.ps1');
     for(const notice of [
