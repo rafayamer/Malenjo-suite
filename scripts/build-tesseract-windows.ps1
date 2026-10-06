@@ -108,7 +108,7 @@ if (!(Test-Path $BundledTesseract)) { throw 'Bundled tesseract.exe was not produ
 
 $env:TESSDATA_PREFIX = $TessdataDir
 $VersionOutput = (& $BundledTesseract --version 2>&1 | Out-String).Trim()
-if ($LASTEXITCODE -ne 0 -or $VersionOutput -notmatch 'tesseract\s+5\.5\.3') {
+if ($LASTEXITCODE -ne 0 -or $VersionOutput -notmatch 'tesseract\s+v?5\.5\.3(?:\.\d+)?') {
   throw "Unexpected Tesseract runtime version: $VersionOutput"
 }
 $Languages = (& $BundledTesseract --list-langs 2>&1 | Out-String)
