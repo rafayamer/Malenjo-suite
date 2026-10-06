@@ -75,6 +75,20 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
+      - name: Build approved qpdf Windows provider pack
+        shell: pwsh
+        run: |
+          ./scripts/build-qpdf-windows.ps1
+          $manifest = Get-Content "provider-packs/qpdf/manifest.json" -Raw | ConvertFrom-Json
+          if ($manifest.version -ne "12.4.2") { throw "Unexpected qpdf version." }
+          if ($manifest.sha256 -ne "db87077e683630c1217e0e8f9a20a9749d952ab676e881c3689187763a5de25d") {
+            throw "Unexpected qpdf source checksum."
+          }
+          $qpdf = Resolve-Path "provider-packs/qpdf/bin/qpdf.exe"
+          $version = (& $qpdf --version 2>&1 | Out-String)
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch "12\.4\.2") {
+            throw "qpdf provider pack failed its executable smoke check."
+          }
       - name: Build reviewed Stirling open-core provider pack
         shell: pwsh
         run: |
@@ -93,6 +107,8 @@ jobs:
         shell: pwsh
         run: |
           $jar = Resolve-Path "provider-packs/stirling-core/stirling-pdf.jar"
+          $qpdfBin = Resolve-Path "provider-packs/qpdf/bin"
+          $env:PATH = "$qpdfBin;$env:PATH"
           $env:STIRLING_FLAVOR = "core"
           $env:DISABLE_ADDITIONAL_FEATURES = "true"
           $env:ENABLE_SAAS = "false"
@@ -122,6 +138,30 @@ jobs:
               throw "Expected a broad Stirling core OpenAPI surface, found only $($v1Paths.Count) /api/v1 paths."
             }
             Write-Host "Stirling core healthy with $($v1Paths.Count) /api/v1 paths."
+
+            foreach ($requiredPath in @("/api/v1/misc/repair", "/api/v1/misc/compress-pdf")) {
+              if (!$api.paths.PSObject.Properties.Name.Contains($requiredPath)) {
+                throw "Expected qpdf-backed operation $requiredPath to be present."
+              }
+            }
+
+            New-Item -ItemType Directory -Force -Path ".build/provider-smoke" | Out-Null
+            $fixture = Resolve-Path "testing/suite/fixtures/pdf/javascript-action.pdf"
+            $repairOut = Join-Path (Resolve-Path ".build/provider-smoke") "repair.pdf"
+            & curl.exe --fail --silent --show-error -o $repairOut -F "fileInput=@$fixture;type=application/pdf" "http://127.0.0.1:28970/api/v1/misc/repair"
+            if ($LASTEXITCODE -ne 0) { throw "qpdf repair operation smoke failed." }
+
+            $compressOut = Join-Path (Resolve-Path ".build/provider-smoke") "compress.pdf"
+            & curl.exe --fail --silent --show-error -o $compressOut -F "fileInput=@$fixture;type=application/pdf" -F "optimizeLevel=3" -F "linearize=false" -F "normalize=false" -F "grayscale=false" "http://127.0.0.1:28970/api/v1/misc/compress-pdf"
+            if ($LASTEXITCODE -ne 0) { throw "qpdf compression operation smoke failed." }
+
+            foreach ($output in @($repairOut, $compressOut)) {
+              $bytes = [System.IO.File]::ReadAllBytes($output)
+              if ($bytes.Length -lt 5 -or [Text.Encoding]::ASCII.GetString($bytes, 0, 5) -ne "%PDF-") {
+                throw "Provider smoke output is not a PDF: $output"
+              }
+            }
+            Write-Host "qpdf operation group passed repair + compression localhost smoke tests."
           } finally {
             if (!$process.HasExited) { Stop-Process -Id $process.Id -Force }
           }
