@@ -226,7 +226,7 @@ No module is complete merely because its navigation entry exists. Completion req
 
 | Requirement | Component | Implementation | Evidence | Status |
 |---|---|---|---|---|
-| Truthful OSS structural source | Home / shell | source-adapted Apache-2.0 CasualOffice launcher components and layout; prior shadcn claim removed | `CasualOfficeUi.tsx`, `third_party/casualoffice/PROVENANCE.md` | Re-verification pending |
+| Truthful OSS structural source | Home / shell | source-adapted Apache-2.0 CasualOffice launcher components and layout; prior shadcn claim removed | `CasualOfficeUi.tsx`, `third_party/casualoffice/PROVENANCE.md` | Complete |
 | Six-to-nine primary actions | Home launcher | eight operational source-adapted ActionCards: Open, Document, Spreadsheet, Presentation, PDF, Scan, OCR, Malenjo AI | `model.ts`, model tests | Implemented |
 | Recent documents | Home / Files | canonical desktop/browser library, CasualOffice-style search + segmented type filter + time groups | `HomeWorkspace.tsx`, model tests | Implemented |
 | Starred documents | Home state | separate Pinned group using bounded versioned MALENJO star state | `model.ts`, UI | Implemented |
@@ -238,4 +238,4 @@ No module is complete merely because its navigation entry exists. Completion req
 | Accessibility / structural baseline | Home UI | native controls, segmented tabs, focus-visible, reduced motion, executable structural test | `HOME-START-CENTER.md`, component test | Implemented |
 | Failure recovery | Home state/library | malformed state/storage denial and library/open errors recover with notice instead of blank shell | model tests | Implemented |
 | Legal review | Home UI source | CasualOffice Apache-2.0 license/provenance retained; no WPS proprietary assets; shadcn notice removed | third-party notices | Implemented |
-| Module completion gate | Registry | Home deliberately demoted during correction; may return to complete only after corrected CI | registry test + issue #139 | Re-verification pending |
+| Module completion gate | Registry | Home re-promoted only after corrected implementation CI #224 passed all three jobs | registry test + issue #139 | Complete |
