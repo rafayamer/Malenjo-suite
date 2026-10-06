@@ -14,15 +14,23 @@ import {
   Type,
   Undo2,
   Redo2,
+  MessageSquare,
+  Paperclip,
+  ListChecks,
+  FileCheck2,
 } from 'lucide-react';
 import type { DocumentSession } from '../files/session';
 import type { RegisterDocumentCommands } from '../commands/types';
 import { isDesktopRuntime } from '../files/api';
 import { exportPdfBytes, readPdfDocumentBytes } from './api';
 import {
+  addPdfCheckBox,
+  addPdfCommentAnnotation,
   addPdfRectangleOverlay,
+  addPdfTextField,
   addPdfTextOverlay,
   appendPdf,
+  attachFileToPdf,
   deletePdfPage,
   deletePdfPages,
   duplicatePdfPage,
@@ -33,6 +41,8 @@ import {
   rotatePdfPagePermanent,
   rotatePdfPagesPermanent,
   splitPdfAtPage,
+  flattenPdfForm,
+  listPdfFormFields,
 } from './editor';
 import { disposePdf, loadPdfBytes, type PdfLoadResult } from './engine';
 import {
@@ -79,6 +89,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const fileInputRef = useRef<HTMLInputElement>(null);
   const appendInputRef = useRef<HTMLInputElement>(null);
   const insertInputRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const selectionAnchorRef = useRef<number | null>(null);
   const activeLoadRef = useRef<PdfLoadResult | null>(null);
   const requestIdRef = useRef(0);
@@ -111,6 +122,18 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [searchResults, setSearchResults] = useState<Array<{page:number;excerpt:string}>>([]);
   const [textOverlay, setTextOverlay] = useState({ text:'', x:0.12, y:0.82, size:12 });
   const [shapeOverlay, setShapeOverlay] = useState({ x:0.12, y:0.68, width:0.35, height:0.08, mode:'highlight' as 'highlight'|'outline' });
+  const [commentDraft, setCommentDraft] = useState({ text:'', author:'MALENJO User', x:0.86, y:0.86 });
+  const [formDraft, setFormDraft] = useState({
+    type:'text' as 'text'|'checkbox',
+    name:'',
+    defaultValue:'',
+    x:0.12,
+    y:0.52,
+    width:0.42,
+    height:0.07,
+    size:0.05,
+  });
+  const [formFields, setFormFields] = useState<string[]>([]);
   const scrollFps = useScrollFps(scrollRef);
   const domIdPrefix=session?.id??previewIdRef.current;
 
@@ -425,6 +448,91 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     return()=>window.removeEventListener('keydown',onKeyDown);
   },[active,historyRevision,mutating]);
 
+
+  useEffect(()=>{
+    if(!sourceBytes){
+      setFormFields([]);
+      return;
+    }
+    let cancelled=false;
+    void listPdfFormFields(sourceBytes)
+      .then((fields)=>{ if(!cancelled)setFormFields(fields); })
+      .catch(()=>{ if(!cancelled)setFormFields([]); });
+    return()=>{cancelled=true;};
+  },[sourceBytes]);
+
+  async function attachDocuments(event:React.ChangeEvent<HTMLInputElement>){
+    const files=Array.from(event.target.files??[]);
+    event.target.value='';
+    if(!files.length||!sourceBytes)return;
+    await mutate(
+      `Embedded ${files.length} attachment(s) in the PDF.`,
+      async(bytes)=>{
+        let result=bytes;
+        for(const file of files){
+          result=await attachFileToPdf(result,{
+            name:file.name,
+            bytes:new Uint8Array(await file.arrayBuffer()),
+            mimeType:file.type||'application/octet-stream',
+            description:'Embedded by MALENJO PDF Workspace',
+          });
+        }
+        return result;
+      },
+      currentPage,
+    );
+  }
+
+  async function addComment(){
+    await mutate(
+      'Added a PDF comment annotation.',
+      (bytes)=>addPdfCommentAnnotation(bytes,{pageNumber:currentPage,...commentDraft}),
+      currentPage,
+    );
+    setCommentDraft((current)=>({...current,text:''}));
+  }
+
+  async function addFormField(){
+    const name=formDraft.name.trim()||`field_${Date.now().toString(36)}`;
+    if(formDraft.type==='checkbox'){
+      await mutate(
+        `Added checkbox field "${name}".`,
+        (bytes)=>addPdfCheckBox(bytes,{
+          pageNumber:currentPage,
+          name,
+          x:formDraft.x,
+          y:formDraft.y,
+          size:formDraft.size,
+        }),
+        currentPage,
+      );
+    }else{
+      await mutate(
+        `Added text field "${name}".`,
+        (bytes)=>addPdfTextField(bytes,{
+          pageNumber:currentPage,
+          name,
+          defaultValue:formDraft.defaultValue,
+          x:formDraft.x,
+          y:formDraft.y,
+          width:formDraft.width,
+          height:formDraft.height,
+        }),
+        currentPage,
+      );
+    }
+    setFormDraft((current)=>({...current,name:'',defaultValue:''}));
+  }
+
+  async function flattenForm(){
+    if(!formFields.length)return;
+    await mutate(
+      `Flattened ${formFields.length} PDF form field(s).`,
+      (bytes)=>flattenPdfForm(bytes),
+      currentPage,
+    );
+  }
+
   async function searchPdf(){
     if(!pdf||!searchQuery.trim())return;
     const needle=searchQuery.trim().toLocaleLowerCase();
@@ -543,6 +651,24 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           run:()=>redoEdit(),
         },
         {
+          id:'attach',
+          label:'Embed file attachment in PDF',
+          keywords:'attach embed file paperclip pdf',
+          detail:'Choose one or more files and embed them inside the current PDF',
+          enabled:!!sourceBytes && !mutating,
+          disabledReason:!sourceBytes ? 'No PDF is loaded.' : 'Wait for the current PDF edit to finish.',
+          run:()=>attachmentInputRef.current?.click(),
+        },
+        {
+          id:'flatten-form',
+          label:'Flatten PDF form fields',
+          keywords:'form acroform flatten fields',
+          detail:formFields.length ? `Flatten ${formFields.length} interactive field(s)` : 'No AcroForm fields detected',
+          enabled:!!sourceBytes && !mutating && formFields.length>0,
+          disabledReason:!sourceBytes ? 'No PDF is loaded.' : !formFields.length ? 'No AcroForm fields detected.' : 'Wait for the current PDF edit to finish.',
+          run:()=>flattenForm(),
+        },
+        {
           id:'print',
           label:'Print current PDF',
           keywords:'print printer ctrl p',
@@ -554,7 +680,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       ],
     });
     return () => registerCommands(null);
-  }, [session, registerCommands, sourceBytes, pdf, dirty, mutating, historyRevision]);
+  }, [session, registerCommands, sourceBytes, pdf, dirty, mutating, historyRevision, formFields.length]);
 
   const zoomLabel = fitMode === 'width'
     ? 'Fit width'
@@ -585,6 +711,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       accept="application/pdf,.pdf"
       multiple
       onChange={(event)=>void insertDocuments(event)}
+    />
+    <input
+      ref={attachmentInputRef}
+      className="visually-hidden"
+      type="file"
+      multiple
+      onChange={(event)=>void attachDocuments(event)}
     />
 
     <div className="pdf-toolbar">
@@ -717,6 +850,49 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           </div>
           <button disabled={mutating} onClick={()=>void mutate(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage)}>Apply rectangle</button>
           <small>Coordinates are normalized 0–1 from the page’s bottom-left corner. A later visual drag/selection layer will replace manual coordinate entry.</small>
+        </div>
+
+        <div className="pdf-pane-title">Comments</div>
+        <div className="pdf-edit-form">
+          <label><MessageSquare size={13}/> Sticky-note comment<textarea value={commentDraft.text} onChange={(event)=>setCommentDraft({...commentDraft,text:event.target.value})} placeholder="Comment text"/></label>
+          <label>Author<input value={commentDraft.author} onChange={(event)=>setCommentDraft({...commentDraft,author:event.target.value})}/></label>
+          <div className="pdf-coordinate-grid">
+            <label>X<input type="number" min="0" max="1" step="0.01" value={commentDraft.x} onChange={(event)=>setCommentDraft({...commentDraft,x:Number(event.target.value)})}/></label>
+            <label>Y<input type="number" min="0" max="1" step="0.01" value={commentDraft.y} onChange={(event)=>setCommentDraft({...commentDraft,y:Number(event.target.value)})}/></label>
+          </div>
+          <button disabled={mutating||!commentDraft.text.trim()} onClick={()=>void addComment()}>Add PDF comment</button>
+          <small>This creates a real PDF /Text annotation. PDF.js canvas rendering does not yet provide a visual annotation layer, but the comment is embedded in the exported document and participates in Undo/Redo.</small>
+        </div>
+
+        <div className="pdf-pane-title">Forms</div>
+        <div className="pdf-edit-form">
+          <label><ListChecks size={13}/> Field type<select value={formDraft.type} onChange={(event)=>setFormDraft({...formDraft,type:event.target.value as 'text'|'checkbox'})}><option value="text">Text field</option><option value="checkbox">Checkbox</option></select></label>
+          <label>Name<input value={formDraft.name} onChange={(event)=>setFormDraft({...formDraft,name:event.target.value})} placeholder="field_name"/></label>
+          {formDraft.type==='text'&&<label>Default value<input value={formDraft.defaultValue} onChange={(event)=>setFormDraft({...formDraft,defaultValue:event.target.value})}/></label>}
+          <div className="pdf-coordinate-grid">
+            <label>X<input type="number" min="0" max="1" step="0.01" value={formDraft.x} onChange={(event)=>setFormDraft({...formDraft,x:Number(event.target.value)})}/></label>
+            <label>Y<input type="number" min="0" max="1" step="0.01" value={formDraft.y} onChange={(event)=>setFormDraft({...formDraft,y:Number(event.target.value)})}/></label>
+            {formDraft.type==='text'
+              ? <>
+                  <label>W<input type="number" min="0.01" max="1" step="0.01" value={formDraft.width} onChange={(event)=>setFormDraft({...formDraft,width:Number(event.target.value)})}/></label>
+                  <label>H<input type="number" min="0.01" max="1" step="0.01" value={formDraft.height} onChange={(event)=>setFormDraft({...formDraft,height:Number(event.target.value)})}/></label>
+                </>
+              : <label>Size<input type="number" min="0.01" max="0.25" step="0.01" value={formDraft.size} onChange={(event)=>setFormDraft({...formDraft,size:Number(event.target.value)})}/></label>}
+          </div>
+          <button disabled={mutating} onClick={()=>void addFormField()}>Add form field</button>
+          <div className="pdf-feature-list">
+            <b>{formFields.length} AcroForm field{formFields.length===1?'':'s'}</b>
+            {formFields.slice(0,12).map((field)=><span key={field}>{field}</span>)}
+            {formFields.length>12&&<span>+ {formFields.length-12} more</span>}
+          </div>
+          <button disabled={mutating||!formFields.length} onClick={()=>void flattenForm()}><FileCheck2 size={13}/> Flatten form fields</button>
+          <small>Flattening permanently paints field appearances into the PDF and removes interactive fields. It is undoable only inside the current MALENJO tab history until export/close.</small>
+        </div>
+
+        <div className="pdf-pane-title">Attachments</div>
+        <div className="pdf-edit-form">
+          <button disabled={mutating} onClick={()=>attachmentInputRef.current?.click()}><Paperclip size={13}/> Embed file attachment…</button>
+          <small>Embedded attachments are stored inside the PDF. MALENJO currently limits each new attachment to 50 MB; attachment listing/removal is a later completeness item.</small>
         </div>
 
         <div className="pdf-pane-title">Page tools</div>
