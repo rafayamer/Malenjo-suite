@@ -11,6 +11,7 @@ import {
   saveAsLibraryDocument,
 } from './api';
 import {
+  hydrateBrowserStore,
   listBrowserDocuments,
   markBrowserDocumentOpened,
   registerBrowserFiles,
