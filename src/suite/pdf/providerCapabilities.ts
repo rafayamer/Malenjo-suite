@@ -198,7 +198,17 @@ function fieldsForResolvedCapability(
     && operationMatches(operation,'ocr-pdf','ocrPdf','processPdfWithOCR')
   ){
     const directTesseractFields=new Set(['fileInput','languages','ocrType']);
-    return operation.fields.filter((field)=>directTesseractFields.has(field.name));
+    return operation.fields
+      .filter((field)=>directTesseractFields.has(field.name))
+      .map((field)=>field.name==='languages'
+        ? {
+            ...field,
+            kind:'string',
+            enumValues:['eng'],
+            defaultValue:'eng',
+            description:'Reviewed local Tesseract language model. This pack currently includes English only.',
+          }
+        : field);
   }
   return operation.fields;
 }
