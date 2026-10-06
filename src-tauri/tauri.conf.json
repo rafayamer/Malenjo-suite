@@ -37,7 +37,8 @@
     },
     "resources": [
       "../workers/paddleocr/worker.py",
-      "../provider-packs/stirling-core"
+      "../provider-packs/stirling-core",
+      "../provider-packs/qpdf"
     ]
   }
 }
