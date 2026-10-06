@@ -18,6 +18,9 @@ import {
   Paperclip,
   ListChecks,
   FileCheck2,
+  Link2,
+  Tags,
+  FileCog,
 } from 'lucide-react';
 import type { DocumentSession } from '../files/session';
 import type { RegisterDocumentCommands } from '../commands/types';
@@ -31,7 +34,9 @@ import {
   addPdfOptionList,
   addPdfRadioGroup,
   addPdfHeaderFooter,
+  addPdfInternalPageLink,
   addPdfRectangleOverlay,
+  addPdfUriLink,
   addPdfTextField,
   addPdfTextOverlay,
   appendPdf,
@@ -48,8 +53,14 @@ import {
   setPdfPageBox,
   splitPdfAtPage,
   flattenPdfForm,
+  clearPdfPageLabels,
+  inspectPdfDocumentProperties,
   inspectPdfFormFields,
+  setPdfDocumentProperties,
+  setPdfPageLabels,
+  type PdfDocumentProperties,
   type PdfFormFieldInfo,
+  type PdfPageLabelRange,
 } from './editor';
 import { disposePdf, loadPdfBytes, type PdfLoadResult } from './engine';
 import {
@@ -173,6 +184,30 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     right:0,
     bottom:0,
     left:0,
+  });
+  const [pageLabelRanges, setPageLabelRanges] = useState<PdfPageLabelRange[]>([
+    {startPage:1,style:'decimal',prefix:'',startNumber:1},
+  ]);
+  const [linkDraft, setLinkDraft] = useState({
+    kind:'external' as 'external'|'internal',
+    url:'https://',
+    label:'',
+    targetPage:1,
+    x:0.12,
+    y:0.42,
+    width:0.36,
+    height:0.06,
+  });
+  const [propertiesDraft, setPropertiesDraft] = useState<PdfDocumentProperties>({
+    title:'',
+    author:'',
+    subject:'',
+    keywords:[],
+    creator:'',
+    producer:'',
+    language:'',
+    creationDate:'',
+    modificationDate:'',
   });
   const scrollFps = useScrollFps(scrollRef);
   const domIdPrefix=session?.id??previewIdRef.current;
@@ -501,6 +536,21 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     return()=>{cancelled=true;};
   },[sourceBytes]);
 
+  useEffect(()=>{
+    if(!sourceBytes){
+      setPropertiesDraft({
+        title:'',author:'',subject:'',keywords:[],creator:'',producer:'',language:'',
+        creationDate:'',modificationDate:'',
+      });
+      return;
+    }
+    let cancelled=false;
+    void inspectPdfDocumentProperties(sourceBytes)
+      .then((properties)=>{ if(!cancelled)setPropertiesDraft(properties); })
+      .catch(()=>{});
+    return()=>{cancelled=true;};
+  },[sourceBytes]);
+
   async function attachDocuments(event:React.ChangeEvent<HTMLInputElement>){
     const files=Array.from(event.target.files??[]);
     event.target.value='';
@@ -651,6 +701,67 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         right:pageBoxDraft.right,
         bottom:pageBoxDraft.bottom,
         left:pageBoxDraft.left,
+      }),
+      currentPage,
+    );
+  }
+
+  function updatePageLabelRange(index:number,patch:Partial<PdfPageLabelRange>){
+    setPageLabelRanges((current)=>current.map((range,rangeIndex)=>rangeIndex===index?{...range,...patch}:range));
+  }
+
+  async function applyPageLabels(){
+    await mutate(
+      `Applied ${pageLabelRanges.length} PDF page-label range(s).`,
+      (bytes)=>setPdfPageLabels(bytes,pageLabelRanges),
+      currentPage,
+    );
+  }
+
+  async function removePageLabels(){
+    await mutate(
+      'Removed PDF page-label ranges.',
+      (bytes)=>clearPdfPageLabels(bytes),
+      currentPage,
+    );
+  }
+
+  async function addConfiguredLink(){
+    if(linkDraft.kind==='internal'){
+      await mutate(
+        `Added internal link to page ${linkDraft.targetPage}.`,
+        (bytes)=>addPdfInternalPageLink(bytes,{
+          pageNumber:currentPage,
+          targetPageNumber:linkDraft.targetPage,
+          x:linkDraft.x,y:linkDraft.y,width:linkDraft.width,height:linkDraft.height,
+        }),
+        currentPage,
+      );
+      return;
+    }
+    await mutate(
+      'Added external PDF link annotation.',
+      (bytes)=>addPdfUriLink(bytes,{
+        pageNumber:currentPage,
+        url:linkDraft.url,
+        label:linkDraft.label,
+        x:linkDraft.x,y:linkDraft.y,width:linkDraft.width,height:linkDraft.height,
+      }),
+      currentPage,
+    );
+  }
+
+  async function applyDocumentProperties(){
+    await mutate(
+      'Updated PDF document properties.',
+      (bytes)=>setPdfDocumentProperties(bytes,{
+        title:propertiesDraft.title,
+        author:propertiesDraft.author,
+        subject:propertiesDraft.subject,
+        keywords:propertiesDraft.keywords,
+        creator:propertiesDraft.creator,
+        producer:propertiesDraft.producer,
+        language:propertiesDraft.language,
       }),
       currentPage,
     );
@@ -828,6 +939,33 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           run:()=>applyPageBox(),
         },
         {
+          id:'page-labels',
+          label:'Apply PDF page labels',
+          keywords:'page labels roman numbering prefix sections',
+          detail:`${pageLabelRanges.length} configured label range(s)`,
+          enabled:!!sourceBytes && !mutating && pageLabelRanges.length>0,
+          disabledReason:!sourceBytes ? 'No PDF is loaded.' : !pageLabelRanges.length ? 'Configure at least one page-label range.' : 'Wait for the current PDF edit to finish.',
+          run:()=>applyPageLabels(),
+        },
+        {
+          id:'add-link',
+          label:'Add PDF link',
+          keywords:'hyperlink uri internal page link annotation',
+          detail:linkDraft.kind==='external' ? linkDraft.url : `Target page ${linkDraft.targetPage}`,
+          enabled:!!sourceBytes && !mutating,
+          disabledReason:!sourceBytes ? 'No PDF is loaded.' : 'Wait for the current PDF edit to finish.',
+          run:()=>addConfiguredLink(),
+        },
+        {
+          id:'properties',
+          label:'Apply PDF document properties',
+          keywords:'metadata title author subject keywords language creator producer properties',
+          detail:propertiesDraft.title||sourceName,
+          enabled:!!sourceBytes && !mutating,
+          disabledReason:!sourceBytes ? 'No PDF is loaded.' : 'Wait for the current PDF edit to finish.',
+          run:()=>applyDocumentProperties(),
+        },
+        {
           id:'print',
           label:'Print current PDF',
           keywords:'print printer ctrl p',
@@ -841,7 +979,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     return () => registerCommands(null);
   }, [
     session, registerCommands, sourceBytes, pdf, dirty, mutating, historyRevision, formFields.length,
-    headerFooterDraft, batesDraft, pageBoxDraft, formDraft, currentPage, pageCount, selectedPages,
+    headerFooterDraft, batesDraft, pageBoxDraft, pageLabelRanges, linkDraft, propertiesDraft, formDraft,
+    currentPage, pageCount, selectedPages,
   ]);
 
   const zoomLabel = fitMode === 'width'
@@ -1132,6 +1271,66 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           </div>
           <button disabled={mutating} onClick={()=>void applyPageBox()}>Apply page box</button>
           <small>Margins are points inset from each page’s MediaBox. Invalid/inverted boxes are rejected; the operation is undoable before export.</small>
+        </div>
+
+        <div className="pdf-pane-title">Page labels</div>
+        <div className="pdf-edit-form">
+          {pageLabelRanges.map((range,index)=><div className="pdf-label-range" key={index}>
+            <div className="pdf-coordinate-grid">
+              <label>Start page<input type="number" min="1" max={pageCount||1} step="1" value={range.startPage} onChange={(event)=>updatePageLabelRange(index,{startPage:Number(event.target.value)})}/></label>
+              <label>Start #<input type="number" min="1" step="1" value={range.startNumber??1} onChange={(event)=>updatePageLabelRange(index,{startNumber:Number(event.target.value)})}/></label>
+            </div>
+            <label>Style<select value={range.style} onChange={(event)=>updatePageLabelRange(index,{style:event.target.value as PdfPageLabelRange['style']})}>
+              <option value="decimal">1, 2, 3</option>
+              <option value="roman-upper">I, II, III</option>
+              <option value="roman-lower">i, ii, iii</option>
+              <option value="letters-upper">A, B, C</option>
+              <option value="letters-lower">a, b, c</option>
+              <option value="none">Prefix only</option>
+            </select></label>
+            <label>Prefix<input value={range.prefix??''} onChange={(event)=>updatePageLabelRange(index,{prefix:event.target.value})} placeholder="Optional prefix"/></label>
+            <button disabled={pageLabelRanges.length===1} onClick={()=>setPageLabelRanges((current)=>current.filter((_,rangeIndex)=>rangeIndex!==index))}>Remove range</button>
+          </div>)}
+          <button onClick={()=>setPageLabelRanges((current)=>[...current,{startPage:Math.min(pageCount||1,currentPage),style:'decimal',prefix:'',startNumber:1}])}>Add label range</button>
+          <button disabled={mutating||!pageLabelRanges.length} onClick={()=>void applyPageLabels()}><Tags size={13}/> Apply page labels</button>
+          <button disabled={mutating} onClick={()=>void removePageLabels()}>Clear page labels</button>
+          <small>Ranges are stored in the PDF catalog’s standard <code>/PageLabels</code> number tree and may differ from physical page indexes.</small>
+        </div>
+
+        <div className="pdf-pane-title">Links</div>
+        <div className="pdf-edit-form">
+          <label><Link2 size={13}/> Link type<select value={linkDraft.kind} onChange={(event)=>setLinkDraft({...linkDraft,kind:event.target.value as 'external'|'internal'})}><option value="external">External URL / email</option><option value="internal">Internal page</option></select></label>
+          {linkDraft.kind==='external'
+            ? <>
+                <label>URL<input value={linkDraft.url} onChange={(event)=>setLinkDraft({...linkDraft,url:event.target.value})} placeholder="https://example.com"/></label>
+                <label>Visible label (optional)<input value={linkDraft.label} onChange={(event)=>setLinkDraft({...linkDraft,label:event.target.value})}/></label>
+              </>
+            : <label>Target page<input type="number" min="1" max={pageCount||1} value={linkDraft.targetPage} onChange={(event)=>setLinkDraft({...linkDraft,targetPage:Number(event.target.value)})}/></label>}
+          <div className="pdf-coordinate-grid">
+            <label>X<input type="number" min="0" max="1" step="0.01" value={linkDraft.x} onChange={(event)=>setLinkDraft({...linkDraft,x:Number(event.target.value)})}/></label>
+            <label>Y<input type="number" min="0" max="1" step="0.01" value={linkDraft.y} onChange={(event)=>setLinkDraft({...linkDraft,y:Number(event.target.value)})}/></label>
+            <label>W<input type="number" min="0.01" max="1" step="0.01" value={linkDraft.width} onChange={(event)=>setLinkDraft({...linkDraft,width:Number(event.target.value)})}/></label>
+            <label>H<input type="number" min="0.01" max="1" step="0.01" value={linkDraft.height} onChange={(event)=>setLinkDraft({...linkDraft,height:Number(event.target.value)})}/></label>
+          </div>
+          <button disabled={mutating} onClick={()=>void addConfiguredLink()}>Add link on current page</button>
+          <small>External links are restricted to http, https and mailto. Internal links use a standard PDF destination targeting another page.</small>
+        </div>
+
+        <div className="pdf-pane-title">Document properties</div>
+        <div className="pdf-edit-form">
+          <label><FileCog size={13}/> Title<input value={propertiesDraft.title} onChange={(event)=>setPropertiesDraft({...propertiesDraft,title:event.target.value})}/></label>
+          <label>Author<input value={propertiesDraft.author} onChange={(event)=>setPropertiesDraft({...propertiesDraft,author:event.target.value})}/></label>
+          <label>Subject<input value={propertiesDraft.subject} onChange={(event)=>setPropertiesDraft({...propertiesDraft,subject:event.target.value})}/></label>
+          <label>Keywords<input value={propertiesDraft.keywords.join(', ')} onChange={(event)=>setPropertiesDraft({...propertiesDraft,keywords:event.target.value.split(',').map((value)=>value.trim()).filter(Boolean)})}/></label>
+          <label>Language<input value={propertiesDraft.language} onChange={(event)=>setPropertiesDraft({...propertiesDraft,language:event.target.value})} placeholder="en-US"/></label>
+          <label>Creator<input value={propertiesDraft.creator} onChange={(event)=>setPropertiesDraft({...propertiesDraft,creator:event.target.value})}/></label>
+          <label>Producer<input value={propertiesDraft.producer} onChange={(event)=>setPropertiesDraft({...propertiesDraft,producer:event.target.value})}/></label>
+          <div className="pdf-property-dates">
+            <span>Created <b>{propertiesDraft.creationDate||'—'}</b></span>
+            <span>Modified <b>{propertiesDraft.modificationDate||'—'}</b></span>
+          </div>
+          <button disabled={mutating} onClick={()=>void applyDocumentProperties()}>Apply document properties</button>
+          <small>Updating properties writes standard PDF information/language fields and refreshes the modification date. Metadata Studio remains the broader privacy/forensic tool.</small>
         </div>
 
         <div className="pdf-pane-title">Page tools</div>

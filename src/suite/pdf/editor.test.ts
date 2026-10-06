@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { PDFArray, PDFDict, PDFDocument, PDFName } from 'pdf-lib';
 import {
   addPdfBatesNumbers, addPdfCheckBox, addPdfCommentAnnotation, addPdfDropdown, addPdfHeaderFooter,
+  addPdfInternalPageLink, addPdfUriLink,
   addPdfOptionList, addPdfRadioGroup, addPdfRectangleOverlay, addPdfTextField, addPdfTextOverlay, appendPdf,
   attachFileToPdf, deletePdfPage, deletePdfPages, duplicatePdfPage, extractPdfPage, extractPdfPages,
-  flattenPdfForm, inspectPdfFormFields, insertBlankPdfPage, insertPdfAfter, listPdfFormFields, movePdfPage,
+  clearPdfPageLabels, flattenPdfForm, inspectPdfDocumentProperties, inspectPdfFormFields, insertBlankPdfPage,
+  insertPdfAfter, listPdfFormFields, movePdfPage, setPdfDocumentProperties, setPdfPageLabels,
   rotatePdfPagePermanent, rotatePdfPagesPermanent, setPdfPageBox, splitPdfAtPage,
 } from './editor';
 
@@ -245,6 +247,74 @@ describe('PDF mutation core',()=>{
     await expect(addPdfCommentAnnotation(bytes,{pageNumber:1,text:'',x:0.2,y:0.2})).rejects.toThrow(/empty/i);
     await expect(addPdfTextField(bytes,{pageNumber:1,name:'x',x:0.9,y:0.1,width:0.2,height:0.1})).rejects.toThrow(/inside the page/i);
     await expect(attachFileToPdf(bytes,{name:'empty.bin',bytes:new Uint8Array()})).rejects.toThrow(/empty/i);
+  });
+
+  it('writes and clears PDF page-label number trees',async()=>{
+    const source=await sample(4);
+    const labeled=await setPdfPageLabels(source,[
+      {startPage:1,style:'roman-lower',prefix:'Intro-',startNumber:1},
+      {startPage:3,style:'decimal',prefix:'P-',startNumber:1},
+    ]);
+    const pdf=await PDFDocument.load(labeled);
+    const labels=pdf.catalog.lookupMaybe(PDFName.of('PageLabels'),PDFDict);
+    expect(labels).toBeDefined();
+    const nums=labels?.lookupMaybe(PDFName.of('Nums'),PDFArray);
+    expect(nums?.size()).toBe(4);
+
+    const cleared=await clearPdfPageLabels(labeled);
+    const clearedPdf=await PDFDocument.load(cleared);
+    expect(clearedPdf.catalog.lookupMaybe(PDFName.of('PageLabels'),PDFDict)).toBeUndefined();
+  });
+
+  it('creates real external and internal PDF link annotations',async()=>{
+    let bytes=await addPdfUriLink(await sample(3),{
+      pageNumber:1,
+      url:'https://example.com/reference',
+      label:'Reference',
+      x:0.1,y:0.8,width:0.35,height:0.07,
+    });
+    bytes=await addPdfInternalPageLink(bytes,{
+      pageNumber:1,
+      targetPageNumber:3,
+      x:0.1,y:0.65,width:0.35,height:0.07,
+    });
+    const pdf=await PDFDocument.load(bytes);
+    const annots=pdf.getPage(0).node.lookupMaybe(PDFName.of('Annots'),PDFArray);
+    expect(annots?.size()).toBe(2);
+  });
+
+  it('round-trips standard PDF document properties',async()=>{
+    const updated=await setPdfDocumentProperties(await sample(1),{
+      title:'MALENJO Test',
+      author:'Rafius Tech LLC',
+      subject:'PDF completeness',
+      keywords:['malenjo','student'],
+      creator:'MALENJO Suite',
+      producer:'MALENJO PDF Workspace',
+      language:'en-US',
+    });
+    const properties=await inspectPdfDocumentProperties(updated);
+    expect(properties).toMatchObject({
+      title:'MALENJO Test',
+      author:'Rafius Tech LLC',
+      subject:'PDF completeness',
+      creator:'MALENJO Suite',
+      producer:'MALENJO PDF Workspace',
+      language:'en-US',
+    });
+    expect(properties.keywords).toEqual(expect.arrayContaining(['malenjo','student']));
+    expect(properties.modificationDate).not.toBe('');
+  });
+
+  it('rejects unsafe link and page-label inputs',async()=>{
+    const source=await sample(2);
+    await expect(addPdfUriLink(source,{
+      pageNumber:1,url:'javascript:alert(1)',x:0.1,y:0.1,width:0.2,height:0.1,
+    })).rejects.toThrow(/http, https or mailto/i);
+    await expect(setPdfPageLabels(source,[
+      {startPage:1,style:'decimal',startNumber:1},
+      {startPage:1,style:'roman-upper',startNumber:1},
+    ])).rejects.toThrow(/only one/i);
   });
 
   it('rejects overlay coordinates outside the page',async()=>{
