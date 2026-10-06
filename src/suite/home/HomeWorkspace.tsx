@@ -275,7 +275,7 @@ export default function HomeWorkspace({
     </section>}
 
     <div className="home-dashboard-grid">
-      <section className="home-work-panel" aria-labelledby="home-work-title">
+      <section className="home-work-panel" aria-label="Home documents and pinned locations">
         <div className="home-work-head">
           <div className="home-tabs" role="tablist" aria-label="Home document views">
             {(['recent','starred','locations'] as HomeView[]).map((view)=><button
@@ -291,7 +291,7 @@ export default function HomeWorkspace({
             : <button className="home-add-location" disabled={busy} onClick={()=>void addPinnedFolder()}><Plus size={14}/>Pin folder</button>}
         </div>
 
-        <div className="home-work-content" id="home-work-title">
+        <div className="home-work-content" role="tabpanel" aria-live="polite">
           {state.activeView==='locations'
             ? <div className="home-location-list">
                 {desktop && state.pinnedLocations.map((location)=><article key={location.id} className="home-location-card">
