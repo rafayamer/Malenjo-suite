@@ -15,6 +15,15 @@ const qpdf:PdfProviderComponentStatus={
   message:'ready',
 };
 
+const tesseract:PdfProviderComponentStatus={
+  id:'tesseract',
+  available:true,
+  version:'5.5.3',
+  executable:'C:\\MALENJO\\providers\\tesseract\\tesseract.exe',
+  source:'bundled',
+  message:'ready',
+};
+
 describe('PDF provider capability resolver',()=>{
   it('uses approved qpdf for repair and records the Java/PDFBox fallback',()=>{
     const result=resolvePdfProviderCapability(operation('/api/v1/misc/repair','repairPdf'),[qpdf]);
@@ -61,6 +70,23 @@ describe('PDF provider capability resolver',()=>{
       expect(result.available).toBe(false);
       expect(result.providerId).toMatch(/libreoffice|pdftohtml/);
     }
+  });
+
+  it('enables OCR and OSD only when the reviewed Tesseract component is available',()=>{
+    const ocr=resolvePdfProviderCapability(operation('/api/v1/misc/ocr-pdf','processPdfWithOCR'),[tesseract]);
+    const rotate=resolvePdfProviderCapability(operation('/api/v1/misc/auto-rotate-pdf','autoRotatePdf'),[tesseract]);
+    expect(ocr).toEqual(expect.objectContaining({
+      available:true,
+      providerId:'tesseract',
+      providerVersion:'5.5.3',
+      componentPack:'tesseract-windows-x64',
+    }));
+    expect(rotate).toEqual(expect.objectContaining({
+      available:true,
+      providerId:'tesseract',
+      providerVersion:'5.5.3',
+      componentPack:'tesseract-windows-x64',
+    }));
   });
 
   it('does not turn absent OCR/Office/proprietary providers into operational tools',()=>{
