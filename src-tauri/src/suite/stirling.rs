@@ -274,14 +274,21 @@ fn tesseract_candidates(app: &AppHandle) -> Vec<(String, String)> {
 }
 
 fn parse_tesseract_version(output: &str) -> Option<String> {
-    output
-        .split_whitespace()
-        .find(|token| {
-            token.chars().next().is_some_and(|ch| ch.is_ascii_digit())
-                && token.chars().any(|ch| ch == '.')
-        })
-        .map(|token| token.trim_matches(|ch: char| !ch.is_ascii_digit() && ch != '.').to_string())
-        .filter(|value| !value.is_empty())
+    let first_line = output.lines().find(|line| !line.trim().is_empty())?.trim();
+    let mut parts = first_line.split_whitespace();
+    if !parts.next()?.eq_ignore_ascii_case("tesseract") {
+        return None;
+    }
+    let token = parts.next()?.trim_start_matches(['v', 'V']);
+    let version = token
+        .chars()
+        .take_while(|ch| ch.is_ascii_digit() || *ch == '.')
+        .collect::<String>();
+    if version.starts_with(|ch: char| ch.is_ascii_digit()) && version.contains('.') {
+        Some(version)
+    } else {
+        None
+    }
 }
 
 fn tesseract_data_dir(executable: &str) -> Option<PathBuf> {
@@ -764,7 +771,8 @@ mod tests {
     #[test]
     fn tesseract_version_parser_requires_a_numeric_version_token() {
         assert_eq!(parse_tesseract_version("tesseract 5.5.3\n leptonica-1.85"), Some("5.5.3".into()));
-        assert_eq!(parse_tesseract_version("tesseract unknown"), None);
+        assert_eq!(parse_tesseract_version("tesseract v5.5.3.20260724\n leptonica-1.87.0"), Some("5.5.3.20260724".into()));
+        assert_eq!(parse_tesseract_version("libgif 5.2.2\ntesseract unknown"), None);
     }
 
     #[test]
