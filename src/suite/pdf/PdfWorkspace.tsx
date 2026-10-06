@@ -17,6 +17,8 @@ import {
   PanelRightOpen,
   Sparkles,
   ShieldCheck,
+  Maximize2,
+  MonitorPlay,
 } from 'lucide-react';
 import type { DocumentSession } from '../files/session';
 import type { RegisterDocumentCommands } from '../commands/types';
@@ -71,6 +73,7 @@ import PdfThumbnail from './PdfThumbnail';
 import PdfProviderToolsPanel from './PdfProviderToolsPanel';
 import { defaultPdfToolProvider } from './defaultProvider';
 import type { PdfProviderToolCategory } from './backend';
+import { pdfViewPages, type PdfViewMode } from './viewMode';
 import { useScrollFps } from './useScrollFps';
 import {
   DEFAULT_PDF_LEFT_PANEL,
@@ -136,6 +139,7 @@ function PdfLeftPanelIcon({id}:{id:PdfLeftPanelId}) {
 }
 
 export default function PdfWorkspace({ session, active, notice, onBackToFiles, onNavigateModule, onDirtyChange, onSavingChange, registerCommands }: Props) {
+  const workspaceRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const appendInputRef = useRef<HTMLInputElement>(null);
@@ -159,6 +163,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [fitMode, setFitMode] = useState<PdfFitMode>('width');
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
+  const [viewMode, setViewMode] = useState<PdfViewMode>('continuous');
+  const [presentationMode, setPresentationMode] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mutating, setMutating] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -1040,6 +1047,33 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       ? 'Fit page'
       : `${Math.round(zoom * 100)}%`;
 
+  const viewPages=pdfViewPages(viewMode,currentPage,pageCount);
+
+  useEffect(()=>{
+    function onFullscreenChange(){
+      const active=Boolean(document.fullscreenElement);
+      setFullscreen(active);
+      if(!active)setPresentationMode(false);
+    }
+    document.addEventListener('fullscreenchange',onFullscreenChange);
+    return()=>document.removeEventListener('fullscreenchange',onFullscreenChange);
+  },[]);
+
+  const toggleFullscreen=async(presentation=false)=>{
+    const element=workspaceRef.current;
+    if(!element)return;
+    if(document.fullscreenElement){
+      await document.exitFullscreen();
+      return;
+    }
+    setPresentationMode(presentation);
+    if(presentation){
+      setViewMode('single');
+      setFitMode('page');
+    }
+    await element.requestFullscreen();
+  };
+
   const thumbnailsRenderAllowed = forceRenderAll
     || pdfCriticalPassReady(currentPage, pageCount, renderedPages);
   const pdfLayoutClass = [
@@ -1135,7 +1169,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     window.requestAnimationFrame(()=>document.getElementById(`${domIdPrefix}-task-${category}`)?.focus());
   };
 
-  return <div className="pdf-workspace">
+  return <div ref={workspaceRef} className={`pdf-workspace${presentationMode?' presentation-mode':''}`}>
     <input
       ref={fileInputRef}
       className="visually-hidden"
@@ -1230,7 +1264,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             <button disabled={!pdf} onClick={() => { setFitMode('custom'); setZoom((value) => stepPdfZoom(value, -1)); }} aria-label="Zoom out"><Minus size={16}/></button>
             <button className="pdf-zoom-label" disabled={!pdf} onClick={() => setFitMode((mode) => mode === 'width' ? 'page' : 'width')} aria-label={`Zoom mode: ${zoomLabel}`}>{zoomLabel}</button>
             <button disabled={!pdf} onClick={() => { setFitMode('custom'); setZoom((value) => stepPdfZoom(value, 1)); }} aria-label="Zoom in"><Plus size={16}/></button>
+            <button disabled={!pdf} onClick={() => {setFitMode('custom');setZoom(1);}} aria-label="Actual size" title="Actual size">100%</button>
+            <button disabled={!pdf} className={viewMode==='single'?'active':''} onClick={()=>setViewMode('single')} aria-label="Single page view" title="Single page">1</button>
+            <button disabled={!pdf} className={viewMode==='continuous'?'active':''} onClick={()=>setViewMode('continuous')} aria-label="Continuous page view" title="Continuous">↕</button>
+            <button disabled={!pdf} className={viewMode==='two'?'active':''} onClick={()=>setViewMode('two')} aria-label="Two-page view" title="Two page">2</button>
             <button disabled={!pdf} onClick={() => setRotation((value) => rotatePdfClockwise(value))} aria-label="Rotate view clockwise" title="Rotate view clockwise"><RotateCw size={16}/></button>
+            <button disabled={!pdf} onClick={()=>void toggleFullscreen(false)} aria-label={fullscreen?'Exit full screen':'Full screen'} title={fullscreen?'Exit full screen':'Full screen'}><Maximize2 size={16}/></button>
+            <button disabled={!pdf} onClick={()=>void toggleFullscreen(true)} aria-label="Presentation mode" title="Presentation mode"><MonitorPlay size={16}/></button>
             <button
               disabled={!pdf}
               onClick={()=>setInspectorHidden((value)=>!value)}
@@ -1360,7 +1400,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
       <div ref={scrollRef} className="pdf-scroll">
         <div className="pdf-stage">
-          {Array.from({ length: pageCount }, (_, index) => index + 1).map((page) => {
+          {viewPages.map((page) => {
             const schedule = pdfPageSchedule(page, currentPage, pageCount, renderedPages);
             return <PdfPageCanvas
               key={page}
