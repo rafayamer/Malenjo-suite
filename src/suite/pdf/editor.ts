@@ -1,9 +1,11 @@
 import {
   PDFArray,
   PDFDocument,
+  PDFDict,
   PDFHexString,
   PDFName,
   PDFNumber,
+  PDFPage,
   PDFString,
   StandardFonts,
   degrees,
@@ -854,11 +856,20 @@ export async function setPdfPageLabels(
   const nums=pdf.context.obj([]) as PDFArray;
   for(const range of normalizedRanges){
     const style=pageLabelStyleName(range.style);
-    const entries:Record<string,unknown>={};
-    if(style)entries.S=PDFName.of(style);
-    if(range.prefix)entries.P=PDFHexString.fromText(range.prefix);
-    if(style)entries.St=PDFNumber.of(range.startNumber);
-    const dictionary=pdf.context.obj(entries);
+    const dictionary=style
+      ? range.prefix
+        ? pdf.context.obj({
+            S:PDFName.of(style),
+            P:PDFHexString.fromText(range.prefix),
+            St:PDFNumber.of(range.startNumber),
+          })
+        : pdf.context.obj({
+            S:PDFName.of(style),
+            St:PDFNumber.of(range.startNumber),
+          })
+      : range.prefix
+        ? pdf.context.obj({P:PDFHexString.fromText(range.prefix)})
+        : pdf.context.obj({});
     nums.push(PDFNumber.of(range.startPage-1));
     nums.push(dictionary);
   }
@@ -874,7 +885,7 @@ export async function clearPdfPageLabels(bytes:Uint8Array):Promise<Uint8Array>{
 }
 
 function linkRectangle(
-  page:{getSize():{width:number;height:number}},
+  page:PDFPage,
   x:number,
   y:number,
   widthFraction:number,
@@ -893,8 +904,8 @@ function linkRectangle(
 
 function appendAnnotation(
   pdf:PDFDocument,
-  page:{node:{lookupMaybe(key:PDFName,type:typeof PDFArray):PDFArray|undefined;set(key:PDFName,value:PDFArray):void}},
-  annotation:unknown,
+  page:PDFPage,
+  annotation:PDFDict,
 ):void{
   const annotsKey=PDFName.of('Annots');
   let annots=page.node.lookupMaybe(annotsKey,PDFArray);
@@ -902,7 +913,7 @@ function appendAnnotation(
     annots=pdf.context.obj([]) as PDFArray;
     page.node.set(annotsKey,annots);
   }
-  annots.push(pdf.context.register(pdf.context.obj(annotation)));
+  annots.push(pdf.context.register(annotation));
 }
 
 function safeLinkUri(value:string):string{
@@ -937,13 +948,14 @@ export async function addPdfUriLink(bytes:Uint8Array,spec:PdfUriLinkSpec):Promis
     S:PDFName.of('URI'),
     URI:PDFString.of(uri),
   });
-  appendAnnotation(pdf,page,{
+  const annotation=pdf.context.obj({
     Type:PDFName.of('Annot'),
     Subtype:PDFName.of('Link'),
     Rect:rect,
     Border:[0,0,0],
     A:action,
-  });
+  }) as PDFDict;
+  appendAnnotation(pdf,page,annotation);
   const label=(spec.label??'').replace(/[\u0000-\u001F]/g,' ').trim().slice(0,500);
   if(label){
     const font=await pdf.embedFont(StandardFonts.Helvetica);
@@ -974,13 +986,14 @@ export async function addPdfInternalPageLink(bytes:Uint8Array,spec:PdfInternalLi
   const source=pdf.getPage(requirePage(spec.pageNumber,pdf.getPageCount()));
   const target=pdf.getPage(requirePage(spec.targetPageNumber,pdf.getPageCount()));
   const rect=linkRectangle(source,spec.x,spec.y,spec.width,spec.height);
-  appendAnnotation(pdf,source,{
+  const annotation=pdf.context.obj({
     Type:PDFName.of('Annot'),
     Subtype:PDFName.of('Link'),
     Rect:rect,
     Border:[0,0,0],
     Dest:[target.ref,PDFName.of('Fit')],
-  });
+  }) as PDFDict;
+  appendAnnotation(pdf,source,annotation);
   return Uint8Array.from(await pdf.save({useObjectStreams:false}));
 }
 
