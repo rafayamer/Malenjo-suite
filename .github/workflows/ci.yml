@@ -215,10 +215,12 @@ jobs:
               "/api/v1/misc/repair",
               "/api/v1/misc/compress-pdf",
               "/api/v1/misc/ocr-pdf",
-              "/api/v1/misc/auto-rotate-pdf"
+              "/api/v1/misc/auto-rotate-pdf",
+              "/api/v1/misc/scanner-effect",
+              "/api/v1/misc/replace-invert-pdf"
             )) {
               if (!$api.paths.PSObject.Properties.Name.Contains($requiredPath)) {
-                throw "Expected qpdf-backed operation $requiredPath to be present."
+                throw "Expected reviewed local PDF operation $requiredPath to be present."
               }
             }
 
@@ -258,13 +260,21 @@ jobs:
             & $curl --fail --silent --show-error -o $rotateOut -F "fileInput=@$ocrFixture;type=application/pdf" -F "detectionMode=osd" -F "confidenceThreshold=0" -F "dryRun=false" -F "inferUndetected=false" "http://127.0.0.1:28970/api/v1/misc/auto-rotate-pdf"
             if ($LASTEXITCODE -ne 0) { throw "Tesseract auto-rotate PDF operation smoke failed." }
 
-            foreach ($output in @($repairOut, $compressOut, $ocrOut, $rotateOut)) {
+            $invertOut = Join-Path (Resolve-Path ".build/provider-smoke") "full-inversion.pdf"
+            & $curl --fail --silent --show-error -o $invertOut -F "fileInput=@$fixture;type=application/pdf" -F "replaceAndInvertOption=FULL_INVERSION" -F "highContrastColorCombination=WHITE_TEXT_ON_BLACK" "http://127.0.0.1:28970/api/v1/misc/replace-invert-pdf"
+            if ($LASTEXITCODE -ne 0) { throw "Open-core full-inversion operation smoke failed." }
+
+            $scannerOut = Join-Path (Resolve-Path ".build/provider-smoke") "scanner-effect.pdf"
+            & $curl --fail --silent --show-error -o $scannerOut -F "fileInput=@$fixture;type=application/pdf" -F "quality=low" -F "rotation=none" -F "colorspace=grayscale" -F "advancedEnabled=false" "http://127.0.0.1:28970/api/v1/misc/scanner-effect"
+            if ($LASTEXITCODE -ne 0) { throw "Open-core scanner-effect operation smoke failed." }
+
+            foreach ($output in @($repairOut, $compressOut, $ocrOut, $rotateOut, $invertOut, $scannerOut)) {
               $bytes = [System.IO.File]::ReadAllBytes($output)
               if ($bytes.Length -lt 5 -or [Text.Encoding]::ASCII.GetString($bytes, 0, 5) -ne "%PDF-") {
                 throw "Provider smoke output is not a PDF: $output"
               }
             }
-            Write-Host "qpdf + Tesseract provider groups passed repair, compression, OCR and auto-rotate localhost smoke tests."
+            Write-Host "Reviewed provider groups passed repair, compression, OCR, auto-rotate, full-inversion and scanner-effect localhost smoke tests."
           } finally {
             if (!$process.HasExited) { Stop-Process -Id $process.Id -Force }
           }
