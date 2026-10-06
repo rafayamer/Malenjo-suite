@@ -94,7 +94,7 @@ Desktop/Tauri export uses the system save picker followed by the native `write_s
 
 ### Third-party notices
 
-The Help UI includes an offline policy summary and a direct notices/policy link to `docs/THIRD_PARTY_POLICY.md`. Provider names are confined to diagnostics/notices where they are technically useful. This does **not** claim that the wider release SBOM/license program is complete; release-level dependency review remains a separate source requirement.
+The Help UI includes an offline policy summary and a direct notices/policy link to `docs/THIRD_PARTY_NOTICES.md`. Provider names are confined to diagnostics/notices where they are technically useful. The notice document points onward to `docs/THIRD_PARTY_POLICY.md`. This does **not** claim that the wider release SBOM/license program is complete; release-level dependency review remains a separate source requirement.
 
 ## Tests
 
