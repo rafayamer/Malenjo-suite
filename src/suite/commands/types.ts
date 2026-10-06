@@ -19,7 +19,8 @@ export type DocumentCommandId =
   | 'header-footer'
   | 'bates'
   | 'page-box'
-  | 'toggle-inspector';
+  | 'toggle-inspector'
+  | 'pdf-toolbar-action';
 
 export interface DocumentCommandDescriptor {
   id: DocumentCommandId;
