@@ -136,8 +136,20 @@ export function resolvePdfProviderCapability(
     return coreCapability('WeasyPrint remains optional and unapproved as a bundled pack');
   }
 
-  if(matches('replace-invert-pdf','replaceInvertPdf','scanner-effect','scannerEffect','pdf-to-vector','pdfToVector','vector-to-pdf','vectorToPdf')){
-    return unavailable('ghostscript','Ghostscript-only Stirling operation');
+  if(matches('scanner-effect','scannerEffect')){
+    return capability(true,'Stirling open core / Java-PDFBox-AWT scanner simulation','stirling-core',{
+      fallback:'No Ghostscript executable is required by the pinned core implementation.',
+    });
+  }
+
+  if(matches('replace-invert-pdf','replaceInvertPdf')){
+    return capability(true,'Stirling open core / Java-PDFBox color transformation','stirling-core',{
+      fallback:'High contrast, custom color and full inversion are core; CMYK color-space conversion is excluded because it requires Ghostscript.',
+    });
+  }
+
+  if(matches('pdf-to-vector','pdfToVector','vector-to-pdf','vectorToPdf')){
+    return unavailable('ghostscript','Ghostscript-only Stirling vector/PostScript operation');
   }
 
   if(matches('ocr-pdf','ocrPdf')){
@@ -193,6 +205,20 @@ function fieldsForResolvedCapability(
   operation:PdfProviderOperation,
   resolved:PdfProviderCapability,
 ):PdfProviderOperation['fields']{
+  if(
+    resolved.providerId==='stirling-core'
+    && operationMatches(operation,'replace-invert-pdf','replaceInvertPdf')
+  ){
+    return operation.fields.map((field)=>field.name==='replaceAndInvertOption'
+      ? {
+          ...field,
+          enumValues:['HIGH_CONTRAST_COLOR','CUSTOM_COLOR','FULL_INVERSION'],
+          defaultValue:'HIGH_CONTRAST_COLOR',
+          description:'Core PDFBox modes only. CMYK color-space conversion is omitted because the pinned Stirling implementation requires Ghostscript for that submode.',
+        }
+      : field);
+  }
+
   if(
     resolved.providerId==='tesseract'
     && operationMatches(operation,'ocr-pdf','ocrPdf','processPdfWithOCR')
