@@ -166,7 +166,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       const selectedFiles=extraFiles[field.name]??[];
       return <div className="stirling-field" key={field.name}>
         <label><span>{field.label}{field.required?' *':''}</span>
-          <input type="file" multiple={field.kind==='files'} onChange={(event)=>setExtraFiles((current)=>({...current,[field.name]:Array.from(event.target.files??[])}))}/>
+          <input type="file" accept={field.accept} multiple={field.kind==='files'} onChange={(event)=>setExtraFiles((current)=>({...current,[field.name]:Array.from(event.target.files??[])}))}/>
         </label>
         <label className="stirling-active-file">
           <input type="checkbox" checked={Boolean(useActive[field.name])} disabled={!sourceBytes} onChange={(event)=>setUseActive((current)=>({...current,[field.name]:event.target.checked}))}/>
