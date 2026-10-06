@@ -34,6 +34,10 @@ import SignWorkspace from '../security/SignWorkspace';
 import EnterpriseWorkspace from '../enterprise/EnterpriseWorkspace';
 import DocumentTabs from './DocumentTabs';
 import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
+import {
+  DocumentCommandProvider,
+  useDocumentCommandRegistry,
+} from './documentCommands';
 
 const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
   {label:'Open document', icon: FolderOpen, target:'files'},
@@ -43,6 +47,11 @@ const quick: Array<{label:string; icon:typeof FolderOpen; target:ModuleId}> = [
 ];
 
 export default function App() {
+  return <DocumentCommandProvider><AppShell/></DocumentCommandProvider>;
+}
+
+function AppShell() {
+  const { commandsFor, run: runDocumentCommand } = useDocumentCommandRegistry();
   const [active, setActive] = useState<ModuleId>('home');
   const [query, setQuery] = useState('');
   const [commandOpen, setCommandOpen] = useState(false);
@@ -280,24 +289,47 @@ export default function App() {
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      const modifier = event.ctrlKey || event.metaKey;
+      if (modifier && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         setCommandOpen(true);
         return;
       }
-      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'w') {
+      if (modifier && event.shiftKey && event.key.toLowerCase() === 'w') {
         event.preventDefault();
         closeSessions(sessions.map((session) => session.id));
         return;
       }
-      if (activeSessionId && (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'w') {
+      if (activeSessionId && modifier && !event.shiftKey && event.key.toLowerCase() === 'w') {
         event.preventDefault();
         closeSession(activeSessionId);
+        return;
+      }
+      if (!activeSessionId || !modifier) return;
+
+      const target = event.target as HTMLElement | null;
+      const editingText = !!target?.closest('input,textarea,[contenteditable="true"]');
+      const key = event.key.toLowerCase();
+
+      if (!editingText && key === 'z' && !event.shiftKey && runDocumentCommand(activeSessionId, 'undo')) {
+        event.preventDefault();
+        return;
+      }
+      if (!editingText && ((key === 'z' && event.shiftKey) || key === 'y') && runDocumentCommand(activeSessionId, 'redo')) {
+        event.preventDefault();
+        return;
+      }
+      if (key === 'p' && runDocumentCommand(activeSessionId, 'print')) {
+        event.preventDefault();
+        return;
+      }
+      if (event.shiftKey && key === 's' && runDocumentCommand(activeSessionId, 'export')) {
+        event.preventDefault();
       }
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activeSessionId, sessions]);
+  }, [activeSessionId, runDocumentCommand, sessions]);
 
   function handleBrowserDrop(event: DragEvent<HTMLElement>) {
     if (isDesktopRuntime()) return;
@@ -336,6 +368,14 @@ export default function App() {
       run:()=>activateSession(session.id),
     })),
     ...(activeSession ? [
+      ...commandsFor(activeSession.id).map((command) => ({
+        id:`active-command-${command.id}`,
+        label:command.label,
+        group:'Current document',
+        detail:command.enabled ? command.detail ?? command.shortcut ?? 'Available' : command.detail ?? 'Unavailable in current state',
+        keywords:`${command.id} ${command.label} ${command.shortcut ?? ''}`,
+        run:()=>{ if (command.enabled) void command.run(); },
+      })),
       ...(!activeSession.document.browserFile && !['pdf','docx','xlsx','pptx'].includes(activeSession.document.kind) ? [{
         id:'active-save-as',
         label:`Save a copy of ${activeSession.document.name}`,
