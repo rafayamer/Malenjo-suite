@@ -27,6 +27,9 @@ import {
   addPdfBatesNumbers,
   addPdfCheckBox,
   addPdfCommentAnnotation,
+  addPdfDropdown,
+  addPdfOptionList,
+  addPdfRadioGroup,
   addPdfHeaderFooter,
   addPdfRectangleOverlay,
   addPdfTextField,
@@ -45,7 +48,8 @@ import {
   setPdfPageBox,
   splitPdfAtPage,
   flattenPdfForm,
-  listPdfFormFields,
+  inspectPdfFormFields,
+  type PdfFormFieldInfo,
 } from './editor';
 import { disposePdf, loadPdfBytes, type PdfLoadResult } from './engine';
 import {
@@ -127,16 +131,22 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [shapeOverlay, setShapeOverlay] = useState({ x:0.12, y:0.68, width:0.35, height:0.08, mode:'highlight' as 'highlight'|'outline' });
   const [commentDraft, setCommentDraft] = useState({ text:'', author:'MALENJO User', x:0.86, y:0.86 });
   const [formDraft, setFormDraft] = useState({
-    type:'text' as 'text'|'checkbox',
+    type:'text' as 'text'|'checkbox'|'radio'|'dropdown'|'list',
     name:'',
     defaultValue:'',
+    optionsText:'Approve\nReject',
+    selectedText:'',
+    required:false,
+    readOnly:false,
+    multiselect:false,
     x:0.12,
     y:0.52,
     width:0.42,
-    height:0.07,
+    height:0.12,
     size:0.05,
+    gap:0.075,
   });
-  const [formFields, setFormFields] = useState<string[]>([]);
+  const [formFields, setFormFields] = useState<PdfFormFieldInfo[]>([]);
   const [headerFooterDraft, setHeaderFooterDraft] = useState({
     scope:'selected' as 'selected'|'all',
     header:'',
@@ -485,7 +495,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       return;
     }
     let cancelled=false;
-    void listPdfFormFields(sourceBytes)
+    void inspectPdfFormFields(sourceBytes)
       .then((fields)=>{ if(!cancelled)setFormFields(fields); })
       .catch(()=>{ if(!cancelled)setFormFields([]); });
     return()=>{cancelled=true;};
@@ -524,15 +534,50 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
   async function addFormField(){
     const name=formDraft.name.trim()||`field_${Date.now().toString(36)}`;
+    const flags={required:formDraft.required,readOnly:formDraft.readOnly};
+    const options=formDraft.optionsText
+      .split(/[\n,]+/)
+      .map((value)=>value.trim())
+      .filter(Boolean);
+    const selected=formDraft.selectedText
+      .split(/[\n,]+/)
+      .map((value)=>value.trim())
+      .filter(Boolean);
+
     if(formDraft.type==='checkbox'){
       await mutate(
         `Added checkbox field "${name}".`,
         (bytes)=>addPdfCheckBox(bytes,{
-          pageNumber:currentPage,
-          name,
-          x:formDraft.x,
-          y:formDraft.y,
-          size:formDraft.size,
+          pageNumber:currentPage,name,x:formDraft.x,y:formDraft.y,size:formDraft.size,...flags,
+        }),
+        currentPage,
+      );
+    }else if(formDraft.type==='radio'){
+      await mutate(
+        `Added radio group "${name}".`,
+        (bytes)=>addPdfRadioGroup(bytes,{
+          pageNumber:currentPage,name,options,selected:selected[0],
+          x:formDraft.x,y:formDraft.y,size:formDraft.size,gap:formDraft.gap,...flags,
+        }),
+        currentPage,
+      );
+    }else if(formDraft.type==='dropdown'){
+      await mutate(
+        `Added dropdown field "${name}".`,
+        (bytes)=>addPdfDropdown(bytes,{
+          pageNumber:currentPage,name,options,selected,
+          x:formDraft.x,y:formDraft.y,width:formDraft.width,height:formDraft.height,
+          multiselect:formDraft.multiselect,...flags,
+        }),
+        currentPage,
+      );
+    }else if(formDraft.type==='list'){
+      await mutate(
+        `Added option-list field "${name}".`,
+        (bytes)=>addPdfOptionList(bytes,{
+          pageNumber:currentPage,name,options,selected,
+          x:formDraft.x,y:formDraft.y,width:formDraft.width,height:formDraft.height,
+          multiselect:formDraft.multiselect,...flags,
         }),
         currentPage,
       );
@@ -540,18 +585,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       await mutate(
         `Added text field "${name}".`,
         (bytes)=>addPdfTextField(bytes,{
-          pageNumber:currentPage,
-          name,
-          defaultValue:formDraft.defaultValue,
-          x:formDraft.x,
-          y:formDraft.y,
-          width:formDraft.width,
-          height:formDraft.height,
+          pageNumber:currentPage,name,defaultValue:formDraft.defaultValue,
+          x:formDraft.x,y:formDraft.y,width:formDraft.width,height:formDraft.height,...flags,
         }),
         currentPage,
       );
     }
-    setFormDraft((current)=>({...current,name:'',defaultValue:''}));
+    setFormDraft((current)=>({...current,name:'',defaultValue:'',selectedText:''}));
   }
 
   async function flattenForm(){
@@ -743,6 +783,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           run:()=>attachmentInputRef.current?.click(),
         },
         {
+          id:'add-form-field',
+          label:'Add configured PDF form field',
+          keywords:'form acroform field text checkbox radio dropdown list required readonly',
+          detail:`${formDraft.type} · ${formDraft.name.trim()||'auto field name'}`,
+          enabled:!!sourceBytes && !mutating,
+          disabledReason:!sourceBytes ? 'No PDF is loaded.' : 'Wait for the current PDF edit to finish.',
+          run:()=>addFormField(),
+        },
+        {
           id:'flatten-form',
           label:'Flatten PDF form fields',
           keywords:'form acroform flatten fields',
@@ -792,7 +841,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     return () => registerCommands(null);
   }, [
     session, registerCommands, sourceBytes, pdf, dirty, mutating, historyRevision, formFields.length,
-    headerFooterDraft, batesDraft, pageBoxDraft, currentPage, pageCount, selectedPages,
+    headerFooterDraft, batesDraft, pageBoxDraft, formDraft, currentPage, pageCount, selectedPages,
   ]);
 
   const zoomLabel = fitMode === 'width'
@@ -979,27 +1028,54 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
         <div className="pdf-pane-title">Forms</div>
         <div className="pdf-edit-form">
-          <label><ListChecks size={13}/> Field type<select value={formDraft.type} onChange={(event)=>setFormDraft({...formDraft,type:event.target.value as 'text'|'checkbox'})}><option value="text">Text field</option><option value="checkbox">Checkbox</option></select></label>
+          <label><ListChecks size={13}/> Field type
+            <select value={formDraft.type} onChange={(event)=>setFormDraft({...formDraft,type:event.target.value as typeof formDraft.type})}>
+              <option value="text">Text field</option>
+              <option value="checkbox">Checkbox</option>
+              <option value="radio">Radio group</option>
+              <option value="dropdown">Dropdown</option>
+              <option value="list">Option list</option>
+            </select>
+          </label>
           <label>Name<input value={formDraft.name} onChange={(event)=>setFormDraft({...formDraft,name:event.target.value})} placeholder="field_name"/></label>
+
           {formDraft.type==='text'&&<label>Default value<input value={formDraft.defaultValue} onChange={(event)=>setFormDraft({...formDraft,defaultValue:event.target.value})}/></label>}
+
+          {['radio','dropdown','list'].includes(formDraft.type)&&<>
+            <label>Options<textarea value={formDraft.optionsText} onChange={(event)=>setFormDraft({...formDraft,optionsText:event.target.value})} placeholder={'One option per line\nOption A\nOption B'}/></label>
+            <label>{formDraft.type==='radio'?'Selected option':'Selected value(s)'}<input value={formDraft.selectedText} onChange={(event)=>setFormDraft({...formDraft,selectedText:event.target.value})} placeholder={formDraft.multiselect?'Comma-separated selections':'Optional default selection'}/></label>
+          </>}
+
+          <div className="pdf-field-flags">
+            <label><input type="checkbox" checked={formDraft.required} onChange={(event)=>setFormDraft({...formDraft,required:event.target.checked})}/> Required</label>
+            <label><input type="checkbox" checked={formDraft.readOnly} onChange={(event)=>setFormDraft({...formDraft,readOnly:event.target.checked})}/> Read-only</label>
+            {(formDraft.type==='dropdown'||formDraft.type==='list')&&<label><input type="checkbox" checked={formDraft.multiselect} onChange={(event)=>setFormDraft({...formDraft,multiselect:event.target.checked})}/> Multi-select</label>}
+          </div>
+
           <div className="pdf-coordinate-grid">
             <label>X<input type="number" min="0" max="1" step="0.01" value={formDraft.x} onChange={(event)=>setFormDraft({...formDraft,x:Number(event.target.value)})}/></label>
             <label>Y<input type="number" min="0" max="1" step="0.01" value={formDraft.y} onChange={(event)=>setFormDraft({...formDraft,y:Number(event.target.value)})}/></label>
-            {formDraft.type==='text'
-              ? <>
+            {(formDraft.type==='checkbox'||formDraft.type==='radio')
+              ? <label>Size<input type="number" min="0.01" max="0.25" step="0.01" value={formDraft.size} onChange={(event)=>setFormDraft({...formDraft,size:Number(event.target.value)})}/></label>
+              : <>
                   <label>W<input type="number" min="0.01" max="1" step="0.01" value={formDraft.width} onChange={(event)=>setFormDraft({...formDraft,width:Number(event.target.value)})}/></label>
                   <label>H<input type="number" min="0.01" max="1" step="0.01" value={formDraft.height} onChange={(event)=>setFormDraft({...formDraft,height:Number(event.target.value)})}/></label>
-                </>
-              : <label>Size<input type="number" min="0.01" max="0.25" step="0.01" value={formDraft.size} onChange={(event)=>setFormDraft({...formDraft,size:Number(event.target.value)})}/></label>}
+                </>}
+            {formDraft.type==='radio'&&<label>Gap<input type="number" min="0.01" max="0.3" step="0.01" value={formDraft.gap} onChange={(event)=>setFormDraft({...formDraft,gap:Number(event.target.value)})}/></label>}
           </div>
-          <button disabled={mutating} onClick={()=>void addFormField()}>Add form field</button>
-          <div className="pdf-feature-list">
+
+          <button disabled={mutating} onClick={()=>void addFormField()}>Add {formDraft.type} field</button>
+
+          <div className="pdf-feature-list pdf-form-inventory">
             <b>{formFields.length} AcroForm field{formFields.length===1?'':'s'}</b>
-            {formFields.slice(0,12).map((field)=><span key={field}>{field}</span>)}
-            {formFields.length>12&&<span>+ {formFields.length-12} more</span>}
+            {formFields.slice(0,16).map((field)=><span key={field.name} title={field.options.length?field.options.join(', '):undefined}>
+              <strong>{field.name}</strong>
+              <em>{field.type}{field.required?' · required':''}{field.readOnly?' · read-only':''}{field.selected.length?` · selected: ${field.selected.join(', ')}`:''}</em>
+            </span>)}
+            {formFields.length>16&&<span>+ {formFields.length-16} more</span>}
           </div>
           <button disabled={mutating||!formFields.length} onClick={()=>void flattenForm()}><FileCheck2 size={13}/> Flatten form fields</button>
-          <small>Flattening permanently paints field appearances into the PDF and removes interactive fields. It is undoable only inside the current MALENJO tab history until export/close.</small>
+          <small>Text, checkbox, radio, dropdown and option-list fields are real AcroForm structures. Required/read-only flags are stored in the field. Flattening paints appearances and removes interactivity; Undo remains available in this tab until export/close.</small>
         </div>
 
         <div className="pdf-pane-title">Attachments</div>
