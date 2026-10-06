@@ -85,6 +85,7 @@ describe('PDF provider capability resolver',()=>{
     expect(resolved.fields[0].enumValues).toEqual([
       'HIGH_CONTRAST_COLOR','CUSTOM_COLOR','FULL_INVERSION',
     ]);
+    expect(resolved.fields[0].defaultValue).toBe('HIGH_CONTRAST_COLOR');
     expect(resolved.fields[0].description).toMatch(/Ghostscript/i);
   });
 
