@@ -209,3 +209,16 @@ No module is complete merely because its navigation entry exists. Completion req
 | No fake unsupported operations | Shell | compression, PDF-to-Word, password protection and invoice creation are disabled discovery entries only | audit + tests | Verified |
 | Detailed audit | Documentation | `docs/audits/UI-53.10-GLOBAL-COMMAND-PALETTE.md` | source SHA/lines and completion boundary recorded | Implemented |
 
+## Complete module — Help / Support
+
+| Requirement | Component | Implementation | Evidence | Status |
+|---|---|---|---|---|
+| Searchable user help | Help / Support | searchable guide library for opening, saving/recovery, OCR, AI, security/signing, Codespaces, diagnostics and shortcuts | `HelpWorkspace.tsx`, `supportModel.test.ts` | Complete |
+| Troubleshooting diagnostics | Help / Support | explicit runtime/provider states without launching heavyweight services or opening documents | `api.ts`, code audit | Complete |
+| Redacted diagnostic bundle | Help / Support | recursive TypeScript redaction + bounded native Rust re-redaction/write; browser download + desktop save picker | frontend/Rust tests | Complete |
+| Secret/content exclusions | Help / Support | no document names/paths/content, OCR text, passwords/tokens/private keys in bundle by design | `supportModel.test.ts`, Rust tests | Complete |
+| About identity | Help / Support | Malenjo Suite, Rafius Tech LLC, version/build, student/noncommercial edition and runtime | UI audit | Complete |
+| Third-party notices access | Help / Support | embedded policy summary + link to `docs/THIRD_PARTY_POLICY.md` | UI audit | Complete |
+| Accessibility | Help / Support | labels, role=status, focus-visible treatment, reduced-motion handling, keyboard-native details/controls | code audit + build | Complete |
+| Module completion gate | Registry | `help` is the only module promoted by this change; audit defines completion boundary | `COMPLETE-MODULE-HELP-SUPPORT.md`, registry test | Complete |
+
