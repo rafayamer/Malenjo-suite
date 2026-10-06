@@ -10,7 +10,7 @@ This is a source/redistribution decision record, not a claim that every row is a
 | Upstream dependency observed by pinned Stirling core | Reviewed target/version | License / redistribution decision | MALENJO decision | Affected operation family |
 |---|---|---|---|---|
 | qpdf | 12.4.2 | Apache-2.0; exact static deps: libjpeg-turbo 3.2.0#1, OpenSSL 3.6.4#1, zlib 1.3.2#2; MSVC runtime file audit still required for release | **integration-approved / release-gated**, checksum-pinned Windows x64 pack | Repair, Compress PDF |
-| Ghostscript | 10.08.0 | AGPL-3.0 or commercial license | **do not bundle for business-compatible pack**; use Stirling Java/PDFBox alternatives where real, otherwise MALENJO replacement required | Repair, Compress, Crop, Replace/Invert, Scanner Effect, vector conversion |
+| Ghostscript | 10.08.0 | AGPL-3.0 or commercial license | **do not bundle for business-compatible pack**; use pinned Java/PDFBox alternatives where real, otherwise MALENJO replacement required | CMYK submode of Replace/Invert plus PDF↔PostScript/EPS/PCL/XPS vector conversion; Repair/Compress/Crop have fallbacks, Scanner Effect and three Replace/Invert modes are core |
 | LibreOffice | 26.8.0 source line; release pack not yet approved | MPL-2.0 / LGPLv3+ project licensing plus large transitive pack | **not yet bundle-approved**; keep conversion endpoints unavailable until exact Windows pack/transitives are audited | Office↔PDF/HTML/XML/RTF/PDF-A |
 | Tesseract OCR | 5.5.3 + tessdata_fast 4.1.0 (eng/osd pinned by commit/blob) | Engine/model data Apache-2.0; official Windows installer uses rolling MSYS2 DLL closure whose exact package-version/license mapping is not yet complete | **integration-approved / release-gated**, checksum-pinned Windows x64 runtime pack with immutable model verification | OCR PDF, Auto Rotate |
 | OCRmyPDF | 17.12.1 | MPL-2.0; runtime stack commonly depends on Ghostscript | **do not use as the business redistribution path while Ghostscript is required**; prefer MALENJO OCR orchestration + Tesseract/PDF libraries | OCR PDF |
@@ -30,6 +30,8 @@ Review of the pinned open-core source shows that dependency-group absence does n
 - Compress has qpdf/Ghostscript paths plus a Java/PDFBox implementation.
 - Crop has Ghostscript and Java alternatives.
 - Markdown→PDF has WeasyPrint and Java alternatives.
+- Scanner Effect is implemented entirely in Java/AWT/PDFBox and does not require Ghostscript.
+- Replace/Invert high-contrast, custom-color and full-inversion modes are Java/PDFBox; only CMYK color-space conversion requires Ghostscript.
 
 The MALENJO capability resolver therefore reports the implementation actually satisfying the operation instead of treating a missing optional executable as equivalent to a missing feature.
 
@@ -40,3 +42,8 @@ Pass 2B adds the reviewed Tesseract 5.5.3 Windows runtime and immutable English/
 ## Pass-2A implemented boundary
 
 This branch introduces the first integration-approved binary component pack, qpdf 12.4.2, and a MALENJO-owned capability resolver contract. Its open-source obligations are recorded, while final distributable release approval remains gated on the exact runtime/SBOM and Microsoft redistributable file check. It does **not** close #143 and does **not** promote PDF above `partial`. Remaining provider rows require implementation, Windows smoke coverage, exact transitive notices/SBOM, and replacement work where the selected upstream license is unsuitable.
+
+
+## Pass-2C correction
+
+Source review and Windows smoke for the pinned core are recorded in `PDF-OPEN-CORE-CAPABILITY-PASS2C.md`. MALENJO exposes Scanner Effect and the three non-CMYK Replace/Invert modes as `stirling-core`, filters the Ghostscript-only CMYK enum value, and leaves true vector/PostScript Ghostscript operations unavailable.
