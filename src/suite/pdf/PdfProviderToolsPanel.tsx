@@ -141,7 +141,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       }
       const response=await provider.run(selected,fields,files);
       if(provider.responseIsPdf(response)){
-        await onApplyPdf(`Stirling core: ${selected.summary}`,Uint8Array.from(response.bytes));
+        await onApplyPdf(`Local PDF core: ${selected.summary}`,Uint8Array.from(response.bytes));
         setNotice(`${selected.summary} completed and was applied to the current MALENJO working copy.`);
       }else{
         const saved=await provider.saveResponse(response,sourceName.replace(/\.pdf$/i,'')||'malenjo-output');
@@ -209,6 +209,12 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       <button disabled={busy} onClick={()=>void refresh(Boolean(status?.running))}><RefreshCw size={14}/>Refresh</button>
     </div>
     <p className="stirling-provider-message">{status?.message??'Checking local provider…'}</p>
+    {!!status?.components.length&&<div className="stirling-components" aria-label="Local PDF component status">
+      {status.components.map((component)=><div key={component.id} className={component.ready?'stirling-component ready':'stirling-component'}>
+        {component.ready?<CheckCircle2 size={13}/>:<TriangleAlert size={13}/>}
+        <span><b>{component.id}</b><small>{component.version??component.detail}</small></span>
+      </div>)}
+    </div>}
     {!status?.installed&&<p className="stirling-provider-help">Windows development pack: <code>powershell -ExecutionPolicy Bypass -File scripts/build-stirling-core.ps1</code>. The provider runs on 127.0.0.1 only and never starts at MALENJO launch.</p>}
     {status?.running&&<div className="stirling-catalog">
       <div className="stirling-catalog-filter">
