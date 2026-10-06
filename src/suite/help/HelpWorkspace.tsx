@@ -203,10 +203,10 @@ export default function HelpWorkspace({ openDocumentCount }: Props) {
         <p className="help-notice-copy">Customer-facing UI uses MALENJO names. Third-party engine names appear here and in diagnostics only when they are technically relevant. Release redistribution still requires exact dependency/SBOM review.</p>
         <a
           className="help-policy-link"
-          href="https://github.com/rafayamer/Malenjo-suite/blob/main/docs/THIRD_PARTY_POLICY.md"
+          href="https://github.com/rafayamer/Malenjo-suite/blob/main/docs/THIRD_PARTY_NOTICES.md"
           target="_blank"
           rel="noreferrer"
-        >Open repository third-party policy <ExternalLink size={13}/></a>
+        >Open third-party notices <ExternalLink size={13}/></a>
       </section>
     </div>
 
