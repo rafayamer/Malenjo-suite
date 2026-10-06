@@ -10,11 +10,13 @@ $BuildDir = Join-Path $Root '.build/qpdf'
 $Archive = Join-Path $BuildDir $Asset
 $ExtractDir = Join-Path $BuildDir 'extract'
 $PackDir = Join-Path $Root 'provider-packs/qpdf'
-$BinDir = Join-Path $PackDir 'bin'
+$RuntimeDir = Join-Path $PackDir 'runtime'
+$LicenseDir = Join-Path $RuntimeDir 'malenjo-notices'
 
 Remove-Item $BuildDir -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item $PackDir -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path $BuildDir, $ExtractDir, $BinDir | Out-Null
+Remove-Item $RuntimeDir -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item (Join-Path $PackDir 'manifest.json') -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $BuildDir, $ExtractDir, $RuntimeDir | Out-Null
 
 Invoke-WebRequest -Uri $ReleaseUrl -OutFile $Archive -UseBasicParsing
 $ActualSha256 = (Get-FileHash -Algorithm SHA256 -Path $Archive).Hash.ToLowerInvariant()
@@ -26,16 +28,25 @@ Expand-Archive -Path $Archive -DestinationPath $ExtractDir -Force
 $Qpdf = Get-ChildItem -Path $ExtractDir -Recurse -File -Filter 'qpdf.exe' | Select-Object -First 1
 if (!$Qpdf) { throw 'qpdf.exe was not found in the reviewed archive.' }
 
-Copy-Item -Path (Join-Path $Qpdf.Directory.FullName '*') -Destination $BinDir -Recurse -Force
-$BundledQpdf = Join-Path $BinDir 'qpdf.exe'
-if (!(Test-Path $BundledQpdf)) { throw 'Bundled qpdf.exe was not produced.' }
+# Preserve the full official distribution root so qpdf's adjacent DLLs/data remain intact.
+$DistributionRoot = $Qpdf.Directory.Parent.FullName
+Copy-Item -Path (Join-Path $DistributionRoot '*') -Destination $RuntimeDir -Recurse -Force
 
-$VersionOutput = (& $BundledQpdf --version 2>&1 | Out-String).Trim()
+$BundledQpdf = Get-ChildItem -Path $RuntimeDir -Recurse -File -Filter 'qpdf.exe' | Select-Object -First 1
+if (!$BundledQpdf) { throw 'Bundled qpdf.exe was not produced.' }
+
+$VersionOutput = (& $BundledQpdf.FullName --version 2>&1 | Out-String).Trim()
 if ($LASTEXITCODE -ne 0 -or $VersionOutput -notmatch [regex]::Escape($Version)) {
   throw "Unexpected qpdf runtime version: $VersionOutput"
 }
 
+New-Item -ItemType Directory -Force -Path $LicenseDir | Out-Null
+Copy-Item (Join-Path $Root 'third_party/qpdf/LICENSE.txt') (Join-Path $LicenseDir 'LICENSE.txt') -Force
+Copy-Item (Join-Path $Root 'third_party/qpdf/NOTICE.md') (Join-Path $LicenseDir 'NOTICE.md') -Force
+
+$RelativeExecutable = [IO.Path]::GetRelativePath($RuntimeDir, $BundledQpdf.FullName).Replace('\','/')
 $Manifest = [ordered]@{
+  schemaVersion = 1
   providerId = 'qpdf'
   componentPack = 'qpdf-windows-x64'
   version = $Version
@@ -43,6 +54,7 @@ $Manifest = [ordered]@{
   release = "v$Version"
   asset = $Asset
   sha256 = $ExpectedSha256
+  executable = "runtime/$RelativeExecutable"
   license = 'Apache-2.0'
   redistribution = 'approved-with-notices'
   architecture = 'windows-x86_64'
