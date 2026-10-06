@@ -6,10 +6,11 @@ interface Props {
   pageNumber: number;
   active: boolean;
   selected: boolean;
+  renderAllowed: boolean;
   onSelect(pageNumber: number, additive: boolean, range: boolean): void;
 }
 
-export default function PdfThumbnail({ document, pageNumber, active, selected, onSelect }: Props) {
+export default function PdfThumbnail({ document, pageNumber, active, selected, renderAllowed, onSelect }: Props) {
   const wrapperRef = useRef<HTMLButtonElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [visible, setVisible] = useState(pageNumber <= 3);
@@ -34,7 +35,7 @@ export default function PdfThumbnail({ document, pageNumber, active, selected, o
   }, [visible]);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!renderAllowed || !visible) return;
 
     let cancelled = false;
     let renderTask: ReturnType<Awaited<ReturnType<PDFDocumentProxy['getPage']>>['render']> | null = null;
@@ -77,7 +78,7 @@ export default function PdfThumbnail({ document, pageNumber, active, selected, o
       cancelled = true;
       renderTask?.cancel();
     };
-  }, [document, pageNumber, visible]);
+  }, [document, pageNumber, renderAllowed, visible]);
 
   return <button
     ref={wrapperRef}
