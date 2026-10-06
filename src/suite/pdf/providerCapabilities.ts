@@ -189,12 +189,30 @@ export function resolvePdfProviderCapability(
   return coreCapability();
 }
 
+function fieldsForResolvedCapability(
+  operation:PdfProviderOperation,
+  resolved:PdfProviderCapability,
+):PdfProviderOperation['fields']{
+  if(
+    resolved.providerId==='tesseract'
+    && operationMatches(operation,'ocr-pdf','ocrPdf','processPdfWithOCR')
+  ){
+    const directTesseractFields=new Set(['fileInput','languages','ocrType']);
+    return operation.fields.filter((field)=>directTesseractFields.has(field.name));
+  }
+  return operation.fields;
+}
+
 export function applyPdfProviderCapabilities(
   operations:PdfProviderOperation[],
   components:PdfProviderComponentStatus[],
 ):PdfProviderOperation[]{
-  return operations.map((operation)=>({
-    ...operation,
-    capability:resolvePdfProviderCapability(operation,components),
-  }));
+  return operations.map((operation)=>{
+    const resolved=resolvePdfProviderCapability(operation,components);
+    return {
+      ...operation,
+      fields:fieldsForResolvedCapability(operation,resolved),
+      capability:resolved,
+    };
+  });
 }
