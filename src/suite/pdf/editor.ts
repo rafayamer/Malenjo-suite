@@ -274,7 +274,30 @@ export async function addPdfCommentAnnotation(
   return Uint8Array.from(await pdf.save({useObjectStreams:false}));
 }
 
-export interface PdfTextFieldSpec {
+export interface PdfFieldFlags {
+  required?:boolean;
+  readOnly?:boolean;
+}
+
+function applyFieldFlags(
+  field:{enableRequired():void;enableReadOnly():void},
+  flags:PdfFieldFlags,
+):void{
+  if(flags.required)field.enableRequired();
+  if(flags.readOnly)field.enableReadOnly();
+}
+
+function cleanFieldOptions(values:string[],minimum=1):string[]{
+  const options=Array.from(new Set(
+    values
+      .map((value)=>value.replace(/[\u0000-\u001F]/g,' ').trim().slice(0,120))
+      .filter(Boolean),
+  )).slice(0,50);
+  if(options.length<minimum)throw new Error(`Provide at least ${minimum} unique non-empty form option(s).`);
+  return options;
+}
+
+export interface PdfTextFieldSpec extends PdfFieldFlags {
   pageNumber:number;
   name:string;
   x:number;
@@ -299,6 +322,7 @@ export async function addPdfTextField(bytes:Uint8Array,spec:PdfTextFieldSpec):Pr
   if(form.getFieldMaybe(name))throw new Error(`A form field named "${name}" already exists.`);
   const field=form.createTextField(name);
   if(spec.defaultValue)field.setText(spec.defaultValue.slice(0,2000));
+  applyFieldFlags(field,spec);
   const {width,height}=page.getSize();
   field.addToPage(page,{
     x:x*width,
@@ -313,7 +337,7 @@ export async function addPdfTextField(bytes:Uint8Array,spec:PdfTextFieldSpec):Pr
   return Uint8Array.from(await pdf.save({useObjectStreams:false}));
 }
 
-export interface PdfCheckBoxSpec {
+export interface PdfCheckBoxSpec extends PdfFieldFlags {
   pageNumber:number;
   name:string;
   x:number;
@@ -345,6 +369,150 @@ export async function addPdfCheckBox(bytes:Uint8Array,spec:PdfCheckBoxSpec):Prom
     backgroundColor:rgb(0.98,0.99,1),
   });
   if(spec.checked)field.check();
+  applyFieldFlags(field,spec);
+  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+}
+
+export interface PdfRadioGroupSpec extends PdfFieldFlags {
+  pageNumber:number;
+  name:string;
+  options:string[];
+  selected?:string;
+  x:number;
+  y:number;
+  size:number;
+  gap?:number;
+}
+
+export async function addPdfRadioGroup(bytes:Uint8Array,spec:PdfRadioGroupSpec):Promise<Uint8Array>{
+  const pdf=await load(bytes);
+  const page=pdf.getPage(requirePage(spec.pageNumber,pdf.getPageCount()));
+  const x=normalized(spec.x,'Radio X');
+  const y=normalized(spec.y,'Radio Y');
+  const size=normalized(spec.size,'Radio size');
+  const gap=normalized(spec.gap??0.075,'Radio gap');
+  const options=cleanFieldOptions(spec.options,2);
+  const form=pdf.getForm();
+  const name=safeFieldName(spec.name,'radio');
+  if(form.getFieldMaybe(name))throw new Error(`A form field named "${name}" already exists.`);
+  const field=form.createRadioGroup(name);
+  const {width,height}=page.getSize();
+  const points=Math.max(10,Math.min(width,height)*size);
+  const gapPoints=Math.max(points+6,height*gap);
+  const startX=x*width;
+  const startY=y*height;
+  if(startX+points>width||startY+points>height||startY-(options.length-1)*gapPoints<0){
+    throw new Error('Radio-group options must remain inside the page.');
+  }
+  const font=await pdf.embedFont(StandardFonts.Helvetica);
+  options.forEach((option,index)=>{
+    const optionY=startY-index*gapPoints;
+    field.addOptionToPage(option,page,{
+      x:startX,
+      y:optionY,
+      width:points,
+      height:points,
+      borderWidth:1,
+      borderColor:rgb(0.08,0.32,0.56),
+      backgroundColor:rgb(0.98,0.99,1),
+    });
+    page.drawText(option,{
+      x:Math.min(width-10,startX+points+6),
+      y:optionY+Math.max(0,(points-9)/2),
+      size:9,
+      font,
+      color:rgb(0.08,0.12,0.16),
+      maxWidth:Math.max(20,width-startX-points-12),
+    });
+  });
+  if(spec.selected){
+    if(!options.includes(spec.selected))throw new Error('Selected radio value must exist in the radio options.');
+    field.select(spec.selected);
+  }
+  applyFieldFlags(field,spec);
+  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+}
+
+export interface PdfChoiceFieldSpec extends PdfFieldFlags {
+  pageNumber:number;
+  name:string;
+  options:string[];
+  selected?:string[];
+  x:number;
+  y:number;
+  width:number;
+  height:number;
+  multiselect?:boolean;
+}
+
+function validateChoiceBox(
+  page:{getSize():{width:number;height:number}},
+  spec:PdfChoiceFieldSpec,
+):{x:number;y:number;widthFraction:number;heightFraction:number;width:number;height:number}{
+  const x=normalized(spec.x,'Choice X');
+  const y=normalized(spec.y,'Choice Y');
+  const widthFraction=normalized(spec.width,'Choice width');
+  const heightFraction=normalized(spec.height,'Choice height');
+  if(widthFraction<=0||heightFraction<=0||x+widthFraction>1||y+heightFraction>1){
+    throw new Error('Choice field must have positive size and remain inside the page.');
+  }
+  const {width,height}=page.getSize();
+  return {x,y,widthFraction,heightFraction,width,height};
+}
+
+export async function addPdfDropdown(bytes:Uint8Array,spec:PdfChoiceFieldSpec):Promise<Uint8Array>{
+  const pdf=await load(bytes);
+  const page=pdf.getPage(requirePage(spec.pageNumber,pdf.getPageCount()));
+  const box=validateChoiceBox(page,spec);
+  const options=cleanFieldOptions(spec.options,1);
+  const form=pdf.getForm();
+  const name=safeFieldName(spec.name,'dropdown');
+  if(form.getFieldMaybe(name))throw new Error(`A form field named "${name}" already exists.`);
+  const field=form.createDropdown(name);
+  field.addOptions(options);
+  if(spec.multiselect)field.enableMultiselect();
+  const selected=(spec.selected??[]).filter((value)=>options.includes(value));
+  if(selected.length){
+    field.select(spec.multiselect ? selected : selected[0]);
+  }
+  applyFieldFlags(field,spec);
+  field.addToPage(page,{
+    x:box.x*box.width,
+    y:box.y*box.height,
+    width:box.widthFraction*box.width,
+    height:box.heightFraction*box.height,
+    borderWidth:1,
+    borderColor:rgb(0.08,0.32,0.56),
+    backgroundColor:rgb(0.98,0.99,1),
+    textColor:rgb(0.05,0.08,0.12),
+  });
+  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+}
+
+export async function addPdfOptionList(bytes:Uint8Array,spec:PdfChoiceFieldSpec):Promise<Uint8Array>{
+  const pdf=await load(bytes);
+  const page=pdf.getPage(requirePage(spec.pageNumber,pdf.getPageCount()));
+  const box=validateChoiceBox(page,spec);
+  const options=cleanFieldOptions(spec.options,1);
+  const form=pdf.getForm();
+  const name=safeFieldName(spec.name,'list');
+  if(form.getFieldMaybe(name))throw new Error(`A form field named "${name}" already exists.`);
+  const field=form.createOptionList(name);
+  field.addOptions(options);
+  if(spec.multiselect)field.enableMultiselect();
+  const selected=(spec.selected??[]).filter((value)=>options.includes(value));
+  if(selected.length)field.select(spec.multiselect ? selected : selected[0]);
+  applyFieldFlags(field,spec);
+  field.addToPage(page,{
+    x:box.x*box.width,
+    y:box.y*box.height,
+    width:box.widthFraction*box.width,
+    height:box.heightFraction*box.height,
+    borderWidth:1,
+    borderColor:rgb(0.08,0.32,0.56),
+    backgroundColor:rgb(0.98,0.99,1),
+    textColor:rgb(0.05,0.08,0.12),
+  });
   return Uint8Array.from(await pdf.save({useObjectStreams:false}));
 }
 
@@ -359,6 +527,55 @@ export async function flattenPdfForm(bytes:Uint8Array):Promise<Uint8Array>{
 export async function listPdfFormFields(bytes:Uint8Array):Promise<string[]>{
   const pdf=await load(bytes);
   return pdf.getForm().getFields().map((field)=>field.getName());
+}
+
+export interface PdfFormFieldInfo {
+  name:string;
+  type:string;
+  required:boolean;
+  readOnly:boolean;
+  options:string[];
+  selected:string[];
+}
+
+export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFieldInfo[]>{
+  const pdf=await load(bytes);
+  const form=pdf.getForm();
+  return form.getFields().map((field)=>{
+    const name=field.getName();
+    const constructor=field.constructor.name;
+    let type='unknown';
+    let options:string[]=[];
+    let selected:string[]=[];
+    if(constructor==='PDFTextField')type='text';
+    else if(constructor==='PDFCheckBox')type='checkbox';
+    else if(constructor==='PDFRadioGroup'){
+      type='radio';
+      const radio=form.getRadioGroup(name);
+      options=radio.getOptions();
+      const value=radio.getSelected();
+      if(value)selected=[value];
+    }else if(constructor==='PDFDropdown'){
+      type='dropdown';
+      const dropdown=form.getDropdown(name);
+      options=dropdown.getOptions();
+      selected=dropdown.getSelected();
+    }else if(constructor==='PDFOptionList'){
+      type='list';
+      const list=form.getOptionList(name);
+      options=list.getOptions();
+      selected=list.getSelected();
+    }else if(constructor==='PDFButton')type='button';
+    else if(constructor==='PDFSignature')type='signature';
+    return {
+      name,
+      type,
+      required:field.isRequired(),
+      readOnly:field.isReadOnly(),
+      options,
+      selected,
+    };
+  });
 }
 
 export interface PdfAttachmentSpec {
