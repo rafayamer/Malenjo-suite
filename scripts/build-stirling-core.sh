@@ -16,6 +16,7 @@ mkdir -p "$WORK" "$OUT"
 echo "Checking out Stirling open core at $PIN..."
 git clone --filter=blob:none --no-checkout "$UPSTREAM" "$SRC"
 cd "$SRC"
+git config core.autocrlf false
 git sparse-checkout init --cone
 git sparse-checkout set app/core app/common buildSrc gradle frontend/editor/public/samples
 git checkout --detach "$PIN"
