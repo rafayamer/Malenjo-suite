@@ -116,7 +116,7 @@ jobs:
             }
             if (!$healthy) { throw "Stirling core did not become healthy." }
 
-            $api = Invoke-RestMethod -Uri "http://127.0.0.1:28970/v3/api-docs" -TimeoutSec 20
+            $api = Invoke-RestMethod -Uri "http://127.0.0.1:28970/v1/api-docs" -TimeoutSec 20
             $v1Paths = @($api.paths.PSObject.Properties | Where-Object { $_.Name.StartsWith("/api/v1/") })
             if ($v1Paths.Count -lt 25) {
               throw "Expected a broad Stirling core OpenAPI surface, found only $($v1Paths.Count) /api/v1 paths."
