@@ -35,9 +35,10 @@
         "installMode": "currentUser"
       }
     },
-    "resources": [
-      "../workers/paddleocr/worker.py",
-      "../provider-packs/stirling-core"
-    ]
+    "resources": {
+      "../workers/paddleocr/worker.py": "workers/paddleocr/worker.py",
+      "../provider-packs/stirling-core/": "provider-packs/stirling-core/",
+      "../provider-packs/qpdf/": "provider-packs/qpdf/"
+    }
   }
 }
