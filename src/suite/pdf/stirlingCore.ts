@@ -344,15 +344,18 @@ export async function stopStirlingCore():Promise<boolean>{
 }
 
 export async function stirlingCoreComponentStatus():Promise<PdfProviderComponentStatus[]>{
+  const pendingWithoutNative=PASS2_PENDING_COMPONENTS.filter((component)=>component.id!=='tesseract');
   if(!isTauri())return [
     {id:'qpdf',available:false,source:'unavailable',message:'The approved qpdf pack is available only in the Windows/Tauri runtime.'},
-    ...PASS2_PENDING_COMPONENTS,
+    {id:'tesseract',available:false,source:'unavailable',message:'The reviewed Tesseract pack is available only in the Windows/Tauri runtime.'},
+    ...pendingWithoutNative,
   ];
   const native=await invoke<NativeStirlingComponentStatus[]>('stirling_core_components');
   const byId=new Map(native.map((item)=>[item.id,item] as const));
   return [
     byId.get('qpdf')??{id:'qpdf',available:false,source:'unavailable',message:'qpdf status was not reported by the native boundary.'},
-    ...PASS2_PENDING_COMPONENTS,
+    byId.get('tesseract')??{id:'tesseract',available:false,source:'unavailable',message:'Tesseract status was not reported by the native boundary.'},
+    ...pendingWithoutNative,
   ];
 }
 

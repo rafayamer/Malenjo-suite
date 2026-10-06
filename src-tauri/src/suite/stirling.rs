@@ -150,7 +150,9 @@ fn qpdf_candidates(app: &AppHandle) -> Vec<(String, String)> {
         if !trimmed.is_empty() {
             let configured = PathBuf::from(trimmed);
             if configured.is_file() {
-                candidates.push((configured.to_string_lossy().to_string(), "configured".into()));
+                if let Ok(canonical) = configured.canonicalize() {
+                    candidates.push((canonical.to_string_lossy().to_string(), "configured".into()));
+                }
             }
         }
     }
@@ -244,33 +246,190 @@ fn qpdf_component_status(app: &AppHandle) -> StirlingComponentStatus {
     }
 }
 
-fn configure_provider_path(command: &mut Command, app: &AppHandle) -> Result<(), String> {
-    let paths = if let Some((executable, _source, _version)) = available_qpdf(app) {
-        let executable_path = PathBuf::from(executable);
-        let parent = executable_path
-            .parent()
-            .ok_or_else(|| "qpdf executable has no parent directory.".to_string())?;
-        vec![parent.to_path_buf()]
-    } else {
-        Vec::new()
-    };
+fn tesseract_candidates(app: &AppHandle) -> Vec<(String, String)> {
+    let mut candidates = Vec::new();
 
+    if let Ok(value) = env::var("MALENJO_TESSERACT_BIN") {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            let configured = PathBuf::from(trimmed);
+            if configured.is_file() {
+                if let Ok(canonical) = configured.canonicalize() {
+                    candidates.push((canonical.to_string_lossy().to_string(), "configured".into()));
+                }
+            }
+        }
+    }
+
+    let development = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../provider-packs/tesseract/runtime/bin/tesseract.exe");
+    if development.is_file() {
+        candidates.push((development.to_string_lossy().to_string(), "bundled".into()));
+    }
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let bundled = resource_dir.join("provider-packs/tesseract/runtime/bin/tesseract.exe");
+        if bundled.is_file() {
+            candidates.push((bundled.to_string_lossy().to_string(), "bundled".into()));
+        }
+    }
+
+    candidates
+}
+
+fn parse_tesseract_version(output: &str) -> Option<String> {
+    let first_line = output.lines().find(|line| !line.trim().is_empty())?.trim();
+    let mut parts = first_line.split_whitespace();
+    if !parts.next()?.eq_ignore_ascii_case("tesseract") {
+        return None;
+    }
+    let token = parts.next()?.trim_start_matches(['v', 'V']);
+    let version = token
+        .chars()
+        .take_while(|ch| ch.is_ascii_digit() || *ch == '.')
+        .collect::<String>();
+    if version.starts_with(|ch: char| ch.is_ascii_digit()) && version.contains('.') {
+        Some(version)
+    } else {
+        None
+    }
+}
+
+fn tesseract_data_dir(executable: &str) -> Option<(PathBuf, bool)> {
+    if let Ok(value) = env::var("MALENJO_TESSDATA_DIR") {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            let configured = PathBuf::from(trimmed);
+            if configured.join("eng.traineddata").is_file()
+                && configured.join("osd.traineddata").is_file()
+            {
+                if let Ok(canonical) = configured.canonicalize() {
+                    return Some((canonical, true));
+                }
+            }
+        }
+    }
+
+    let executable = PathBuf::from(executable);
+    let parent = executable.parent()?;
+    let mut candidates = vec![parent.join("tessdata")];
+    if let Some(runtime) = parent.parent() {
+        candidates.push(runtime.join("tessdata"));
+    }
+    candidates.into_iter().find_map(|path| {
+        if path.join("eng.traineddata").is_file() && path.join("osd.traineddata").is_file() {
+            Some((path, false))
+        } else {
+            None
+        }
+    })
+}
+
+fn available_tesseract(app: &AppHandle) -> Option<(String, String, String, PathBuf)> {
+    for (candidate, source) in tesseract_candidates(app) {
+        let output = Command::new(&candidate)
+            .arg("--version")
+            .stdin(Stdio::null())
+            .output();
+        let Ok(output) = output else {
+            continue;
+        };
+        if !output.status.success() {
+            continue;
+        }
+        let combined = format!(
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let Some(version) = parse_tesseract_version(&combined) else {
+            continue;
+        };
+        let Some((tessdata, tessdata_configured)) = tesseract_data_dir(&candidate) else {
+            continue;
+        };
+        let resolved_source = if tessdata_configured {
+            "configured".to_string()
+        } else {
+            source
+        };
+        return Some((candidate, resolved_source, version, tessdata));
+    }
+    None
+}
+
+fn tesseract_component_status(app: &AppHandle) -> StirlingComponentStatus {
+    if let Some((executable, source, version, tessdata)) = available_tesseract(app) {
+        let supported = version
+            .split('.')
+            .next()
+            .and_then(|major| major.parse::<u32>().ok())
+            .is_some_and(|major| major >= 5);
+        if supported {
+            return StirlingComponentStatus {
+                id: "tesseract".into(),
+                available: true,
+                version: Some(version.clone()),
+                executable: Some(executable),
+                source,
+                message: format!(
+                    "Tesseract {version} is available with reviewed eng/osd data at {}.",
+                    tessdata.display()
+                ),
+            };
+        }
+        return StirlingComponentStatus {
+            id: "tesseract".into(),
+            available: false,
+            version: Some(version.clone()),
+            executable: Some(executable),
+            source,
+            message: format!("Tesseract {version} is below the reviewed 5.x provider floor."),
+        };
+    }
+
+    StirlingComponentStatus {
+        id: "tesseract".into(),
+        available: false,
+        version: None,
+        executable: None,
+        source: "unavailable".into(),
+        message: "The reviewed Tesseract pack with eng/osd model data is not installed.".into(),
+    }
+}
+
+fn set_reviewed_provider_path(command: &mut Command, mut paths: Vec<PathBuf>) -> Result<(), String> {
+    paths.sort();
+    paths.dedup();
     let joined = env::join_paths(paths)
         .map_err(|error| format!("Unable to construct reviewed local provider PATH: {error}"))?;
     command.env("PATH", joined);
     Ok(())
 }
 
-#[cfg(test)]
-fn configure_provider_path_for_test(command: &mut Command, executable: Option<&Path>) -> Result<(), String> {
-    let paths = executable
-        .and_then(Path::parent)
-        .map(|parent| vec![parent.to_path_buf()])
-        .unwrap_or_default();
-    let joined = env::join_paths(paths)
-        .map_err(|error| format!("Unable to construct reviewed local provider PATH: {error}"))?;
-    command.env("PATH", joined);
-    Ok(())
+fn configure_provider_environment(command: &mut Command, app: &AppHandle) -> Result<(), String> {
+    let mut paths = Vec::new();
+
+    if let Some((executable, _source, _version)) = available_qpdf(app) {
+        let executable_path = PathBuf::from(executable);
+        let parent = executable_path
+            .parent()
+            .ok_or_else(|| "qpdf executable has no parent directory.".to_string())?;
+        paths.push(parent.to_path_buf());
+    }
+
+    if let Some((executable, _source, _version, tessdata)) = available_tesseract(app) {
+        let executable_path = PathBuf::from(executable);
+        let parent = executable_path
+            .parent()
+            .ok_or_else(|| "Tesseract executable has no parent directory.".to_string())?;
+        paths.push(parent.to_path_buf());
+        command.env("TESSDATA_PREFIX", tessdata);
+    } else {
+        command.env_remove("TESSDATA_PREFIX");
+    }
+
+    set_reviewed_provider_path(command, paths)
 }
 
 fn api_client() -> Result<Client, String> {
@@ -374,7 +533,7 @@ fn spawn_core(java: &str, jar: &Path, app: &AppHandle) -> Result<(), String> {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    configure_provider_path(&mut command, app)?;
+    configure_provider_environment(&mut command, app)?;
     suppress_windows_console(&mut command);
 
     let child = command
@@ -424,7 +583,7 @@ pub async fn stirling_core_status(app: AppHandle) -> StirlingCoreStatus {
 
 #[tauri::command]
 pub async fn stirling_core_components(app: AppHandle) -> Vec<StirlingComponentStatus> {
-    vec![qpdf_component_status(&app)]
+    vec![qpdf_component_status(&app), tesseract_component_status(&app)]
 }
 
 #[tauri::command]
@@ -605,10 +764,10 @@ pub async fn stirling_core_request(
 #[cfg(test)]
 mod tests {
     use super::{
-        configure_provider_path_for_test, parse_qpdf_version, validate_api_path, MAX_INPUT_BYTES,
-        MAX_OUTPUT_BYTES, STIRLING_BASE_URL, STIRLING_PORT,
+        parse_qpdf_version, parse_tesseract_version, set_reviewed_provider_path, validate_api_path,
+        MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, STIRLING_BASE_URL, STIRLING_PORT,
     };
-    use std::process::Command;
+    use std::{path::PathBuf, process::Command};
 
     #[test]
     fn stirling_proxy_accepts_only_local_v1_paths() {
@@ -628,9 +787,16 @@ mod tests {
     }
 
     #[test]
+    fn tesseract_version_parser_requires_a_numeric_version_token() {
+        assert_eq!(parse_tesseract_version("tesseract 5.5.3\n leptonica-1.85"), Some("5.5.3".into()));
+        assert_eq!(parse_tesseract_version("tesseract v5.5.3.20260724\n leptonica-1.87.0"), Some("5.5.3.20260724".into()));
+        assert_eq!(parse_tesseract_version("libgif 5.2.2\ntesseract unknown"), None);
+    }
+
+    #[test]
     fn provider_path_does_not_inherit_unreviewed_system_tools() {
         let mut command = Command::new("java");
-        configure_provider_path_for_test(&mut command, None).unwrap();
+        set_reviewed_provider_path(&mut command, Vec::new()).unwrap();
         let path = command
             .get_envs()
             .find(|(key, _)| *key == "PATH")
@@ -638,6 +804,22 @@ mod tests {
             .map(|value| value.to_string_lossy().to_string())
             .unwrap_or_default();
         assert!(path.is_empty());
+    }
+
+    #[test]
+    fn provider_path_contains_only_explicit_reviewed_directories() {
+        let mut command = Command::new("java");
+        let first = PathBuf::from("reviewed-provider-qpdf/bin");
+        let second = PathBuf::from("reviewed-provider-tesseract/bin");
+        set_reviewed_provider_path(&mut command, vec![second.clone(), first.clone(), first.clone()]).unwrap();
+        let path = command
+            .get_envs()
+            .find(|(key, _)| *key == "PATH")
+            .and_then(|(_, value)| value)
+            .map(|value| value.to_os_string())
+            .unwrap_or_default();
+        let parts = std::env::split_paths(&path).collect::<Vec<_>>();
+        assert_eq!(parts, vec![first, second]);
     }
 
     #[test]

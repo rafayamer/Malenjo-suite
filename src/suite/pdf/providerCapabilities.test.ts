@@ -1,6 +1,6 @@
 import { describe,expect,it } from 'vitest';
 import type { PdfProviderComponentStatus, PdfProviderOperation } from './backend';
-import { resolvePdfProviderCapability } from './providerCapabilities';
+import { applyPdfProviderCapabilities, resolvePdfProviderCapability } from './providerCapabilities';
 
 function operation(path:string,id=path.split('/').at(-1)??'tool'):Pick<PdfProviderOperation,'id'|'path'|'summary'>{
   return {id,path,summary:id};
@@ -11,6 +11,15 @@ const qpdf:PdfProviderComponentStatus={
   available:true,
   version:'12.4.2',
   executable:'C:\\MALENJO\\providers\\qpdf\\qpdf.exe',
+  source:'bundled',
+  message:'ready',
+};
+
+const tesseract:PdfProviderComponentStatus={
+  id:'tesseract',
+  available:true,
+  version:'5.5.3',
+  executable:'C:\\MALENJO\\providers\\tesseract\\tesseract.exe',
   source:'bundled',
   message:'ready',
 };
@@ -61,6 +70,53 @@ describe('PDF provider capability resolver',()=>{
       expect(result.available).toBe(false);
       expect(result.providerId).toMatch(/libreoffice|pdftohtml/);
     }
+  });
+
+  it('enables OCR and OSD only when the reviewed Tesseract component is available',()=>{
+    const ocr=resolvePdfProviderCapability(operation('/api/v1/misc/ocr-pdf','processPdfWithOCR'),[tesseract]);
+    const rotate=resolvePdfProviderCapability(operation('/api/v1/misc/auto-rotate-pdf','autoRotatePdf'),[tesseract]);
+    expect(ocr).toEqual(expect.objectContaining({
+      available:true,
+      providerId:'tesseract',
+      providerVersion:'5.5.3',
+      componentPack:'tesseract-windows-x64',
+    }));
+    expect(rotate).toEqual(expect.objectContaining({
+      available:true,
+      providerId:'tesseract',
+      providerVersion:'5.5.3',
+      componentPack:'tesseract-windows-x64',
+    }));
+  });
+
+  it('exposes only controls implemented by the direct Tesseract OCR fallback',()=>{
+    const fields:PdfProviderOperation['fields']=[
+      'fileInput','languages','sidecar','deskew','rotatePages','clean','cleanFinal','ocrType','ocrRenderType','removeImagesAfter',
+    ].map((name)=>({
+      name,
+      label:name,
+      kind:name==='fileInput'?'file':'string',
+      required:false,
+      location:'form',
+    }));
+    const [resolved]=applyPdfProviderCapabilities([{
+      id:'processPdfWithOCR',
+      path:'/api/v1/misc/ocr-pdf',
+      method:'POST',
+      summary:'Process a PDF file with OCR',
+      description:'',
+      tags:[],
+      fields,
+      category:'scan',
+      capability:resolvePdfProviderCapability(operation('/api/v1/misc/ocr-pdf'),[]),
+    }],[tesseract]);
+    expect(resolved.fields.map((field)=>field.name)).toEqual(['fileInput','languages','ocrType']);
+    expect(resolved.fields.find((field)=>field.name==='languages')).toEqual(expect.objectContaining({
+      kind:'string',
+      enumValues:['eng'],
+      defaultValue:'eng',
+    }));
+    expect(resolved.capability.providerId).toBe('tesseract');
   });
 
   it('does not turn absent OCR/Office/proprietary providers into operational tools',()=>{

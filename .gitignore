@@ -28,3 +28,10 @@ provider-packs/qpdf/runtime/
 provider-packs/qpdf/manifest.json
 provider-packs/qpdf/sbom.cdx.json
 .build/qpdf/
+
+
+# Generated Tesseract OCR provider pack
+provider-packs/tesseract/runtime/
+provider-packs/tesseract/manifest.json
+provider-packs/tesseract/sbom.cdx.json
+.build/tesseract/

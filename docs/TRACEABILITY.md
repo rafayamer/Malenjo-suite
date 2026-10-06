@@ -273,3 +273,20 @@ No module is complete merely because its navigation entry exists. Completion req
 
 | Stirling PATH isolation | Native provider boundary | child PATH contains only reviewed/configured qpdf; user PATH is not inherited | Rust regression test + review | Implemented; CI pending |
 | OpenAPI provider-name normalization | PDF capability resolver | slash/camelCase/spaced names resolve to the same provider gate | provider capability tests | Implemented; CI pending |
+
+
+## PDF completion pass 2B — Tesseract OCR / OSD
+
+| Requirement | Component | Implementation | Evidence | Status |
+|---|---|---|---|---|
+| Immutable OCR engine source | Tesseract provider | 5.5.3 upstream Windows x64 asset, exact SHA-256 + signed tag source commit | builder + `third_party/tesseract/PROVENANCE.md` | Implemented |
+| Immutable OCR model source | Tesseract provider | tessdata_fast 4.1.0 commit + exact eng/osd Git blob verification | builder + provenance | Implemented |
+| No mutable installer downloads | Tesseract provider | NSIS asset extracted, never executed; models fetched from immutable commit | `build-tesseract-windows.ps1` | Implemented |
+| Runtime provider truth | Rust + PDF contract | executable/version/eng/osd validation; component status only then becomes available | `stirling.rs`, provider tests | Passed — CI #292 |
+| Isolated local provider environment | Stirling child | PATH only reviewed qpdf/Tesseract dirs; reviewed `TESSDATA_PREFIX` | Rust tests + Windows smoke | Passed — CI #292 |
+| OCR PDF operation | Windows provider smoke | local `/api/v1/misc/ocr-pdf`, English force-OCR | CI #292 | Passed |
+| Auto Rotate OSD operation | Windows provider smoke | local `/api/v1/misc/auto-rotate-pdf`, forced OSD analysis requires a positive `method=osd` verdict before PDF smoke | CI #292 | Passed |
+| Tesseract binary redistribution | Legal/release | full runtime SHA-256 inventory + component SBOM; exact DLL package/license mapping still required | dependency record + generated manifest/SBOM | Release-gated |
+| Module completion | Registry | PDF remains `partial` | canonical #39/#81/#143 gate | Correct |
+
+| Direct Tesseract OCR control truth | PDF provider contract | direct fallback exposes only file/language/OCR-type controls it actually consumes | capability resolver + regression test + pinned Stirling source audit | Implemented; CI pending |

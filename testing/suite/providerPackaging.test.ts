@@ -6,12 +6,13 @@ function text(path:string):string{
 }
 
 describe('Windows PDF provider packaging contract',()=>{
-  it('maps Stirling and qpdf to stable Tauri resource destinations',()=>{
+  it('maps Stirling, qpdf and Tesseract to stable Tauri resource destinations',()=>{
     const config=JSON.parse(text('src-tauri/tauri.conf.json')) as {
       bundle:{resources:Record<string,string>};
     };
     expect(config.bundle.resources['../provider-packs/stirling-core/']).toBe('provider-packs/stirling-core/');
     expect(config.bundle.resources['../provider-packs/qpdf/']).toBe('provider-packs/qpdf/');
+    expect(config.bundle.resources['../provider-packs/tesseract/']).toBe('provider-packs/tesseract/');
   });
 
   it('keeps generated qpdf layout and native packaged lookup aligned',()=>{
@@ -22,6 +23,20 @@ describe('Windows PDF provider packaging contract',()=>{
     expect(builder).toContain("$DistributionRoot = $Qpdf.Directory.Parent.FullName");
     expect(native).toContain('../provider-packs/qpdf/runtime/bin/qpdf.exe');
     expect(native).toContain('provider-packs/qpdf/runtime/bin/qpdf.exe');
+  });
+
+  it('keeps generated Tesseract layout, model pins and native packaged lookup aligned',()=>{
+    const builder=text('scripts/build-tesseract-windows.ps1');
+    const native=text('src-tauri/src/suite/stirling.rs');
+
+    expect(builder).toContain("$RuntimeBin = Join-Path $RuntimeDir 'bin'");
+    expect(builder).toContain("$TessdataDir = Join-Path $RuntimeDir 'tessdata'");
+    expect(builder).toContain("65727574dfcd264acbb0c3e07860e4e9e9b22185");
+    expect(builder).toContain("bbef4675053b5b468cdb477053e28b1c698ba08e");
+    expect(builder).toContain("527457ca8f8fe1fda7c2f88bce3c0e4be12be9d0");
+    expect(native).toContain('../provider-packs/tesseract/runtime/bin/tesseract.exe');
+    expect(native).toContain('provider-packs/tesseract/runtime/bin/tesseract.exe');
+    expect(native).toContain('TESSDATA_PREFIX');
   });
 
   it('retains qpdf transitive notices in the generated component pack',()=>{
