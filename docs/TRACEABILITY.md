@@ -20,11 +20,11 @@ No module is complete merely because its navigation entry exists. Completion req
 
 | Requirement | Component | Implementation | Test/evidence | Status |
 |---|---|---|---|---|
-| Persistent document tabs in global shell | Shell | `DocumentTabs.tsx`, mounted `document-session-stack` | source-truth audit + CI pending | Implemented |
+| Persistent document tabs in global shell | Shell | `DocumentTabs.tsx`, mounted `document-session-stack` | source-truth audit + PR CI #190 | Verified |
 | Multiple open documents | Shell / Files | native picker, browser multi-open, drag/drop, independent sessions | `session.test.ts`, `browserStore.test.ts` | Implemented |
 | Independent editor state | Shell | inactive document workspaces remain mounted by session ID | code audit; PDF/Office state tests | Implemented |
 | Independent Undo/Redo | PDF / Office | per-workspace history refs and bounded history models | `pdf/history.test.ts`, `office/history.test.ts` | Implemented |
-| Dirty and saving state | Shell + document writers | tab status indicator + PDF/Office write callbacks | session tests + CI pending | Implemented |
+| Dirty and saving state | Shell + document writers | tab status indicator + PDF/Office write callbacks | session tests + PR CI #190 | Verified |
 | Middle-click and keyboard close | Tab strip / shell shortcuts | middle-click, Ctrl/Cmd+W, Ctrl+Shift+W | code audit | Implemented |
 | Keyboard tab switching | Shell shortcuts | Ctrl+Tab / Ctrl+Shift+Tab | `session.test.ts` cycle coverage | Implemented |
 | Detailed audit | Documentation | `docs/audits/UI-53.5-DOCUMENT-TABS.md` | canonical README SHA recorded | Implemented |
