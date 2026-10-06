@@ -53,6 +53,9 @@ Native component readiness is merged into the MALENJO-owned provider contract. `
 
 OCRmyPDF is not used as the business redistribution path in this pass because its common runtime stack introduces the Ghostscript boundary.
 
+
+The pinned Stirling direct-Tesseract fallback does not implement OCRmyPDF-only request controls such as deskew/cleanup/remove-images and does not provide equivalent sidecar semantics. MALENJO therefore removes those fields from the operational Tesseract-backed tool surface instead of presenting them as working options. The direct Tesseract surface exposes only the active PDF, language selection, and OCR mode.
+
 ## Windows executable gate
 
 The provider CI job builds both qpdf and Tesseract packs, builds the reviewed Stirling core, and starts Stirling on `127.0.0.1:28970` with an isolated provider PATH. It then exercises:
