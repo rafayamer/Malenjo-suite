@@ -102,7 +102,7 @@ const PDF_TOOL_OUTPUT_EXTENSIONS: &[&str] = &[
     "txt", "csv", "json", "xml", "html", "md",
     "doc", "docx", "odt", "rtf",
     "xls", "xlsx", "ods",
-    "ppt", "pptx", "odp",
+    "ppt", "pptx", "odp", "bin",
 ];
 
 fn validate_tool_output_destination(destination: &str) -> Result<PathBuf, String> {
