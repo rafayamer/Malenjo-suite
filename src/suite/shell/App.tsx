@@ -6,6 +6,7 @@ import FileLibrary from '../files/FileLibrary';
 import RecentDocuments from '../files/RecentDocuments';
 import { workspaceForDocument } from '../files/route';
 import {
+  attachRecoveredWorkingCopy,
   createDocumentSession,
   markDocumentDirty,
   markDocumentSaved,
@@ -14,8 +15,15 @@ import {
   type DocumentSession,
 } from '../files/session';
 import type { LibraryDocument } from '../files/types';
-import { addLibraryDocumentsByPaths, isDesktopRuntime, saveAsLibraryDocument } from '../files/api';
-import { markBrowserDocumentOpened, registerBrowserFiles } from '../files/browserStore';
+import { addLibraryDocumentsByPaths, isDesktopRuntime, openLibraryDocument, saveAsLibraryDocument } from '../files/api';
+import { hydrateBrowserStore, markBrowserDocumentOpened, registerBrowserFiles } from '../files/browserStore';
+import {
+  deleteWorkingCopy,
+  loadSessionManifest,
+  loadWorkingCopy,
+  saveSessionManifest,
+  saveWorkingCopy,
+} from '../files/recovery';
 import PdfWorkspace from '../pdf/PdfWorkspace';
 import OfficeWorkspace from '../office/OfficeWorkspace';
 import ScannerWorkspace from '../scanner/ScannerWorkspace';
@@ -39,6 +47,7 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [commandOpen, setCommandOpen] = useState(false);
   const [dropActive, setDropActive] = useState(false);
+  const [sessionRestoreReady, setSessionRestoreReady] = useState(false);
   const [sessions, setSessions] = useState<DocumentSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [workspaceNotices, setWorkspaceNotices] = useState<Record<string,string>>({});
@@ -49,6 +58,70 @@ export default function App() {
     () => sessions.find((session) => session.id === activeSessionId) ?? null,
     [activeSessionId, sessions],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function restoreSessions() {
+      const manifest = loadSessionManifest();
+      const desktop = isDesktopRuntime();
+      const browserDocuments = desktop ? [] : await hydrateBrowserStore();
+      const restored: DocumentSession[] = [];
+
+      for (const descriptor of manifest.documents) {
+        try {
+          let document: LibraryDocument | undefined;
+          if (descriptor.runtime === 'browser-session') {
+            if (desktop) continue;
+            document = browserDocuments.find((item) => item.id === descriptor.documentId);
+          } else {
+            if (!desktop) continue;
+            document = await openLibraryDocument(descriptor.documentId);
+          }
+          if (!document) continue;
+
+          let session = createDocumentSession(document, descriptor.openedAt);
+          const recovery = await loadWorkingCopy(document.id);
+          if (recovery && recovery.kind === document.kind) {
+            session = attachRecoveredWorkingCopy(session, recovery.bytes, recovery.updatedAt);
+          }
+          restored.push(session);
+        } catch {
+          // Missing/moved documents are skipped; the remaining tab set is still restored.
+        }
+      }
+
+      if (cancelled) return;
+      setSessions(restored);
+
+      const selected = restored.find((session) => session.document.id === manifest.activeDocumentId)
+        ?? restored[0]
+        ?? null;
+      if (selected) {
+        setActiveSessionId(selected.id);
+        setActive(workspaceForDocument(selected.document.kind));
+      }
+      setSessionRestoreReady(true);
+    }
+
+    void restoreSessions();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!sessionRestoreReady) return;
+    const activeDocumentId = sessions.find((session) => session.id === activeSessionId)?.document.id ?? null;
+    saveSessionManifest({
+      version: 1,
+      activeDocumentId,
+      documents: sessions.map((session) => ({
+        documentId: session.document.id,
+        openedAt: session.openedAt,
+        runtime: session.document.browserFile ? 'browser-session' : 'native-library',
+      })),
+    });
+  }, [activeSessionId, sessionRestoreReady, sessions]);
+
 
   function selectModule(id: ModuleId) {
     setActive(id);
@@ -79,6 +152,16 @@ export default function App() {
     setSessions((current) => current.map((session) => session.id === sessionId ? updater(session) : session));
   }
 
+  function persistWorkingCopy(sessionId: string, bytes: Uint8Array | null, dirty: boolean) {
+    const session = sessions.find((item) => item.id === sessionId);
+    if (!session) return;
+    if (dirty && bytes?.byteLength) {
+      void saveWorkingCopy(session.document, bytes);
+    } else {
+      void deleteWorkingCopy(session.document.id);
+    }
+  }
+
   function markSessionDirty(sessionId: string, dirty: boolean) {
     updateSession(sessionId, (session) => setDocumentDirty(session, dirty));
   }
@@ -90,6 +173,7 @@ export default function App() {
     const dirty = targets.filter((session) => session.dirty);
     if (dirty.length && !window.confirm(`Close ${targets.length} tab(s)? ${dirty.length} contain unsaved edits that will be discarded.`)) return;
 
+    targets.forEach((session) => { void deleteWorkingCopy(session.document.id); });
     const remaining = sessions.filter((session) => !remove.has(session.id));
     setSessions(remaining);
     setWorkspaceNotices((current) => {
@@ -115,6 +199,7 @@ export default function App() {
     const target = sessions[index];
     if (target.dirty && !window.confirm(`Close "${target.document.name}" without saving its current edits?`)) return;
 
+    void deleteWorkingCopy(target.document.id);
     const remaining = sessions.filter((session) => session.id !== sessionId);
     setSessions(remaining);
     setWorkspaceNotices((current) => {
@@ -146,6 +231,7 @@ export default function App() {
         return;
       }
       updateSession(sessionId, (session) => markDocumentSaved(session, copy));
+      void deleteWorkingCopy(target.document.id);
       setWorkspaceNotices((current) => ({
         ...current,
         [sessionId]: `Saved a copy as ${copy.name} and added it to the MALENJO library.`,
@@ -278,6 +364,7 @@ export default function App() {
         notice={notice}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty)=>markSessionDirty(session.id,dirty)}
+        onWorkingCopyChange={(bytes,dirty)=>persistWorkingCopy(session.id,bytes,dirty)}
       />;
     }
     if (route === 'word') {
@@ -286,6 +373,7 @@ export default function App() {
         session={session}
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
+        onWorkingCopyChange={(bytes,dirty)=>persistWorkingCopy(session.id,bytes,dirty)}
       />;
     }
     if (route === 'spreadsheet') {
