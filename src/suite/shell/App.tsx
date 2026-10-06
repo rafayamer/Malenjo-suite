@@ -47,6 +47,7 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [commandOpen, setCommandOpen] = useState(false);
   const [dropActive, setDropActive] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sessions, setSessions] = useState<DocumentSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [workspaceNotices, setWorkspaceNotices] = useState<Record<string,string>>({});
@@ -404,17 +405,23 @@ export default function App() {
     />;
   }
 
-  return <div className="app-shell">
-    <aside className="sidebar">
-      <div className="brand"><div className="brand-mark">M</div><div><strong>MALENJO</strong><span>SUITE</span></div></div>
+  return <div className={sidebarCollapsed?'app-shell sidebar-collapsed':'app-shell'}>
+    <aside className="sidebar" aria-label="MALENJO workspace navigation">
+      <div className="brand">
+        <div className="brand-mark">M</div>
+        <div className="brand-copy"><strong>MALENJO</strong><span>SUITE</span></div>
+        <button className="sidebar-toggle" onClick={()=>setSidebarCollapsed((value)=>!value)} aria-label={sidebarCollapsed?'Expand workspace navigation':'Collapse workspace navigation'} title={sidebarCollapsed?'Expand navigation':'Collapse navigation'}>{sidebarCollapsed?'›':'‹'}</button>
+      </div>
       <nav>
         {groups.map(group => <section key={group}><h3>{group}</h3>{modules.filter(item=>item.group===group).map(item =>
-          <button className={!activeSessionId && active===item.id?'nav-item active':'nav-item'} onClick={()=>selectModule(item.id)} key={item.id}>
-            <span>{item.name}</span><small>{item.status==='complete'?'●':item.status==='partial'?'◐':'○'}</small>
+          <button className={!activeSessionId && active===item.id?'nav-item active':'nav-item'} onClick={()=>selectModule(item.id)} key={item.id} title={item.name} aria-label={item.name}>
+            <span className="nav-glyph" aria-hidden="true">{item.name.slice(0,2).toUpperCase()}</span>
+            <span className="nav-label">{item.name}</span>
+            <small>{item.status==='complete'?'●':item.status==='partial'?'◐':'○'}</small>
           </button>
         )}</section>)}
       </nav>
-      <div className="local-state"><Activity size={16}/><div><b>Local-first</b><span>{sessions.length} document{sessions.length===1?'':'s'} open · network optional</span></div></div>
+      <div className="local-state"><Activity size={16}/><div className="local-state-copy"><b>Local-first</b><span>{sessions.length} document{sessions.length===1?'':'s'} open · network optional</span></div></div>
     </aside>
 
     <main
