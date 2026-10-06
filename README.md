@@ -18,6 +18,7 @@ MALENJO Suite is a **local-first Windows document workspace** being built from t
 - Automation Studio with saved local workflow contracts plus an optional fixed-loopback Temporal handoff.
 - Verified offline Backup / DR with per-file SHA-256 manifests, tamper detection, recovery-copy restore safety, and optional Kopia integration.
 - Administration policy shared across DMS, automation and backup with owner/admin/editor/viewer permission contracts and archive-based audit retention.
+- Complete Help / Support module with searchable guides, About/build identity, provider diagnostics, privacy-redacted copy/export support bundles and third-party notice access.
 - Feature registry and adapter status model.
 - Tauri/Rust native shell with a `LocalServiceManager` catalog and security boundary.
 - Localhost-only service policy; heavyweight services are not launched on UI startup.
