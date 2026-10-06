@@ -1,0 +1,12 @@
+diff --git a/app/common/src/main/java/stirling/software/SPDF/config/EndpointConfiguration.java b/app/common/src/main/java/stirling/software/SPDF/config/EndpointConfiguration.java
+--- a/app/common/src/main/java/stirling/software/SPDF/config/EndpointConfiguration.java
++++ b/app/common/src/main/java/stirling/software/SPDF/config/EndpointConfiguration.java
+@@ -324,6 +324,8 @@ public class EndpointConfiguration {
+         addEndpointAlternative("compress-pdf", "Java");
+         addEndpointAlternative("crop", "Ghostscript");
+         addEndpointAlternative("crop", "Java");
++        addEndpointAlternative("replace-invert-pdf", "Java");
++        addEndpointAlternative("scanner-effect", "Java");
+         addEndpointAlternative("ocr-pdf", "tesseract");
+         addEndpointAlternative("ocr-pdf", "OCRmyPDF");
+ 
