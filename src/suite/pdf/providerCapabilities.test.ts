@@ -1,6 +1,6 @@
 import { describe,expect,it } from 'vitest';
 import type { PdfProviderComponentStatus, PdfProviderOperation } from './backend';
-import { resolvePdfProviderCapability } from './providerCapabilities';
+import { applyPdfProviderCapabilities, resolvePdfProviderCapability } from './providerCapabilities';
 
 function operation(path:string,id=path.split('/').at(-1)??'tool'):Pick<PdfProviderOperation,'id'|'path'|'summary'>{
   return {id,path,summary:id};
@@ -79,6 +79,42 @@ describe('PDF provider capability resolver',()=>{
       expect(result.providerVersion).toBe('5.5.3');
       expect(result.componentPack).toBe('tesseract-windows-x64');
     }
+  });
+
+  it('removes OCRmyPDF-only controls from the direct Tesseract operation surface',()=>{
+    const tesseract:PdfProviderComponentStatus={
+      id:'tesseract',
+      available:true,
+      version:'5.5.3',
+      executable:'C:\\MALENJO\\providers\\tesseract\\tesseract.exe',
+      source:'bundled',
+      message:'ready',
+    };
+    const raw:PdfProviderOperation={
+      id:'processPdfWithOCR',
+      path:'/api/v1/misc/ocr-pdf',
+      method:'POST',
+      summary:'Process PDF with OCR',
+      description:'',
+      tags:[],
+      category:'scan',
+      capability:resolvePdfProviderCapability(operation('/api/v1/misc/ocr-pdf'),[]),
+      fields:[
+        {name:'fileInput',label:'File',kind:'file',required:true,location:'form'},
+        {name:'languages',label:'Languages',kind:'json',required:true,location:'form'},
+        {name:'ocrType',label:'OCR Type',kind:'string',required:true,location:'form'},
+        {name:'deskew',label:'Deskew',kind:'boolean',required:false,location:'form'},
+        {name:'sidecar',label:'Sidecar',kind:'boolean',required:false,location:'form'},
+        {name:'removeImagesAfter',label:'Remove images',kind:'boolean',required:false,location:'form'},
+      ],
+    };
+    const resolved=applyPdfProviderCapabilities([raw],[tesseract])[0];
+    expect(resolved.fields.map((field)=>field.name)).toEqual(['fileInput','languages','ocrType']);
+    expect(resolved.fields.find((field)=>field.name==='languages')).toEqual(expect.objectContaining({
+      kind:'string',
+      defaultValue:'eng',
+    }));
+    expect(resolved.capability.fallback).toMatch(/not exposed/i);
   });
 
   it('does not turn absent OCR/Office/proprietary providers into operational tools',()=>{
