@@ -76,3 +76,17 @@ Tesseract and the pinned model files are Apache-2.0, but the upstream Windows in
 Therefore the pack is **integration-approved / release-gated**. Final distributable approval requires mapping every inventoried non-system DLL to exact package/version/license and retaining all corresponding obligations.
 
 This pass advances #143 but does not close it and does not promote PDF above `partial`.
+
+
+## Executed CI evidence
+
+GitHub Actions CI **#292** on the pass-2B implementation head passed all four jobs:
+
+- frontend typecheck/tests/build;
+- Windows Rust check/tests;
+- Codespaces/Linux Rust check/tests;
+- Windows provider pack + Stirling operation smoke.
+
+The Windows provider job produced a Tesseract pack with **144 inventoried runtime files**, started the pinned Stirling core with the reviewed local Tesseract data path, successfully completed the Tesseract OCR PDF operation, required a positive forced-OSD dry-run verdict (`method=osd`, `detectedByOsd >= 1`), and then completed the PDF-producing Auto Rotate operation. Repair and Compress remained green in the same isolated local-provider environment.
+
+This is integration evidence only. It does not remove the Tesseract DLL redistribution release gate and does not make the PDF module complete.
