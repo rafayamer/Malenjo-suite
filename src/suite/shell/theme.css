@@ -200,3 +200,10 @@
 .pdf-feature-list span{font-size:8px;color:#7895a9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pdf-edit-form>button svg{vertical-align:-2px;margin-right:4px}
 
+.pdf-label-range{display:grid;grid-template-columns:62px minmax(0,1fr) minmax(0,1fr) 72px 28px;gap:5px;align-items:end;padding:6px 0;border-top:1px solid #153047}
+.pdf-label-range:first-of-type{border-top:0}
+.pdf-label-range label{margin:0}
+.pdf-label-range input,.pdf-label-range select{min-width:0;padding:6px}
+.pdf-label-range>button{height:30px;padding:0;display:grid;place-items:center}
+@media(max-width:1200px){.pdf-label-range{grid-template-columns:1fr 1fr}.pdf-label-range>button{grid-column:2}}
+

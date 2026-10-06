@@ -460,3 +460,19 @@ Implemented on `feat/pdf-completeness-numbering-pageboxes`:
 Still open: page-label number trees, header/footer/Bates inventory/removal/editing, visual crop handles, page-size normalization, print-production controls, templates/backgrounds and the wider master PDF tool tree.
 
 The PDF module remains `partial`.
+
+
+## Completion pass 5 — PDF links, page labels and document properties
+
+Implemented on `feat/pdf-completeness-links-labels-properties`:
+
+- genuine external PDF Link annotations restricted to HTTP/HTTPS/mailto;
+- genuine internal page Link annotations using PDF Fit destinations;
+- multiple PDF PageLabels number-tree ranges;
+- decimal/Roman/letter label styles, prefixes and logical start numbers;
+- standard PDF title/author/subject/keywords/creator editing;
+- all mutations integrated with bounded per-tab Undo/Redo and explicit export.
+
+Still open: link inventory/edit/delete, named destinations, bookmarks/outlines, page-label inventory/removal and thumbnail label display, richer XMP synchronization and the wider PDF master feature tree.
+
+The PDF module remains `partial`.
