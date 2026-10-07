@@ -6,9 +6,10 @@ export async function readPdfDocumentBytes(documentId: string): Promise<ArrayBuf
 }
 
 export async function exportPdfJsonText(name:string,contents:string):Promise<boolean>{
-  if(contents.length>1024*1024)throw new Error('PDF JSON export exceeds the 1 MB safety limit.');
+  const encoded=new TextEncoder().encode(contents);
+  if(encoded.byteLength>1024*1024)throw new Error('PDF JSON export exceeds the 1 MB safety limit.');
   if(!isTauri()){
-    const blob=new Blob([contents],{type:'application/json;charset=utf-8'});
+    const blob=new Blob([encoded],{type:'application/json;charset=utf-8'});
     const url=URL.createObjectURL(blob);
     const anchor=document.createElement('a');
     anchor.href=url;
@@ -27,8 +28,7 @@ export async function exportPdfJsonText(name:string,contents:string):Promise<boo
     filters:[{name:'JSON',extensions:['json']}],
   });
   if(!destination)return false;
-  const bytes=new TextEncoder().encode(contents);
-  return invoke<boolean>('write_pdf_tool_output',{destination,bytes:Array.from(bytes)});
+  return invoke<boolean>('write_pdf_tool_output',{destination,bytes:Array.from(encoded)});
 }
 
 export async function exportPdfBytes(name:string,bytes:Uint8Array):Promise<boolean>{
