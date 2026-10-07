@@ -67,8 +67,14 @@ The provider build reproduces the pinned Stirling license policy:
 
 `checkLicense generateLicenseReport --no-parallel`
 
-It fails if that resolution modifies `app/license-overrides.json`. The
-generated exact dependency-license report is packaged as
+The pinned upstream override file contains two Apache-2.0 entries that are not
+resolved in MALENJO's core-only graph: `immutables-exceptions:1.9` and
+`algebra:1.5`. Gradle removes both as unused. MALENJO records that reviewed
+normalization in `0002-malenjo-core-license-overrides.patch` before running
+the license task. After that explicit baseline is applied, **any further**
+mutation of `app/license-overrides.json` fails the build.
+
+The generated exact dependency-license report is packaged as
 `malenjo-notices/stirling-dependency-licenses.json` beside retained Stirling
 and Office Convert license notices.
 
