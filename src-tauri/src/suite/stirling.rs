@@ -5,6 +5,7 @@ use sha2::{Digest, Sha256};
 use std::{
     env,
     io::Read,
+    net::{SocketAddr, TcpStream},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{Mutex, OnceLock},
@@ -21,8 +22,13 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
 const MAX_INPUT_BYTES: usize = 512 * 1024 * 1024;
 const MAX_OUTPUT_BYTES: usize = 512 * 1024 * 1024;
 
-fn process_slot() -> &'static Mutex<Option<Child>> {
-    static SLOT: OnceLock<Mutex<Option<Child>>> = OnceLock::new();
+struct OwnedStirlingProcess {
+    child: Child,
+    context_path: String,
+}
+
+fn process_slot() -> &'static Mutex<Option<OwnedStirlingProcess>> {
+    static SLOT: OnceLock<Mutex<Option<OwnedStirlingProcess>>> = OnceLock::new();
     SLOT.get_or_init(|| Mutex::new(None))
 }
 
@@ -153,22 +159,28 @@ const OFFICE_CONVERT_DEPENDENCIES_TEXT: &str =
     include_str!("../../../third_party/stirling-office-convert/DEPENDENCIES.md");
 const OFFICE_CONVERT_ARTIFACT_PINS: &str =
     include_str!("../../../third_party/stirling-office-convert/ARTIFACTS.sha256");
+const OFFICE_CONVERT_LICENSE_REPORT_PIN: &str =
+    include_str!("../../../third_party/stirling-office-convert/DEPENDENCY_LICENSE_REPORT.sha256");
 
-fn sha256_file_hex(path: &Path) -> Result<String, String> {
-    let mut file = std::fs::File::open(path)
-        .map_err(|error| format!("Unable to open {} for hashing: {error}", path.display()))?;
+fn sha256_reader_hex<R: Read>(reader: &mut R) -> Result<String, String> {
     let mut hasher = Sha256::new();
     let mut buffer = [0u8; 1024 * 1024];
     loop {
-        let read = file
+        let read = reader
             .read(&mut buffer)
-            .map_err(|error| format!("Unable to hash {}: {error}", path.display()))?;
+            .map_err(|error| format!("Unable to hash stream: {error}"))?;
         if read == 0 {
             break;
         }
         hasher.update(&buffer[..read]);
     }
     Ok(format!("{:x}", hasher.finalize()))
+}
+
+fn sha256_file_hex(path: &Path) -> Result<String, String> {
+    let mut file = std::fs::File::open(path)
+        .map_err(|error| format!("Unable to open {} for hashing: {error}", path.display()))?;
+    sha256_reader_hex(&mut file)
 }
 
 fn selected_stirling_source(jar: &Path) -> String {
@@ -217,7 +229,7 @@ fn office_status_cache() -> &'static Mutex<Option<OfficeStatusCacheEntry>> {
 fn office_pack_files(jar: &Path) -> Option<(Value, PathBuf, PathBuf, PathBuf, PathBuf)> {
     let manifest_path = jar.parent()?.join("manifest.json");
     let manifest_text = std::fs::read_to_string(&manifest_path).ok()?;
-    let manifest: Value = serde_json::from_str(&manifest_text).ok()?;
+    let manifest: Value = serde_json::from_str(manifest_text.trim_start_matches('\u{feff}')).ok()?;
     let report_relative = manifest.get("dependencyLicenseReport")?.as_str()?;
     if report_relative.is_empty() {
         return None;
@@ -272,6 +284,86 @@ fn reviewed_office_artifact_hash(name: &str) -> Option<&'static str> {
     })
 }
 
+fn reviewed_dependency_report_hash() -> Option<&'static str> {
+    OFFICE_CONVERT_LICENSE_REPORT_PIN.lines().find_map(|line| {
+        let mut parts = line.split_whitespace();
+        let hash = parts.next()?;
+        let artifact = parts.next()?;
+        (parts.next().is_none()
+            && artifact == "stirling-dependency-licenses.json"
+            && hash.len() == 64
+            && hash.chars().all(|ch| ch.is_ascii_hexdigit()))
+        .then_some(hash)
+    })
+}
+
+fn reviewed_office_artifacts() -> Option<Vec<(String, String)>> {
+    [
+        "stirling-office-convert-0.2.2.jar",
+        "stirling-office-convert-legacy-0.2.2.jar",
+        "stirling-office-convert-topdf-0.2.2.jar",
+    ]
+    .into_iter()
+    .map(|name| {
+        reviewed_office_artifact_hash(name)
+            .map(|hash| (name.to_string(), hash.to_string()))
+    })
+    .collect()
+}
+
+fn embedded_office_artifacts_match(
+    jar: &Path,
+    expected_artifacts: &[(String, String)],
+) -> bool {
+    let Ok(file) = std::fs::File::open(jar) else {
+        return false;
+    };
+    let Ok(mut archive) = zip::ZipArchive::new(file) else {
+        return false;
+    };
+
+    let mut expected_entries = expected_artifacts
+        .iter()
+        .map(|(name, _)| format!("BOOT-INF/lib/{name}"))
+        .collect::<Vec<_>>();
+    expected_entries.sort();
+
+    let mut actual_entries = Vec::new();
+    for index in 0..archive.len() {
+        let Ok(artifact) = archive.by_index(index) else {
+            return false;
+        };
+        let name = artifact.name().to_string();
+        if name.starts_with("BOOT-INF/lib/stirling-office-convert") && name.ends_with(".jar") {
+            actual_entries.push(name);
+        }
+    }
+    actual_entries.sort();
+    if actual_entries != expected_entries {
+        return false;
+    }
+
+    for (name, expected) in expected_artifacts {
+        let entry_name = format!("BOOT-INF/lib/{name}");
+        let actual = {
+            let Ok(mut artifact) = archive.by_name(&entry_name) else {
+                return false;
+            };
+            if artifact.size() > 128 * 1024 * 1024 {
+                return false;
+            }
+            let Ok(hash) = sha256_reader_hex(&mut artifact) else {
+                return false;
+            };
+            hash
+        };
+        if actual != *expected {
+            return false;
+        }
+    }
+    true
+}
+
 fn license_artifact_matches(manifest: &Value, relative: &str, path: &Path) -> bool {
     let Some(expected) = manifest
         .get("licenseArtifacts")
@@ -286,7 +378,11 @@ fn license_artifact_matches(manifest: &Value, relative: &str, path: &Path) -> bo
         && sha256_file_hex(path).is_ok_and(|actual| actual == expected)
 }
 
-fn office_convert_pack_is_verified(jar: &Path) -> bool {
+fn office_convert_pack_is_verified_against(
+    jar: &Path,
+    expected_artifacts: &[(String, String)],
+    expected_report_hash: &str,
+) -> bool {
     let Some((manifest, _manifest_path, license_report, office_license, office_dependencies)) =
         office_pack_files(jar)
     else {
@@ -297,19 +393,12 @@ fn office_convert_pack_is_verified(jar: &Path) -> bool {
     let actual_hash = sha256_file_hex(jar).ok();
     let office = manifest.get("embeddedOfficeConvert");
     let jars = office.and_then(|value| value.get("jars")).and_then(Value::as_object);
-    let required_jars = [
-        "stirling-office-convert-0.2.2.jar",
-        "stirling-office-convert-legacy-0.2.2.jar",
-        "stirling-office-convert-topdf-0.2.2.jar",
-    ];
     let office_jars_valid = jars.is_some_and(|items| {
-        required_jars.iter().all(|name| {
-            let Some(expected) = reviewed_office_artifact_hash(name) else {
-                return false;
-            };
-            items.get(*name).and_then(Value::as_str) == Some(expected)
-        })
-    });
+        items.len() == expected_artifacts.len()
+            && expected_artifacts.iter().all(|(name, expected)| {
+                items.get(name).and_then(Value::as_str) == Some(expected.as_str())
+            })
+    }) && embedded_office_artifacts_match(jar, expected_artifacts);
 
     let office_license_text = std::fs::read_to_string(&office_license).ok();
     let office_dependencies_text = std::fs::read_to_string(&office_dependencies).ok();
@@ -319,6 +408,8 @@ fn office_convert_pack_is_verified(jar: &Path) -> bool {
             && content.contains("stirling-office-convert")
             && serde_json::from_str::<Value>(content).is_ok()
     });
+    let report_matches_reviewed_pin =
+        sha256_file_hex(&license_report).is_ok_and(|actual| actual == expected_report_hash);
 
     manifest.get("provider").and_then(Value::as_str) == Some("stirling-open-core")
         && manifest.get("upstreamCommit").and_then(Value::as_str) == Some(STIRLING_PIN)
@@ -352,6 +443,17 @@ fn office_convert_pack_is_verified(jar: &Path) -> bool {
             &license_report,
         )
         && report_semantically_valid
+        && report_matches_reviewed_pin
+}
+
+fn office_convert_pack_is_verified(jar: &Path) -> bool {
+    let Some(expected_artifacts) = reviewed_office_artifacts() else {
+        return false;
+    };
+    let Some(expected_report_hash) = reviewed_dependency_report_hash() else {
+        return false;
+    };
+    office_convert_pack_is_verified_against(jar, &expected_artifacts, expected_report_hash)
 }
 
 fn office_convert_component_status(app: &AppHandle) -> StirlingComponentStatus {
@@ -716,7 +818,7 @@ fn api_client() -> Result<Client, String> {
         .map_err(|error| format!("Unable to create local Stirling client: {error}"))
 }
 
-fn validate_api_path(path: &str) -> Result<String, String> {
+fn validate_api_path(base_url: &str, path: &str) -> Result<String, String> {
     if !path.starts_with("/api/v1/") {
         return Err("Only Stirling core /api/v1/* paths may be called.".into());
     }
@@ -726,13 +828,13 @@ fn validate_api_path(path: &str) -> Result<String, String> {
     if path.len() > 512 {
         return Err("Stirling API path is too long.".into());
     }
-    Ok(format!("{STIRLING_BASE_URL}{path}"))
+    Ok(format!("{base_url}{path}"))
 }
 
-async fn health_payload() -> Option<Value> {
+async fn health_payload(base_url: &str) -> Option<Value> {
     let client = api_client().ok()?;
     let response = client
-        .get(format!("{STIRLING_BASE_URL}{STIRLING_HEALTH_PATH}"))
+        .get(format!("{base_url}{STIRLING_HEALTH_PATH}"))
         .send()
         .await
         .ok()?;
@@ -742,8 +844,8 @@ async fn health_payload() -> Option<Value> {
     response.json::<Value>().await.ok()
 }
 
-async fn is_healthy() -> bool {
-    health_payload()
+async fn is_healthy(base_url: &str) -> bool {
+    health_payload(base_url)
         .await
         .and_then(|value| value.get("status").and_then(Value::as_str).map(str::to_owned))
         .is_some_and(|status| status.eq_ignore_ascii_case("UP"))
@@ -755,24 +857,40 @@ fn version_from_health(value: &Value) -> Option<String> {
         .find_map(|key| value.get(*key).and_then(Value::as_str).map(str::to_owned))
 }
 
-fn owned_provider_ready(healthy: bool, child_running: bool) -> bool {
-    healthy && child_running
+fn new_context_path() -> Result<String, String> {
+    let mut token = [0u8; 16];
+    getrandom::fill(&mut token)
+        .map_err(|error| format!("Unable to generate Stirling sidecar identity: {error}"))?;
+    let token = token
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    Ok(format!("/malenjo-{token}"))
+}
+
+fn owned_base_url() -> Option<String> {
+    let Ok(mut guard) = process_slot().lock() else {
+        return None;
+    };
+    let Some(owned) = guard.as_mut() else {
+        return None;
+    };
+    match owned.child.try_wait() {
+        Ok(None) => Some(format!("{STIRLING_BASE_URL}{}", owned.context_path)),
+        Ok(Some(_)) | Err(_) => {
+            *guard = None;
+            None
+        }
+    }
 }
 
 fn process_running() -> bool {
-    let Ok(mut guard) = process_slot().lock() else {
-        return false;
-    };
-    let Some(child) = guard.as_mut() else {
-        return false;
-    };
-    match child.try_wait() {
-        Ok(None) => true,
-        Ok(Some(_)) | Err(_) => {
-            *guard = None;
-            false
-        }
-    }
+    owned_base_url().is_some()
+}
+
+fn stirling_port_in_use() -> bool {
+    let address = SocketAddr::from(([127, 0, 0, 1], STIRLING_PORT));
+    TcpStream::connect_timeout(&address, Duration::from_millis(250)).is_ok()
 }
 
 #[cfg(windows)]
@@ -785,7 +903,7 @@ fn suppress_windows_console(command: &mut Command) {
 #[cfg(not(windows))]
 fn suppress_windows_console(_command: &mut Command) {}
 
-fn spawn_core(java: &str, jar: &Path, app: &AppHandle) -> Result<(), String> {
+fn spawn_core(java: &str, jar: &Path, app: &AppHandle) -> Result<String, String> {
     let data_dir = app
         .path()
         .app_data_dir()
@@ -794,6 +912,7 @@ fn spawn_core(java: &str, jar: &Path, app: &AppHandle) -> Result<(), String> {
     std::fs::create_dir_all(&data_dir)
         .map_err(|error| format!("Unable to create Stirling core data directory: {error}"))?;
 
+    let context_path = new_context_path()?;
     let mut command = Command::new(java);
     command
         .arg("-Xms128m")
@@ -802,6 +921,7 @@ fn spawn_core(java: &str, jar: &Path, app: &AppHandle) -> Result<(), String> {
         .arg(jar)
         .arg(format!("--server.address=127.0.0.1"))
         .arg(format!("--server.port={STIRLING_PORT}"))
+        .arg(format!("--server.servlet.context-path={context_path}"))
         .arg("--spring.main.banner-mode=off")
         .arg("--system.stirlingOfficeConversion=true")
         .env("STIRLING_FLAVOR", "core")
@@ -824,26 +944,33 @@ fn spawn_core(java: &str, jar: &Path, app: &AppHandle) -> Result<(), String> {
     let mut guard = process_slot()
         .lock()
         .map_err(|_| "Unable to lock Stirling core process state.".to_string())?;
-    *guard = Some(child);
-    Ok(())
+    *guard = Some(OwnedStirlingProcess {
+        child,
+        context_path: context_path.clone(),
+    });
+    Ok(format!("{STIRLING_BASE_URL}{context_path}"))
 }
 
 #[tauri::command]
 pub async fn stirling_core_status(app: AppHandle) -> StirlingCoreStatus {
     let jar = stirling_jar_path(&app);
     let java = available_java(&app);
-    let health = health_payload().await;
-    let healthy = health
+    let owned_url = owned_base_url();
+    let health = match owned_url.as_deref() {
+        Some(base_url) => health_payload(base_url).await,
+        None => None,
+    };
+    let owned_ready = health
         .as_ref()
         .and_then(|value| value.get("status").and_then(Value::as_str))
         .is_some_and(|value| value.eq_ignore_ascii_case("UP"));
-    let child_running = process_running();
-    let owned_ready = owned_provider_ready(healthy, child_running);
+    let child_running = owned_url.is_some();
+    let foreign_listener = !child_running && stirling_port_in_use();
 
     let message = if owned_ready {
         "Local Stirling open-core PDF provider is ready.".to_string()
-    } else if healthy {
-        "Port 28970 is occupied by a healthy local service that was not started by MALENJO. It will not be trusted or used.".to_string()
+    } else if foreign_listener {
+        "Port 28970 is occupied by a local service that was not started by MALENJO. It will not be trusted or used.".to_string()
     } else if jar.is_none() {
         "The local Stirling core provider pack is not installed. Build or install the reviewed core pack before using provider-backed PDF tools.".to_string()
     } else if java.is_none() {
@@ -859,7 +986,7 @@ pub async fn stirling_core_status(app: AppHandle) -> StirlingCoreStatus {
         running: owned_ready,
         java,
         jar_path: jar.map(|path| path.to_string_lossy().to_string()),
-        base_url: STIRLING_BASE_URL.into(),
+        base_url: owned_url.unwrap_or_else(|| STIRLING_BASE_URL.into()),
         version: health.as_ref().and_then(version_from_health),
         message,
     }
@@ -867,10 +994,9 @@ pub async fn stirling_core_status(app: AppHandle) -> StirlingCoreStatus {
 
 #[tauri::command]
 pub async fn stirling_core_components(app: AppHandle) -> Vec<StirlingComponentStatus> {
-    let healthy = is_healthy().await;
     let child_running = process_running();
     let mut office = office_convert_component_status(&app);
-    if healthy && !child_running {
+    if !child_running && stirling_port_in_use() {
         office.available = false;
         office.version = None;
         office.message =
@@ -885,26 +1011,24 @@ pub async fn stirling_core_components(app: AppHandle) -> Vec<StirlingComponentSt
 
 #[tauri::command]
 pub async fn stirling_core_start(app: AppHandle) -> Result<StirlingCoreStatus, String> {
-    let healthy = is_healthy().await;
-    let child_running = process_running();
-    if healthy {
-        if child_running {
-            return Ok(stirling_core_status(app).await);
-        }
-        return Err(
-            "Port 28970 is already serving a healthy process that MALENJO did not start. The local PDF provider will not connect to an unowned sidecar.".into(),
-        );
-    }
-
-    if child_running {
+    if let Some(base_url) = owned_base_url() {
         let started = Instant::now();
         while started.elapsed() < START_TIMEOUT {
-            if is_healthy().await {
+            if is_healthy(&base_url).await {
                 return Ok(stirling_core_status(app).await);
+            }
+            if !process_running() {
+                return Err("The local Stirling core provider exited before becoming healthy.".into());
             }
             tokio::time::sleep(Duration::from_millis(250)).await;
         }
         return Err("The existing Stirling core process did not become healthy within 75 seconds.".into());
+    }
+
+    if stirling_port_in_use() {
+        return Err(
+            "Port 28970 is already occupied by a process that MALENJO did not start. The local PDF provider will not connect to an unowned sidecar.".into(),
+        );
     }
 
     let jar = stirling_jar_path(&app)
@@ -912,11 +1036,11 @@ pub async fn stirling_core_start(app: AppHandle) -> Result<StirlingCoreStatus, S
     let java = available_java(&app)
         .ok_or_else(|| "Java 25 is not available for the local Stirling core provider.".to_string())?;
 
-    spawn_core(&java, &jar, &app)?;
+    let base_url = spawn_core(&java, &jar, &app)?;
 
     let started = Instant::now();
     while started.elapsed() < START_TIMEOUT {
-        if is_healthy().await {
+        if is_healthy(&base_url).await {
             return Ok(stirling_core_status(app).await);
         }
 
@@ -935,21 +1059,21 @@ pub async fn stirling_core_stop() -> Result<bool, String> {
     let mut guard = process_slot()
         .lock()
         .map_err(|_| "Unable to lock Stirling core process state.".to_string())?;
-    let Some(child) = guard.as_mut() else {
+    let Some(owned) = guard.as_mut() else {
         return Ok(false);
     };
-    let _ = child.kill();
-    let _ = child.wait();
+    let _ = owned.child.kill();
+    let _ = owned.child.wait();
     *guard = None;
     Ok(true)
 }
 
 #[tauri::command]
 pub async fn stirling_core_openapi(app: AppHandle) -> Result<Value, String> {
-    let _ = stirling_core_start(app).await?;
+    let status = stirling_core_start(app).await?;
     let client = api_client()?;
     let response = client
-        .get(format!("{STIRLING_BASE_URL}{STIRLING_OPENAPI_PATH}"))
+        .get(format!("{}{STIRLING_OPENAPI_PATH}", status.base_url))
         .send()
         .await
         .map_err(|error| format!("Unable to read local Stirling OpenAPI catalog: {error}"))?;
@@ -973,8 +1097,8 @@ pub async fn stirling_core_request(
     fields: Vec<StirlingFormField>,
     files: Vec<StirlingInputFile>,
 ) -> Result<StirlingResponse, String> {
-    let _ = stirling_core_start(app).await?;
-    let url = validate_api_path(&path)?;
+    let status = stirling_core_start(app).await?;
+    let url = validate_api_path(&status.base_url, &path)?;
     let method = match method.to_ascii_uppercase().as_str() {
         "GET" => Method::GET,
         "POST" => Method::POST,
@@ -1068,7 +1192,7 @@ pub async fn stirling_core_request(
 #[cfg(test)]
 mod tests {
     use super::{
-        office_convert_pack_is_verified, owned_provider_ready, parse_qpdf_version, reviewed_office_artifact_hash,
+        new_context_path, office_convert_pack_is_verified_against, parse_qpdf_version, reviewed_dependency_report_hash, reviewed_office_artifact_hash,
         parse_tesseract_version, set_reviewed_provider_path, sha256_file_hex, validate_api_path,
         MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, OFFICE_CONVERT_DEPENDENCIES_TEXT,
         OFFICE_CONVERT_LICENSE_TEXT, OFFICE_CONVERT_SOURCE_COMMIT, OFFICE_CONVERT_VERSION,
@@ -1079,12 +1203,12 @@ mod tests {
     #[test]
     fn stirling_proxy_accepts_only_local_v1_paths() {
         assert_eq!(
-            validate_api_path("/api/v1/general/merge-pdfs").unwrap(),
-            format!("{STIRLING_BASE_URL}/api/v1/general/merge-pdfs")
+            validate_api_path("http://127.0.0.1:28970/malenjo-test", "/api/v1/general/merge-pdfs").unwrap(),
+            "http://127.0.0.1:28970/malenjo-test/api/v1/general/merge-pdfs"
         );
-        assert!(validate_api_path("https://example.com/api/v1/test").is_err());
-        assert!(validate_api_path("/api/v1/../admin").is_err());
-        assert!(validate_api_path("/v3/api-docs").is_err());
+        assert!(validate_api_path(STIRLING_BASE_URL, "https://example.com/api/v1/test").is_err());
+        assert!(validate_api_path(STIRLING_BASE_URL, "/api/v1/../admin").is_err());
+        assert!(validate_api_path(STIRLING_BASE_URL, "/v3/api-docs").is_err());
     }
 
     #[test]
@@ -1130,7 +1254,10 @@ mod tests {
     }
 
     #[test]
-    fn office_pack_verifier_rejects_jar_and_license_tampering() {
+    fn office_pack_verifier_accepts_reviewed_fixture_then_rejects_tampering() {
+        use std::io::Write;
+        use zip::{write::SimpleFileOptions, ZipWriter};
+
         let root = std::env::temp_dir().join(format!(
             "malenjo-office-pack-test-{}",
             std::process::id()
@@ -1143,7 +1270,47 @@ mod tests {
         let office_dependencies = notices.join("stirling-office-convert-DEPENDENCIES.md");
         let license_report = notices.join("stirling-dependency-licenses.json");
 
-        std::fs::write(&jar, b"reviewed-stirling-pack").unwrap();
+        let fixture_artifacts = [
+            ("stirling-office-convert-0.2.2.jar", b"fixture-office-core".as_slice()),
+            ("stirling-office-convert-legacy-0.2.2.jar", b"fixture-office-legacy".as_slice()),
+            ("stirling-office-convert-topdf-0.2.2.jar", b"fixture-office-topdf".as_slice()),
+        ];
+        let expected_artifacts = fixture_artifacts
+            .iter()
+            .map(|(name, bytes)| {
+                let mut cursor = std::io::Cursor::new(*bytes);
+                (
+                    (*name).to_string(),
+                    super::sha256_reader_hex(&mut cursor).unwrap(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let write_jar = |include_extra: bool| {
+            let file = std::fs::File::create(&jar).unwrap();
+            let mut writer = ZipWriter::new(file);
+            for (name, bytes) in fixture_artifacts {
+                writer
+                    .start_file(
+                        format!("BOOT-INF/lib/{name}"),
+                        SimpleFileOptions::default(),
+                    )
+                    .unwrap();
+                writer.write_all(bytes).unwrap();
+            }
+            if include_extra {
+                writer
+                    .start_file(
+                        "BOOT-INF/lib/stirling-office-convert-unreviewed.jar",
+                        SimpleFileOptions::default(),
+                    )
+                    .unwrap();
+                writer.write_all(b"unreviewed").unwrap();
+            }
+            writer.finish().unwrap();
+        };
+
+        write_jar(false);
         std::fs::write(&office_license, OFFICE_CONVERT_LICENSE_TEXT.as_bytes()).unwrap();
         std::fs::write(&office_dependencies, OFFICE_CONVERT_DEPENDENCIES_TEXT.as_bytes()).unwrap();
         let report = serde_json::json!({
@@ -1152,14 +1319,17 @@ mod tests {
         });
         std::fs::write(&license_report, serde_json::to_vec(&report).unwrap()).unwrap();
 
-        let jar_hash = sha256_file_hex(&jar).unwrap();
+        let report_hash = sha256_file_hex(&license_report).unwrap();
         let license_hash = sha256_file_hex(&office_license).unwrap();
         let dependencies_hash = sha256_file_hex(&office_dependencies).unwrap();
-        let report_hash = sha256_file_hex(&license_report).unwrap();
-        let manifest = serde_json::json!({
+        let artifact_manifest = expected_artifacts
+            .iter()
+            .map(|(name, hash)| (name.clone(), serde_json::Value::String(hash.clone())))
+            .collect::<serde_json::Map<_, _>>();
+        let mut manifest = serde_json::json!({
             "provider": "stirling-open-core",
             "upstreamCommit": STIRLING_PIN,
-            "sha256": jar_hash,
+            "sha256": sha256_file_hex(&jar).unwrap(),
             "dependencyLicenseReport": "malenjo-notices/stirling-dependency-licenses.json",
             "licenseArtifacts": {
                 "malenjo-notices/stirling-office-convert-LICENSE.txt": license_hash,
@@ -1172,30 +1342,53 @@ mod tests {
                 "sourceCommit": OFFICE_CONVERT_SOURCE_COMMIT,
                 "license": "MIT",
                 "verification": "pinned-published-sha256",
-                "jars": {
-                    "stirling-office-convert-0.2.2.jar": reviewed_office_artifact_hash("stirling-office-convert-0.2.2.jar").unwrap(),
-                    "stirling-office-convert-legacy-0.2.2.jar": reviewed_office_artifact_hash("stirling-office-convert-legacy-0.2.2.jar").unwrap(),
-                    "stirling-office-convert-topdf-0.2.2.jar": reviewed_office_artifact_hash("stirling-office-convert-topdf-0.2.2.jar").unwrap()
-                }
+                "jars": serde_json::Value::Object(artifact_manifest)
             }
         });
-        std::fs::write(root.join("manifest.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
+        let manifest_path = root.join("manifest.json");
+        std::fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
 
-        assert!(office_convert_pack_is_verified(&jar));
+        assert!(office_convert_pack_is_verified_against(
+            &jar,
+            &expected_artifacts,
+            &report_hash,
+        ));
+
         std::fs::write(&office_license, b"tampered license").unwrap();
-        assert!(!office_convert_pack_is_verified(&jar));
+        assert!(!office_convert_pack_is_verified_against(
+            &jar,
+            &expected_artifacts,
+            &report_hash,
+        ));
         std::fs::write(&office_license, OFFICE_CONVERT_LICENSE_TEXT.as_bytes()).unwrap();
-        std::fs::write(&jar, b"tampered-stirling-pack").unwrap();
-        assert!(!office_convert_pack_is_verified(&jar));
+
+        write_jar(true);
+        manifest["sha256"] = serde_json::Value::String(sha256_file_hex(&jar).unwrap());
+        std::fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+        assert!(!office_convert_pack_is_verified_against(
+            &jar,
+            &expected_artifacts,
+            &report_hash,
+        ));
+
         std::fs::remove_dir_all(root).ok();
     }
 
     #[test]
-    fn healthy_provider_must_be_owned_by_malenjo() {
-        assert!(owned_provider_ready(true, true));
-        assert!(!owned_provider_ready(true, false));
-        assert!(!owned_provider_ready(false, true));
-        assert!(!owned_provider_ready(false, false));
+    fn dependency_license_report_has_an_immutable_reviewed_pin() {
+        assert_eq!(
+            reviewed_dependency_report_hash(),
+            Some("05c4ef33b49a9f16d7029c81575938bb9673ddcaea28da91d90fb50b66260cf1")
+        );
+    }
+
+    #[test]
+    fn owned_provider_context_path_is_scoped() {
+        let context = new_context_path().unwrap();
+        assert!(context.starts_with("/malenjo-"));
+        assert_eq!(context.matches('/').count(), 1);
+        assert_eq!(context.len(), "/malenjo-".len() + 32);
+        assert!(context["/malenjo-".len()..].chars().all(|ch| ch.is_ascii_hexdigit()));
     }
 
     #[test]

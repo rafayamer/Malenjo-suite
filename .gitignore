@@ -35,3 +35,10 @@ provider-packs/tesseract/runtime/
 provider-packs/tesseract/manifest.json
 provider-packs/tesseract/sbom.cdx.json
 .build/tesseract/
+
+
+# Generated WeasyPrint audit-stage provider pack
+provider-packs/weasyprint/runtime/
+provider-packs/weasyprint/manifest.json
+provider-packs/weasyprint/inventory.json
+.build/weasyprint/

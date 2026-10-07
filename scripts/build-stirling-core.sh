@@ -54,6 +54,14 @@ echo "Checking pinned Stirling runtime dependency licenses..."
 ./gradlew checkLicense generateLicenseReport --no-parallel --no-daemon
 license_report="$SRC/build/reports/dependency-license/index.json"
 [[ -f "$license_report" ]] || { echo "Stirling dependency license report was not generated" >&2; exit 1; }
+license_report_pin="$ROOT/third_party/stirling-office-convert/DEPENDENCY_LICENSE_REPORT.sha256"
+[[ -f "$license_report_pin" ]] || { echo "Reviewed Stirling dependency-license report pin is missing" >&2; exit 1; }
+expected_license_report_hash="$(awk '$2=="stirling-dependency-licenses.json" {print $1}' "$license_report_pin")"
+actual_license_report_hash="$(sha256sum "$license_report" | awk '{print $1}')"
+[[ -n "$expected_license_report_hash" && "$actual_license_report_hash" == "$expected_license_report_hash" ]] || {
+  echo "Generated Stirling dependency-license report differs from the reviewed SHA-256 baseline" >&2
+  exit 1
+}
 license_overrides_after_hash="$(sha256sum "$license_overrides" | awk '{print $1}')"
 if [[ "$license_overrides_after_hash" != "$license_overrides_baseline_hash" ]]; then
   echo "Stirling dependency license resolution changed the reviewed core-only app/license-overrides.json baseline; review the new metadata before packaging." >&2
@@ -111,6 +119,10 @@ cp "$license_report" "$notice_dir/stirling-dependency-licenses.json"
 office_license_hash="$(sha256sum "$notice_dir/stirling-office-convert-LICENSE.txt" | awk '{print $1}')"
 office_dependencies_hash="$(sha256sum "$notice_dir/stirling-office-convert-DEPENDENCIES.md" | awk '{print $1}')"
 dependency_report_hash="$(sha256sum "$notice_dir/stirling-dependency-licenses.json" | awk '{print $1}')"
+[[ "$dependency_report_hash" == "$expected_license_report_hash" ]] || {
+  echo "Packaged Stirling dependency-license report differs from the reviewed SHA-256 baseline" >&2
+  exit 1
+}
 
 cat > "$OUT/manifest.json" <<JSON
 {
