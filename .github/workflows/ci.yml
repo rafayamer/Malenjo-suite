@@ -253,10 +253,11 @@ jobs:
               "/api/v1/convert/file/pdf",
               "/api/v1/convert/pdf/word",
               "/api/v1/convert/pdf/presentation",
-              "/api/v1/convert/pdf/text"
+              "/api/v1/convert/pdf/text",
+              "/api/v1/convert/pdf/xlsx"
             )) {
               if (!$api.paths.PSObject.Properties.Name.Contains($requiredPath)) {
-                throw "Expected qpdf-backed operation $requiredPath to be present."
+                throw "Expected reviewed local operation $requiredPath to be present."
               }
             }
 
@@ -301,6 +302,17 @@ jobs:
             if ($rtfBytes.Length -lt 5 -or [Text.Encoding]::ASCII.GetString($rtfBytes, 0, 5) -ne "{\rtf") {
               throw "PDF-to-RTF output does not have an RTF header."
             }
+
+            $tableFixture = Join-Path (Resolve-Path ".build/provider-smoke") "office-table.pdf"
+            ./scripts/write-table-pdf-smoke-fixture.ps1 -OutputPath $tableFixture
+            & $qpdf.FullName --check $tableFixture
+            if ($LASTEXITCODE -ne 0) { throw "Generated table PDF fixture failed qpdf validation." }
+
+            $xlsxOut = Join-Path (Resolve-Path ".build/provider-smoke") "pdf-to-table.xlsx"
+            & $curl --fail --silent --show-error -o $xlsxOut -F "fileInput=@$tableFixture;type=application/pdf" "http://127.0.0.1:28970/api/v1/convert/pdf/xlsx"
+            if ($LASTEXITCODE -ne 0) { throw "Embedded Office PDF-to-XLSX operation smoke failed." }
+            Assert-ZipEntry $xlsxOut "xl/workbook.xml"
+            Assert-ZipEntry $xlsxOut "xl/worksheets/sheet1.xml"
 
             $repairOut = Join-Path (Resolve-Path ".build/provider-smoke") "repair.pdf"
             & $curl --fail --silent --show-error -o $repairOut -F "fileInput=@$fixture;type=application/pdf" "http://127.0.0.1:28970/api/v1/misc/repair"
@@ -357,7 +369,7 @@ jobs:
             if ($vectorStatus -match "^2") {
               throw "Ghostscript-only PDF-to-vector unexpectedly executed without a reviewed Ghostscript provider."
             }
-            Write-Host "Reviewed local provider groups passed embedded Office, repair, compression, Java effects, OCR and auto-rotate localhost smoke tests; LibreOffice-only XML and Ghostscript-only vector conversion remained unavailable."
+            Write-Host "Reviewed local provider groups passed embedded Office (PDF/DOCX/PPTX/RTF/XLSX), repair, compression, Java effects, OCR and auto-rotate localhost smoke tests; LibreOffice-only XML and Ghostscript-only vector conversion remained unavailable."
           } finally {
             if (!$process.HasExited) { Stop-Process -Id $process.Id -Force }
           }
