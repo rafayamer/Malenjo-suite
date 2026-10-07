@@ -109,6 +109,19 @@ describe('Windows PDF provider packaging contract',()=>{
     expect(fixture).toContain('(MALENJO) Tj');
   });
 
+  it('keeps WeasyPrint at inventory-only status until transitive Windows licensing closes',()=>{
+    const builder=text('scripts/build-weasyprint-windows.ps1');
+    const provenance=text('third_party/weasyprint/PROVENANCE.md');
+
+    expect(builder).toContain("$Version = '70.0'");
+    expect(builder).toContain('4d3b7b6449e3494f59c7c2f36b512d129225679c');
+    expect(builder).toContain('ab1151f210b4e6bb7aa7a79e91a67e8ddb760094c107bfda55241b6aaefe7d53');
+    expect(builder).toContain("redistribution = 'inventory-only-not-approved'");
+    expect(builder).toContain('capabilityEnabled = $false');
+    expect(builder).toContain('WEASYPRINT_INVENTORY_BEGIN');
+    expect(provenance).toContain('HTML→PDF, URL→PDF and EML→PDF remain unavailable');
+  });
+
   it('retains qpdf transitive notices in the generated component pack',()=>{
     const builder=text('scripts/build-qpdf-windows.ps1');
     for(const notice of [
