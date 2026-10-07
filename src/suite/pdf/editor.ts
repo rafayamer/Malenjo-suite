@@ -910,26 +910,25 @@ function isRecord(value:unknown):value is Record<string,unknown>{
 }
 
 function safeFormDataFields(fields:PdfFormFieldInfo[]):PdfFormDataField[]{
-  return fields.flatMap((field)=>{
+  const exported:PdfFormDataField[]=[];
+  for(const field of fields){
     if(
       field.readOnly
       || field.richText
       || field.password
       || field.duplicateChoiceExports
       || (field.type==='dropdown'&&field.editable&&field.multiselect)
-    )return [];
+    )continue;
 
-    if(field.type==='text')return [{name:field.name,type:'text' as const,value:field.value}];
-    if(field.type==='checkbox')return [{name:field.name,type:'checkbox' as const,checked:Boolean(field.checked)}];
-    if(field.type==='radio'||field.type==='dropdown'||field.type==='list'){
-      return [{
-        name:field.name,
-        type:field.type,
-        selected:[...field.selected],
-      }];
+    if(field.type==='text'){
+      exported.push({name:field.name,type:'text',value:field.value});
+    }else if(field.type==='checkbox'){
+      exported.push({name:field.name,type:'checkbox',checked:Boolean(field.checked)});
+    }else if(field.type==='radio'||field.type==='dropdown'||field.type==='list'){
+      exported.push({name:field.name,type:field.type,selected:[...field.selected]});
     }
-    return [];
-  });
+  }
+  return exported;
 }
 
 export async function exportPdfFormData(bytes:Uint8Array):Promise<string>{
