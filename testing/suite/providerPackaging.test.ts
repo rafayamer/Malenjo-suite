@@ -76,6 +76,20 @@ describe('Windows PDF provider packaging contract',()=>{
     expect(provenance).toContain('673aab8d6ac784524cd1d90141c95e74b9fd26ae');
   });
 
+  it('requires native source verification before embedded Office capability is advertised',()=>{
+    const native=text('src-tauri/src/suite/stirling.rs');
+    const fixture=text('scripts/write-table-pdf-smoke-fixture.ps1');
+
+    expect(native).toContain('stirling-office-convert');
+    expect(native).toContain('OFFICE_CONVERT_VERSION');
+    expect(native).toContain('OFFICE_CONVERT_SOURCE_COMMIT');
+    expect(native).toContain('sha256_file_hex');
+    expect(native).toContain('dependencyLicenseReport');
+    expect(native).toContain('MALENJO_STIRLING_JAR override is not eligible');
+    expect(fixture).toContain('%PDF-1.4`n');
+    expect(fixture).toContain('(MALENJO) Tj');
+  });
+
   it('retains qpdf transitive notices in the generated component pack',()=>{
     const builder=text('scripts/build-qpdf-windows.ps1');
     for(const notice of [
