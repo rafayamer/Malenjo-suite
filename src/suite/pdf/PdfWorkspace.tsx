@@ -48,6 +48,7 @@ import {
   rotatePdfPagesPermanent,
   setPdfPageBox,
   splitPdfAtPage,
+  fillPdfFormFields,
   flattenPdfForm,
   inspectPdfFormFields,
   type PdfFormFieldInfo,
@@ -205,6 +206,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     gap:0.075,
   });
   const [formFields, setFormFields] = useState<PdfFormFieldInfo[]>([]);
+  const [formFillDraft, setFormFillDraft] = useState<Record<string,string|string[]|boolean>>({});
   const [headerFooterDraft, setHeaderFooterDraft] = useState({
     scope:'selected' as 'selected'|'all',
     header:'',
@@ -561,10 +563,28 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }
     let cancelled=false;
     void inspectPdfFormFields(sourceBytes)
-      .then((fields)=>{ if(!cancelled)setFormFields(fields); })
-      .catch(()=>{ if(!cancelled)setFormFields([]); });
+      .then((fields)=>{
+        if(cancelled)return;
+        setFormFields(fields);
+        setFormFillDraft(Object.fromEntries(fields.map((field)=>{
+          if(field.type==='checkbox')return [field.name,field.checked??false];
+          if(field.type==='radio'||field.type==='dropdown'||field.type==='list'){
+            return [field.name,[...field.selected]];
+          }
+          return [field.name,field.value];
+        })) as Record<string,string|string[]|boolean>);
+      })
+      .catch(()=>{
+        if(cancelled)return;
+        setFormFields([]);
+        setFormFillDraft({});
+      });
     return()=>{cancelled=true;};
   },[sourceBytes]);
+
+  const fillableFormFields=formFields.filter((field)=>
+    !field.readOnly&&['text','checkbox','radio','dropdown','list'].includes(field.type),
+  );
 
   async function attachDocuments(event:React.ChangeEvent<HTMLInputElement>){
     const files=Array.from(event.target.files??[]);
@@ -657,6 +677,29 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       );
     }
     setFormDraft((current)=>({...current,name:'',defaultValue:'',selectedText:''}));
+  }
+
+  function setFormFillValue(name:string,value:string|string[]|boolean){
+    setFormFillDraft((current)=>({...current,[name]:value}));
+  }
+
+  async function fillForm(){
+    if(!fillableFormFields.length)return;
+    const updates=fillableFormFields.map((field)=>{
+      const draft=formFillDraft[field.name];
+      if(field.type==='checkbox'){
+        return {name:field.name,checked:Boolean(draft)};
+      }
+      if(field.type==='radio'||field.type==='dropdown'||field.type==='list'){
+        return {name:field.name,selected:Array.isArray(draft)?draft:[]};
+      }
+      return {name:field.name,value:typeof draft==='string'?draft:''};
+    });
+    await mutate(
+      `Updated ${updates.length} PDF form field value(s).`,
+      (bytes)=>fillPdfFormFields(bytes,updates),
+      currentPage,
+    );
   }
 
   async function flattenForm(){
@@ -866,6 +909,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           run:()=>addFormField(),
         },
         {
+          id:'fill-form',
+          label:'Apply PDF form values',
+          keywords:'form acroform fill fields values input',
+          detail:fillableFormFields.length ? `Update ${fillableFormFields.length} fillable field(s)` : 'No editable AcroForm fields detected',
+          enabled:!!sourceBytes && !mutating && fillableFormFields.length>0,
+          disabledReason:!sourceBytes ? 'No PDF is loaded.' : !fillableFormFields.length ? 'No editable AcroForm fields detected.' : 'Wait for the current PDF edit to finish.',
+          run:()=>fillForm(),
+        },
+        {
           id:'flatten-form',
           label:'Flatten PDF form fields',
           keywords:'form acroform flatten fields',
@@ -1011,7 +1063,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     return () => registerCommands(null);
   }, [
     session, registerCommands, sourceBytes, pdf, dirty, mutating, historyRevision, formFields.length,
-    headerFooterDraft, batesDraft, pageBoxDraft, formDraft, currentPage, pageCount, selectedPages,
+    headerFooterDraft, batesDraft, pageBoxDraft, formDraft, formFillDraft, currentPage, pageCount, selectedPages,
     inspectorHidden, textOverlay, shapeOverlay, commentDraft,
   ]);
 
@@ -1152,6 +1204,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     ],
     forms:[
       {id:'add-form-field',label:`Add ${formDraft.type} field`,enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addFormField},
+      {id:'fill-form',label:'Apply field values',enabled:!!sourceBytes&&!mutating&&fillableFormFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!fillableFormFields.length?'No editable AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:fillForm},
       {id:'flatten-form',label:'Flatten fields',enabled:!!sourceBytes&&!mutating&&formFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:flattenForm},
       {id:'configure-forms',label:'Form settings',enabled:true,run:configureProperties},
       providerAction,
@@ -1518,12 +1571,65 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             <b>{formFields.length} AcroForm field{formFields.length===1?'':'s'}</b>
             {formFields.slice(0,16).map((field)=><span key={field.name} title={field.options.length?field.options.join(', '):undefined}>
               <strong>{field.name}</strong>
-              <em>{field.type}{field.required?' · required':''}{field.readOnly?' · read-only':''}{field.selected.length?` · selected: ${field.selected.join(', ')}`:''}</em>
+              <em>{field.type}{field.required?' · required':''}{field.readOnly?' · read-only':''}{field.type==='text'&&field.value?` · value: ${field.value}`:''}{field.type==='checkbox'?` · ${field.checked?'checked':'unchecked'}`:''}{field.selected.length?` · selected: ${field.selected.join(', ')}`:''}</em>
             </span>)}
             {formFields.length>16&&<span>+ {formFields.length-16} more</span>}
           </div>
+
+          {formFields.slice(0,16).map((field)=>{
+            const draft=formFillDraft[field.name];
+            const disabled=mutating||field.readOnly;
+            if(field.type==='checkbox'){
+              return <label key={`fill-${field.name}`}><input
+                type="checkbox"
+                checked={Boolean(draft)}
+                disabled={disabled}
+                onChange={(event)=>setFormFillValue(field.name,event.target.checked)}
+              /> {field.name}{field.readOnly?' · read-only':''}</label>;
+            }
+            if(field.type==='radio'||field.type==='dropdown'){
+              const selected=Array.isArray(draft)?draft[0]??'':'';
+              return <label key={`fill-${field.name}`}>{field.name}
+                <select
+                  value={selected}
+                  disabled={disabled}
+                  onChange={(event)=>setFormFillValue(field.name,event.target.value?[event.target.value]:[])}
+                >
+                  <option value="">— Clear —</option>
+                  {field.options.map((option)=><option key={option} value={option}>{option}</option>)}
+                </select>
+              </label>;
+            }
+            if(field.type==='list'){
+              const selected=Array.isArray(draft)?draft:[];
+              return <label key={`fill-${field.name}`}>{field.name}
+                <select
+                  multiple
+                  value={selected}
+                  disabled={disabled}
+                  onChange={(event)=>setFormFillValue(
+                    field.name,
+                    Array.from(event.target.selectedOptions).map((option)=>option.value),
+                  )}
+                >
+                  {field.options.map((option)=><option key={option} value={option}>{option}</option>)}
+                </select>
+              </label>;
+            }
+            if(field.type==='text'){
+              return <label key={`fill-${field.name}`}>{field.name}
+                <input
+                  value={typeof draft==='string'?draft:''}
+                  disabled={disabled}
+                  onChange={(event)=>setFormFillValue(field.name,event.target.value)}
+                />
+              </label>;
+            }
+            return <small key={`fill-${field.name}`}><b>{field.name}</b> ({field.type}) is detected but is not directly fillable in this pass.</small>;
+          })}
+          <button disabled={mutating||!fillableFormFields.length} onClick={()=>void fillForm()}><ListChecks size={13}/> Apply form values</button>
           <button disabled={mutating||!formFields.length} onClick={()=>void flattenForm()}><FileCheck2 size={13}/> Flatten form fields</button>
-          <small>Text, checkbox, radio, dropdown and option-list fields are real AcroForm structures. Required/read-only flags are stored in the field. Flattening paints appearances and removes interactivity; Undo remains available in this tab until export/close.</small>
+          <small>Text, checkbox, radio, dropdown and option-list values are edited in the MALENJO working copy with Undo/Redo. Required/read-only flags remain enforced. Flattening paints appearances and removes interactivity; Undo remains available until export/close.</small>
         </div>
 
         <div className="pdf-pane-title">Headers / footers</div>
