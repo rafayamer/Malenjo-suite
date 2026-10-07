@@ -588,7 +588,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   },[sourceBytes]);
 
   const fillableFormFields=formFields.filter((field)=>
-    !field.readOnly&&!field.richText&&['text','checkbox','radio','dropdown','list'].includes(field.type),
+    !field.readOnly
+    &&!field.richText
+    &&!(field.type==='dropdown'&&field.editable&&field.multiselect)
+    &&['text','checkbox','radio','dropdown','list'].includes(field.type),
   );
 
   async function attachDocuments(event:React.ChangeEvent<HTMLInputElement>){
@@ -1584,7 +1587,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             <b>{formFields.length} AcroForm field{formFields.length===1?'':'s'}</b>
             {formFields.map((field)=><span key={field.name} title={field.options.length?field.options.join(', '):undefined}>
               <strong>{field.name}</strong>
-              <em>{field.type}{field.required?' · required':''}{field.readOnly?' · read-only':''}{field.password?' · password':''}{field.multiline?' · multiline':''}{field.richText?' · rich-text unsupported':''}{field.multiselect?' · multiselect':''}{field.editable?' · editable':''}{field.type==='text'&&!field.password&&!field.richText&&field.value?` · value: ${field.value}`:''}{field.type==='checkbox'?` · ${field.checked?'checked':'unchecked'}`:''}{field.selected.length?` · selected: ${field.selected.map((value)=>field.choiceOptions.find((option)=>option.value===value)?.label??value).join(', ')}`:''}</em>
+              <em>{field.type}{field.required?' · required':''}{field.readOnly?' · read-only':''}{field.password?' · password':''}{field.multiline?' · multiline':''}{field.richText?' · rich-text unsupported':''}{field.multiselect?' · multiselect':''}{field.editable?' · editable':''}{field.type==='radio'&&!field.offToggleable?' · cannot clear':''}{field.type==='text'&&!field.password&&!field.richText&&field.value?` · value: ${field.value}`:''}{field.type==='checkbox'?` · ${field.checked?'checked':'unchecked'}`:''}{field.selected.length?` · selected: ${field.selected.map((value)=>field.choiceOptions.find((option)=>option.value===value)?.label??value).join(', ')}`:''}</em>
             </span>)}
           </div>
 
@@ -1602,17 +1605,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             if(field.type==='dropdown'&&field.editable){
               const selected=Array.isArray(draft)?draft:[];
               if(field.multiselect){
-                return <label key={`fill-${field.name}`}>{field.name}
-                  <textarea
-                    value={selected.join('\n')}
-                    disabled={disabled}
-                    placeholder="One selected/custom value per line"
-                    onChange={(event)=>setFormFillValue(
-                      field.name,
-                      event.target.value.split('\n').filter((value)=>value.length>0),
-                    )}
-                  />
-                </label>;
+                return <small key={`fill-${field.name}`}>
+                  <b>{field.name}</b> combines editable and multiselect flags; MALENJO inspects it but does not modify that unsafe combination.
+                </small>;
               }
               const listId=`${domIdPrefix}-choice-${field.name.replace(/[^A-Za-z0-9_-]/g,'_')}`;
               return <label key={`fill-${field.name}`}>{field.name}
@@ -1635,7 +1630,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                   disabled={disabled}
                   onChange={(event)=>setFormFillValue(field.name,event.target.value?[event.target.value]:[])}
                 >
-                  <option value="">— Clear —</option>
+                  {(field.type!=='radio'||field.offToggleable)&&<option value="">— Clear —</option>}
                   {field.choiceOptions.map((option)=><option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </label>;
