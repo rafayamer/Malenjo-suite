@@ -261,8 +261,11 @@ fn office_pack_fingerprint(jar: &Path) -> Option<OfficePackFingerprint> {
 
 fn reviewed_office_artifact_hash(name: &str) -> Option<&'static str> {
     OFFICE_CONVERT_ARTIFACT_PINS.lines().find_map(|line| {
-        let (hash, artifact) = line.split_once(char::is_whitespace)?;
-        (artifact.trim() == name
+        let mut parts = line.split_whitespace();
+        let hash = parts.next()?;
+        let artifact = parts.next()?;
+        (parts.next().is_none()
+            && artifact == name
             && hash.len() == 64
             && hash.chars().all(|ch| ch.is_ascii_hexdigit()))
         .then_some(hash)
