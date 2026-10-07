@@ -518,6 +518,12 @@ export async function addPdfOptionList(bytes:Uint8Array,spec:PdfChoiceFieldSpec)
 
 export async function flattenPdfForm(bytes:Uint8Array):Promise<Uint8Array>{
   const pdf=await load(bytes);
+  if(pdfHasXfa(pdf)){
+    throw new Error('XFA/hybrid PDF forms cannot be flattened because that would discard XFA form data.');
+  }
+  if(pdfNeedsReaderAppearances(pdf)){
+    throw new Error('This PDF has reader-deferred form appearances. Refresh/save those appearances in a compatible PDF reader before flattening.');
+  }
   const form=pdf.getForm();
   if(!form.getFields().length)throw new Error('This PDF contains no AcroForm fields to flatten.');
   form.flatten();
@@ -552,9 +558,19 @@ export interface PdfFormFieldInfo {
   offToggleable:boolean;
 }
 
-function pdfHasXfa(pdf:PDFDocument):boolean{
+function pdfAcroFormDict(pdf:PDFDocument):PDFDict|undefined{
   const acroForm=pdf.catalog.lookup(PDFName.of('AcroForm'));
-  return acroForm instanceof PDFDict && acroForm.has(PDFName.of('XFA'));
+  return acroForm instanceof PDFDict?acroForm:undefined;
+}
+
+function pdfHasXfa(pdf:PDFDocument):boolean{
+  return pdfAcroFormDict(pdf)?.has(PDFName.of('XFA'))??false;
+}
+
+function pdfNeedsReaderAppearances(pdf:PDFDocument):boolean{
+  return pdfAcroFormDict(pdf)
+    ?.lookupMaybe(PDFName.of('NeedAppearances'),PDFBool)
+    ?.asBoolean()??false;
 }
 
 export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFieldInfo[]>{
@@ -672,6 +688,24 @@ function setChoiceExportValues(dict:PDFDict,values:string[]):void{
   dict.set(key,encoded.length===1?encoded[0]:dict.context.obj(encoded));
 }
 
+function setChoiceSelectedIndices(
+  dict:PDFDict,
+  values:string[],
+  choices:{value:string;label:string}[],
+):void{
+  const key=PDFName.of('I');
+  if(values.length<=1){
+    dict.delete(key);
+    return;
+  }
+  const indices=values.map((value)=>choices.findIndex((choice)=>choice.value===value));
+  if(indices.some((index)=>index<0)){
+    dict.delete(key);
+    return;
+  }
+  dict.set(key,dict.context.obj(indices.sort((a,b)=>a-b)));
+}
+
 function updateSupportedFieldAppearances(
   form:ReturnType<PDFDocument['getForm']>,
   readerDeferredFields:Set<string>,
@@ -750,6 +784,10 @@ export async function fillPdfFormFields(
         throw new Error(`PDF form field "${name}" contains a NUL character.`);
       }
       text.setText(value);
+      if(text.isPassword()){
+        form.markFieldAsClean(field.ref);
+        readerDeferredFields.add(name);
+      }
     }else if(field instanceof PDFCheckBox){
       const checkbox=field;
       if(update.checked)checkbox.check();else checkbox.uncheck();
@@ -788,6 +826,7 @@ export async function fillPdfFormFields(
         );
         dropdown.select(dropdown.isMultiselect()?displayValues:displayValues[0]);
         setChoiceExportValues(dropdown.acroField.dict,selected);
+        setChoiceSelectedIndices(dropdown.acroField.dict,selected,choices);
         if(selected.some((value,index)=>value!==displayValues[index])){
           form.markFieldAsClean(field.ref);
           readerDeferredFields.add(name);
@@ -812,6 +851,7 @@ export async function fillPdfFormFields(
         );
         list.select(list.isMultiselect()?displayValues:displayValues[0]);
         setChoiceExportValues(list.acroField.dict,selected);
+        setChoiceSelectedIndices(list.acroField.dict,selected,choices);
         if(selected.some((value,index)=>value!==displayValues[index])){
           form.markFieldAsClean(field.ref);
           readerDeferredFields.add(name);
