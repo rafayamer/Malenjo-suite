@@ -373,6 +373,102 @@ describe('PDF mutation core',()=>{
     });
   });
 
+  it('defers untouched password widgets with missing appearances when another field changes',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+
+    const ordinary=form.createTextField('ordinary_for_password');
+    ordinary.setText('before');
+    ordinary.addToPage(page,{x:30,y:620,width:220,height:28});
+
+    const secret=form.createTextField('untouched_secret');
+    secret.enablePassword();
+    secret.setText('existing secret');
+    secret.addToPage(page,{x:30,y:570,width:220,height:28});
+    secret.acroField.getWidgets()[0].dict.delete(PDFName.of('AP'));
+
+    const bytes=Uint8Array.from(await pdf.save({
+      useObjectStreams:false,
+      updateFieldAppearances:false,
+    }));
+    const filled=await fillPdfFormFields(bytes,[{
+      name:'ordinary_for_password',
+      value:'after',
+    }]);
+
+    const reloaded=await PDFDocument.load(filled,{updateMetadata:false});
+    const reloadedForm=reloaded.getForm();
+    expect(reloadedForm.getTextField('ordinary_for_password').getText()).toBe('after');
+    expect(reloadedForm.getTextField('untouched_secret').acroField.getWidgets()[0].dict.has(PDFName.of('AP')))
+      .toBe(false);
+    expect(reloadedForm.acroForm.dict
+      .lookupMaybe(PDFName.of('NeedAppearances'),PDFBool)
+      ?.asBoolean()).toBe(true);
+  });
+
+  it('defers untouched labeled choice widgets with missing appearances when another field changes',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+
+    const ordinary=form.createTextField('ordinary_for_choice');
+    ordinary.setText('before');
+    ordinary.addToPage(page,{x:30,y:620,width:220,height:28});
+
+    const labeled=form.createDropdown('untouched_labeled_choice');
+    labeled.acroField.setOptions([
+      {value:PDFHexString.fromText('ENG'),display:PDFHexString.fromText('Engineering')},
+      {value:PDFHexString.fromText('FIN'),display:PDFHexString.fromText('Finance')},
+    ]);
+    labeled.addToPage(page,{x:30,y:570,width:220,height:28});
+    labeled.acroField.dict.set(PDFName.of('V'),PDFHexString.fromText('ENG'));
+    labeled.acroField.getWidgets()[0].dict.delete(PDFName.of('AP'));
+
+    const bytes=Uint8Array.from(await pdf.save({
+      useObjectStreams:false,
+      updateFieldAppearances:false,
+    }));
+    const filled=await fillPdfFormFields(bytes,[{
+      name:'ordinary_for_choice',
+      value:'after',
+    }]);
+
+    const reloaded=await PDFDocument.load(filled,{updateMetadata:false});
+    const reloadedForm=reloaded.getForm();
+    expect(reloadedForm.getTextField('ordinary_for_choice').getText()).toBe('after');
+    expect(reloadedForm.getDropdown('untouched_labeled_choice').acroField.getWidgets()[0].dict.has(PDFName.of('AP')))
+      .toBe(false);
+    expect(reloadedForm.acroForm.dict
+      .lookupMaybe(PDFName.of('NeedAppearances'),PDFBool)
+      ?.asBoolean()).toBe(true);
+  });
+
+  it('detects and rejects ambiguous duplicate choice export values',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+    const list=form.createOptionList('duplicate_exports');
+    list.acroField.setOptions([
+      {value:PDFHexString.fromText('DUP'),display:PDFHexString.fromText('First')},
+      {value:PDFHexString.fromText('DUP'),display:PDFHexString.fromText('Second')},
+      {value:PDFHexString.fromText('UNIQUE'),display:PDFHexString.fromText('Third')},
+    ]);
+    list.enableMultiselect();
+    list.addToPage(page,{x:30,y:560,width:220,height:90});
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const info=await inspectPdfFormFields(bytes);
+    expect(info.find((field)=>field.name==='duplicate_exports')).toMatchObject({
+      duplicateChoiceExports:true,
+      multiselect:true,
+    });
+    await expect(fillPdfFormFields(bytes,[{
+      name:'duplicate_exports',
+      selected:['DUP'],
+    }])).rejects.toThrow(/duplicate export values/i);
+  });
+
   it('rejects hybrid XFA forms before AcroForm editing can discard XFA data',async()=>{
     const pdf=await PDFDocument.create();
     const page=pdf.addPage([500,700]);
