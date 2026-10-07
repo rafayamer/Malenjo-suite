@@ -3,8 +3,9 @@ import { PDFArray, PDFBool, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumb
 import {
   addPdfBatesNumbers, addPdfCheckBox, addPdfCommentAnnotation, addPdfDropdown, addPdfHeaderFooter,
   addPdfOptionList, addPdfRadioGroup, addPdfRectangleOverlay, addPdfTextField, addPdfTextOverlay, appendPdf,
-  attachFileToPdf, deletePdfPage, deletePdfPages, duplicatePdfPage, extractPdfPage, extractPdfPages,
+  attachFileToPdf, clearPdfFormValues, deletePdfPage, deletePdfPages, duplicatePdfPage, extractPdfPage, extractPdfPages,
   fillPdfFormFields, flattenPdfForm, inspectPdfFormFields, insertBlankPdfPage, insertPdfAfter, listPdfFormFields, movePdfPage,
+  resetPdfFormValues,
   rotatePdfPagePermanent, rotatePdfPagesPermanent, setPdfPageBox, splitPdfAtPage,
 } from './editor';
 
@@ -164,6 +165,118 @@ describe('PDF mutation core',()=>{
     const info=await inspectPdfFormFields(bytes);
     expect(info.find((field)=>field.name==='readonly_name')).toMatchObject({required:true,readOnly:true});
     expect(info.find((field)=>field.name==='must_accept')).toMatchObject({required:true,readOnly:false});
+  });
+
+  it('clears editable AcroForm values while preserving read-only fields',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+
+    const editable=form.createTextField('editable_text');
+    editable.setText('Current');
+    editable.addToPage(page,{x:30,y:620,width:180,height:24});
+
+    const locked=form.createTextField('locked_text');
+    locked.setText('Keep me');
+    locked.enableReadOnly();
+    locked.addToPage(page,{x:30,y:580,width:180,height:24});
+
+    const check=form.createCheckBox('approved');
+    check.addToPage(page,{x:30,y:540,width:18,height:18});
+    check.check();
+
+    const radio=form.createRadioGroup('decision');
+    radio.addOptionToPage('Yes',page,{x:30,y:500,width:18,height:18});
+    radio.addOptionToPage('No',page,{x:60,y:500,width:18,height:18});
+    radio.select('Yes');
+
+    const dropdown=form.createDropdown('department');
+    dropdown.addOptions(['Engineering','Finance']);
+    dropdown.addToPage(page,{x:30,y:450,width:180,height:24});
+    dropdown.select('Finance');
+
+    const list=form.createOptionList('reviewers');
+    list.addOptions(['Alice','Bob']);
+    list.enableMultiselect();
+    list.addToPage(page,{x:30,y:350,width:180,height:80});
+    list.select(['Alice','Bob']);
+
+    const cleared=await clearPdfFormValues(Uint8Array.from(await pdf.save({useObjectStreams:false})));
+    const info=await inspectPdfFormFields(cleared);
+    expect(info.find((field)=>field.name==='editable_text')?.value).toBe('');
+    expect(info.find((field)=>field.name==='locked_text')?.value).toBe('Keep me');
+    expect(info.find((field)=>field.name==='approved')?.checked).toBe(false);
+    expect(info.find((field)=>field.name==='decision')?.selected).toEqual([]);
+    expect(info.find((field)=>field.name==='department')?.selected).toEqual([]);
+    expect(info.find((field)=>field.name==='reviewers')?.selected).toEqual([]);
+  });
+
+  it('resets editable AcroForm values to their PDF /DV defaults',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+
+    const text=form.createTextField('student');
+    text.setText('Current');
+    text.acroField.dict.set(PDFName.of('DV'),PDFHexString.fromText('Default Student'));
+    text.addToPage(page,{x:30,y:620,width:180,height:24});
+
+    const check=form.createCheckBox('approved_default');
+    check.addToPage(page,{x:30,y:580,width:18,height:18});
+    check.uncheck();
+    const onValue=check.acroField.getOnValue();
+    expect(onValue).toBeDefined();
+    check.acroField.dict.set(PDFName.of('DV'),onValue!);
+
+    const radio=form.createRadioGroup('decision_default');
+    radio.addOptionToPage('Approve',page,{x:30,y:540,width:18,height:18});
+    radio.addOptionToPage('Reject',page,{x:60,y:540,width:18,height:18});
+    radio.select('Reject');
+    radio.acroField.dict.set(PDFName.of('DV'),PDFName.of('Approve'));
+
+    const dropdown=form.createDropdown('department_default');
+    dropdown.addOptions(['Engineering','Finance']);
+    dropdown.addToPage(page,{x:30,y:490,width:180,height:24});
+    dropdown.select('Finance');
+    dropdown.acroField.dict.set(PDFName.of('DV'),PDFHexString.fromText('Engineering'));
+
+    const list=form.createOptionList('reviewers_default');
+    list.addOptions(['Alice','Bob','Carol']);
+    list.enableMultiselect();
+    list.addToPage(page,{x:30,y:370,width:180,height:90});
+    list.select(['Carol']);
+    list.acroField.dict.set(
+      PDFName.of('DV'),
+      list.acroField.dict.context.obj([PDFHexString.fromText('Alice'),PDFHexString.fromText('Bob')]),
+    );
+
+    const locked=form.createTextField('locked_default');
+    locked.setText('Current Locked');
+    locked.acroField.dict.set(PDFName.of('DV'),PDFHexString.fromText('Should Not Apply'));
+    locked.enableReadOnly();
+    locked.addToPage(page,{x:30,y:330,width:180,height:24});
+
+    const reset=await resetPdfFormValues(Uint8Array.from(await pdf.save({useObjectStreams:false})));
+    const info=await inspectPdfFormFields(reset);
+    expect(info.find((field)=>field.name==='student')?.value).toBe('Default Student');
+    expect(info.find((field)=>field.name==='approved_default')?.checked).toBe(true);
+    expect(info.find((field)=>field.name==='decision_default')?.selected).toEqual(['Approve']);
+    expect(info.find((field)=>field.name==='department_default')?.selected).toEqual(['Engineering']);
+    expect(info.find((field)=>field.name==='reviewers_default')?.selected).toEqual(['Alice','Bob']);
+    expect(info.find((field)=>field.name==='locked_default')?.value).toBe('Current Locked');
+  });
+
+  it('rejects clear/reset mutations for XFA hybrid forms',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+    const field=form.createTextField('fallback');
+    field.addToPage(page,{x:30,y:620,width:180,height:24});
+    form.acroForm.dict.set(PDFName.of('XFA'),PDFHexString.fromText('<xfa/>'));
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false,updateFieldAppearances:false}));
+
+    await expect(clearPdfFormValues(bytes)).rejects.toThrow(/XFA\/hybrid/i);
+    await expect(resetPdfFormValues(bytes)).rejects.toThrow(/XFA\/hybrid/i);
   });
 
   it('fills existing text, checkbox and choice fields while respecting read-only fields',async()=>{

@@ -49,6 +49,8 @@ import {
   setPdfPageBox,
   splitPdfAtPage,
   fillPdfFormFields,
+  clearPdfFormValues,
+  resetPdfFormValues,
   flattenPdfForm,
   inspectPdfFormFields,
   type PdfFormFieldInfo,
@@ -593,12 +595,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     return()=>{cancelled=true;};
   },[sourceBytes]);
 
-  const fillableFormFields=(formInspectedSource===sourceBytes?formFields:[]).filter((field)=>
-    !field.readOnly
-    &&!field.richText
+  const inspectedFormFields=formInspectedSource===sourceBytes?formFields:[];
+  const mutableValueFormFields=inspectedFormFields.filter((field)=>
+    !field.readOnly&&['text','checkbox','radio','dropdown','list'].includes(field.type),
+  );
+  const fillableFormFields=mutableValueFormFields.filter((field)=>
+    !field.richText
     &&!field.duplicateChoiceExports
-    &&!(field.type==='dropdown'&&field.editable&&field.multiselect)
-    &&['text','checkbox','radio','dropdown','list'].includes(field.type),
+    &&!(field.type==='dropdown'&&field.editable&&field.multiselect),
   );
 
   async function attachDocuments(event:React.ChangeEvent<HTMLInputElement>){
@@ -725,6 +729,24 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     await mutate(
       `Updated ${updates.length} PDF form field value(s).`,
       (bytes)=>fillPdfFormFields(bytes,updates),
+      currentPage,
+    );
+  }
+
+  async function clearFormValues(){
+    if(!mutableValueFormFields.length)return;
+    await mutate(
+      'Cleared editable PDF form values.',
+      (bytes)=>clearPdfFormValues(bytes),
+      currentPage,
+    );
+  }
+
+  async function resetFormValues(){
+    if(!mutableValueFormFields.length)return;
+    await mutate(
+      'Reset editable PDF form values to their PDF defaults.',
+      (bytes)=>resetPdfFormValues(bytes),
       currentPage,
     );
   }
@@ -1232,6 +1254,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     forms:[
       {id:'add-form-field',label:`Add ${formDraft.type} field`,enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addFormField},
       {id:'fill-form',label:'Apply field values',enabled:!!sourceBytes&&!mutating&&fillableFormFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!fillableFormFields.length?'No editable AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:fillForm},
+      {id:'clear-form',label:'Clear form values',enabled:!!sourceBytes&&!mutating&&mutableValueFormFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!mutableValueFormFields.length?'No editable AcroForm value fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:clearFormValues},
+      {id:'reset-form',label:'Reset form defaults',enabled:!!sourceBytes&&!mutating&&mutableValueFormFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!mutableValueFormFields.length?'No editable AcroForm value fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:resetFormValues},
       {id:'flatten-form',label:'Flatten fields',enabled:!!sourceBytes&&!mutating&&formFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:flattenForm},
       {id:'configure-forms',label:'Form settings',enabled:true,run:configureProperties},
       providerAction,
@@ -1744,8 +1768,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             return <small key={`fill-${field.name}`}><b>{field.name}</b> ({field.type}) is detected but is not directly fillable in this pass.</small>;
           })}
           <button disabled={mutating||!fillableFormFields.length} onClick={()=>void fillForm()}><ListChecks size={13}/> Apply form values</button>
+          <button disabled={mutating||!mutableValueFormFields.length} onClick={()=>void clearFormValues()}>Clear form values</button>
+          <button disabled={mutating||!mutableValueFormFields.length} onClick={()=>void resetFormValues()}>Reset to PDF defaults</button>
           <button disabled={mutating||!formFields.length} onClick={()=>void flattenForm()}><FileCheck2 size={13}/> Flatten form fields</button>
-          <small>Text, checkbox, radio, dropdown and option-list values are edited in the MALENJO working copy with Undo/Redo. Required/read-only flags remain enforced. Flattening paints appearances and removes interactivity; Undo remains available until export/close.</small>
+          <small>Text, checkbox, radio, dropdown and option-list values are edited in the MALENJO working copy with Undo/Redo. Clear removes editable values; Reset restores each supported field's PDF <code>/DV</code> default when present, otherwise clears it. Required/read-only flags remain enforced. Flattening paints appearances and removes interactivity; Undo remains available until export/close.</small>
         </div>
 
         <div className="pdf-pane-title">Headers / footers</div>
