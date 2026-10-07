@@ -1614,7 +1614,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                   />
                 </label>;
               }
-              const listId={`${domIdPrefix}-choice-${field.name.replace(/[^A-Za-z0-9_-]/g,'_')}`};
+              const listId=`${domIdPrefix}-choice-${field.name.replace(/[^A-Za-z0-9_-]/g,'_')}`;
               return <label key={`fill-${field.name}`}>{field.name}
                 <input
                   list={listId}
