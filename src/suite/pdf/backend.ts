@@ -20,6 +20,7 @@ export interface PdfProviderOperationField{
   description?:string;
   enumValues?:string[];
   defaultValue?:string|number|boolean;
+  accept?:string;
   location:'query'|'form';
 }
 

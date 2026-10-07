@@ -14,6 +14,7 @@ function Assert-Command([string]$Name) {
 }
 
 Assert-Command "git"
+Assert-Command "jar"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $work = Join-Path $repoRoot $WorkRoot
@@ -51,13 +52,26 @@ try {
     }
   }
 
-  $patchPath = Join-Path $repoRoot "third_party/stirling-pdf/patches/0001-malenjo-java-effect-alternatives.patch"
-  if (!(Test-Path $patchPath)) { throw "Reviewed Stirling endpoint patch is missing: $patchPath" }
-  & git apply --check $patchPath
-  if ($LASTEXITCODE -ne 0) { throw "Reviewed Stirling endpoint patch no longer applies cleanly to $Pin." }
-  & git apply $patchPath
-  if ($LASTEXITCODE -ne 0) { throw "Unable to apply reviewed Stirling endpoint patch." }
-  $patchHash = (Get-FileHash -Algorithm SHA256 $patchPath).Hash.ToLowerInvariant()
+  $patchRelativePaths = @(
+    "third_party/stirling-pdf/patches/0001-malenjo-java-effect-alternatives.patch",
+    "third_party/stirling-pdf/patches/0002-malenjo-core-license-overrides.patch"
+  )
+  $patchRecords = @()
+  foreach ($patchRelativePath in $patchRelativePaths) {
+    $patchPath = Join-Path $repoRoot $patchRelativePath
+    if (!(Test-Path $patchPath)) { throw "Reviewed Stirling patch is missing: $patchPath" }
+    & git apply --check $patchPath
+    if ($LASTEXITCODE -ne 0) { throw "Reviewed Stirling patch no longer applies cleanly to ${Pin}: $patchRelativePath" }
+    & git apply $patchPath
+    if ($LASTEXITCODE -ne 0) { throw "Unable to apply reviewed Stirling patch: $patchRelativePath" }
+    $patchRecords += [ordered]@{
+      path = $patchRelativePath
+      sha256 = (Get-FileHash -Algorithm SHA256 $patchPath).Hash.ToLowerInvariant()
+    }
+  }
+
+  $licenseOverridesPath = Join-Path $src "app/license-overrides.json"
+  $licenseOverridesBaselineHash = (Get-FileHash -Algorithm SHA256 $licenseOverridesPath).Hash.ToLowerInvariant()
 
   # settings.gradle always declares :proprietary even in core flavor. Provide an
   # empty MALENJO-owned stub project so Gradle can configure the graph without
@@ -68,6 +82,16 @@ try {
   $env:STIRLING_FLAVOR = "core"
   $env:DISABLE_ADDITIONAL_FEATURES = "true"
   $env:ENABLE_SAAS = "false"
+
+  Write-Host "Checking pinned Stirling runtime dependency licenses..."
+  .\gradlew.bat checkLicense generateLicenseReport --no-parallel --no-daemon
+  if ($LASTEXITCODE -ne 0) { throw "Pinned Stirling dependency license gate failed." }
+  $licenseReport = Join-Path $src "build/reports/dependency-license/index.json"
+  if (!(Test-Path $licenseReport)) { throw "Stirling dependency license report was not generated." }
+  $licenseOverridesAfterHash = (Get-FileHash -Algorithm SHA256 $licenseOverridesPath).Hash.ToLowerInvariant()
+  if ($licenseOverridesAfterHash -ne $licenseOverridesBaselineHash) {
+    throw "Stirling dependency license resolution changed the reviewed core-only app/license-overrides.json baseline; review the new metadata before packaging."
+  }
 
   Write-Host "Building backend-only Stirling core JAR..."
   .\gradlew.bat :stirling-pdf:bootJar -PbuildWithFrontend=false --no-daemon
@@ -81,6 +105,65 @@ try {
   Copy-Item $jar.FullName $destination -Force
 
   $hash = (Get-FileHash -Algorithm SHA256 $destination).Hash.ToLowerInvariant()
+
+  $officeVersion = "0.2.2"
+  $officeCommit = "673aab8d6ac784524cd1d90141c95e74b9fd26ae"
+  $officeNames = @(
+    "stirling-office-convert-$officeVersion.jar",
+    "stirling-office-convert-legacy-$officeVersion.jar",
+    "stirling-office-convert-topdf-$officeVersion.jar"
+  )
+  $jarTool = (Get-Command jar).Source
+  $jarEntries = @(& $jarTool tf $destination)
+  $embeddedRoot = Join-Path $work "embedded-office"
+  New-Item -ItemType Directory -Force -Path $embeddedRoot | Out-Null
+  $officeHashes = [ordered]@{}
+  Push-Location $embeddedRoot
+  try {
+    foreach ($officeName in $officeNames) {
+      $entry = "BOOT-INF/lib/$officeName"
+      if ($jarEntries -notcontains $entry) { throw "Stirling core JAR is missing embedded $entry." }
+      & $jarTool xf $destination $entry
+      if ($LASTEXITCODE -ne 0) { throw "Unable to extract embedded Office Convert component $officeName." }
+      $embeddedPath = Join-Path $embeddedRoot $entry
+      $officeHashes[$officeName] = (Get-FileHash -Algorithm SHA256 $embeddedPath).Hash.ToLowerInvariant()
+    }
+  } finally {
+    Pop-Location
+  }
+
+  $artifactPinsPath = Join-Path $repoRoot "third_party/stirling-office-convert/ARTIFACTS.sha256"
+  if (!(Test-Path $artifactPinsPath)) { throw "Reviewed Office artifact hash pins are missing." }
+  $artifactPins = @{}
+  foreach ($line in Get-Content $artifactPinsPath) {
+    if ($line -match '^([0-9a-f]{64})\s+(.+)$') {
+      $artifactPins[$Matches[2].Trim()] = $Matches[1]
+    }
+  }
+  foreach ($officeName in $officeNames) {
+    $expectedHash = $artifactPins[$officeName]
+    if (-not $expectedHash) { throw "No reviewed SHA-256 pin exists for $officeName." }
+    if ($officeHashes[$officeName] -ne $expectedHash) {
+      throw "Embedded Office artifact $officeName does not match its reviewed published SHA-256 pin."
+    }
+  }
+
+  $noticeDir = Join-Path $out "malenjo-notices"
+  New-Item -ItemType Directory -Force -Path $noticeDir | Out-Null
+  Copy-Item (Join-Path $repoRoot "third_party/stirling-pdf/LICENSE") (Join-Path $noticeDir "stirling-pdf-LICENSE.txt") -Force
+  Copy-Item (Join-Path $repoRoot "third_party/stirling-office-convert/LICENSE.txt") (Join-Path $noticeDir "stirling-office-convert-LICENSE.txt") -Force
+  Copy-Item (Join-Path $repoRoot "third_party/stirling-office-convert/DEPENDENCIES.md") (Join-Path $noticeDir "stirling-office-convert-DEPENDENCIES.md") -Force
+  Copy-Item $licenseReport (Join-Path $noticeDir "stirling-dependency-licenses.json") -Force
+
+  $licenseArtifacts = [ordered]@{}
+  foreach ($licenseRelativePath in @(
+    "malenjo-notices/stirling-office-convert-LICENSE.txt",
+    "malenjo-notices/stirling-office-convert-DEPENDENCIES.md",
+    "malenjo-notices/stirling-dependency-licenses.json"
+  )) {
+    $licenseArtifacts[$licenseRelativePath] = (Get-FileHash -Algorithm SHA256 (Join-Path $out $licenseRelativePath)).Hash.ToLowerInvariant()
+  }
+
   $manifest = [ordered]@{
     schemaVersion = 1
     provider = "stirling-open-core"
@@ -90,14 +173,19 @@ try {
     restrictedSourceMaterialized = $false
     jar = "stirling-pdf.jar"
     sha256 = $hash
-    patches = @(
-      [ordered]@{
-        path = "third_party/stirling-pdf/patches/0001-malenjo-java-effect-alternatives.patch"
-        sha256 = $patchHash
-      }
-    )
+    patches = $patchRecords
+    embeddedOfficeConvert = [ordered]@{
+      version = $officeVersion
+      upstream = "Stirling-Tools/Stirling-Office-Convert"
+      sourceCommit = $officeCommit
+      license = "MIT"
+      verification = "pinned-published-sha256"
+      jars = $officeHashes
+    }
+    dependencyLicenseReport = "malenjo-notices/stirling-dependency-licenses.json"
+    licenseArtifacts = $licenseArtifacts
     builtAt = [DateTime]::UtcNow.ToString("o")
-  } | ConvertTo-Json -Depth 4
+  } | ConvertTo-Json -Depth 6
   Set-Content -Path (Join-Path $out "manifest.json") -Value $manifest -Encoding UTF8
 
   Write-Host "Built MALENJO Stirling core pack: $destination"

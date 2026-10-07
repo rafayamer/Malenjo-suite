@@ -291,4 +291,10 @@ No module is complete merely because its navigation entry exists. Completion req
 
 | Direct Tesseract OCR control truth | PDF provider contract | direct fallback exposes only file/language/OCR-type controls it actually consumes | capability resolver + regression test + pinned Stirling source audit | Implemented; CI pending |
 
-| Open-core Scanner Effect + Java Replace/Invert modes | PDF effects/provider gating | Scanner Effect plus high-contrast/custom/full-inversion color modes execute through pinned Stirling Java/PDFBox; CMYK remains gated | reviewed Stirling patch + capability filter + Windows operation smoke | Implemented in pass 2C; CI/review pending |
+| Open-core Scanner Effect + Java Replace/Invert modes | PDF effects/provider gating | Scanner Effect plus high-contrast/custom/full-inversion color modes execute through pinned Stirling Java/PDFBox; CMYK remains gated | reviewed Stirling patch + capability filter + Windows operation smoke | Verified — CI #309 + clean final review |
+
+| Embedded Stirling Office Convert 0.2.2 | PDF Office conversion/provider gating | deterministic Java provider for reviewed File→PDF + PDF→Word/Presentation/Text-RTF/XLSX routes; LibreOffice-only routes remain gated | source pin + nested JAR hashes + dependency-license report + capability tests + Windows operation smoke | Implemented in pass 2D; CI/review pending |
+
+| Verified embedded Office runtime | PDF provider/native boundary | Office routes require generated/bundled Stirling manifest + repository-pinned Office 0.2.2 JAR hashes + source provenance + authenticated notices; configured JAR overrides stay unavailable | Rust verifier/tamper tests + provider capability tests | Implemented in pass 2D; CI/review pending |
+| Office input compatibility | PDF provider UI | active PDF is only offered to file fields whose reviewed accept contract allows PDF | providerFileInputs tests | Implemented in pass 2D; CI/review pending |
+| PDF → XLSX execution | Windows provider smoke | deterministic ruled-table PDF must produce OOXML workbook + worksheet through Office Convert | qpdf fixture validation + localhost operation smoke | Implemented in pass 2D; CI/review pending |

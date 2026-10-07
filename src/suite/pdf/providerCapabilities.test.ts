@@ -24,6 +24,15 @@ const tesseract:PdfProviderComponentStatus={
   message:'ready',
 };
 
+const officeConvert:PdfProviderComponentStatus={
+  id:'stirling-office-convert',
+  available:true,
+  version:'0.2.2',
+  executable:'C:\\MALENJO\\providers\\stirling-core\\stirling-pdf.jar',
+  source:'core',
+  message:'source-verified',
+};
+
 describe('PDF provider capability resolver',()=>{
   it('uses approved qpdf for repair and records the Java/PDFBox fallback',()=>{
     const result=resolvePdfProviderCapability(operation('/api/v1/misc/repair','repairPdf'),[qpdf]);
@@ -89,17 +98,79 @@ describe('PDF provider capability resolver',()=>{
     expect(resolved.fields[0].description).toMatch(/Ghostscript/i);
   });
 
-  it('normalizes Stirling slash paths, camelCase ids and spaced summaries before provider gating',()=>{
-    const variants=[
+  it('routes reviewed Office conversions to embedded Stirling Office Convert 0.2.2',()=>{
+    for(const variant of [
+      {path:'/api/v1/convert/file/pdf',id:'processFileToPDF',summary:'Convert a file to a PDF'},
       {path:'/api/v1/convert/pdf/word',id:'convertPDFToWord',summary:'Convert PDF to Word'},
       {path:'/api/v1/convert/pdf/presentation',id:'convertPDFToPresentation',summary:'Convert PDF to Presentation'},
-      {path:'/api/v1/convert/pdf/html',id:'convertPDFToHTML',summary:'Convert PDF to HTML'},
-    ];
-    for(const variant of variants){
-      const result=resolvePdfProviderCapability(variant,[]);
-      expect(result.available).toBe(false);
-      expect(result.providerId).toMatch(/libreoffice|pdftohtml/);
+      {path:'/api/v1/convert/pdf/text',id:'processPdfToRTForTXT',summary:'Convert PDF to RTF/TXT'},
+      {path:'/api/v1/convert/pdf/xlsx',id:'pdfToExcel',summary:'Convert PDF to XLSX'},
+    ]){
+      const result=resolvePdfProviderCapability(variant,[officeConvert]);
+      expect(result).toEqual(expect.objectContaining({
+        available:true,
+        providerId:'stirling-office-convert',
+        providerVersion:'0.2.2',
+        componentPack:'stirling-core-embedded',
+      }));
     }
+    const html=resolvePdfProviderCapability(
+      {path:'/api/v1/convert/pdf/html',id:'convertPDFToHTML',summary:'Convert PDF to HTML'},[officeConvert],
+    );
+    expect(html.available).toBe(false);
+    expect(html.providerId).toMatch(/libreoffice|pdftohtml/);
+  });
+
+  it('keeps embedded Office routes unavailable when the selected Stirling pack is not source-verified',()=>{
+    const result=resolvePdfProviderCapability(
+      {path:'/api/v1/convert/pdf/word',id:'convertPDFToWord',summary:'Convert PDF to Word'},
+      [{...officeConvert,available:false,source:'configured',message:'manifest mismatch'}],
+    );
+    expect(result).toEqual(expect.objectContaining({
+      available:false,
+      providerId:'stirling-office-convert',
+      disabledReason:'manifest mismatch',
+    }));
+  });
+
+  it('removes the Office implementation toggle and constrains reviewed input formats',()=>{
+    const fields:PdfProviderOperation['fields']=[
+      {name:'fileInput',label:'File Input',kind:'file',required:true,location:'form'},
+      {name:'useStirlingOfficeConvert',label:'Use Stirling Office Convert',kind:'boolean',required:false,location:'query'},
+    ];
+    const [fileToPdf]=applyPdfProviderCapabilities([{
+      id:'processFileToPDF',
+      path:'/api/v1/convert/file/pdf',
+      method:'POST',
+      summary:'Convert a file to a PDF',
+      description:'',
+      tags:[],
+      fields,
+      category:'convert',
+      capability:resolvePdfProviderCapability(
+        {path:'/api/v1/convert/file/pdf',id:'processFileToPDF',summary:'Convert a file to a PDF'},[officeConvert],
+      ),
+    }],[officeConvert]);
+    expect(fileToPdf.fields.map((field)=>field.name)).toEqual(['fileInput']);
+    expect(fileToPdf.fields[0].accept).toContain('.docx');
+    expect(fileToPdf.fields[0].accept).toContain('.txt');
+    expect(fileToPdf.fields[0].accept).toContain('.pptx');
+    expect(fileToPdf.fields[0].accept).toContain('.xlsx');
+
+    const [pdfToWord]=applyPdfProviderCapabilities([{
+      id:'convertPDFToWord',
+      path:'/api/v1/convert/pdf/word',
+      method:'POST',
+      summary:'Convert PDF to Word',
+      description:'',
+      tags:[],
+      fields,
+      category:'convert',
+      capability:resolvePdfProviderCapability(
+        {path:'/api/v1/convert/pdf/word',id:'convertPDFToWord',summary:'Convert PDF to Word'},[officeConvert],
+      ),
+    }],[officeConvert]);
+    expect(pdfToWord.fields[0].accept).toBe('.pdf');
   });
 
   it('enables OCR and OSD only when the reviewed Tesseract component is available',()=>{
@@ -149,9 +220,9 @@ describe('PDF provider capability resolver',()=>{
     expect(resolved.capability.providerId).toBe('tesseract');
   });
 
-  it('does not turn absent OCR/Office/proprietary providers into operational tools',()=>{
+  it('does not turn absent OCR, LibreOffice-only or proprietary providers into operational tools',()=>{
     expect(resolvePdfProviderCapability(operation('/api/v1/misc/ocr-pdf'),[]).available).toBe(false);
-    expect(resolvePdfProviderCapability(operation('/api/v1/convert/pdf-to-word'),[]).available).toBe(false);
+    expect(resolvePdfProviderCapability(operation('/api/v1/convert/pdf-to-xml','convertPDFToXML'),[]).available).toBe(false);
     expect(resolvePdfProviderCapability(operation('/api/v1/misc/form-detection'),[]).available).toBe(false);
   });
 

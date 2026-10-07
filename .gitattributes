@@ -1,1 +1,4 @@
 *.patch text eol=lf
+third_party/stirling-office-convert/LICENSE.txt text eol=lf
+third_party/stirling-office-convert/DEPENDENCIES.md text eol=lf
+third_party/stirling-office-convert/ARTIFACTS.sha256 text eol=lf

@@ -40,6 +40,9 @@ Upstream license/provenance are retained under `third_party/stirling-pdf/` and `
 | Component | Reviewed version | License | Packaging status |
 |---|---:|---|---|
 | qpdf | 12.4.2 | Apache-2.0; static libjpeg-turbo/OpenSSL/zlib obligations recorded | Integration-approved Windows x64 component pack; final distributable release remains gated on exact runtime/SBOM + Microsoft runtime redistributable check. |
+| Stirling Office Convert | 0.2.2 / source `673aab8d6ac784524cd1d90141c95e74b9fd26ae` | MIT; Java runtime dependency licenses generated from the pinned Stirling graph | Embedded in the reviewed Stirling core JAR; MALENJO ships its MIT notice and the generated exact dependency-license report with the provider pack. |
+
+Stirling Office Convert runs in-process inside the loopback-only Stirling sidecar and does not invoke LibreOffice or Microsoft Office for the reviewed routes. Its exact source/license records are under `third_party/stirling-office-convert/`.
 
 The qpdf pack is injected only into the on-demand local Stirling child process and is never added to the user or machine PATH. Generated binaries are excluded from Git. Exact qpdf build evidence and retained static-dependency licenses are under `third_party/qpdf/`; release packaging must reproduce the checksum-verified pack, capture its exact file inventory in the SBOM, and complete the Microsoft runtime redistributable check.
 

@@ -43,6 +43,7 @@ describe('Windows PDF provider packaging contract',()=>{
     const windows=text('scripts/build-stirling-core.ps1');
     const linux=text('scripts/build-stirling-core.sh');
     const patch=text('third_party/stirling-pdf/patches/0001-malenjo-java-effect-alternatives.patch');
+    const licensePatch=text('third_party/stirling-pdf/patches/0002-malenjo-core-license-overrides.patch');
     const attributes=text('.gitattributes');
 
     expect(windows).toContain('0001-malenjo-java-effect-alternatives.patch');
@@ -53,7 +54,59 @@ describe('Windows PDF provider packaging contract',()=>{
     expect(linux).toContain('git apply --check');
     expect(patch).toContain('addEndpointAlternative("replace-invert-pdf", "Java")');
     expect(patch).toContain('addEndpointAlternative("scanner-effect", "Java")');
+    expect(windows).toContain('0002-malenjo-core-license-overrides.patch');
+    expect(linux).toContain('0002-malenjo-core-license-overrides.patch');
+    expect(licensePatch).toContain('com.hubspot.immutables:immutables-exceptions:1.9');
+    expect(licensePatch).toContain('com.hubspot:algebra:1.5');
+    expect(licensePatch).toContain('+{}');
     expect(attributes).toContain('*.patch text eol=lf');
+  });
+
+  it('pins and ships the embedded Stirling Office Convert provider contract',()=>{
+    const windows=text('scripts/build-stirling-core.ps1');
+    const linux=text('scripts/build-stirling-core.sh');
+    const native=text('src-tauri/src/suite/stirling.rs');
+    const provenance=text('third_party/stirling-office-convert/PROVENANCE.md');
+
+    for(const source of [windows,linux]){
+      expect(source).toContain('0.2.2');
+      expect(source).toContain('673aab8d6ac784524cd1d90141c95e74b9fd26ae');
+      expect(source).toContain('stirling-office-convert-topdf');
+      expect(source).toContain('stirling-office-convert-legacy');
+      expect(source).toContain('checkLicense generateLicenseReport --no-parallel');
+      expect(source).toContain('stirling-dependency-licenses.json');
+      expect(source).toContain('stirling-office-convert-LICENSE.txt');
+      expect(source).toContain('pinned-published-sha256');
+      expect(source).toContain('ARTIFACTS.sha256');
+      expect(source).toContain('licenseArtifacts');
+    }
+    expect(native).toContain('--system.stirlingOfficeConversion=true');
+    expect(provenance).toContain('v0.2.2');
+    expect(provenance).toContain('673aab8d6ac784524cd1d90141c95e74b9fd26ae');
+    const artifactPins=text('third_party/stirling-office-convert/ARTIFACTS.sha256');
+    expect(artifactPins).toContain('79e67f69843095cfc557f3cb040bf0c34489ee51f86b815abf0faf5bd8b47a0c  stirling-office-convert-0.2.2.jar');
+    expect(artifactPins).toContain('f57b17c14c91318e27c109e462955bc04d64fd3d67c6e79a50073e863425fe37  stirling-office-convert-legacy-0.2.2.jar');
+    expect(artifactPins).toContain('210e212dd1345598080ef142c53fbba805cb83dbed150fa0970505bb290df741  stirling-office-convert-topdf-0.2.2.jar');
+  });
+
+  it('requires native source verification before embedded Office capability is advertised',()=>{
+    const native=text('src-tauri/src/suite/stirling.rs');
+    const fixture=text('scripts/write-table-pdf-smoke-fixture.ps1');
+
+    expect(native).toContain('stirling-office-convert');
+    expect(native).toContain('OFFICE_CONVERT_VERSION');
+    expect(native).toContain('OFFICE_CONVERT_SOURCE_COMMIT');
+    expect(native).toContain('sha256_file_hex');
+    expect(native).toContain('dependencyLicenseReport');
+    expect(native).toContain('licenseArtifacts');
+    expect(native).toContain('pinned-published-sha256');
+    expect(native).toContain('ARTIFACTS.sha256');
+    expect(native).toContain('MALENJO_STIRLING_JAR override is not eligible');
+    expect(native).toContain('Port 28970 is already serving a healthy process that MALENJO did not start');
+    expect(native).toContain('OFFICE_CONVERT_LICENSE_TEXT');
+    expect(native).toContain('OFFICE_CONVERT_DEPENDENCIES_TEXT');
+    expect(fixture).toContain('%PDF-1.4`n');
+    expect(fixture).toContain('(MALENJO) Tj');
   });
 
   it('retains qpdf transitive notices in the generated component pack',()=>{

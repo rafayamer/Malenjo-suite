@@ -299,7 +299,7 @@ interface NativeStirlingComponentStatus{
   available:boolean;
   version?:string|null;
   executable?:string|null;
-  source:'bundled'|'configured'|'system'|'unavailable';
+  source:'bundled'|'configured'|'system'|'core'|'unavailable';
   message:string;
 }
 
@@ -348,6 +348,7 @@ export async function stirlingCoreComponentStatus():Promise<PdfProviderComponent
   if(!isTauri())return [
     {id:'qpdf',available:false,source:'unavailable',message:'The approved qpdf pack is available only in the Windows/Tauri runtime.'},
     {id:'tesseract',available:false,source:'unavailable',message:'The reviewed Tesseract pack is available only in the Windows/Tauri runtime.'},
+    {id:'stirling-office-convert',available:false,source:'unavailable',message:'Embedded Office Convert is verified only inside the Windows/Tauri runtime.'},
     ...pendingWithoutNative,
   ];
   const native=await invoke<NativeStirlingComponentStatus[]>('stirling_core_components');
@@ -355,6 +356,7 @@ export async function stirlingCoreComponentStatus():Promise<PdfProviderComponent
   return [
     byId.get('qpdf')??{id:'qpdf',available:false,source:'unavailable',message:'qpdf status was not reported by the native boundary.'},
     byId.get('tesseract')??{id:'tesseract',available:false,source:'unavailable',message:'Tesseract status was not reported by the native boundary.'},
+    byId.get('stirling-office-convert')??{id:'stirling-office-convert',available:false,source:'unavailable',message:'Embedded Office Convert status was not reported by the native boundary.'},
     ...pendingWithoutNative,
   ];
 }
