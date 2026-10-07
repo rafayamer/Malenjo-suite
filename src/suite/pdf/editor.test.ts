@@ -4,7 +4,7 @@ import {
   addPdfBatesNumbers, addPdfCheckBox, addPdfCommentAnnotation, addPdfDropdown, addPdfHeaderFooter,
   addPdfOptionList, addPdfRadioGroup, addPdfRectangleOverlay, addPdfTextField, addPdfTextOverlay, appendPdf,
   attachFileToPdf, deletePdfPage, deletePdfPages, duplicatePdfPage, extractPdfPage, extractPdfPages,
-  fillPdfFormFields, flattenPdfForm, inspectPdfFormFields, insertBlankPdfPage, insertPdfAfter, listPdfFormFields, movePdfPage,
+  exportPdfFormDataJson, fillPdfFormFields, flattenPdfForm, importPdfFormDataJson, inspectPdfFormFields, insertBlankPdfPage, insertPdfAfter, listPdfFormFields, movePdfPage,
   rotatePdfPagePermanent, rotatePdfPagesPermanent, setPdfPageBox, splitPdfAtPage,
 } from './editor';
 
@@ -206,6 +206,73 @@ describe('PDF mutation core',()=>{
     });
     await expect(fillPdfFormFields(readOnly,[{name:'locked',value:'blocked'}]))
       .rejects.toThrow(/read-only/i);
+  });
+
+  it('round-trips supported AcroForm data through deterministic MALENJO JSON',async()=>{
+    let bytes=await sample(1);
+    bytes=await addPdfTextField(bytes,{
+      pageNumber:1,name:'name',defaultValue:'Before',x:0.1,y:0.72,width:0.42,height:0.07,
+    });
+    bytes=await addPdfCheckBox(bytes,{
+      pageNumber:1,name:'approved',checked:false,x:0.1,y:0.6,size:0.05,
+    });
+    bytes=await addPdfDropdown(bytes,{
+      pageNumber:1,name:'department',options:['Engineering','Finance'],selected:['Engineering'],
+      x:0.1,y:0.48,width:0.42,height:0.07,
+    });
+    bytes=await addPdfTextField(bytes,{
+      pageNumber:1,name:'locked',defaultValue:'Do not export',readOnly:true,
+      x:0.1,y:0.36,width:0.42,height:0.07,
+    });
+
+    const pdf=await PDFDocument.load(bytes,{updateMetadata:false});
+    const secret=pdf.getForm().createTextField('secret');
+    secret.enablePassword();
+    secret.setText('hidden');
+    secret.addToPage(pdf.getPage(0),{x:30,y:70,width:120,height:24});
+    bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+
+    const json=await exportPdfFormDataJson(bytes);
+    expect(json).toBe(await exportPdfFormDataJson(bytes));
+    const snapshot=JSON.parse(json);
+    expect(snapshot).toMatchObject({
+      format:'malenjo-pdf-form-data',
+      version:1,
+    });
+    expect(snapshot.fields.map((field:{name:string})=>field.name))
+      .toEqual(['name','approved','department']);
+    expect(json).not.toContain('hidden');
+    expect(json).not.toContain('Do not export');
+
+    const changed=await fillPdfFormFields(bytes,[
+      {name:'name',value:'Changed'},
+      {name:'approved',checked:true},
+      {name:'department',selected:['Finance']},
+    ]);
+    const restored=await importPdfFormDataJson(changed,json);
+    const info=await inspectPdfFormFields(restored);
+    expect(info.find((field)=>field.name==='name')?.value).toBe('Before');
+    expect(info.find((field)=>field.name==='approved')?.checked).toBe(false);
+    expect(info.find((field)=>field.name==='department')?.selected).toEqual(['Engineering']);
+  });
+
+  it('rejects malformed or mismatched form-data JSON before mutation',async()=>{
+    let bytes=await sample(1);
+    bytes=await addPdfTextField(bytes,{
+      pageNumber:1,name:'name',defaultValue:'Before',x:0.1,y:0.72,width:0.42,height:0.07,
+    });
+
+    await expect(importPdfFormDataJson(bytes,'not json')).rejects.toThrow(/invalid/i);
+    await expect(importPdfFormDataJson(bytes,JSON.stringify({
+      format:'malenjo-pdf-form-data',version:1,fields:[
+        {name:'missing',type:'text',value:'x'},
+      ],
+    }))).rejects.toThrow(/not found/i);
+    await expect(importPdfFormDataJson(bytes,JSON.stringify({
+      format:'malenjo-pdf-form-data',version:1,fields:[
+        {name:'name',type:'checkbox',checked:true},
+      ],
+    }))).rejects.toThrow(/has type/i);
   });
 
   it('preserves external field names/options and reports password, multiline and multiselect semantics',async()=>{
