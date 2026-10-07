@@ -208,7 +208,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   });
   const [formFields, setFormFields] = useState<PdfFormFieldInfo[]>([]);
   const [formFillDraft, setFormFillDraft] = useState<Record<string,string|string[]|boolean|undefined>>({});
-  const [formFillTouched, setFormFillTouched] = useState<Record<string,boolean>>({});
+  const [formFillTouched, setFormFillTouched] = useState<Set<string>>(()=>new Set());
+  const [formInspectedSource, setFormInspectedSource] = useState<Uint8Array|null>(null);
   const [headerFooterDraft, setHeaderFooterDraft] = useState({
     scope:'selected' as 'selected'|'all',
     header:'',
@@ -559,12 +560,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
 
   useEffect(()=>{
-    if(!sourceBytes){
-      setFormFields([]);
-      return;
-    }
+    setFormFields([]);
+    setFormFillDraft({});
+    setFormFillTouched(new Set());
+    setFormInspectedSource(null);
+    if(!sourceBytes)return;
+
+    const inspectedBytes=sourceBytes;
     let cancelled=false;
-    void inspectPdfFormFields(sourceBytes)
+    void inspectPdfFormFields(inspectedBytes)
       .then((fields)=>{
         if(cancelled)return;
         setFormFields(fields);
@@ -576,18 +580,20 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           if(field.type==='text'&&field.password)return [field.name,undefined];
           return [field.name,field.value];
         })) as Record<string,string|string[]|boolean|undefined>);
-        setFormFillTouched({});
+        setFormFillTouched(new Set());
+        setFormInspectedSource(inspectedBytes);
       })
       .catch(()=>{
         if(cancelled)return;
         setFormFields([]);
         setFormFillDraft({});
-        setFormFillTouched({});
+        setFormFillTouched(new Set());
+        setFormInspectedSource(null);
       });
     return()=>{cancelled=true;};
   },[sourceBytes]);
 
-  const fillableFormFields=formFields.filter((field)=>
+  const fillableFormFields=(formInspectedSource===sourceBytes?formFields:[]).filter((field)=>
     !field.readOnly
     &&!field.richText
     &&!(field.type==='dropdown'&&field.editable&&field.multiselect)
@@ -689,14 +695,18 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
   function setFormFillValue(name:string,value:string|string[]|boolean|undefined){
     setFormFillDraft((current)=>({...current,[name]:value}));
-    setFormFillTouched((current)=>({...current,[name]:true}));
+    setFormFillTouched((current)=>{
+      const next=new Set(current);
+      next.add(name);
+      return next;
+    });
   }
 
   async function fillForm(){
     if(!fillableFormFields.length)return;
     const updates:PdfFormFieldUpdate[]=[];
     for(const field of fillableFormFields){
-      if(!formFillTouched[field.name])continue;
+      if(!formFillTouched.has(field.name))continue;
       const draft=formFillDraft[field.name];
       if(field.type==='checkbox'){
         updates.push({name:field.name,checked:Boolean(draft)});
@@ -1609,17 +1619,39 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                   <b>{field.name}</b> combines editable and multiselect flags; MALENJO inspects it but does not modify that unsafe combination.
                 </small>;
               }
-              const listId=`${domIdPrefix}-choice-${fieldIndex}-${field.name.replace(/[^A-Za-z0-9_-]/g,'_')}`;
+              const selectedIndex=selected.length
+                ? field.choiceOptions.findIndex((option)=>option.value===selected[0])
+                : -1;
+              const hasCustomValue=selected.length>0&&selectedIndex<0;
+              const selectedToken=selectedIndex>=0?`option-${selectedIndex}`:hasCustomValue?'custom':'clear';
               return <label key={`fill-${field.name}`}>{field.name}
-                <input
-                  list={listId}
-                  value={selected[0]??''}
+                <select
+                  value={selectedToken}
                   disabled={disabled}
-                  onChange={(event)=>setFormFillValue(field.name,event.target.value?[event.target.value]:[])}
-                />
-                <datalist id={listId}>
-                  {field.choiceOptions.map((option)=><option key={option.value} value={option.value}>{option.label}</option>)}
-                </datalist>
+                  onChange={(event)=>{
+                    if(event.target.value==='clear'){
+                      setFormFillValue(field.name,[]);
+                      return;
+                    }
+                    if(event.target.value==='custom'){
+                      if(!hasCustomValue)setFormFillValue(field.name,['']);
+                      return;
+                    }
+                    const optionIndex=Number(event.target.value.replace(/^option-/,''));
+                    const option=field.choiceOptions[optionIndex];
+                    if(option)setFormFillValue(field.name,[option.value]);
+                  }}
+                >
+                  <option value="clear">— Clear —</option>
+                  {field.choiceOptions.map((option,index)=><option key={`${index}-${option.value}`} value={`option-${index}`}>{option.label}</option>)}
+                  <option value="custom">— Custom value —</option>
+                </select>
+                {selectedToken==='custom'&&<input
+                  value={hasCustomValue?selected[0]:''}
+                  disabled={disabled}
+                  placeholder="Custom value"
+                  onChange={(event)=>setFormFillValue(field.name,[event.target.value])}
+                />}
               </label>;
             }
             if(field.type==='radio'||((field.type==='dropdown'||field.type==='list')&&!field.multiselect)){
