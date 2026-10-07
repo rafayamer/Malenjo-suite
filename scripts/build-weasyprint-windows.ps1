@@ -80,10 +80,14 @@ $PythonPackages = @(
     Sort-Object FullName |
     ForEach-Object {
       $lines = Get-Content $_.FullName
-      $name = (($lines | Where-Object { $_ -match '^Name:\s+' } | Select-Object -First 1) -replace '^Name:\s+','').Trim()
-      $version = (($lines | Where-Object { $_ -match '^Version:\s+' } | Select-Object -First 1) -replace '^Version:\s+','').Trim()
-      $licenseExpression = (($lines | Where-Object { $_ -match '^License-Expression:\s+' } | Select-Object -First 1) -replace '^License-Expression:\s+','').Trim()
-      $license = (($lines | Where-Object { $_ -match '^License:\s+' } | Select-Object -First 1) -replace '^License:\s+','').Trim()
+      $nameLine = $lines | Where-Object { $_ -match '^Name:\s+' } | Select-Object -First 1
+      $versionLine = $lines | Where-Object { $_ -match '^Version:\s+' } | Select-Object -First 1
+      $licenseExpressionLine = $lines | Where-Object { $_ -match '^License-Expression:\s+' } | Select-Object -First 1
+      $licenseLine = $lines | Where-Object { $_ -match '^License:\s+' } | Select-Object -First 1
+      $name = if ($null -eq $nameLine) { '' } else { ($nameLine -replace '^Name:\s+','').Trim() }
+      $version = if ($null -eq $versionLine) { '' } else { ($versionLine -replace '^Version:\s+','').Trim() }
+      $licenseExpression = if ($null -eq $licenseExpressionLine) { '' } else { ($licenseExpressionLine -replace '^License-Expression:\s+','').Trim() }
+      $license = if ($null -eq $licenseLine) { '' } else { ($licenseLine -replace '^License:\s+','').Trim() }
       $licenseClassifiers = @(
         $lines |
           Where-Object { $_ -match '^Classifier:\s+License\s+::\s+' } |
