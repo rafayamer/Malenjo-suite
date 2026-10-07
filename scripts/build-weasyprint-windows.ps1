@@ -58,8 +58,126 @@ $RuntimeFiles = @(
 
 $NativeFiles = @(
   $RuntimeFiles |
-    Where-Object { $_.path -match '(?i)\.(dll|pyd|exe)$' } |
+    Where-Object { $_.path -match '(?i)\.(dll|pyd|exe)
+  schemaVersion = 1
+  providerId = 'weasyprint'
+  version = $Version
+  releaseCommit = $ReleaseCommit
+  sourceAsset = $Asset
+  sourceSha256 = $ExpectedSha256
+  executable = 'runtime/bin/weasyprint.exe'
+  runtimeFiles = $RuntimeFiles
+  nativeFiles = $NativeFiles
+  pythonPackages = $PythonPackages
+}
+$Inventory | ConvertTo-Json -Depth 8 | Set-Content -Path (Join-Path $PackDir 'inventory.json') -Encoding UTF8
+
+$Manifest = [ordered]@{
+  schemaVersion = 1
+  providerId = 'weasyprint'
+  componentPack = 'weasyprint-windows-x64'
+  version = $Version
+  upstream = 'https://github.com/Kozea/WeasyPrint'
+  release = "v$Version"
+  releaseCommit = $ReleaseCommit
+  asset = $Asset
+  sha256 = $ExpectedSha256
+  executable = 'runtime/bin/weasyprint.exe'
+  license = 'BSD-3-Clause'
+  architecture = 'windows-x86_64'
+  redistribution = 'inventory-only-not-approved'
+  capabilityEnabled = $false
+  operations = @('html-to-pdf', 'url-to-pdf', 'eml-to-pdf')
+  releaseGate = 'Map every bundled Python/native runtime file and every non-system DLL to an exact package/version/license, retain required notices/source obligations, then add native runtime verification before enabling capability.'
+  runtimeFileCount = $RuntimeFiles.Count
+  nativeFileCount = $NativeFiles.Count
+  pythonPackageCount = $PythonPackages.Count
+  reviewedAt = '2026-10-07'
+}
+$Manifest | ConvertTo-Json -Depth 6 | Set-Content -Path (Join-Path $PackDir 'manifest.json') -Encoding UTF8
+
+Write-Host "WEASYPRINT_INVENTORY_BEGIN"
+foreach ($file in $NativeFiles) {
+  Write-Host ("{0}|{1}|{2}" -f $file.path,$file.size,$file.sha256)
+}
+Write-Host "WEASYPRINT_INVENTORY_END"
+Write-Host "WEASYPRINT_PYTHON_PACKAGES_BEGIN"
+foreach ($package in $PythonPackages) {
+  Write-Host ("WEASY_PYTHON|{0}|{1}|{2}|{3}" -f $package.name,$package.version,$package.licenseExpression,$package.license)
+}
+Write-Host "WEASYPRINT_PYTHON_PACKAGES_END"
+Write-Host "Inventoried WeasyPrint $Version runtime: $($RuntimeFiles.Count) total files, $($NativeFiles.Count) native/executable files, $($PythonPackages.Count) Python package metadata entries. Capability remains disabled."
+ } |
     ForEach-Object { $_ }
+)
+
+$PythonPackages = @(
+  Get-ChildItem -Path $RuntimeBin -Recurse -File -Filter 'METADATA' |
+    Where-Object { $_.Directory.Name -match '(?i)\.dist-info
+  schemaVersion = 1
+  providerId = 'weasyprint'
+  version = $Version
+  releaseCommit = $ReleaseCommit
+  sourceAsset = $Asset
+  sourceSha256 = $ExpectedSha256
+  executable = 'runtime/bin/weasyprint.exe'
+  runtimeFiles = $RuntimeFiles
+  nativeFiles = $NativeFiles
+}
+$Inventory | ConvertTo-Json -Depth 8 | Set-Content -Path (Join-Path $PackDir 'inventory.json') -Encoding UTF8
+
+$Manifest = [ordered]@{
+  schemaVersion = 1
+  providerId = 'weasyprint'
+  componentPack = 'weasyprint-windows-x64'
+  version = $Version
+  upstream = 'https://github.com/Kozea/WeasyPrint'
+  release = "v$Version"
+  releaseCommit = $ReleaseCommit
+  asset = $Asset
+  sha256 = $ExpectedSha256
+  executable = 'runtime/bin/weasyprint.exe'
+  license = 'BSD-3-Clause'
+  architecture = 'windows-x86_64'
+  redistribution = 'inventory-only-not-approved'
+  capabilityEnabled = $false
+  operations = @('html-to-pdf', 'url-to-pdf', 'eml-to-pdf')
+  releaseGate = 'Map every bundled Python/native runtime file and every non-system DLL to an exact package/version/license, retain required notices/source obligations, then add native runtime verification before enabling capability.'
+  runtimeFileCount = $RuntimeFiles.Count
+  nativeFileCount = $NativeFiles.Count
+  reviewedAt = '2026-10-07'
+}
+$Manifest | ConvertTo-Json -Depth 6 | Set-Content -Path (Join-Path $PackDir 'manifest.json') -Encoding UTF8
+
+Write-Host "WEASYPRINT_INVENTORY_BEGIN"
+foreach ($file in $NativeFiles) {
+  Write-Host ("{0}|{1}|{2}" -f $file.path,$file.size,$file.sha256)
+}
+Write-Host "WEASYPRINT_INVENTORY_END"
+Write-Host "Inventoried WeasyPrint $Version runtime: $($RuntimeFiles.Count) total files, $($NativeFiles.Count) native/executable files. Capability remains disabled."
+ } |
+    Sort-Object FullName |
+    ForEach-Object {
+      $lines = Get-Content $_.FullName
+      $name = ($lines | Where-Object { $_ -match '^Name:\s+' } | Select-Object -First 1) -replace '^Name:\s+',''
+      $version = ($lines | Where-Object { $_ -match '^Version:\s+' } | Select-Object -First 1) -replace '^Version:\s+',''
+      $licenseExpression = ($lines | Where-Object { $_ -match '^License-Expression:\s+' } | Select-Object -First 1) -replace '^License-Expression:\s+',''
+      $license = ($lines | Where-Object { $_ -match '^License:\s+' } | Select-Object -First 1) -replace '^License:\s+',''
+      $licenseClassifiers = @(
+        $lines |
+          Where-Object { $_ -match '^Classifier:\s+License\s+::\s+' } |
+          ForEach-Object { $_ -replace '^Classifier:\s+','' }
+      )
+      [ordered]@{
+        name = $name
+        version = $version
+        licenseExpression = $licenseExpression
+        license = $license
+        licenseClassifiers = $licenseClassifiers
+        metadataPath = [IO.Path]::GetRelativePath($RuntimeDir, $_.FullName).Replace('\','/')
+        metadataSha256 = (Get-FileHash -Algorithm SHA256 -Path $_.FullName).Hash.ToLowerInvariant()
+      }
+    }
 )
 
 $Inventory = [ordered]@{
