@@ -154,13 +154,19 @@ try {
       "stirling-office-convert-legacy-$officeVersion.jar" = Join-Path $officeSource "legacy/build/libs/stirling-office-convert-legacy-$officeVersion.jar"
       "stirling-office-convert-topdf-$officeVersion.jar" = Join-Path $officeSource "topdf/build/libs/stirling-office-convert-topdf-$officeVersion.jar"
     }
+    $officeSourceMismatches = @()
     foreach ($officeName in $officeNames) {
       $sourceJar = $sourceJars[$officeName]
       if (!(Test-Path $sourceJar)) { throw "Reviewed Office source build did not produce $officeName." }
       $sourceHash = (Get-FileHash -Algorithm SHA256 $sourceJar).Hash.ToLowerInvariant()
-      if ($sourceHash -ne $officeHashes[$officeName]) {
-        throw "Embedded Office artifact $officeName does not match the reproducible build from reviewed source commit $officeCommit."
+      $embeddedHash = $officeHashes[$officeName]
+      Write-Host "Office artifact identity: $officeName embedded=$embeddedHash sourceBuild=$sourceHash"
+      if ($sourceHash -ne $embeddedHash) {
+        $officeSourceMismatches += "$officeName embedded=$embeddedHash sourceBuild=$sourceHash"
       }
+    }
+    if ($officeSourceMismatches.Count -gt 0) {
+      throw "Published Office artifacts differ from this fresh source build; pin the reviewed published SHA-256 values instead. $($officeSourceMismatches -join '; ')"
     }
   } finally {
     Pop-Location
