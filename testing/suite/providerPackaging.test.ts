@@ -76,16 +76,17 @@ describe('Windows PDF provider packaging contract',()=>{
       expect(source).toContain('checkLicense generateLicenseReport --no-parallel');
       expect(source).toContain('stirling-dependency-licenses.json');
       expect(source).toContain('stirling-office-convert-LICENSE.txt');
-      expect(source).toContain('reproducible-source-build-match');
-      expect(source).toContain('Stirling-Tools/Stirling-Office-Convert.git');
-      expect(source).toContain(':core:jar');
-      expect(source).toContain(':legacy:jar');
-      expect(source).toContain(':topdf:jar');
+      expect(source).toContain('pinned-published-sha256');
+      expect(source).toContain('ARTIFACTS.sha256');
       expect(source).toContain('licenseArtifacts');
     }
     expect(native).toContain('--system.stirlingOfficeConversion=true');
     expect(provenance).toContain('v0.2.2');
     expect(provenance).toContain('673aab8d6ac784524cd1d90141c95e74b9fd26ae');
+    const artifactPins=text('third_party/stirling-office-convert/ARTIFACTS.sha256');
+    expect(artifactPins).toContain('79e67f69843095cfc557f3cb040bf0c34489ee51f86b815abf0faf5bd8b47a0c  stirling-office-convert-0.2.2.jar');
+    expect(artifactPins).toContain('f57b17c14c91318e27c109e462955bc04d64fd3d67c6e79a50073e863425fe37  stirling-office-convert-legacy-0.2.2.jar');
+    expect(artifactPins).toContain('210e212dd1345598080ef142c53fbba805cb83dbed150fa0970505bb290df741  stirling-office-convert-topdf-0.2.2.jar');
   });
 
   it('requires native source verification before embedded Office capability is advertised',()=>{
@@ -98,11 +99,12 @@ describe('Windows PDF provider packaging contract',()=>{
     expect(native).toContain('sha256_file_hex');
     expect(native).toContain('dependencyLicenseReport');
     expect(native).toContain('licenseArtifacts');
-    expect(native).toContain('reproducible-source-build-match');
+    expect(native).toContain('pinned-published-sha256');
+    expect(native).toContain('ARTIFACTS.sha256');
     expect(native).toContain('MALENJO_STIRLING_JAR override is not eligible');
     expect(native).toContain('Port 28970 is already serving a healthy process that MALENJO did not start');
-    expect(native).toContain('OFFICE_CONVERT_LICENSE_SHA256');
-    expect(native).toContain('OFFICE_CONVERT_DEPENDENCIES_SHA256');
+    expect(native).toContain('OFFICE_CONVERT_LICENSE_TEXT');
+    expect(native).toContain('OFFICE_CONVERT_DEPENDENCIES_TEXT');
     expect(fixture).toContain('%PDF-1.4`n');
     expect(fixture).toContain('(MALENJO) Tj');
   });

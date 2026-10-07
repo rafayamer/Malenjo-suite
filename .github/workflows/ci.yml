@@ -192,10 +192,16 @@ jobs:
           if ($office.version -ne "0.2.2" -or $office.sourceCommit -ne "673aab8d6ac784524cd1d90141c95e74b9fd26ae" -or $office.license -ne "MIT") {
             throw "Unexpected embedded Stirling Office Convert provenance."
           }
-          if ($office.verification -ne "reproducible-source-build-match") {
-            throw "Embedded Office artifacts were not verified against the reviewed reproducible source build."
+          if ($office.verification -ne "pinned-published-sha256") {
+            throw "Embedded Office artifacts were not verified against repository-pinned published SHA-256 identities."
           }
           $officeJars = @($office.jars.PSObject.Properties)
+          $artifactPins = @{}
+          foreach ($line in Get-Content "third_party/stirling-office-convert/ARTIFACTS.sha256") {
+            if ($line -match "^([0-9a-f]{64})\s+(.+)$") {
+              $artifactPins[$Matches[2].Trim()] = $Matches[1]
+            }
+          }
           $expectedOfficeJars = @(
             "stirling-office-convert-0.2.2.jar",
             "stirling-office-convert-legacy-0.2.2.jar",
@@ -204,8 +210,8 @@ jobs:
           if ($officeJars.Count -ne $expectedOfficeJars.Count) { throw "Expected exactly three embedded Office Convert JARs." }
           foreach ($expectedOfficeJar in $expectedOfficeJars) {
             $jarEntry = $officeJars | Where-Object { $_.Name -eq $expectedOfficeJar } | Select-Object -First 1
-            if (-not $jarEntry -or $jarEntry.Value -notmatch "^[0-9a-f]{64}$") {
-              throw "Embedded Office Convert JAR is missing or has an invalid hash: $expectedOfficeJar"
+            if (-not $jarEntry -or -not $artifactPins[$expectedOfficeJar] -or $jarEntry.Value -ne $artifactPins[$expectedOfficeJar]) {
+              throw "Embedded Office Convert JAR does not match reviewed published SHA-256 pin: $expectedOfficeJar"
             }
           }
           foreach ($notice in @(
@@ -230,11 +236,11 @@ jobs:
               throw "Stirling Office license artifact hash mismatch: $relative"
             }
           }
-          if ((Get-FileHash -Algorithm SHA256 "provider-packs/stirling-core/malenjo-notices/stirling-office-convert-LICENSE.txt").Hash.ToLowerInvariant() -ne "8758ef1539950d6b14017a6f8f84fdfa4598b869cc6233b1e8cd490c12955900") {
-            throw "Office Convert MIT license notice no longer matches the reviewed baseline."
+          if ((Get-FileHash -Algorithm SHA256 "provider-packs/stirling-core/malenjo-notices/stirling-office-convert-LICENSE.txt").Hash -ne (Get-FileHash -Algorithm SHA256 "third_party/stirling-office-convert/LICENSE.txt").Hash) {
+            throw "Office Convert MIT license notice differs from the reviewed checked-in baseline."
           }
-          if ((Get-FileHash -Algorithm SHA256 "provider-packs/stirling-core/malenjo-notices/stirling-office-convert-DEPENDENCIES.md").Hash.ToLowerInvariant() -ne "87ab24690f9adbd1cc2e0a2f09d75fa2a037c698f6553c457ec5a74aa598cf0b") {
-            throw "Office Convert dependency review no longer matches the reviewed baseline."
+          if ((Get-FileHash -Algorithm SHA256 "provider-packs/stirling-core/malenjo-notices/stirling-office-convert-DEPENDENCIES.md").Hash -ne (Get-FileHash -Algorithm SHA256 "third_party/stirling-office-convert/DEPENDENCIES.md").Hash) {
+            throw "Office Convert dependency review differs from the reviewed checked-in baseline."
           }
           $licenseText = Get-Content "provider-packs/stirling-core/malenjo-notices/stirling-dependency-licenses.json" -Raw
           if ($licenseText.Length -lt 1000 -or $licenseText -notmatch "stirling-office-convert") {

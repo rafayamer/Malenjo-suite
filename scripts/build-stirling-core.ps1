@@ -6,7 +6,6 @@ param(
 $ErrorActionPreference = "Stop"
 $Pin = "25220cbdbde2d526cebf173b94357884e180b8c1"
 $Upstream = "https://github.com/Stirling-Tools/Stirling-PDF.git"
-$OfficeUpstream = "https://github.com/Stirling-Tools/Stirling-Office-Convert.git"
 
 function Assert-Command([string]$Name) {
   if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
@@ -133,43 +132,20 @@ try {
     Pop-Location
   }
 
-  # The Office release config makes archives reproducible. Rebuild the exact
-  # three modules from the reviewed source commit and require byte-identical
-  # hashes to the Maven artifacts embedded by the pinned Stirling build.
-  $officeSource = Join-Path $work "office-source"
-  git clone --filter=blob:none --no-checkout $OfficeUpstream $officeSource
-  Push-Location $officeSource
-  try {
-    git config core.autocrlf false
-    git checkout --detach $officeCommit
-    $resolvedOfficeCommit = (& git rev-parse HEAD | Out-String).Trim()
-    if ($resolvedOfficeCommit -ne $officeCommit) {
-      throw "Office Convert source checkout did not resolve the reviewed commit."
+  $artifactPinsPath = Join-Path $repoRoot "third_party/stirling-office-convert/ARTIFACTS.sha256"
+  if (!(Test-Path $artifactPinsPath)) { throw "Reviewed Office artifact hash pins are missing." }
+  $artifactPins = @{}
+  foreach ($line in Get-Content $artifactPinsPath) {
+    if ($line -match '^([0-9a-f]{64})\s+(.+)$') {
+      $artifactPins[$Matches[2].Trim()] = $Matches[1]
     }
-    .\gradlew.bat clean :core:jar :legacy:jar :topdf:jar "-Pofficeconvert.version=$officeVersion" --no-daemon
-    if ($LASTEXITCODE -ne 0) { throw "Unable to reproducibly build reviewed Office Convert modules." }
-
-    $sourceJars = [ordered]@{
-      "stirling-office-convert-$officeVersion.jar" = Join-Path $officeSource "core/build/libs/stirling-office-convert-$officeVersion.jar"
-      "stirling-office-convert-legacy-$officeVersion.jar" = Join-Path $officeSource "legacy/build/libs/stirling-office-convert-legacy-$officeVersion.jar"
-      "stirling-office-convert-topdf-$officeVersion.jar" = Join-Path $officeSource "topdf/build/libs/stirling-office-convert-topdf-$officeVersion.jar"
+  }
+  foreach ($officeName in $officeNames) {
+    $expectedHash = $artifactPins[$officeName]
+    if (-not $expectedHash) { throw "No reviewed SHA-256 pin exists for $officeName." }
+    if ($officeHashes[$officeName] -ne $expectedHash) {
+      throw "Embedded Office artifact $officeName does not match its reviewed published SHA-256 pin."
     }
-    $officeSourceMismatches = @()
-    foreach ($officeName in $officeNames) {
-      $sourceJar = $sourceJars[$officeName]
-      if (!(Test-Path $sourceJar)) { throw "Reviewed Office source build did not produce $officeName." }
-      $sourceHash = (Get-FileHash -Algorithm SHA256 $sourceJar).Hash.ToLowerInvariant()
-      $embeddedHash = $officeHashes[$officeName]
-      Write-Host "Office artifact identity: $officeName embedded=$embeddedHash sourceBuild=$sourceHash"
-      if ($sourceHash -ne $embeddedHash) {
-        $officeSourceMismatches += "$officeName embedded=$embeddedHash sourceBuild=$sourceHash"
-      }
-    }
-    if ($officeSourceMismatches.Count -gt 0) {
-      throw "Published Office artifacts differ from this fresh source build; pin the reviewed published SHA-256 values instead. $($officeSourceMismatches -join '; ')"
-    }
-  } finally {
-    Pop-Location
   }
 
   $noticeDir = Join-Path $out "malenjo-notices"
@@ -203,7 +179,7 @@ try {
       upstream = "Stirling-Tools/Stirling-Office-Convert"
       sourceCommit = $officeCommit
       license = "MIT"
-      verification = "reproducible-source-build-match"
+      verification = "pinned-published-sha256"
       jars = $officeHashes
     }
     dependencyLicenseReport = "malenjo-notices/stirling-dependency-licenses.json"

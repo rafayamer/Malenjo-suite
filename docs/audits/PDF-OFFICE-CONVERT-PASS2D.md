@@ -57,12 +57,13 @@ The pinned Stirling Gradle build resolves these exact embedded modules:
 - `stirling-office-convert-topdf:0.2.2`.
 
 The MALENJO provider builder verifies all three nested JAR names inside the
-generated Spring Boot JAR. It also checks out the exact Office source commit,
-rebuilds `core`, `legacy`, and `topdf` with the upstream reproducible
-archive settings, and requires each source-built JAR SHA-256 to be byte
-identical to the corresponding embedded Maven artifact. Only then are the
-nested hashes, source commit, MIT license, and
-`verification: reproducible-source-build-match` recorded in
+generated Spring Boot JAR and requires each SHA-256 to match the reviewed,
+repository-pinned Maven Central 0.2.2 identities in
+`third_party/stirling-office-convert/ARTIFACTS.sha256`. The source release is
+independently pinned to commit
+`673aab8d6ac784524cd1d90141c95e74b9fd26ae`. Only then are the nested
+hashes, source commit, MIT license, and
+`verification: pinned-published-sha256` recorded in
 `provider-packs/stirling-core/manifest.json`.
 
 ## License gate and shipped notices
@@ -80,11 +81,12 @@ mutation of `app/license-overrides.json` fails the build.
 
 The generated exact dependency-license report is packaged as
 `malenjo-notices/stirling-dependency-licenses.json` beside retained Stirling
-and Office Convert license notices. The manifest records SHA-256 values for
-the Office MIT license, the MALENJO dependency review, and the generated
-dependency-license report. The native verifier recomputes those hashes; the
-static Office notice hashes are also pinned in the Tauri binary, and the
-dependency report must remain valid JSON containing the Office converter.
+and Office Convert license notices. The manifest records SHA-256 values for the Office MIT license, the MALENJO
+dependency review, and the generated dependency-license report. The native
+verifier recomputes those hashes; the static Office notice and dependency
+review are additionally compared byte-for-byte with copies compiled into the
+Tauri binary, and the generated dependency report must remain valid JSON
+containing the Office converter.
 
 See `third_party/stirling-office-convert/` for the source license,
 provenance, and direct dependency record.
@@ -116,8 +118,8 @@ verifies the selected generated/bundled Stirling pack before reporting the
 - the selected `stirling-pdf.jar` SHA-256 matches the manifest;
 - embedded Office Convert is exactly `0.2.2` from source commit
   `673aab8d6ac784524cd1d90141c95e74b9fd26ae` under MIT;
-- all three expected embedded Office Convert JAR entries have recorded
-  SHA-256 values and the manifest confirms the reproducible-source-build match;
+- all three expected embedded Office Convert JAR entries match the
+  repository-pinned published SHA-256 identities;
 - the generated dependency-license report and Office notice artifacts match
   their recorded hashes, while the static Office notice hashes also match
   MALENJO's compiled review baseline.

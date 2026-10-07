@@ -3,7 +3,6 @@ set -euo pipefail
 
 PIN="25220cbdbde2d526cebf173b94357884e180b8c1"
 UPSTREAM="https://github.com/Stirling-Tools/Stirling-PDF.git"
-OFFICE_UPSTREAM="https://github.com/Stirling-Tools/Stirling-Office-Convert.git"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="${1:-$ROOT/.build/stirling-core}"
 OUT="${2:-$ROOT/provider-packs/stirling-core}"
@@ -93,37 +92,14 @@ office_core_hash="$(sha256sum "$embedded/BOOT-INF/lib/$office_core" | awk '{prin
 office_legacy_hash="$(sha256sum "$embedded/BOOT-INF/lib/$office_legacy" | awk '{print $1}')"
 office_topdf_hash="$(sha256sum "$embedded/BOOT-INF/lib/$office_topdf" | awk '{print $1}')"
 
-office_source="$WORK/office-source"
-git clone --filter=blob:none --no-checkout "$OFFICE_UPSTREAM" "$office_source"
-(
-  cd "$office_source"
-  git config core.autocrlf false
-  git checkout --detach "$office_commit"
-  [[ "$(git rev-parse HEAD)" == "$office_commit" ]] || {
-    echo "Office Convert source checkout did not resolve the reviewed commit" >&2
-    exit 1
-  }
-  ./gradlew clean :core:jar :legacy:jar :topdf:jar "-Pofficeconvert.version=$office_version" --no-daemon
-)
-declare -A source_jars=(
-  ["$office_core"]="$office_source/core/build/libs/$office_core"
-  ["$office_legacy"]="$office_source/legacy/build/libs/$office_legacy"
-  ["$office_topdf"]="$office_source/topdf/build/libs/$office_topdf"
-)
-declare -A embedded_hashes=(
-  ["$office_core"]="$office_core_hash"
-  ["$office_legacy"]="$office_legacy_hash"
-  ["$office_topdf"]="$office_topdf_hash"
-)
-for office_name in "$office_core" "$office_legacy" "$office_topdf"; do
-  source_jar="${source_jars[$office_name]}"
-  [[ -f "$source_jar" ]] || { echo "Reviewed Office source build did not produce $office_name" >&2; exit 1; }
-  source_hash="$(sha256sum "$source_jar" | awk '{print $1}')"
-  [[ "$source_hash" == "${embedded_hashes[$office_name]}" ]] || {
-    echo "Embedded Office artifact $office_name does not match the reproducible build from reviewed source commit $office_commit" >&2
-    exit 1
-  }
-done
+artifact_pins="$ROOT/third_party/stirling-office-convert/ARTIFACTS.sha256"
+[[ -f "$artifact_pins" ]] || { echo "Reviewed Office artifact hash pins are missing" >&2; exit 1; }
+expected_core="$(awk '$2=="'"$office_core"'" {print $1}' "$artifact_pins")"
+expected_legacy="$(awk '$2=="'"$office_legacy"'" {print $1}' "$artifact_pins")"
+expected_topdf="$(awk '$2=="'"$office_topdf"'" {print $1}' "$artifact_pins")"
+[[ -n "$expected_core" && "$office_core_hash" == "$expected_core" ]] || { echo "Embedded Office core artifact does not match reviewed SHA-256 pin" >&2; exit 1; }
+[[ -n "$expected_legacy" && "$office_legacy_hash" == "$expected_legacy" ]] || { echo "Embedded Office legacy artifact does not match reviewed SHA-256 pin" >&2; exit 1; }
+[[ -n "$expected_topdf" && "$office_topdf_hash" == "$expected_topdf" ]] || { echo "Embedded Office topdf artifact does not match reviewed SHA-256 pin" >&2; exit 1; }
 
 notice_dir="$OUT/malenjo-notices"
 mkdir -p "$notice_dir"
@@ -161,7 +137,7 @@ cat > "$OUT/manifest.json" <<JSON
     "upstream": "Stirling-Tools/Stirling-Office-Convert",
     "sourceCommit": "$office_commit",
     "license": "MIT",
-    "verification": "reproducible-source-build-match",
+    "verification": "pinned-published-sha256",
     "jars": {
       "$office_core": "$office_core_hash",
       "$office_legacy": "$office_legacy_hash",

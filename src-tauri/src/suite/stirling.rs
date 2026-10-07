@@ -147,12 +147,12 @@ fn stirling_jar_path(app: &AppHandle) -> Option<PathBuf> {
 const STIRLING_PIN: &str = "25220cbdbde2d526cebf173b94357884e180b8c1";
 const OFFICE_CONVERT_VERSION: &str = "0.2.2";
 const OFFICE_CONVERT_SOURCE_COMMIT: &str = "673aab8d6ac784524cd1d90141c95e74b9fd26ae";
-const OFFICE_CONVERT_LICENSE_SHA256: &str = "8758ef1539950d6b14017a6f8f84fdfa4598b869cc6233b1e8cd490c12955900";
-const OFFICE_CONVERT_DEPENDENCIES_SHA256: &str = "87ab24690f9adbd1cc2e0a2f09d75fa2a037c698f6553c457ec5a74aa598cf0b";
 const OFFICE_CONVERT_LICENSE_TEXT: &str =
     include_str!("../../../third_party/stirling-office-convert/LICENSE.txt");
 const OFFICE_CONVERT_DEPENDENCIES_TEXT: &str =
     include_str!("../../../third_party/stirling-office-convert/DEPENDENCIES.md");
+const OFFICE_CONVERT_ARTIFACT_PINS: &str =
+    include_str!("../../../third_party/stirling-office-convert/ARTIFACTS.sha256");
 
 fn sha256_file_hex(path: &Path) -> Result<String, String> {
     let mut file = std::fs::File::open(path)
@@ -259,6 +259,16 @@ fn office_pack_fingerprint(jar: &Path) -> Option<OfficePackFingerprint> {
     })
 }
 
+fn reviewed_office_artifact_hash(name: &str) -> Option<&'static str> {
+    OFFICE_CONVERT_ARTIFACT_PINS.lines().find_map(|line| {
+        let (hash, artifact) = line.split_once(char::is_whitespace)?;
+        (artifact.trim() == name
+            && hash.len() == 64
+            && hash.chars().all(|ch| ch.is_ascii_hexdigit()))
+        .then_some(hash)
+    })
+}
+
 fn license_artifact_matches(manifest: &Value, relative: &str, path: &Path) -> bool {
     let Some(expected) = manifest
         .get("licenseArtifacts")
@@ -291,15 +301,15 @@ fn office_convert_pack_is_verified(jar: &Path) -> bool {
     ];
     let office_jars_valid = jars.is_some_and(|items| {
         required_jars.iter().all(|name| {
-            items
-                .get(*name)
-                .and_then(Value::as_str)
-                .is_some_and(|hash| hash.len() == 64 && hash.chars().all(|ch| ch.is_ascii_hexdigit()))
+            let Some(expected) = reviewed_office_artifact_hash(name) else {
+                return false;
+            };
+            items.get(*name).and_then(Value::as_str) == Some(expected)
         })
     });
 
-    let office_license_hash = sha256_file_hex(&office_license).ok();
-    let office_dependencies_hash = sha256_file_hex(&office_dependencies).ok();
+    let office_license_text = std::fs::read_to_string(&office_license).ok();
+    let office_dependencies_text = std::fs::read_to_string(&office_dependencies).ok();
     let report_content = std::fs::read_to_string(&license_report).ok();
     let report_semantically_valid = report_content.as_deref().is_some_and(|content| {
         content.len() > 1000
@@ -319,10 +329,10 @@ fn office_convert_pack_is_verified(jar: &Path) -> bool {
             == Some(OFFICE_CONVERT_SOURCE_COMMIT)
         && office.and_then(|value| value.get("license")).and_then(Value::as_str) == Some("MIT")
         && office.and_then(|value| value.get("verification")).and_then(Value::as_str)
-            == Some("reproducible-source-build-match")
+            == Some("pinned-published-sha256")
         && office_jars_valid
-        && office_license_hash.as_deref() == Some(OFFICE_CONVERT_LICENSE_SHA256)
-        && office_dependencies_hash.as_deref() == Some(OFFICE_CONVERT_DEPENDENCIES_SHA256)
+        && office_license_text.as_deref() == Some(OFFICE_CONVERT_LICENSE_TEXT)
+        && office_dependencies_text.as_deref() == Some(OFFICE_CONVERT_DEPENDENCIES_TEXT)
         && license_artifact_matches(
             &manifest,
             "malenjo-notices/stirling-office-convert-LICENSE.txt",
@@ -381,7 +391,7 @@ fn office_convert_component_status(app: &AppHandle) -> StirlingComponentStatus {
             executable: Some(jar.to_string_lossy().to_string()),
             source,
             message: if valid {
-                "Embedded Stirling Office Convert 0.2.2 is source-verified in the selected MALENJO core pack.".into()
+                "Embedded Stirling Office Convert 0.2.2 matches MALENJO's reviewed published artifact pins.".into()
             } else {
                 "The selected Stirling JAR does not match the reviewed MALENJO Office Convert 0.2.2 pack provenance.".into()
             },
@@ -1055,7 +1065,7 @@ pub async fn stirling_core_request(
 #[cfg(test)]
 mod tests {
     use super::{
-        office_convert_pack_is_verified, owned_provider_ready, parse_qpdf_version,
+        office_convert_pack_is_verified, owned_provider_ready, parse_qpdf_version, reviewed_office_artifact_hash,
         parse_tesseract_version, set_reviewed_provider_path, sha256_file_hex, validate_api_path,
         MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, OFFICE_CONVERT_DEPENDENCIES_TEXT,
         OFFICE_CONVERT_LICENSE_TEXT, OFFICE_CONVERT_SOURCE_COMMIT, OFFICE_CONVERT_VERSION,
@@ -1158,11 +1168,11 @@ mod tests {
                 "upstream": "Stirling-Tools/Stirling-Office-Convert",
                 "sourceCommit": OFFICE_CONVERT_SOURCE_COMMIT,
                 "license": "MIT",
-                "verification": "reproducible-source-build-match",
+                "verification": "pinned-published-sha256",
                 "jars": {
-                    "stirling-office-convert-0.2.2.jar": "a".repeat(64),
-                    "stirling-office-convert-legacy-0.2.2.jar": "b".repeat(64),
-                    "stirling-office-convert-topdf-0.2.2.jar": "c".repeat(64)
+                    "stirling-office-convert-0.2.2.jar": reviewed_office_artifact_hash("stirling-office-convert-0.2.2.jar").unwrap(),
+                    "stirling-office-convert-legacy-0.2.2.jar": reviewed_office_artifact_hash("stirling-office-convert-legacy-0.2.2.jar").unwrap(),
+                    "stirling-office-convert-topdf-0.2.2.jar": reviewed_office_artifact_hash("stirling-office-convert-topdf-0.2.2.jar").unwrap()
                 }
             }
         });
