@@ -4,7 +4,7 @@ import {
   addPdfBatesNumbers, addPdfCheckBox, addPdfCommentAnnotation, addPdfDropdown, addPdfHeaderFooter,
   addPdfOptionList, addPdfRadioGroup, addPdfRectangleOverlay, addPdfTextField, addPdfTextOverlay, appendPdf,
   attachFileToPdf, deletePdfPage, deletePdfPages, duplicatePdfPage, extractPdfPage, extractPdfPages,
-  exportPdfFormDataJson, fillPdfFormFields, flattenPdfForm, importPdfFormDataJson, inspectPdfFormFields, insertBlankPdfPage, insertPdfAfter, listPdfFormFields, movePdfPage,
+  exportPdfFormDataJson, fillPdfFormFields, flattenPdfForm, importPdfFormDataJson, inspectPdfFormFields, isPdfFormFieldDataExportable, insertBlankPdfPage, insertPdfAfter, listPdfFormFields, movePdfPage,
   rotatePdfPagePermanent, rotatePdfPagesPermanent, setPdfPageBox, splitPdfAtPage,
 } from './editor';
 
@@ -254,6 +254,49 @@ describe('PDF mutation core',()=>{
     expect(info.find((field)=>field.name==='name')?.value).toBe('Before');
     expect(info.find((field)=>field.name==='approved')?.checked).toBe(false);
     expect(info.find((field)=>field.name==='department')?.selected).toEqual(['Engineering']);
+  });
+
+  it('keeps exported form-data snapshots within import safety limits',async()=>{
+    const longPdf=await PDFDocument.create();
+    const longPage=longPdf.addPage([500,700]);
+    const longForm=longPdf.getForm();
+    const longField=longForm.createTextField('too_long');
+    longField.setText('x'.repeat(10001));
+    longField.addToPage(longPage,{x:30,y:620,width:220,height:28});
+    const longBytes=Uint8Array.from(await longPdf.save({useObjectStreams:false}));
+    await expect(exportPdfFormDataJson(longBytes)).rejects.toThrow(/safety limits/i);
+
+    const manyPdf=await PDFDocument.create();
+    manyPdf.addPage([500,700]);
+    const manyForm=manyPdf.getForm();
+    for(let index=0;index<1001;index+=1){
+      manyForm.createCheckBox(`field_${index}`);
+    }
+    const manyBytes=Uint8Array.from(await manyPdf.save({useObjectStreams:false}));
+    await expect(exportPdfFormDataJson(manyBytes)).rejects.toThrow(/1,000/i);
+  });
+
+  it('uses the shared exportability predicate for sensitive and unsupported fields',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+
+    const normal=form.createTextField('normal');
+    normal.addToPage(page,{x:30,y:620,width:220,height:28});
+
+    const secret=form.createTextField('secret');
+    secret.enablePassword();
+    secret.addToPage(page,{x:30,y:570,width:220,height:28});
+
+    const locked=form.createTextField('locked');
+    locked.enableReadOnly();
+    locked.addToPage(page,{x:30,y:520,width:220,height:28});
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const exportable=(await inspectPdfFormFields(bytes))
+      .filter(isPdfFormFieldDataExportable)
+      .map((field)=>field.name);
+    expect(exportable).toEqual(['normal']);
   });
 
   it('rejects malformed or mismatched form-data JSON before mutation',async()=>{
