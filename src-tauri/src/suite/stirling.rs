@@ -147,6 +147,12 @@ fn stirling_jar_path(app: &AppHandle) -> Option<PathBuf> {
 const STIRLING_PIN: &str = "25220cbdbde2d526cebf173b94357884e180b8c1";
 const OFFICE_CONVERT_VERSION: &str = "0.2.2";
 const OFFICE_CONVERT_SOURCE_COMMIT: &str = "673aab8d6ac784524cd1d90141c95e74b9fd26ae";
+const OFFICE_CONVERT_LICENSE_SHA256: &str = "94838a9a135b813032c95d85f356e0605a0ec337ab84de422d13cac237e20ffb";
+const OFFICE_CONVERT_DEPENDENCIES_SHA256: &str = "87ab24690f9adbd1cc2e0a2f09d75fa2a037c698f6553c457ec5a74aa598cf0b";
+const OFFICE_CONVERT_LICENSE_TEXT: &str =
+    include_str!("../../../third_party/stirling-office-convert/LICENSE.txt");
+const OFFICE_CONVERT_DEPENDENCIES_TEXT: &str =
+    include_str!("../../../third_party/stirling-office-convert/DEPENDENCIES.md");
 
 fn sha256_file_hex(path: &Path) -> Result<String, String> {
     let mut file = std::fs::File::open(path)
@@ -193,6 +199,8 @@ struct OfficePackFingerprint {
     report_modified: Option<SystemTime>,
     license_len: u64,
     license_modified: Option<SystemTime>,
+    dependencies_len: u64,
+    dependencies_modified: Option<SystemTime>,
 }
 
 #[derive(Clone)]
@@ -206,7 +214,7 @@ fn office_status_cache() -> &'static Mutex<Option<OfficeStatusCacheEntry>> {
     CACHE.get_or_init(|| Mutex::new(None))
 }
 
-fn office_pack_files(jar: &Path) -> Option<(Value, PathBuf, PathBuf, PathBuf)> {
+fn office_pack_files(jar: &Path) -> Option<(Value, PathBuf, PathBuf, PathBuf, PathBuf)> {
     let manifest_path = jar.parent()?.join("manifest.json");
     let manifest_text = std::fs::read_to_string(&manifest_path).ok()?;
     let manifest: Value = serde_json::from_str(&manifest_text).ok()?;
@@ -217,15 +225,25 @@ fn office_pack_files(jar: &Path) -> Option<(Value, PathBuf, PathBuf, PathBuf)> {
     let pack_dir = jar.parent()?;
     let license_report = pack_dir.join(report_relative);
     let office_license = pack_dir.join("malenjo-notices/stirling-office-convert-LICENSE.txt");
-    Some((manifest, manifest_path, license_report, office_license))
+    let office_dependencies =
+        pack_dir.join("malenjo-notices/stirling-office-convert-DEPENDENCIES.md");
+    Some((
+        manifest,
+        manifest_path,
+        license_report,
+        office_license,
+        office_dependencies,
+    ))
 }
 
 fn office_pack_fingerprint(jar: &Path) -> Option<OfficePackFingerprint> {
-    let (_, manifest_path, license_report, office_license) = office_pack_files(jar)?;
+    let (_, manifest_path, license_report, office_license, office_dependencies) =
+        office_pack_files(jar)?;
     let jar_meta = std::fs::metadata(jar).ok()?;
     let manifest_meta = std::fs::metadata(&manifest_path).ok()?;
     let report_meta = std::fs::metadata(&license_report).ok()?;
     let license_meta = std::fs::metadata(&office_license).ok()?;
+    let dependencies_meta = std::fs::metadata(&office_dependencies).ok()?;
     Some(OfficePackFingerprint {
         jar: jar.canonicalize().unwrap_or_else(|_| jar.to_path_buf()),
         jar_len: jar_meta.len(),
@@ -236,11 +254,29 @@ fn office_pack_fingerprint(jar: &Path) -> Option<OfficePackFingerprint> {
         report_modified: report_meta.modified().ok(),
         license_len: license_meta.len(),
         license_modified: license_meta.modified().ok(),
+        dependencies_len: dependencies_meta.len(),
+        dependencies_modified: dependencies_meta.modified().ok(),
     })
 }
 
+fn license_artifact_matches(manifest: &Value, relative: &str, path: &Path) -> bool {
+    let Some(expected) = manifest
+        .get("licenseArtifacts")
+        .and_then(Value::as_object)
+        .and_then(|items| items.get(relative))
+        .and_then(Value::as_str)
+    else {
+        return false;
+    };
+    expected.len() == 64
+        && expected.chars().all(|ch| ch.is_ascii_hexdigit())
+        && sha256_file_hex(path).is_ok_and(|actual| actual == expected)
+}
+
 fn office_convert_pack_is_verified(jar: &Path) -> bool {
-    let Some((manifest, _manifest_path, license_report, office_license)) = office_pack_files(jar) else {
+    let Some((manifest, _manifest_path, license_report, office_license, office_dependencies)) =
+        office_pack_files(jar)
+    else {
         return false;
     };
 
@@ -262,6 +298,15 @@ fn office_convert_pack_is_verified(jar: &Path) -> bool {
         })
     });
 
+    let office_license_hash = sha256_file_hex(&office_license).ok();
+    let office_dependencies_hash = sha256_file_hex(&office_dependencies).ok();
+    let report_content = std::fs::read_to_string(&license_report).ok();
+    let report_semantically_valid = report_content.as_deref().is_some_and(|content| {
+        content.len() > 1000
+            && content.contains("stirling-office-convert")
+            && serde_json::from_str::<Value>(content).is_ok()
+    });
+
     manifest.get("provider").and_then(Value::as_str) == Some("stirling-open-core")
         && manifest.get("upstreamCommit").and_then(Value::as_str) == Some(STIRLING_PIN)
         && expected_hash.is_some()
@@ -273,9 +318,27 @@ fn office_convert_pack_is_verified(jar: &Path) -> bool {
         && office.and_then(|value| value.get("sourceCommit")).and_then(Value::as_str)
             == Some(OFFICE_CONVERT_SOURCE_COMMIT)
         && office.and_then(|value| value.get("license")).and_then(Value::as_str) == Some("MIT")
+        && office.and_then(|value| value.get("verification")).and_then(Value::as_str)
+            == Some("reproducible-source-build-match")
         && office_jars_valid
-        && license_report.is_file()
-        && office_license.is_file()
+        && office_license_hash.as_deref() == Some(OFFICE_CONVERT_LICENSE_SHA256)
+        && office_dependencies_hash.as_deref() == Some(OFFICE_CONVERT_DEPENDENCIES_SHA256)
+        && license_artifact_matches(
+            &manifest,
+            "malenjo-notices/stirling-office-convert-LICENSE.txt",
+            &office_license,
+        )
+        && license_artifact_matches(
+            &manifest,
+            "malenjo-notices/stirling-office-convert-DEPENDENCIES.md",
+            &office_dependencies,
+        )
+        && license_artifact_matches(
+            &manifest,
+            "malenjo-notices/stirling-dependency-licenses.json",
+            &license_report,
+        )
+        && report_semantically_valid
 }
 
 fn office_convert_component_status(app: &AppHandle) -> StirlingComponentStatus {
@@ -679,6 +742,10 @@ fn version_from_health(value: &Value) -> Option<String> {
         .find_map(|key| value.get(*key).and_then(Value::as_str).map(str::to_owned))
 }
 
+fn owned_provider_ready(healthy: bool, child_running: bool) -> bool {
+    healthy && child_running
+}
+
 fn process_running() -> bool {
     let Ok(mut guard) = process_slot().lock() else {
         return false;
@@ -758,9 +825,12 @@ pub async fn stirling_core_status(app: AppHandle) -> StirlingCoreStatus {
         .and_then(|value| value.get("status").and_then(Value::as_str))
         .is_some_and(|value| value.eq_ignore_ascii_case("UP"));
     let child_running = process_running();
+    let owned_ready = owned_provider_ready(healthy, child_running);
 
-    let message = if healthy {
+    let message = if owned_ready {
         "Local Stirling open-core PDF provider is ready.".to_string()
+    } else if healthy {
+        "Port 28970 is occupied by a healthy local service that was not started by MALENJO. It will not be trusted or used.".to_string()
     } else if jar.is_none() {
         "The local Stirling core provider pack is not installed. Build or install the reviewed core pack before using provider-backed PDF tools.".to_string()
     } else if java.is_none() {
@@ -773,7 +843,7 @@ pub async fn stirling_core_status(app: AppHandle) -> StirlingCoreStatus {
 
     StirlingCoreStatus {
         installed: jar.is_some(),
-        running: healthy,
+        running: owned_ready,
         java,
         jar_path: jar.map(|path| path.to_string_lossy().to_string()),
         base_url: STIRLING_BASE_URL.into(),
@@ -784,20 +854,36 @@ pub async fn stirling_core_status(app: AppHandle) -> StirlingCoreStatus {
 
 #[tauri::command]
 pub async fn stirling_core_components(app: AppHandle) -> Vec<StirlingComponentStatus> {
+    let healthy = is_healthy().await;
+    let child_running = process_running();
+    let mut office = office_convert_component_status(&app);
+    if healthy && !child_running {
+        office.available = false;
+        office.version = None;
+        office.message =
+            "Port 28970 is occupied by an unowned service; MALENJO will not approve Office conversion against that live process.".into();
+    }
     vec![
         qpdf_component_status(&app),
         tesseract_component_status(&app),
-        office_convert_component_status(&app),
+        office,
     ]
 }
 
 #[tauri::command]
 pub async fn stirling_core_start(app: AppHandle) -> Result<StirlingCoreStatus, String> {
-    if is_healthy().await {
-        return Ok(stirling_core_status(app).await);
+    let healthy = is_healthy().await;
+    let child_running = process_running();
+    if healthy {
+        if child_running {
+            return Ok(stirling_core_status(app).await);
+        }
+        return Err(
+            "Port 28970 is already serving a healthy process that MALENJO did not start. The local PDF provider will not connect to an unowned sidecar.".into(),
+        );
     }
 
-    if process_running() {
+    if child_running {
         let started = Instant::now();
         while started.elapsed() < START_TIMEOUT {
             if is_healthy().await {
@@ -969,10 +1055,11 @@ pub async fn stirling_core_request(
 #[cfg(test)]
 mod tests {
     use super::{
-        office_convert_pack_is_verified, parse_qpdf_version, parse_tesseract_version,
-        set_reviewed_provider_path, sha256_file_hex, validate_api_path, MAX_INPUT_BYTES,
-        MAX_OUTPUT_BYTES, OFFICE_CONVERT_SOURCE_COMMIT, OFFICE_CONVERT_VERSION, STIRLING_BASE_URL,
-        STIRLING_PIN, STIRLING_PORT,
+        office_convert_pack_is_verified, owned_provider_ready, parse_qpdf_version,
+        parse_tesseract_version, set_reviewed_provider_path, sha256_file_hex, validate_api_path,
+        MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, OFFICE_CONVERT_DEPENDENCIES_TEXT,
+        OFFICE_CONVERT_LICENSE_TEXT, OFFICE_CONVERT_SOURCE_COMMIT, OFFICE_CONVERT_VERSION,
+        STIRLING_BASE_URL, STIRLING_PIN, STIRLING_PORT,
     };
     use std::{path::PathBuf, process::Command};
 
@@ -1030,7 +1117,7 @@ mod tests {
     }
 
     #[test]
-    fn office_pack_verifier_rejects_tampering() {
+    fn office_pack_verifier_rejects_jar_and_license_tampering() {
         let root = std::env::temp_dir().join(format!(
             "malenjo-office-pack-test-{}",
             std::process::id()
@@ -1039,20 +1126,39 @@ mod tests {
         let notices = root.join("malenjo-notices");
         std::fs::create_dir_all(&notices).unwrap();
         let jar = root.join("stirling-pdf.jar");
+        let office_license = notices.join("stirling-office-convert-LICENSE.txt");
+        let office_dependencies = notices.join("stirling-office-convert-DEPENDENCIES.md");
+        let license_report = notices.join("stirling-dependency-licenses.json");
+
         std::fs::write(&jar, b"reviewed-stirling-pack").unwrap();
+        std::fs::write(&office_license, OFFICE_CONVERT_LICENSE_TEXT.as_bytes()).unwrap();
+        std::fs::write(&office_dependencies, OFFICE_CONVERT_DEPENDENCIES_TEXT.as_bytes()).unwrap();
+        let report = serde_json::json!({
+            "component": "stirling-office-convert",
+            "padding": "x".repeat(1200)
+        });
+        std::fs::write(&license_report, serde_json::to_vec(&report).unwrap()).unwrap();
+
         let jar_hash = sha256_file_hex(&jar).unwrap();
-        std::fs::write(notices.join("stirling-office-convert-LICENSE.txt"), b"MIT").unwrap();
-        std::fs::write(notices.join("stirling-dependency-licenses.json"), b"{}").unwrap();
+        let license_hash = sha256_file_hex(&office_license).unwrap();
+        let dependencies_hash = sha256_file_hex(&office_dependencies).unwrap();
+        let report_hash = sha256_file_hex(&license_report).unwrap();
         let manifest = serde_json::json!({
             "provider": "stirling-open-core",
             "upstreamCommit": STIRLING_PIN,
             "sha256": jar_hash,
             "dependencyLicenseReport": "malenjo-notices/stirling-dependency-licenses.json",
+            "licenseArtifacts": {
+                "malenjo-notices/stirling-office-convert-LICENSE.txt": license_hash,
+                "malenjo-notices/stirling-office-convert-DEPENDENCIES.md": dependencies_hash,
+                "malenjo-notices/stirling-dependency-licenses.json": report_hash
+            },
             "embeddedOfficeConvert": {
                 "version": OFFICE_CONVERT_VERSION,
                 "upstream": "Stirling-Tools/Stirling-Office-Convert",
                 "sourceCommit": OFFICE_CONVERT_SOURCE_COMMIT,
                 "license": "MIT",
+                "verification": "reproducible-source-build-match",
                 "jars": {
                     "stirling-office-convert-0.2.2.jar": "a".repeat(64),
                     "stirling-office-convert-legacy-0.2.2.jar": "b".repeat(64),
@@ -1063,9 +1169,20 @@ mod tests {
         std::fs::write(root.join("manifest.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
 
         assert!(office_convert_pack_is_verified(&jar));
+        std::fs::write(&office_license, b"tampered license").unwrap();
+        assert!(!office_convert_pack_is_verified(&jar));
+        std::fs::write(&office_license, OFFICE_CONVERT_LICENSE_TEXT.as_bytes()).unwrap();
         std::fs::write(&jar, b"tampered-stirling-pack").unwrap();
         assert!(!office_convert_pack_is_verified(&jar));
         std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn healthy_provider_must_be_owned_by_malenjo() {
+        assert!(owned_provider_ready(true, true));
+        assert!(!owned_provider_ready(true, false));
+        assert!(!owned_provider_ready(false, true));
+        assert!(!owned_provider_ready(false, false));
     }
 
     #[test]
