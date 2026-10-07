@@ -301,12 +301,15 @@ jobs:
           $env:STIRLING_FLAVOR = "core"
           $env:DISABLE_ADDITIONAL_FEATURES = "true"
           $env:ENABLE_SAAS = "false"
+          $providerContext = "/malenjo-ci"
+          $providerBase = "$providerBase$providerContext"
           $process = Start-Process -FilePath $java -ArgumentList @(
             "-Xms128m",
             "-Xmx1536m",
             "-jar", $jar,
             "--server.address=127.0.0.1",
             "--server.port=28970",
+            "--server.servlet.context-path=$providerContext",
             "--spring.main.banner-mode=off",
             "--system.stirlingOfficeConversion=true"
           ) -PassThru -NoNewWindow
@@ -314,7 +317,7 @@ jobs:
             $healthy = $false
             for ($i = 0; $i -lt 180; $i++) {
               try {
-                $health = Invoke-RestMethod -Uri "http://127.0.0.1:28970/api/v1/info/health" -TimeoutSec 2
+                $health = Invoke-RestMethod -Uri "$providerBase/api/v1/info/health" -TimeoutSec 2
                 if ($health.status -eq "UP") { $healthy = $true; break }
               } catch {}
               Start-Sleep -Milliseconds 500
@@ -322,7 +325,7 @@ jobs:
             }
             if (!$healthy) { throw "Stirling core did not become healthy." }
 
-            $api = Invoke-RestMethod -Uri "http://127.0.0.1:28970/v1/api-docs" -TimeoutSec 20
+            $api = Invoke-RestMethod -Uri "$providerBase/v1/api-docs" -TimeoutSec 20
             $v1Paths = @($api.paths.PSObject.Properties | Where-Object { $_.Name.StartsWith("/api/v1/") })
             if ($v1Paths.Count -lt 25) {
               throw "Expected a broad Stirling core OpenAPI surface, found only $($v1Paths.Count) /api/v1 paths."
@@ -380,21 +383,21 @@ jobs:
             $officeText = Join-Path (Resolve-Path ".build/provider-smoke") "office-input.txt"
             Set-Content -Path $officeText -Value "MALENJO embedded Office Convert smoke test" -Encoding utf8
             $officePdfOut = Join-Path (Resolve-Path ".build/provider-smoke") "office-to-pdf.pdf"
-            & $curl --fail --silent --show-error -o $officePdfOut -F "fileInput=@$officeText;type=text/plain" "http://127.0.0.1:28970/api/v1/convert/file/pdf"
+            & $curl --fail --silent --show-error -o $officePdfOut -F "fileInput=@$officeText;type=text/plain" "$providerBase/api/v1/convert/file/pdf"
             if ($LASTEXITCODE -ne 0) { throw "Embedded Office text-to-PDF operation smoke failed." }
 
             $docxOut = Join-Path (Resolve-Path ".build/provider-smoke") "pdf-to-word.docx"
-            & $curl --fail --silent --show-error -o $docxOut -F "fileInput=@$fixture;type=application/pdf" -F "outputFormat=docx" "http://127.0.0.1:28970/api/v1/convert/pdf/word"
+            & $curl --fail --silent --show-error -o $docxOut -F "fileInput=@$fixture;type=application/pdf" -F "outputFormat=docx" "$providerBase/api/v1/convert/pdf/word"
             if ($LASTEXITCODE -ne 0) { throw "Embedded Office PDF-to-DOCX operation smoke failed." }
             Assert-ZipEntry $docxOut "word/document.xml"
 
             $pptxOut = Join-Path (Resolve-Path ".build/provider-smoke") "pdf-to-presentation.pptx"
-            & $curl --fail --silent --show-error -o $pptxOut -F "fileInput=@$fixture;type=application/pdf" -F "outputFormat=pptx" "http://127.0.0.1:28970/api/v1/convert/pdf/presentation"
+            & $curl --fail --silent --show-error -o $pptxOut -F "fileInput=@$fixture;type=application/pdf" -F "outputFormat=pptx" "$providerBase/api/v1/convert/pdf/presentation"
             if ($LASTEXITCODE -ne 0) { throw "Embedded Office PDF-to-PPTX operation smoke failed." }
             Assert-ZipEntry $pptxOut "ppt/presentation.xml"
 
             $rtfOut = Join-Path (Resolve-Path ".build/provider-smoke") "pdf-to-text.rtf"
-            & $curl --fail --silent --show-error -o $rtfOut -F "fileInput=@$fixture;type=application/pdf" -F "outputFormat=rtf" "http://127.0.0.1:28970/api/v1/convert/pdf/text"
+            & $curl --fail --silent --show-error -o $rtfOut -F "fileInput=@$fixture;type=application/pdf" -F "outputFormat=rtf" "$providerBase/api/v1/convert/pdf/text"
             if ($LASTEXITCODE -ne 0) { throw "Embedded Office PDF-to-RTF operation smoke failed." }
             $rtfBytes = [System.IO.File]::ReadAllBytes($rtfOut)
             if ($rtfBytes.Length -lt 5 -or [Text.Encoding]::ASCII.GetString($rtfBytes, 0, 5) -ne "{\rtf") {
@@ -407,7 +410,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Generated table PDF fixture failed qpdf validation." }
 
             $xlsxOut = Join-Path (Resolve-Path ".build/provider-smoke") "pdf-to-table.xlsx"
-            & $curl --fail --silent --show-error -o $xlsxOut -F "fileInput=@$tableFixture;type=application/pdf" "http://127.0.0.1:28970/api/v1/convert/pdf/xlsx"
+            & $curl --fail --silent --show-error -o $xlsxOut -F "fileInput=@$tableFixture;type=application/pdf" "$providerBase/api/v1/convert/pdf/xlsx"
             if ($LASTEXITCODE -ne 0) { throw "Embedded Office PDF-to-XLSX operation smoke failed." }
             Assert-ZipEntry $xlsxOut "xl/workbook.xml"
             Assert-ZipEntry $xlsxOut "xl/worksheets/sheet1.xml"
@@ -419,19 +422,19 @@ jobs:
             }
 
             $repairOut = Join-Path (Resolve-Path ".build/provider-smoke") "repair.pdf"
-            & $curl --fail --silent --show-error -o $repairOut -F "fileInput=@$fixture;type=application/pdf" "http://127.0.0.1:28970/api/v1/misc/repair"
+            & $curl --fail --silent --show-error -o $repairOut -F "fileInput=@$fixture;type=application/pdf" "$providerBase/api/v1/misc/repair"
             if ($LASTEXITCODE -ne 0) { throw "qpdf repair operation smoke failed." }
 
             $compressOut = Join-Path (Resolve-Path ".build/provider-smoke") "compress.pdf"
-            & $curl --fail --silent --show-error -o $compressOut -F "fileInput=@$fixture;type=application/pdf" -F "optimizeLevel=3" -F "linearize=false" -F "normalize=false" -F "grayscale=false" "http://127.0.0.1:28970/api/v1/misc/compress-pdf"
+            & $curl --fail --silent --show-error -o $compressOut -F "fileInput=@$fixture;type=application/pdf" -F "optimizeLevel=3" -F "linearize=false" -F "normalize=false" -F "grayscale=false" "$providerBase/api/v1/misc/compress-pdf"
             if ($LASTEXITCODE -ne 0) { throw "qpdf compression operation smoke failed." }
 
             $replaceOut = Join-Path (Resolve-Path ".build/provider-smoke") "replace-invert.pdf"
-            & $curl --fail --silent --show-error -o $replaceOut -F "fileInput=@$fixture;type=application/pdf" -F "replaceAndInvertOption=FULL_INVERSION" -F "highContrastColorCombination=WHITE_TEXT_ON_BLACK" "http://127.0.0.1:28970/api/v1/misc/replace-invert-pdf"
+            & $curl --fail --silent --show-error -o $replaceOut -F "fileInput=@$fixture;type=application/pdf" -F "replaceAndInvertOption=FULL_INVERSION" -F "highContrastColorCombination=WHITE_TEXT_ON_BLACK" "$providerBase/api/v1/misc/replace-invert-pdf"
             if ($LASTEXITCODE -ne 0) { throw "Java/PDFBox replace-invert operation smoke failed." }
 
             $scannerOut = Join-Path (Resolve-Path ".build/provider-smoke") "scanner-effect.pdf"
-            & $curl --fail --silent --show-error -o $scannerOut -F "fileInput=@$fixture;type=application/pdf" -F "quality=low" -F "rotation=none" -F "colorspace=grayscale" -F "advancedEnabled=false" "http://127.0.0.1:28970/api/v1/misc/scanner-effect"
+            & $curl --fail --silent --show-error -o $scannerOut -F "fileInput=@$fixture;type=application/pdf" -F "quality=low" -F "rotation=none" -F "colorspace=grayscale" -F "advancedEnabled=false" "$providerBase/api/v1/misc/scanner-effect"
             if ($LASTEXITCODE -ne 0) { throw "Java/PDFBox scanner-effect operation smoke failed." }
 
             $ocrFixture = Join-Path (Resolve-Path ".build/provider-smoke") "ocr-text-page.pdf"
@@ -440,11 +443,11 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Generated OCR fixture failed qpdf validation." }
 
             $ocrOut = Join-Path (Resolve-Path ".build/provider-smoke") "ocr.pdf"
-            & $curl --fail --silent --show-error -o $ocrOut -F "fileInput=@$ocrFixture;type=application/pdf" -F "languages=eng" -F "sidecar=false" -F "deskew=false" -F "rotatePages=false" -F "clean=false" -F "cleanFinal=false" -F "ocrType=force-ocr" -F "ocrRenderType=hocr" -F "removeImagesAfter=false" "http://127.0.0.1:28970/api/v1/misc/ocr-pdf"
+            & $curl --fail --silent --show-error -o $ocrOut -F "fileInput=@$ocrFixture;type=application/pdf" -F "languages=eng" -F "sidecar=false" -F "deskew=false" -F "rotatePages=false" -F "clean=false" -F "cleanFinal=false" -F "ocrType=force-ocr" -F "ocrRenderType=hocr" -F "removeImagesAfter=false" "$providerBase/api/v1/misc/ocr-pdf"
             if ($LASTEXITCODE -ne 0) { throw "Tesseract OCR PDF operation smoke failed." }
 
             $rotateReport = Join-Path (Resolve-Path ".build/provider-smoke") "auto-rotate-report.json"
-            & $curl --fail --silent --show-error -o $rotateReport -F "fileInput=@$ocrFixture;type=application/pdf" -F "detectionMode=osd" -F "confidenceThreshold=0" -F "dryRun=true" -F "inferUndetected=false" "http://127.0.0.1:28970/api/v1/misc/auto-rotate-pdf"
+            & $curl --fail --silent --show-error -o $rotateReport -F "fileInput=@$ocrFixture;type=application/pdf" -F "detectionMode=osd" -F "confidenceThreshold=0" -F "dryRun=true" -F "inferUndetected=false" "$providerBase/api/v1/misc/auto-rotate-pdf"
             if ($LASTEXITCODE -ne 0) { throw "Tesseract auto-rotate OSD analysis smoke failed." }
             $analysis = Get-Content $rotateReport -Raw | ConvertFrom-Json
             $osdPages = @($analysis.pages | Where-Object { $_.method -eq "osd" })
@@ -453,7 +456,7 @@ jobs:
             }
 
             $rotateOut = Join-Path (Resolve-Path ".build/provider-smoke") "auto-rotate.pdf"
-            & $curl --fail --silent --show-error -o $rotateOut -F "fileInput=@$ocrFixture;type=application/pdf" -F "detectionMode=osd" -F "confidenceThreshold=0" -F "dryRun=false" -F "inferUndetected=false" "http://127.0.0.1:28970/api/v1/misc/auto-rotate-pdf"
+            & $curl --fail --silent --show-error -o $rotateOut -F "fileInput=@$ocrFixture;type=application/pdf" -F "detectionMode=osd" -F "confidenceThreshold=0" -F "dryRun=false" -F "inferUndetected=false" "$providerBase/api/v1/misc/auto-rotate-pdf"
             if ($LASTEXITCODE -ne 0) { throw "Tesseract auto-rotate PDF operation smoke failed." }
 
             foreach ($output in @($officePdfOut, $repairOut, $compressOut, $replaceOut, $scannerOut, $ocrOut, $rotateOut)) {
@@ -463,13 +466,13 @@ jobs:
               }
             }
             $xmlDisabledOut = Join-Path (Resolve-Path ".build/provider-smoke") "xml-disabled.bin"
-            $xmlStatus = (& $curl --silent --show-error -o $xmlDisabledOut -w "%{http_code}" -F "fileInput=@$fixture;type=application/pdf" "http://127.0.0.1:28970/api/v1/convert/pdf/xml" | Out-String).Trim()
+            $xmlStatus = (& $curl --silent --show-error -o $xmlDisabledOut -w "%{http_code}" -F "fileInput=@$fixture;type=application/pdf" "$providerBase/api/v1/convert/pdf/xml" | Out-String).Trim()
             if ($xmlStatus -match "^2") {
               throw "LibreOffice-only PDF-to-XML unexpectedly executed without a reviewed LibreOffice provider."
             }
 
             $vectorDisabledOut = Join-Path (Resolve-Path ".build/provider-smoke") "vector-disabled.bin"
-            $vectorStatus = (& $curl --silent --show-error -o $vectorDisabledOut -w "%{http_code}" -F "fileInput=@$fixture;type=application/pdf" -F "outputFormat=eps" "http://127.0.0.1:28970/api/v1/convert/pdf/vector" | Out-String).Trim()
+            $vectorStatus = (& $curl --silent --show-error -o $vectorDisabledOut -w "%{http_code}" -F "fileInput=@$fixture;type=application/pdf" -F "outputFormat=eps" "$providerBase/api/v1/convert/pdf/vector" | Out-String).Trim()
             if ($vectorStatus -match "^2") {
               throw "Ghostscript-only PDF-to-vector unexpectedly executed without a reviewed Ghostscript provider."
             }
