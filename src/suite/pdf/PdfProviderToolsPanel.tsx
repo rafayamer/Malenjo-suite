@@ -12,6 +12,7 @@ import type {
   PdfProviderToolCategory,
   PdfToolProvider,
 } from './backend';
+import { fieldAcceptsActivePdf } from './providerFileInputs';
 
 interface Props{
   provider:PdfToolProvider;
@@ -93,8 +94,9 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     let activeAssigned=false;
     for(const field of selected.fields){
       if(field.kind==='file'||field.kind==='files'){
-        nextUseActive[field.name]=!activeAssigned;
-        if(!activeAssigned)activeAssigned=true;
+        const canUseActive=fieldAcceptsActivePdf(field);
+        nextUseActive[field.name]=canUseActive&&!activeAssigned;
+        if(canUseActive&&!activeAssigned)activeAssigned=true;
       }else nextValues[field.name]=defaultFieldValue(field);
     }
     setValues(nextValues);setExtraFiles({});setUseActive(nextUseActive);setNotice('');setError('');
@@ -134,7 +136,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       for(const field of selected.fields){
         if(field.kind==='file'||field.kind==='files'){
           const picked=extraFiles[field.name]??[];
-          const active=useActive[field.name]&&sourceBytes?[{
+          const active=useActive[field.name]&&fieldAcceptsActivePdf(field)&&sourceBytes?[{
             field:field.name,filename:providerFilename(sourceName),contentType:'application/pdf',bytes:Array.from(sourceBytes),
           }]:[];
           const extras=await Promise.all(picked.map(async(file)=>({
@@ -169,8 +171,8 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
           <input type="file" accept={field.accept} multiple={field.kind==='files'} onChange={(event)=>setExtraFiles((current)=>({...current,[field.name]:Array.from(event.target.files??[])}))}/>
         </label>
         <label className="stirling-active-file">
-          <input type="checkbox" checked={Boolean(useActive[field.name])} disabled={!sourceBytes} onChange={(event)=>setUseActive((current)=>({...current,[field.name]:event.target.checked}))}/>
-          Use current PDF{sourceBytes?` (${sourceName})`:' — no PDF loaded'}
+          <input type="checkbox" checked={Boolean(useActive[field.name])} disabled={!sourceBytes||!fieldAcceptsActivePdf(field)} onChange={(event)=>setUseActive((current)=>({...current,[field.name]:event.target.checked}))}/>
+          {fieldAcceptsActivePdf(field)?<>Use current PDF{sourceBytes?` (${sourceName})`:' — no PDF loaded'}</>:'Select a compatible local file'}
         </label>
         <small>{selectedFiles.length?`${selectedFiles.length} additional file(s) selected.`:(field.description??'')}</small>
       </div>;
