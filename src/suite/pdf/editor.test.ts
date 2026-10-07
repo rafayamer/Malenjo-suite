@@ -4,7 +4,7 @@ import {
   addPdfBatesNumbers, addPdfCheckBox, addPdfCommentAnnotation, addPdfDropdown, addPdfHeaderFooter,
   addPdfOptionList, addPdfRadioGroup, addPdfRectangleOverlay, addPdfTextField, addPdfTextOverlay, appendPdf,
   attachFileToPdf, deletePdfPage, deletePdfPages, duplicatePdfPage, extractPdfPage, extractPdfPages,
-  flattenPdfForm, inspectPdfFormFields, insertBlankPdfPage, insertPdfAfter, listPdfFormFields, movePdfPage,
+  fillPdfFormFields, flattenPdfForm, inspectPdfFormFields, insertBlankPdfPage, insertPdfAfter, listPdfFormFields, movePdfPage,
   rotatePdfPagePermanent, rotatePdfPagesPermanent, setPdfPageBox, splitPdfAtPage,
 } from './editor';
 
@@ -164,6 +164,48 @@ describe('PDF mutation core',()=>{
     const info=await inspectPdfFormFields(bytes);
     expect(info.find((field)=>field.name==='readonly_name')).toMatchObject({required:true,readOnly:true});
     expect(info.find((field)=>field.name==='must_accept')).toMatchObject({required:true,readOnly:false});
+  });
+
+  it('fills existing text, checkbox and choice fields while respecting read-only fields',async()=>{
+    let bytes=await addPdfTextField(await sample(1),{
+      pageNumber:1,name:'student_name',x:0.1,y:0.82,width:0.5,height:0.07,
+      defaultValue:'Before',
+    });
+    bytes=await addPdfCheckBox(bytes,{
+      pageNumber:1,name:'approved',x:0.1,y:0.7,size:0.05,
+    });
+    bytes=await addPdfRadioGroup(bytes,{
+      pageNumber:1,name:'decision',options:['Approve','Reject'],selected:'Reject',
+      x:0.1,y:0.58,size:0.04,gap:0.08,
+    });
+    bytes=await addPdfDropdown(bytes,{
+      pageNumber:1,name:'department',options:['Engineering','Finance','Legal'],selected:['Engineering'],
+      x:0.1,y:0.34,width:0.45,height:0.07,
+    });
+    bytes=await addPdfOptionList(bytes,{
+      pageNumber:1,name:'reviewers',options:['Alice','Bob','Carol'],selected:['Bob'],
+      x:0.55,y:0.18,width:0.35,height:0.24,multiselect:true,
+    });
+
+    const filled=await fillPdfFormFields(bytes,[
+      {name:'student_name',value:'MALENJO Student'},
+      {name:'approved',checked:true},
+      {name:'decision',selected:['Approve']},
+      {name:'department',selected:['Legal']},
+      {name:'reviewers',selected:['Alice','Carol']},
+    ]);
+    const info=await inspectPdfFormFields(filled);
+    expect(info.find((field)=>field.name==='student_name')).toMatchObject({value:'MALENJO Student'});
+    expect(info.find((field)=>field.name==='approved')).toMatchObject({checked:true});
+    expect(info.find((field)=>field.name==='decision')?.selected).toEqual(['Approve']);
+    expect(info.find((field)=>field.name==='department')?.selected).toEqual(['Legal']);
+    expect(info.find((field)=>field.name==='reviewers')?.selected).toEqual(['Alice','Carol']);
+
+    const readOnly=await addPdfTextField(filled,{
+      pageNumber:1,name:'locked',x:0.1,y:0.08,width:0.35,height:0.06,readOnly:true,
+    });
+    await expect(fillPdfFormFields(readOnly,[{name:'locked',value:'blocked'}]))
+      .rejects.toThrow(/read-only/i);
   });
 
   it('rejects invalid radio and choice field configurations',async()=>{
