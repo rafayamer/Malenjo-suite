@@ -3,9 +3,9 @@ import { PDFArray, PDFBool, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumb
 import {
   addPdfBatesNumbers, addPdfCheckBox, addPdfCommentAnnotation, addPdfDropdown, addPdfHeaderFooter,
   addPdfOptionList, addPdfRadioGroup, addPdfRectangleOverlay, addPdfTextField, addPdfTextOverlay, appendPdf,
-  attachFileToPdf, deletePdfPage, deletePdfPages, duplicatePdfPage, extractPdfPage, extractPdfPages,
-  fillPdfFormFields, flattenPdfForm, inspectPdfFormFields, insertBlankPdfPage, insertPdfAfter, listPdfFormFields, movePdfPage,
-  rotatePdfPagePermanent, rotatePdfPagesPermanent, setPdfPageBox, splitPdfAtPage,
+  attachFileToPdf, clearPdfFormFields, deletePdfPage, deletePdfPages, duplicatePdfPage, exportPdfFormData, extractPdfPage, extractPdfPages,
+  fillPdfFormFields, flattenPdfForm, importPdfFormData, inspectPdfFormFields, insertBlankPdfPage, insertPdfAfter, isPdfFormFieldClearable, listPdfFormFields, movePdfPage,
+  resetPdfFormFields, rotatePdfPagePermanent, rotatePdfPagesPermanent, serializePdfFormDataFields, setPdfPageBox, splitPdfAtPage,
 } from './editor';
 
 async function sample(pages=3):Promise<Uint8Array>{
@@ -270,6 +270,172 @@ describe('PDF mutation core',()=>{
     ])).rejects.toThrow(/accepts one selected option/i);
   });
 
+  it('exports, clears, imports and resets safe form data without exposing passwords',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+
+    const name=form.createTextField('name');
+    name.setText('Current Name');
+    name.addToPage(page,{x:30,y:620,width:220,height:28});
+    name.acroField.dict.set(PDFName.of('DV'),PDFHexString.fromText('Default Name'));
+
+    const approved=form.createCheckBox('approved');
+    approved.check();
+    approved.addToPage(page,{x:30,y:580,width:20,height:20});
+    approved.acroField.dict.set(PDFName.of('DV'),PDFName.of('Off'));
+
+    const decision=form.createRadioGroup('decision');
+    decision.addOptionToPage('Approve',page,{x:30,y:540,width:20,height:20});
+    decision.addOptionToPage('Reject',page,{x:30,y:500,width:20,height:20});
+    decision.select('Approve');
+    const exports=decision.acroField.getExportValues()??[];
+    const onValues=decision.acroField.getOnValues();
+    const rejectIndex=exports.findIndex((value)=>value.decodeText()==='Reject');
+    expect(rejectIndex).toBeGreaterThanOrEqual(0);
+    decision.acroField.dict.set(PDFName.of('DV'),onValues[rejectIndex]);
+
+    const department=form.createDropdown('department');
+    department.addOptions(['Engineering','Finance']);
+    department.select('Finance');
+    department.addToPage(page,{x:30,y:450,width:220,height:28});
+    department.acroField.dict.set(PDFName.of('DV'),PDFHexString.fromText('Engineering'));
+
+    const secret=form.createTextField('secret');
+    secret.enablePassword();
+    secret.setText('private-value');
+    secret.addToPage(page,{x:30,y:400,width:220,height:28});
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const exported=await exportPdfFormData(bytes);
+    const payload=JSON.parse(exported) as {format:string;version:number;fields:Array<{name:string}>};
+    expect(payload.format).toBe('malenjo-pdf-form-data');
+    expect(payload.version).toBe(1);
+    expect(payload.fields.map((field)=>field.name)).toEqual(['name','approved','decision','department']);
+
+    const cleared=await clearPdfFormFields(bytes);
+    const clearedInfo=await inspectPdfFormFields(cleared);
+    expect(clearedInfo.find((field)=>field.name==='name')?.value).toBe('');
+    expect(clearedInfo.find((field)=>field.name==='approved')?.checked).toBe(false);
+    expect(clearedInfo.find((field)=>field.name==='decision')?.selected).toEqual([]);
+    expect(clearedInfo.find((field)=>field.name==='department')?.selected).toEqual([]);
+
+    const imported=await importPdfFormData(cleared,exported);
+    const importedInfo=await inspectPdfFormFields(imported);
+    expect(importedInfo.find((field)=>field.name==='name')?.value).toBe('Current Name');
+    expect(importedInfo.find((field)=>field.name==='approved')?.checked).toBe(true);
+    expect(importedInfo.find((field)=>field.name==='decision')?.selected).toEqual(['Approve']);
+    expect(importedInfo.find((field)=>field.name==='department')?.selected).toEqual(['Finance']);
+
+    const reset=await resetPdfFormFields(imported);
+    const resetInfo=await inspectPdfFormFields(reset);
+    expect(resetInfo.find((field)=>field.name==='name')?.value).toBe('Default Name');
+    expect(resetInfo.find((field)=>field.name==='approved')?.checked).toBe(false);
+    expect(resetInfo.find((field)=>field.name==='decision')?.selected).toEqual(['Reject']);
+    expect(resetInfo.find((field)=>field.name==='department')?.selected).toEqual(['Engineering']);
+
+    await expect(importPdfFormData(bytes,'{}')).rejects.toThrow(/supported MALENJO v1 schema/i);
+  });
+
+  it('does not export values that the importer would reject',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+    const oversized=form.createTextField('oversized');
+    oversized.setText('x'.repeat(10001));
+    oversized.addToPage(page,{x:30,y:620,width:220,height:28});
+    const secret=form.createTextField('secret_only');
+    secret.enablePassword();
+    secret.setText('private');
+    secret.addToPage(page,{x:30,y:570,width:220,height:28});
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    await expect(exportPdfFormData(bytes)).rejects.toThrow(/no safely exportable/i);
+  });
+
+  it('skips stale choice defaults without blocking valid field resets',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+
+    const text=form.createTextField('resettable_text');
+    text.setText('current');
+    text.addToPage(page,{x:30,y:620,width:220,height:28});
+    text.acroField.dict.set(PDFName.of('DV'),PDFHexString.fromText('default'));
+
+    const dropdown=form.createDropdown('stale_default_choice');
+    dropdown.addOptions(['A','B']);
+    dropdown.select('B');
+    dropdown.addToPage(page,{x:30,y:570,width:220,height:28});
+    dropdown.acroField.dict.set(PDFName.of('DV'),PDFHexString.fromText('REMOVED'));
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const reset=await resetPdfFormFields(bytes);
+    const info=await inspectPdfFormFields(reset);
+    expect(info.find((field)=>field.name==='resettable_text')?.value).toBe('default');
+    expect(info.find((field)=>field.name==='stale_default_choice')?.selected).toEqual(['B']);
+  });
+
+  it('rejects exports with stale or impossible single-select choice values',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+    const dropdown=form.createDropdown('stale_export');
+    dropdown.addOptions(['A','B']);
+    dropdown.addToPage(page,{x:30,y:620,width:220,height:28});
+    dropdown.acroField.dict.set(PDFName.of('V'),PDFHexString.fromText('STALE'));
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    await expect(exportPdfFormData(bytes)).rejects.toThrow(/no safely exportable/i);
+
+    const impossible=await PDFDocument.load(bytes,{updateMetadata:false});
+    const impossibleDropdown=impossible.getForm().getDropdown('stale_export');
+    impossibleDropdown.acroField.dict.set(
+      PDFName.of('V'),
+      impossible.context.obj([PDFHexString.fromText('A'),PDFHexString.fromText('B')]),
+    );
+    const impossibleBytes=Uint8Array.from(await impossible.save({
+      useObjectStreams:false,
+      updateFieldAppearances:false,
+    }));
+    await expect(exportPdfFormData(impossibleBytes)).rejects.toThrow(/no safely exportable/i);
+  });
+
+  it('skips invalid text defaults without blocking other field resets',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+
+    const valid=form.createTextField('valid_reset');
+    valid.setText('current');
+    valid.addToPage(page,{x:30,y:620,width:220,height:28});
+    valid.acroField.dict.set(PDFName.of('DV'),PDFHexString.fromText('default'));
+
+    const invalid=form.createTextField('invalid_reset');
+    invalid.setText('keep-me');
+    invalid.addToPage(page,{x:30,y:570,width:220,height:28});
+    invalid.acroField.dict.set(PDFName.of('DV'),PDFHexString.fromText('x'.repeat(10001)));
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const before=await inspectPdfFormFields(bytes);
+    expect(before.find((field)=>field.name==='valid_reset')?.resettable).toBe(true);
+    expect(before.find((field)=>field.name==='invalid_reset')?.resettable).toBe(false);
+
+    const reset=await resetPdfFormFields(bytes);
+    const info=await inspectPdfFormFields(reset);
+    expect(info.find((field)=>field.name==='valid_reset')?.value).toBe('default');
+    expect(info.find((field)=>field.name==='invalid_reset')?.value).toBe('keep-me');
+  });
+
+  it('rejects form-data exports that exceed the importer field-count limit',()=>{
+    const fields=Array.from({length:5001},(_,index)=>({
+      name:`bulk_${index}`,
+      type:'text' as const,
+      value:'',
+    }));
+    expect(()=>serializePdfFormDataFields(fields)).toThrow(/more than 5,000/i);
+  });
+
   it('isolates rich-text fields and reports combined password/multiline flags',async()=>{
     const pdf=await PDFDocument.create();
     const page=pdf.addPage([500,700]);
@@ -292,10 +458,10 @@ describe('PDF mutation core',()=>{
     const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
     const info=await inspectPdfFormFields(bytes);
     expect(info.find((field)=>field.name==='ordinary')).toMatchObject({
-      richText:false,value:'editable',
+      richText:false,value:'editable',resettable:true,
     });
     expect(info.find((field)=>field.name==='rich')).toMatchObject({
-      richText:true,value:'',
+      richText:true,value:'',resettable:false,
     });
     expect(info.find((field)=>field.name==='secret_multiline')).toMatchObject({
       password:true,multiline:true,value:'',
@@ -547,9 +713,11 @@ describe('PDF mutation core',()=>{
 
     const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
     const info=await inspectPdfFormFields(bytes);
-    expect(info.find((field)=>field.name==='decision_locked_on')).toMatchObject({
+    const lockedInfo=info.find((field)=>field.name==='decision_locked_on');
+    expect(lockedInfo).toMatchObject({
       type:'radio',offToggleable:false,selected:['Approve'],
     });
+    expect(lockedInfo&&isPdfFormFieldClearable(lockedInfo)).toBe(false);
     await expect(fillPdfFormFields(bytes,[{
       name:'decision_locked_on',
       selected:[],

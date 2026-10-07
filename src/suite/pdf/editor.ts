@@ -1,4 +1,4 @@
-import { PDFArray, PDFBool, PDFButton, PDFCheckBox, PDFDict, PDFDocument, PDFDropdown, PDFHexString, PDFName, PDFOptionList, PDFRadioGroup, PDFSignature, PDFTextField, StandardFonts, degrees, rgb } from 'pdf-lib';
+import { PDFArray, PDFBool, PDFButton, PDFCheckBox, PDFDict, PDFDocument, PDFDropdown, PDFField, PDFHexString, PDFName, PDFOptionList, PDFRadioGroup, PDFSignature, PDFString, PDFTextField, StandardFonts, degrees, rgb } from 'pdf-lib';
 
 function requirePage(pageNumber:number,pageCount:number):number{
   if(!Number.isInteger(pageNumber)||pageNumber<1||pageNumber>pageCount){
@@ -557,6 +557,7 @@ export interface PdfFormFieldInfo {
   editable:boolean;
   offToggleable:boolean;
   duplicateChoiceExports:boolean;
+  resettable:boolean;
 }
 
 function pdfAcroFormDict(pdf:PDFDocument):PDFDict|undefined{
@@ -656,6 +657,7 @@ export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFiel
       editable,
       offToggleable,
       duplicateChoiceExports,
+      resettable:resetUpdateForField(field)!==undefined,
     };
   });
 }
@@ -886,6 +888,276 @@ export async function fillPdfFormFields(
     }
   }
   return saveFilledPdfForm(pdf,form,readerDeferredFields);
+}
+
+
+export type PdfFormDataFieldType='text'|'checkbox'|'radio'|'dropdown'|'list';
+
+export interface PdfFormDataField {
+  name:string;
+  type:PdfFormDataFieldType;
+  value?:string;
+  checked?:boolean;
+  selected?:string[];
+}
+
+export interface PdfFormDataPackage {
+  format:'malenjo-pdf-form-data';
+  version:1;
+  fields:PdfFormDataField[];
+}
+
+function isRecord(value:unknown):value is Record<string,unknown>{
+  return typeof value==='object'&&value!==null&&!Array.isArray(value);
+}
+
+function choiceValuesWithinFillLimits(values:string[]):boolean{
+  return values.length<=100&&values.every((value)=>value.length<=4096);
+}
+
+export function isPdfFormFieldDataExportable(field:PdfFormFieldInfo):boolean{
+  if(
+    field.readOnly
+    || field.richText
+    || field.password
+    || field.duplicateChoiceExports
+    || (field.type==='dropdown'&&field.editable&&field.multiselect)
+  )return false;
+  if(field.type==='text'){
+    return field.value.length<=10000&&!field.value.includes('\u0000');
+  }
+  if(field.type==='checkbox')return true;
+  if(field.type==='radio'||field.type==='dropdown'||field.type==='list'){
+    if(!choiceValuesWithinFillLimits(field.selected))return false;
+    if(!field.multiselect&&field.selected.length>1)return false;
+    if(field.type==='dropdown'&&field.editable)return true;
+    const allowed=new Set(field.choiceOptions.map((option)=>option.value));
+    return field.selected.every((value)=>allowed.has(value));
+  }
+  return false;
+}
+
+export function isPdfFormFieldClearable(field:PdfFormFieldInfo):boolean{
+  if(
+    field.readOnly
+    || field.richText
+    || field.duplicateChoiceExports
+    || (field.type==='dropdown'&&field.editable&&field.multiselect)
+  )return false;
+  if(field.type==='text'||field.type==='checkbox'||field.type==='dropdown'||field.type==='list')return true;
+  if(field.type==='radio')return field.offToggleable||!field.selected.length;
+  return false;
+}
+
+function safeFormDataFields(fields:PdfFormFieldInfo[]):PdfFormDataField[]{
+  const exported:PdfFormDataField[]=[];
+  for(const field of fields){
+    if(!isPdfFormFieldDataExportable(field))continue;
+
+    if(field.type==='text'){
+      exported.push({name:field.name,type:'text',value:field.value});
+    }else if(field.type==='checkbox'){
+      exported.push({name:field.name,type:'checkbox',checked:Boolean(field.checked)});
+    }else if(field.type==='radio'||field.type==='dropdown'||field.type==='list'){
+      exported.push({name:field.name,type:field.type,selected:[...field.selected]});
+    }
+  }
+  return exported;
+}
+
+export function serializePdfFormDataFields(fields:PdfFormDataField[]):string{
+  if(!fields.length)throw new Error('This PDF has no safely exportable AcroForm values.');
+  if(fields.length>5000)throw new Error('This PDF has more than 5,000 safely exportable AcroForm fields.');
+  const payload:PdfFormDataPackage={
+    format:'malenjo-pdf-form-data',
+    version:1,
+    fields,
+  };
+  return `${JSON.stringify(payload,null,2)}\n`;
+}
+
+export async function exportPdfFormData(bytes:Uint8Array):Promise<string>{
+  return serializePdfFormDataFields(safeFormDataFields(await inspectPdfFormFields(bytes)));
+}
+
+function parsePdfFormData(json:string):PdfFormDataPackage{
+  if(!json.trim())throw new Error('PDF form-data file is empty.');
+  if(new TextEncoder().encode(json).length>8*1024*1024){
+    throw new Error('PDF form-data file exceeds the 8 MB safety limit.');
+  }
+
+  let parsed:unknown;
+  try{
+    parsed=JSON.parse(json);
+  }catch{
+    throw new Error('PDF form-data file is not valid JSON.');
+  }
+  if(!isRecord(parsed)||parsed.format!=='malenjo-pdf-form-data'||parsed.version!==1||!Array.isArray(parsed.fields)){
+    throw new Error('PDF form-data file does not use the supported MALENJO v1 schema.');
+  }
+  if(parsed.fields.length>5000)throw new Error('PDF form-data file contains more than 5,000 fields.');
+
+  const names=new Set<string>();
+  const fields:PdfFormDataField[]=parsed.fields.map((raw,index)=>{
+    if(!isRecord(raw))throw new Error(`PDF form-data field ${index+1} is invalid.`);
+    const name=raw.name;
+    const type=raw.type;
+    if(typeof name!=='string'||!name.trim())throw new Error(`PDF form-data field ${index+1} has an invalid name.`);
+    if(names.has(name))throw new Error(`PDF form-data field "${name}" is duplicated.`);
+    names.add(name);
+    if(!['text','checkbox','radio','dropdown','list'].includes(String(type))){
+      throw new Error(`PDF form-data field "${name}" has an unsupported type.`);
+    }
+
+    if(type==='text'){
+      if(typeof raw.value!=='string')throw new Error(`PDF form-data text field "${name}" requires a string value.`);
+      return {name,type,value:raw.value};
+    }
+    if(type==='checkbox'){
+      if(typeof raw.checked!=='boolean')throw new Error(`PDF form-data checkbox "${name}" requires a boolean value.`);
+      return {name,type,checked:raw.checked};
+    }
+    if(!Array.isArray(raw.selected)||raw.selected.some((value)=>typeof value!=='string')){
+      throw new Error(`PDF form-data choice field "${name}" requires a string selection array.`);
+    }
+    return {name,type:type as 'radio'|'dropdown'|'list',selected:[...raw.selected] as string[]};
+  });
+
+  return {format:'malenjo-pdf-form-data',version:1,fields};
+}
+
+export async function importPdfFormData(bytes:Uint8Array,json:string):Promise<Uint8Array>{
+  const payload=parsePdfFormData(json);
+  if(!payload.fields.length)throw new Error('PDF form-data file contains no editable values.');
+
+  const current=await inspectPdfFormFields(bytes);
+  const byName=new Map(current.map((field)=>[field.name,field]));
+  const updates:PdfFormFieldUpdate[]=payload.fields.map((incoming)=>{
+    const field=byName.get(incoming.name);
+    if(!field)throw new Error(`PDF form field "${incoming.name}" was not found in this document.`);
+    if(field.type!==incoming.type){
+      throw new Error(`PDF form field "${incoming.name}" type does not match the imported data.`);
+    }
+    if(
+      field.readOnly
+      || field.richText
+      || field.password
+      || field.duplicateChoiceExports
+      || (field.type==='dropdown'&&field.editable&&field.multiselect)
+    ){
+      throw new Error(`PDF form field "${incoming.name}" is not safely importable.`);
+    }
+    if(incoming.type==='text')return {name:incoming.name,value:incoming.value};
+    if(incoming.type==='checkbox')return {name:incoming.name,checked:incoming.checked};
+    return {name:incoming.name,selected:[...(incoming.selected??[])]};
+  });
+
+  return fillPdfFormFields(bytes,updates);
+}
+
+export async function clearPdfFormFields(bytes:Uint8Array):Promise<Uint8Array>{
+  const fields=await inspectPdfFormFields(bytes);
+  const updates:PdfFormFieldUpdate[]=[];
+  for(const field of fields){
+    if(!isPdfFormFieldClearable(field))continue;
+    if(field.type==='text'){
+      updates.push({name:field.name,value:''});
+    }else if(field.type==='checkbox'){
+      updates.push({name:field.name,checked:false});
+    }else if(field.type==='radio'||field.type==='dropdown'||field.type==='list'){
+      updates.push({name:field.name,selected:[]});
+    }
+  }
+  if(!updates.length)throw new Error('This PDF has no safely clearable AcroForm fields.');
+  return fillPdfFormFields(bytes,updates);
+}
+
+function decodedDefaultStrings(field:PDFDropdown|PDFOptionList):string[]{
+  const raw=field.acroField.getInheritableAttribute(PDFName.of('DV'));
+  const resolved=raw===undefined?undefined:field.acroField.dict.context.lookup(raw);
+  if(resolved instanceof PDFString||resolved instanceof PDFHexString)return [resolved.decodeText()];
+  if(resolved instanceof PDFArray){
+    const values:string[]=[];
+    for(let index=0;index<resolved.size();index+=1){
+      const value=resolved.lookupMaybe(index,PDFString,PDFHexString);
+      if(value)values.push(value.decodeText());
+    }
+    return values;
+  }
+  return [];
+}
+
+function resetUpdateForField(field:PDFField):PdfFormFieldUpdate|undefined{
+  if(field.isReadOnly())return undefined;
+  const rawDefault=field.acroField.getInheritableAttribute(PDFName.of('DV'));
+  const resolvedDefault=rawDefault===undefined?undefined:field.acroField.dict.context.lookup(rawDefault);
+
+  if(field instanceof PDFTextField){
+    if(field.isRichFormatted())return undefined;
+    const value=(resolvedDefault instanceof PDFString||resolvedDefault instanceof PDFHexString)
+      ? resolvedDefault.decodeText()
+      : '';
+    if(value.length>10000||value.includes('\u0000'))return undefined;
+    return {name:field.getName(),value};
+  }
+  if(field instanceof PDFCheckBox){
+    const defaultName=resolvedDefault instanceof PDFName?resolvedDefault.decodeText():'Off';
+    const onValue=field.acroField.getOnValue()?.decodeText();
+    return {name:field.getName(),checked:defaultName!=='Off'&&defaultName===onValue};
+  }
+  if(field instanceof PDFRadioGroup){
+    const options=field.getOptions();
+    if(new Set(options).size!==options.length)return undefined;
+    const defaultName=resolvedDefault instanceof PDFName?resolvedDefault.decodeText():'Off';
+    if(defaultName==='Off'){
+      if(field.isOffToggleable()||field.getSelected()===undefined){
+        return {name:field.getName(),selected:[]};
+      }
+      return undefined;
+    }
+    let defaultOption=defaultName;
+    const exportValues=field.acroField.getExportValues();
+    if(exportValues){
+      const onValues=field.acroField.getOnValues();
+      const index=onValues.findIndex((value)=>value.decodeText()===defaultName);
+      if(index>=0)defaultOption=exportValues[index]?.decodeText()??defaultName;
+    }
+    return options.includes(defaultOption)
+      ? {name:field.getName(),selected:[defaultOption]}
+      : undefined;
+  }
+  if(field instanceof PDFDropdown){
+    const choices=field.acroField.getOptions().map(({value})=>value.decodeText());
+    if(new Set(choices).size!==choices.length||field.isEditable()&&field.isMultiselect())return undefined;
+    const defaults=decodedDefaultStrings(field);
+    if(!choiceValuesWithinFillLimits(defaults))return undefined;
+    if(!field.isMultiselect()&&defaults.length>1)return undefined;
+    if(!field.isEditable()&&defaults.some((value)=>!choices.includes(value)))return undefined;
+    return {name:field.getName(),selected:defaults};
+  }
+  if(field instanceof PDFOptionList){
+    const choices=field.acroField.getOptions().map(({value})=>value.decodeText());
+    if(new Set(choices).size!==choices.length)return undefined;
+    const defaults=decodedDefaultStrings(field);
+    if(!choiceValuesWithinFillLimits(defaults))return undefined;
+    if(!field.isMultiselect()&&defaults.length>1)return undefined;
+    if(defaults.some((value)=>!choices.includes(value)))return undefined;
+    return {name:field.getName(),selected:defaults};
+  }
+  return undefined;
+}
+
+export async function resetPdfFormFields(bytes:Uint8Array):Promise<Uint8Array>{
+  const pdf=await load(bytes);
+  if(pdfHasXfa(pdf)){
+    throw new Error('XFA/hybrid PDF forms are not supported because resetting them could discard XFA form data.');
+  }
+  const updates=pdf.getForm().getFields()
+    .map((field)=>resetUpdateForField(field))
+    .filter((update):update is PdfFormFieldUpdate=>update!==undefined);
+
+  if(!updates.length)throw new Error('This PDF has no safely resettable AcroForm fields.');
+  return fillPdfFormFields(bytes,updates);
 }
 
 export interface PdfAttachmentSpec {
