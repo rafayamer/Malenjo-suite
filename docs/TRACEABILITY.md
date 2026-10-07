@@ -305,11 +305,11 @@ No module is complete merely because its navigation entry exists. Completion req
 
 | Requirement | Component | Implementation | Test/evidence | Status |
 |---|---|---|---|---|
-| Detect current AcroForm field state | PDF Workspace | `inspectPdfFormFields` reports type, flags, options, text value, checkbox state and current selections | `editor.test.ts` form inspection coverage | Implemented |
-| Fill existing text/checkbox/radio/dropdown/list fields | PDF mutation core | `fillPdfFormFields` in `src/suite/pdf/editor.ts` | focused fill/read-only unit test + PR CI | Implemented |
-| Preserve read-only constraints | PDF mutation core | read-only fields are rejected before mutation | `editor.test.ts` read-only rejection | Implemented |
-| Bound choice values to actual PDF options | PDF mutation core | radio/dropdown/list selections validated against field options | code review + unit test coverage | Implemented |
-| Real workspace controls | PDF Forms inspector | type-appropriate fill controls preload current working-copy values | TypeScript/build CI + source audit | Implemented |
+| Detect current AcroForm field state | PDF Workspace | `inspectPdfFormFields` reports type, flags, options, non-password text value, password/multiline/multiselect metadata, checkbox state and current selections | `editor.test.ts` external-form inspection coverage | Implemented |
+| Fill existing text/checkbox/radio/dropdown/list fields | PDF mutation core | `fillPdfFormFields` in `src/suite/pdf/editor.ts`; exact field identifiers/options preserved; Unicode fallback uses `NeedAppearances` rather than incompatible Helvetica rewriting | focused fill/external-form/Unicode/read-only tests + PR CI | Implemented |
+| Preserve read-only and sensitive-field constraints | PDF mutation core / Forms UI | read-only fields are rejected; password plaintext is suppressed and unchanged unless a replacement is entered | `editor.test.ts` read-only/password metadata + source audit | Implemented |
+| Bound choice values to actual PDF options | PDF mutation core | exact radio/dropdown/list selections validated against field options; single/multiselect semantics enforced | invalid-option + single/multiselect unit assertions | Implemented |
+| Real workspace controls | PDF Forms inspector | controls render for all fields; password masking, multiline textarea and actual single/multiselect behavior | TypeScript/test/build CI + source audit | Implemented |
 | Undo/Redo/dirty/export semantics | PDF Workspace | fill operation routes through existing `mutate()` / per-tab history pipeline | existing history tests + source audit | Implemented |
 | Command discoverability | PDF command bus / Forms toolbar | `fill-form` command + Forms task action | typecheck/build CI | Implemented |
 | Full Forms completion | PDF module | signature authoring, buttons, property editing, tab order, validation/calculation, reset/clear, data import/export, XFA/accessibility/interoperability remain | #39 / #141 | Partial |
