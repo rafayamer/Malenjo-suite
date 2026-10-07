@@ -536,6 +536,8 @@ export interface PdfFormFieldInfo {
   readOnly:boolean;
   options:string[];
   selected:string[];
+  value:string;
+  checked:boolean|null;
 }
 
 export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFieldInfo[]>{
@@ -547,9 +549,15 @@ export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFiel
     let type='unknown';
     let options:string[]=[];
     let selected:string[]=[];
-    if(constructor==='PDFTextField')type='text';
-    else if(constructor==='PDFCheckBox')type='checkbox';
-    else if(constructor==='PDFRadioGroup'){
+    let value='';
+    let checked:boolean|null=null;
+    if(constructor==='PDFTextField'){
+      type='text';
+      value=form.getTextField(name).getText()??'';
+    }else if(constructor==='PDFCheckBox'){
+      type='checkbox';
+      checked=form.getCheckBox(name).isChecked();
+    }else if(constructor==='PDFRadioGroup'){
       type='radio';
       const radio=form.getRadioGroup(name);
       options=radio.getOptions();
@@ -574,8 +582,78 @@ export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFiel
       readOnly:field.isReadOnly(),
       options,
       selected,
+      value,
+      checked,
     };
   });
+}
+
+export interface PdfFormFieldUpdate {
+  name:string;
+  value?:string;
+  checked?:boolean;
+  selected?:string[];
+}
+
+function selectedFieldValues(values:string[]|undefined):string[]{
+  return Array.from(new Set((values??[])
+    .map((value)=>value.replace(/[\u0000-\u001F]/g,' ').trim().slice(0,240))
+    .filter(Boolean)));
+}
+
+function requireSelectedOptions(name:string,selected:string[],options:string[]):void{
+  const invalid=selected.filter((value)=>!options.includes(value));
+  if(invalid.length){
+    throw new Error(`Field "${name}" does not contain option "${invalid[0]}".`);
+  }
+}
+
+export async function fillPdfFormFields(
+  bytes:Uint8Array,
+  updates:PdfFormFieldUpdate[],
+):Promise<Uint8Array>{
+  if(!updates.length)throw new Error('Choose at least one PDF form field to update.');
+  const pdf=await load(bytes);
+  const form=pdf.getForm();
+  for(const update of updates){
+    const name=update.name.trim();
+    if(!name)throw new Error('PDF form field name is empty.');
+    const field=form.getFieldMaybe(name);
+    if(!field)throw new Error(`PDF form field "${name}" was not found.`);
+    if(field.isReadOnly())throw new Error(`PDF form field "${name}" is read-only.`);
+
+    const constructor=field.constructor.name;
+    if(constructor==='PDFTextField'){
+      const value=(update.value??'').replace(/\u0000/g,'').slice(0,10000);
+      form.getTextField(name).setText(value);
+    }else if(constructor==='PDFCheckBox'){
+      const checkbox=form.getCheckBox(name);
+      if(update.checked)checkbox.check();else checkbox.uncheck();
+    }else if(constructor==='PDFRadioGroup'){
+      const radio=form.getRadioGroup(name);
+      const selected=selectedFieldValues(update.selected);
+      requireSelectedOptions(name,selected,radio.getOptions());
+      if(!selected.length)radio.clear();
+      else if(selected.length===1)radio.select(selected[0]);
+      else throw new Error(`Radio field "${name}" accepts one selected option.`);
+    }else if(constructor==='PDFDropdown'){
+      const dropdown=form.getDropdown(name);
+      const selected=selectedFieldValues(update.selected);
+      requireSelectedOptions(name,selected,dropdown.getOptions());
+      if(!selected.length)dropdown.clear();
+      else dropdown.select(selected.length===1?selected[0]:selected);
+    }else if(constructor==='PDFOptionList'){
+      const list=form.getOptionList(name);
+      const selected=selectedFieldValues(update.selected);
+      requireSelectedOptions(name,selected,list.getOptions());
+      if(!selected.length)list.clear();
+      else list.select(selected.length===1?selected[0]:selected);
+    }else{
+      throw new Error(`PDF form field "${name}" of type ${constructor} is not fillable in this pass.`);
+    }
+  }
+  form.updateFieldAppearances();
+  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
 }
 
 export interface PdfAttachmentSpec {
