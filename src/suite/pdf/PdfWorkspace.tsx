@@ -206,7 +206,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     gap:0.075,
   });
   const [formFields, setFormFields] = useState<PdfFormFieldInfo[]>([]);
-  const [formFillDraft, setFormFillDraft] = useState<Record<string,string|string[]|boolean>>({});
+  const [formFillDraft, setFormFillDraft] = useState<Record<string,string|string[]|boolean|undefined>>({});
   const [headerFooterDraft, setHeaderFooterDraft] = useState({
     scope:'selected' as 'selected'|'all',
     header:'',
@@ -571,8 +571,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           if(field.type==='radio'||field.type==='dropdown'||field.type==='list'){
             return [field.name,[...field.selected]];
           }
+          if(field.type==='text'&&field.password)return [field.name,undefined];
           return [field.name,field.value];
-        })) as Record<string,string|string[]|boolean>);
+        })) as Record<string,string|string[]|boolean|undefined>);
       })
       .catch(()=>{
         if(cancelled)return;
@@ -679,22 +680,30 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setFormDraft((current)=>({...current,name:'',defaultValue:'',selectedText:''}));
   }
 
-  function setFormFillValue(name:string,value:string|string[]|boolean){
+  function setFormFillValue(name:string,value:string|string[]|boolean|undefined){
     setFormFillDraft((current)=>({...current,[name]:value}));
   }
 
   async function fillForm(){
     if(!fillableFormFields.length)return;
-    const updates=fillableFormFields.map((field)=>{
+    const updates=fillableFormFields.flatMap((field)=>{
       const draft=formFillDraft[field.name];
       if(field.type==='checkbox'){
-        return {name:field.name,checked:Boolean(draft)};
+        return [{name:field.name,checked:Boolean(draft)}];
       }
       if(field.type==='radio'||field.type==='dropdown'||field.type==='list'){
-        return {name:field.name,selected:Array.isArray(draft)?draft:[]};
+        return [{name:field.name,selected:Array.isArray(draft)?draft:[]}];
       }
-      return {name:field.name,value:typeof draft==='string'?draft:''};
+      if(field.type==='text'){
+        if(field.password&&typeof draft!=='string')return [];
+        return [{name:field.name,value:typeof draft==='string'?draft:''}];
+      }
+      return [];
     });
+    if(!updates.length){
+      setActionNotice('No editable PDF form values have changed.');
+      return;
+    }
     await mutate(
       `Updated ${updates.length} PDF form field value(s).`,
       (bytes)=>fillPdfFormFields(bytes,updates),
@@ -1569,14 +1578,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
           <div className="pdf-feature-list pdf-form-inventory">
             <b>{formFields.length} AcroForm field{formFields.length===1?'':'s'}</b>
-            {formFields.slice(0,16).map((field)=><span key={field.name} title={field.options.length?field.options.join(', '):undefined}>
+            {formFields.map((field)=><span key={field.name} title={field.options.length?field.options.join(', '):undefined}>
               <strong>{field.name}</strong>
-              <em>{field.type}{field.required?' · required':''}{field.readOnly?' · read-only':''}{field.type==='text'&&field.value?` · value: ${field.value}`:''}{field.type==='checkbox'?` · ${field.checked?'checked':'unchecked'}`:''}{field.selected.length?` · selected: ${field.selected.join(', ')}`:''}</em>
+              <em>{field.type}{field.required?' · required':''}{field.readOnly?' · read-only':''}{field.password?' · password':''}{field.multiline?' · multiline':''}{field.multiselect?' · multiselect':''}{field.type==='text'&&!field.password&&field.value?` · value: ${field.value}`:''}{field.type==='checkbox'?` · ${field.checked?'checked':'unchecked'}`:''}{field.selected.length?` · selected: ${field.selected.join(', ')}`:''}</em>
             </span>)}
-            {formFields.length>16&&<span>+ {formFields.length-16} more</span>}
           </div>
 
-          {formFields.slice(0,16).map((field)=>{
+          {formFields.map((field)=>{
             const draft=formFillDraft[field.name];
             const disabled=mutating||field.readOnly;
             if(field.type==='checkbox'){
@@ -1587,7 +1595,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                 onChange={(event)=>setFormFillValue(field.name,event.target.checked)}
               /> {field.name}{field.readOnly?' · read-only':''}</label>;
             }
-            if(field.type==='radio'||field.type==='dropdown'){
+            if(field.type==='radio'||((field.type==='dropdown'||field.type==='list')&&!field.multiselect)){
               const selected=Array.isArray(draft)?draft[0]??'':'';
               return <label key={`fill-${field.name}`}>{field.name}
                 <select
@@ -1600,7 +1608,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                 </select>
               </label>;
             }
-            if(field.type==='list'){
+            if((field.type==='dropdown'||field.type==='list')&&field.multiselect){
               const selected=Array.isArray(draft)?draft:[];
               return <label key={`fill-${field.name}`}>{field.name}
                 <select
@@ -1617,10 +1625,22 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               </label>;
             }
             if(field.type==='text'){
+              if(field.multiline){
+                return <label key={`fill-${field.name}`}>{field.name}
+                  <textarea
+                    value={typeof draft==='string'?draft:''}
+                    disabled={disabled}
+                    onChange={(event)=>setFormFillValue(field.name,event.target.value)}
+                  />
+                </label>;
+              }
               return <label key={`fill-${field.name}`}>{field.name}
                 <input
+                  type={field.password?'password':'text'}
                   value={typeof draft==='string'?draft:''}
+                  placeholder={field.password?'Enter a replacement value to change this password field':undefined}
                   disabled={disabled}
+                  autoComplete={field.password?'new-password':undefined}
                   onChange={(event)=>setFormFillValue(field.name,event.target.value)}
                 />
               </label>;
