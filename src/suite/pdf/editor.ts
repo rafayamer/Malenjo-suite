@@ -1,4 +1,4 @@
-import { PDFArray, PDFBool, PDFButton, PDFCheckBox, PDFDict, PDFDocument, PDFDropdown, PDFHexString, PDFName, PDFOptionList, PDFRadioGroup, PDFSignature, PDFTextField, StandardFonts, degrees, rgb } from 'pdf-lib';
+import { PDFArray, PDFBool, PDFButton, PDFCheckBox, PDFDict, PDFDocument, PDFDropdown, PDFHexString, PDFName, PDFOptionList, PDFRadioGroup, PDFSignature, PDFString, PDFTextField, StandardFonts, degrees, rgb } from 'pdf-lib';
 
 function requirePage(pageNumber:number,pageCount:number):number{
   if(!Number.isInteger(pageNumber)||pageNumber<1||pageNumber>pageCount){
@@ -765,6 +765,190 @@ async function saveFilledPdfForm(
       updateFieldAppearances:false,
     }));
   }
+}
+
+
+function fieldDefaultObject(field:PDFTextField|PDFCheckBox|PDFRadioGroup|PDFDropdown|PDFOptionList){
+  const inherited=field.acroField.getInheritableAttribute(PDFName.of('DV'));
+  if(inherited===undefined)return undefined;
+  return field.acroField.dict.context.lookup(inherited);
+}
+
+function decodeDefaultString(value:unknown):string|undefined{
+  if(value instanceof PDFString||value instanceof PDFHexString)return value.decodeText();
+  return undefined;
+}
+
+function decodeDefaultChoiceValues(value:unknown):string[]{
+  if(value instanceof PDFString||value instanceof PDFHexString)return [value.decodeText()];
+  if(!(value instanceof PDFArray))return [];
+  const values:string[]=[];
+  for(let index=0;index<value.size();index+=1){
+    const item=value.lookup(index,PDFString,PDFHexString);
+    values.push(item.decodeText());
+  }
+  return values;
+}
+
+function clearSupportedFormField(
+  field:PDFTextField|PDFCheckBox|PDFRadioGroup|PDFDropdown|PDFOptionList,
+  form:ReturnType<PDFDocument['getForm']>,
+  readerDeferredFields:Set<string>,
+):void{
+  const name=field.getName();
+  if(field instanceof PDFTextField){
+    if(field.isRichFormatted()){
+      field.acroField.dict.delete(PDFName.of('V'));
+      field.acroField.dict.delete(PDFName.of('RV'));
+      form.markFieldAsClean(field.ref);
+      readerDeferredFields.add(name);
+      return;
+    }
+    field.setText('');
+    if(field.isPassword()){
+      form.markFieldAsClean(field.ref);
+      readerDeferredFields.add(name);
+    }
+    return;
+  }
+  if(field instanceof PDFCheckBox){
+    field.uncheck();
+    return;
+  }
+  if(field instanceof PDFRadioGroup){
+    field.clear();
+    return;
+  }
+  field.clear();
+}
+
+export async function clearPdfFormValues(bytes:Uint8Array):Promise<Uint8Array>{
+  const pdf=await load(bytes);
+  if(pdfHasXfa(pdf)){
+    throw new Error('XFA/hybrid PDF forms are not supported because clearing them could discard XFA form data.');
+  }
+  const form=pdf.getForm();
+  const readerDeferredFields=new Set<string>();
+  let changed=0;
+  for(const field of form.getFields()){
+    if(field.isReadOnly())continue;
+    if(
+      field instanceof PDFTextField
+      ||field instanceof PDFCheckBox
+      ||field instanceof PDFRadioGroup
+      ||field instanceof PDFDropdown
+      ||field instanceof PDFOptionList
+    ){
+      clearSupportedFormField(field,form,readerDeferredFields);
+      changed+=1;
+    }
+  }
+  if(!changed)throw new Error('No editable AcroForm values are available to clear.');
+  return saveFilledPdfForm(pdf,form,readerDeferredFields);
+}
+
+export async function resetPdfFormValues(bytes:Uint8Array):Promise<Uint8Array>{
+  const pdf=await load(bytes);
+  if(pdfHasXfa(pdf)){
+    throw new Error('XFA/hybrid PDF forms are not supported because resetting them could discard XFA form data.');
+  }
+  const form=pdf.getForm();
+  const readerDeferredFields=new Set<string>();
+  let changed=0;
+
+  for(const field of form.getFields()){
+    if(field.isReadOnly())continue;
+    if(
+      !(field instanceof PDFTextField)
+      &&!(field instanceof PDFCheckBox)
+      &&!(field instanceof PDFRadioGroup)
+      &&!(field instanceof PDFDropdown)
+      &&!(field instanceof PDFOptionList)
+    )continue;
+
+    const name=field.getName();
+    const defaultObject=fieldDefaultObject(field);
+
+    if(field instanceof PDFTextField){
+      const defaultValue=decodeDefaultString(defaultObject)??'';
+      if(field.isRichFormatted()){
+        if(defaultObject instanceof PDFString||defaultObject instanceof PDFHexString){
+          field.acroField.setValue(defaultObject);
+        }else{
+          field.acroField.dict.delete(PDFName.of('V'));
+        }
+        field.acroField.dict.delete(PDFName.of('RV'));
+        form.markFieldAsClean(field.ref);
+        readerDeferredFields.add(name);
+      }else{
+        field.setText(defaultValue);
+        if(field.isPassword()){
+          form.markFieldAsClean(field.ref);
+          readerDeferredFields.add(name);
+        }
+      }
+      changed+=1;
+      continue;
+    }
+
+    if(field instanceof PDFCheckBox){
+      if(defaultObject instanceof PDFName){
+        field.acroField.setValue(defaultObject);
+      }else{
+        field.uncheck();
+      }
+      changed+=1;
+      continue;
+    }
+
+    if(field instanceof PDFRadioGroup){
+      const options=field.getOptions();
+      if(new Set(options).size!==options.length)continue;
+      if(defaultObject instanceof PDFName){
+        field.acroField.setValue(defaultObject);
+      }else{
+        field.clear();
+      }
+      changed+=1;
+      continue;
+    }
+
+    const choices=field.acroField.getOptions().map(({value,display})=>({
+      value:value.decodeText(),
+      label:(display??value).decodeText(),
+    }));
+    if(new Set(choices.map((option)=>option.value)).size!==choices.length)continue;
+    if(field instanceof PDFDropdown&&field.isEditable()&&field.isMultiselect())continue;
+
+    const defaults=decodeDefaultChoiceValues(defaultObject);
+    if(!defaults.length){
+      field.clear();
+      changed+=1;
+      continue;
+    }
+    const displayValues=defaults.map((value)=>
+      choices.find((option)=>option.value===value)?.label??value,
+    );
+    if(field instanceof PDFDropdown){
+      if(!field.isMultiselect()&&displayValues.length>1)continue;
+      field.select(field.isMultiselect()?displayValues:displayValues[0]);
+      setChoiceExportValues(field.acroField.dict,defaults);
+      setChoiceSelectedIndices(field.acroField.dict,defaults,choices);
+    }else{
+      if(!field.isMultiselect()&&displayValues.length>1)continue;
+      field.select(field.isMultiselect()?displayValues:displayValues[0]);
+      setChoiceExportValues(field.acroField.dict,defaults);
+      setChoiceSelectedIndices(field.acroField.dict,defaults,choices);
+    }
+    if(defaults.some((value,index)=>value!==displayValues[index])){
+      form.markFieldAsClean(field.ref);
+      readerDeferredFields.add(name);
+    }
+    changed+=1;
+  }
+
+  if(!changed)throw new Error('No editable AcroForm values are available to reset.');
+  return saveFilledPdfForm(pdf,form,readerDeferredFields);
 }
 
 export async function fillPdfFormFields(
