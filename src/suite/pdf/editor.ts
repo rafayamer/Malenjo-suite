@@ -1087,8 +1087,17 @@ export async function resetPdfFormFields(bytes:Uint8Array):Promise<Uint8Array>{
         if(field.isOffToggleable()||field.getSelected()===undefined){
           updates.push({name:field.getName(),selected:[]});
         }
-      }else if(options.includes(defaultName)){
-        updates.push({name:field.getName(),selected:[defaultName]});
+      }else{
+        let defaultOption=defaultName;
+        const exportValues=field.acroField.getExportValues();
+        if(exportValues){
+          const onValues=field.acroField.getOnValues();
+          const index=onValues.findIndex((value)=>value.decodeText()===defaultName);
+          if(index>=0)defaultOption=exportValues[index]?.decodeText()??defaultName;
+        }
+        if(options.includes(defaultOption)){
+          updates.push({name:field.getName(),selected:[defaultOption]});
+        }
       }
     }else if(field instanceof PDFDropdown){
       const choices=field.acroField.getOptions().map(({value})=>value.decodeText());
