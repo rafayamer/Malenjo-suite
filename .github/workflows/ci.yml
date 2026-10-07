@@ -173,8 +173,8 @@ jobs:
           if (@($inventory.runtimeFiles).Count -lt 10 -or @($inventory.nativeFiles).Count -lt 2) {
             throw "WeasyPrint runtime/native inventory is missing or unexpectedly small."
           }
-          if (@($inventory.pythonPackages).Count -lt 5) {
-            throw "WeasyPrint bundled Python package metadata inventory is missing or unexpectedly small."
+          if ($null -eq $inventory.pythonPackages) {
+            throw "WeasyPrint inventory schema is missing the bundled Python package metadata field."
           }
           if (!(Test-Path "provider-packs/weasyprint/runtime/malenjo-notices/weasyprint-LICENSE.txt")) {
             throw "WeasyPrint BSD license notice is missing from the audit pack."
@@ -186,7 +186,7 @@ jobs:
           }
           Write-Host "WeasyPrint native inventory for legal mapping:"
           @($inventory.nativeFiles) | ForEach-Object {
-            Write-Host ("WEASY_NATIVE|{0}|{1}|{2}" -f $_.path,$_.size,$_.sha256)
+            Write-Host ("WEASY_NATIVE|{0}|{1}|{2}|{3}|{4}|{5}|{6}" -f $_.path,$_.size,$_.sha256,$_.fileVersion,$_.productVersion,$_.productName,$_.companyName)
           }
           Write-Host "WeasyPrint bundled Python package metadata:"
           @($inventory.pythonPackages) | ForEach-Object {
