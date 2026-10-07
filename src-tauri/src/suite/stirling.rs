@@ -961,7 +961,8 @@ mod tests {
     use super::{
         office_convert_pack_is_verified, parse_qpdf_version, parse_tesseract_version,
         set_reviewed_provider_path, sha256_file_hex, validate_api_path, MAX_INPUT_BYTES,
-        MAX_OUTPUT_BYTES, STIRLING_BASE_URL, STIRLING_PORT,
+        MAX_OUTPUT_BYTES, OFFICE_CONVERT_SOURCE_COMMIT, OFFICE_CONVERT_VERSION, STIRLING_BASE_URL,
+        STIRLING_PIN, STIRLING_PORT,
     };
     use std::{path::PathBuf, process::Command};
 
@@ -1024,6 +1025,7 @@ mod tests {
             "malenjo-office-pack-test-{}",
             std::process::id()
         ));
+        std::fs::remove_dir_all(&root).ok();
         let notices = root.join("malenjo-notices");
         std::fs::create_dir_all(&notices).unwrap();
         let jar = root.join("stirling-pdf.jar");
