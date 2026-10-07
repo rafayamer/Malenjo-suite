@@ -1324,7 +1324,7 @@ mod tests {
         let dependencies_hash = sha256_file_hex(&office_dependencies).unwrap();
         let artifact_manifest = expected_artifacts
             .iter()
-            .map(|(name, hash)| (name.clone(), Value::String(hash.clone())))
+            .map(|(name, hash)| (name.clone(), serde_json::Value::String(hash.clone())))
             .collect::<serde_json::Map<_, _>>();
         let mut manifest = serde_json::json!({
             "provider": "stirling-open-core",
@@ -1342,7 +1342,7 @@ mod tests {
                 "sourceCommit": OFFICE_CONVERT_SOURCE_COMMIT,
                 "license": "MIT",
                 "verification": "pinned-published-sha256",
-                "jars": Value::Object(artifact_manifest)
+                "jars": serde_json::Value::Object(artifact_manifest)
             }
         });
         let manifest_path = root.join("manifest.json");
@@ -1363,7 +1363,7 @@ mod tests {
         std::fs::write(&office_license, OFFICE_CONVERT_LICENSE_TEXT.as_bytes()).unwrap();
 
         write_jar(true);
-        manifest["sha256"] = Value::String(sha256_file_hex(&jar).unwrap());
+        manifest["sha256"] = serde_json::Value::String(sha256_file_hex(&jar).unwrap());
         std::fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
         assert!(!office_convert_pack_is_verified_against(
             &jar,
