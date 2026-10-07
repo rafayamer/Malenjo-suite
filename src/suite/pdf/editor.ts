@@ -610,8 +610,9 @@ export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFiel
       const radio=field;
       options=radio.getOptions();
       choiceOptions=options.map((option)=>({value:option,label:option}));
+      duplicateChoiceExports=new Set(options).size!==options.length;
       const value=radio.getSelected();
-      if(value)selected=[value];
+      if(value!==undefined)selected=[value];
       offToggleable=radio.isOffToggleable();
     }else if(field instanceof PDFDropdown){
       type='dropdown';
@@ -807,7 +808,11 @@ export async function fillPdfFormFields(
     }else if(field instanceof PDFRadioGroup){
       const radio=field;
       const selected=selectedFieldValues(update.selected);
-      requireSelectedOptions(name,selected,radio.getOptions());
+      const radioOptions=radio.getOptions();
+      if(new Set(radioOptions).size!==radioOptions.length){
+        throw new Error(`Radio field "${name}" has duplicate export values and is not safely writable in this pass.`);
+      }
+      requireSelectedOptions(name,selected,radioOptions);
       if(!selected.length){
         if(!radio.isOffToggleable()&&radio.getSelected()!==undefined){
           throw new Error(`Radio field "${name}" cannot be cleared because off toggling is disabled.`);
