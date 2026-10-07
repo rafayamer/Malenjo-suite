@@ -84,9 +84,11 @@ describe('Windows PDF provider packaging contract',()=>{
     expect(provenance).toContain('v0.2.2');
     expect(provenance).toContain('673aab8d6ac784524cd1d90141c95e74b9fd26ae');
     const artifactPins=text('third_party/stirling-office-convert/ARTIFACTS.sha256');
+    const licenseReportPin=text('third_party/stirling-office-convert/DEPENDENCY_LICENSE_REPORT.sha256');
     expect(artifactPins).toContain('79e67f69843095cfc557f3cb040bf0c34489ee51f86b815abf0faf5bd8b47a0c  stirling-office-convert-0.2.2.jar');
     expect(artifactPins).toContain('f57b17c14c91318e27c109e462955bc04d64fd3d67c6e79a50073e863425fe37  stirling-office-convert-legacy-0.2.2.jar');
     expect(artifactPins).toContain('210e212dd1345598080ef142c53fbba805cb83dbed150fa0970505bb290df741  stirling-office-convert-topdf-0.2.2.jar');
+    expect(licenseReportPin).toContain('05c4ef33b49a9f16d7029c81575938bb9673ddcaea28da91d90fb50b66260cf1  stirling-dependency-licenses.json');
   });
 
   it('requires native source verification before embedded Office capability is advertised',()=>{
