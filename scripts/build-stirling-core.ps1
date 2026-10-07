@@ -186,7 +186,10 @@ try {
     licenseArtifacts = $licenseArtifacts
     builtAt = [DateTime]::UtcNow.ToString("o")
   } | ConvertTo-Json -Depth 6
-  Set-Content -Path (Join-Path $out "manifest.json") -Value $manifest -Encoding UTF8
+  $manifestPath = Join-Path $out "manifest.json"
+  [System.IO.File]::WriteAllText($manifestPath, $manifest, (New-Object System.Text.UTF8Encoding($false)))
+  $dependencyLicenseHash = (Get-FileHash -Algorithm SHA256 (Join-Path $out "malenjo-notices/stirling-dependency-licenses.json")).Hash.ToLowerInvariant()
+  Write-Host "Dependency-license report SHA-256: $dependencyLicenseHash"
 
   Write-Host "Built MALENJO Stirling core pack: $destination"
   Write-Host "SHA-256: $hash"
