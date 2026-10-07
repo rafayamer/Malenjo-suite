@@ -174,15 +174,26 @@ jobs:
           if ($patch.path -ne $patchPath -or $patch.sha256 -ne $patchHash) {
             throw "Stirling open-core effects patch provenance mismatch."
           }
+          $actualStirlingHash = (Get-FileHash -Algorithm SHA256 "provider-packs/stirling-core/stirling-pdf.jar").Hash.ToLowerInvariant()
+          if ($manifest.sha256 -ne $actualStirlingHash) {
+            throw "Generated Stirling JAR hash does not match its provider manifest."
+          }
+
           $office = $manifest.embeddedOfficeConvert
           if ($office.version -ne "0.2.2" -or $office.sourceCommit -ne "673aab8d6ac784524cd1d90141c95e74b9fd26ae" -or $office.license -ne "MIT") {
             throw "Unexpected embedded Stirling Office Convert provenance."
           }
           $officeJars = @($office.jars.PSObject.Properties)
-          if ($officeJars.Count -ne 3) { throw "Expected exactly three embedded Office Convert JARs." }
-          foreach ($jarEntry in $officeJars) {
-            if ($jarEntry.Value -notmatch "^[0-9a-f]{64}$") {
-              throw "Embedded Office Convert JAR hash is invalid: $($jarEntry.Name)"
+          $expectedOfficeJars = @(
+            "stirling-office-convert-0.2.2.jar",
+            "stirling-office-convert-legacy-0.2.2.jar",
+            "stirling-office-convert-topdf-0.2.2.jar"
+          )
+          if ($officeJars.Count -ne $expectedOfficeJars.Count) { throw "Expected exactly three embedded Office Convert JARs." }
+          foreach ($expectedOfficeJar in $expectedOfficeJars) {
+            $jarEntry = $officeJars | Where-Object { $_.Name -eq $expectedOfficeJar } | Select-Object -First 1
+            if (-not $jarEntry -or $jarEntry.Value -notmatch "^[0-9a-f]{64}$") {
+              throw "Embedded Office Convert JAR is missing or has an invalid hash: $expectedOfficeJar"
             }
           }
           foreach ($notice in @(
