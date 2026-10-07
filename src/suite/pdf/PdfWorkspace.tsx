@@ -1591,7 +1591,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             </span>)}
           </div>
 
-          {formFields.map((field)=>{
+          {formFields.map((field,fieldIndex)=>{
             const draft=formFillDraft[field.name];
             const disabled=mutating||field.readOnly;
             if(field.type==='checkbox'){
@@ -1609,7 +1609,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                   <b>{field.name}</b> combines editable and multiselect flags; MALENJO inspects it but does not modify that unsafe combination.
                 </small>;
               }
-              const listId=`${domIdPrefix}-choice-${field.name.replace(/[^A-Za-z0-9_-]/g,'_')}`;
+              const listId=`${domIdPrefix}-choice-${fieldIndex}-${field.name.replace(/[^A-Za-z0-9_-]/g,'_')}`;
               return <label key={`fill-${field.name}`}>{field.name}
                 <input
                   list={listId}
@@ -1623,15 +1623,30 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               </label>;
             }
             if(field.type==='radio'||((field.type==='dropdown'||field.type==='list')&&!field.multiselect)){
-              const selected=Array.isArray(draft)?draft[0]??'':'';
+              const selectedValues=Array.isArray(draft)?draft:[];
+              const selectedIndex=selectedValues.length
+                ? field.choiceOptions.findIndex((option)=>option.value===selectedValues[0])
+                : -1;
+              const selectedToken=selectedIndex>=0?`option-${selectedIndex}`:'placeholder';
+              const canClear=field.type!=='radio'||field.offToggleable;
               return <label key={`fill-${field.name}`}>{field.name}
                 <select
-                  value={selected}
+                  value={selectedToken}
                   disabled={disabled}
-                  onChange={(event)=>setFormFillValue(field.name,event.target.value?[event.target.value]:[])}
+                  onChange={(event)=>{
+                    if(event.target.value==='clear'){
+                      setFormFillValue(field.name,[]);
+                      return;
+                    }
+                    if(event.target.value==='placeholder')return;
+                    const optionIndex=Number(event.target.value.replace(/^option-/,''));
+                    const option=field.choiceOptions[optionIndex];
+                    if(option)setFormFillValue(field.name,[option.value]);
+                  }}
                 >
-                  {(field.type!=='radio'||field.offToggleable)&&<option value="">— Clear —</option>}
-                  {field.choiceOptions.map((option)=><option key={option.value} value={option.value}>{option.label}</option>)}
+                  {selectedIndex<0&&!canClear&&<option value="placeholder" disabled>— No selection —</option>}
+                  {canClear&&<option value="clear">— Clear —</option>}
+                  {field.choiceOptions.map((option,index)=><option key={`${index}-${option.value}`} value={`option-${index}`}>{option.label}</option>)}
                 </select>
               </label>;
             }
@@ -1663,7 +1678,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                     placeholder="Enter a replacement value to change this password field"
                     disabled={disabled}
                     autoComplete="new-password"
-                    onChange={(event)=>setFormFillValue(field.name,event.target.value)}
+                    onChange={(event)=>setFormFillValue(
+                      field.name,
+                      event.target.value.length?event.target.value:undefined,
+                    )}
                   />
                 </label>;
               }
