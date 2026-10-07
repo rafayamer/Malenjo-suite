@@ -88,6 +88,15 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "Pinned Stirling dependency license gate failed." }
   $licenseReport = Join-Path $src "build/reports/dependency-license/index.json"
   if (!(Test-Path $licenseReport)) { throw "Stirling dependency license report was not generated." }
+  $licenseReportPinPath = Join-Path $repoRoot "third_party/stirling-office-convert/DEPENDENCY_LICENSE_REPORT.sha256"
+  if (!(Test-Path $licenseReportPinPath)) { throw "Reviewed Stirling dependency-license report pin is missing." }
+  $licenseReportPinLine = (Get-Content $licenseReportPinPath | Where-Object { $_ -match '^[0-9a-f]{64}\s+stirling-dependency-licenses\.json$' } | Select-Object -First 1)
+  if (-not $licenseReportPinLine) { throw "Reviewed Stirling dependency-license report pin is malformed." }
+  $expectedLicenseReportHash = ($licenseReportPinLine -split '\s+')[0]
+  $actualLicenseReportHash = (Get-FileHash -Algorithm SHA256 $licenseReport).Hash.ToLowerInvariant()
+  if ($actualLicenseReportHash -ne $expectedLicenseReportHash) {
+    throw "Generated Stirling dependency-license report differs from the reviewed SHA-256 baseline."
+  }
   $licenseOverridesAfterHash = (Get-FileHash -Algorithm SHA256 $licenseOverridesPath).Hash.ToLowerInvariant()
   if ($licenseOverridesAfterHash -ne $licenseOverridesBaselineHash) {
     throw "Stirling dependency license resolution changed the reviewed core-only app/license-overrides.json baseline; review the new metadata before packaging."
@@ -189,6 +198,9 @@ try {
   $manifestPath = Join-Path $out "manifest.json"
   [System.IO.File]::WriteAllText($manifestPath, $manifest, (New-Object System.Text.UTF8Encoding($false)))
   $dependencyLicenseHash = (Get-FileHash -Algorithm SHA256 (Join-Path $out "malenjo-notices/stirling-dependency-licenses.json")).Hash.ToLowerInvariant()
+  if ($dependencyLicenseHash -ne $expectedLicenseReportHash) {
+    throw "Packaged Stirling dependency-license report differs from the reviewed SHA-256 baseline."
+  }
   Write-Host "Dependency-license report SHA-256: $dependencyLicenseHash"
 
   Write-Host "Built MALENJO Stirling core pack: $destination"
