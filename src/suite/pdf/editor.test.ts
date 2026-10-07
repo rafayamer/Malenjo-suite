@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PDFArray, PDFDict, PDFDocument, PDFName } from 'pdf-lib';
+import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName } from 'pdf-lib';
 import {
   addPdfBatesNumbers, addPdfCheckBox, addPdfCommentAnnotation, addPdfDropdown, addPdfHeaderFooter,
   addPdfOptionList, addPdfRadioGroup, addPdfRectangleOverlay, addPdfTextField, addPdfTextOverlay, appendPdf,
@@ -268,6 +268,95 @@ describe('PDF mutation core',()=>{
     await expect(fillPdfFormFields(bytes,[
       {name:'single_reviewer',selected:['Alice','Bob']},
     ])).rejects.toThrow(/accepts one selected option/i);
+  });
+
+  it('isolates rich-text fields and reports combined password/multiline flags',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+
+    const ordinary=form.createTextField('ordinary');
+    ordinary.setText('editable');
+    ordinary.addToPage(page,{x:30,y:620,width:220,height:28});
+
+    const rich=form.createTextField('rich');
+    rich.enableRichFormatting();
+    rich.addToPage(page,{x:30,y:570,width:220,height:28});
+
+    const secret=form.createTextField('secret_multiline');
+    secret.enablePassword();
+    secret.enableMultiline();
+    secret.setText('masked\nreplacement');
+    secret.addToPage(page,{x:30,y:500,width:220,height:55});
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const info=await inspectPdfFormFields(bytes);
+    expect(info.find((field)=>field.name==='ordinary')).toMatchObject({
+      richText:false,value:'editable',
+    });
+    expect(info.find((field)=>field.name==='rich')).toMatchObject({
+      richText:true,value:'',
+    });
+    expect(info.find((field)=>field.name==='secret_multiline')).toMatchObject({
+      password:true,multiline:true,value:'',
+    });
+    await expect(fillPdfFormFields(bytes,[{name:'rich',value:'unsupported'}]))
+      .rejects.toThrow(/unsupported rich text/i);
+  });
+
+  it('preserves labeled choice export values and accepts editable dropdown custom values',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+
+    const labeled=form.createDropdown('department_code');
+    labeled.acroField.setOptions([
+      {value:PDFHexString.fromText('ENG'),display:PDFHexString.fromText('Engineering')},
+      {value:PDFHexString.fromText('FIN'),display:PDFHexString.fromText('Finance')},
+    ]);
+    labeled.addToPage(page,{x:30,y:620,width:220,height:28});
+    labeled.acroField.dict.set(PDFName.of('V'),PDFHexString.fromText('ENG'));
+
+    const editable=form.createDropdown('custom_department');
+    editable.addOptions(['Known']);
+    editable.enableEditing();
+    editable.select('Custom One');
+    editable.addToPage(page,{x:30,y:570,width:220,height:28});
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const initial=await inspectPdfFormFields(bytes);
+    expect(initial.find((field)=>field.name==='department_code')).toMatchObject({
+      selected:['ENG'],
+      choiceOptions:[
+        {value:'ENG',label:'Engineering'},
+        {value:'FIN',label:'Finance'},
+      ],
+    });
+    expect(initial.find((field)=>field.name==='custom_department')).toMatchObject({
+      editable:true,selected:['Custom One'],
+    });
+
+    const filled=await fillPdfFormFields(bytes,[
+      {name:'department_code',selected:['FIN']},
+      {name:'custom_department',selected:['Unlisted Custom Value']},
+    ]);
+    const updated=await inspectPdfFormFields(filled);
+    expect(updated.find((field)=>field.name==='department_code')?.selected).toEqual(['FIN']);
+    expect(updated.find((field)=>field.name==='custom_department')?.selected)
+      .toEqual(['Unlisted Custom Value']);
+  });
+
+  it('rejects oversized text instead of truncating the field value',async()=>{
+    const bytes=await addPdfTextField(await sample(1),{
+      pageNumber:1,name:'long_text',x:0.1,y:0.75,width:0.6,height:0.08,
+      defaultValue:'keep me',
+    });
+    await expect(fillPdfFormFields(bytes,[{
+      name:'long_text',
+      value:'x'.repeat(10001),
+    }])).rejects.toThrow(/10,000-character/i);
+    const info=await inspectPdfFormFields(bytes);
+    expect(info.find((field)=>field.name==='long_text')?.value).toBe('keep me');
   });
 
   it('rejects invalid radio and choice field configurations',async()=>{
