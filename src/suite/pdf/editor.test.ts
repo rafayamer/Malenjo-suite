@@ -274,6 +274,16 @@ describe('PDF mutation core',()=>{
     }
     const manyBytes=Uint8Array.from(await manyPdf.save({useObjectStreams:false}));
     await expect(exportPdfFormDataJson(manyBytes)).rejects.toThrow(/1,000/i);
+
+    const utf8Pdf=await PDFDocument.create();
+    utf8Pdf.addPage([500,700]);
+    const utf8Form=utf8Pdf.getForm();
+    for(let index=0;index<100;index+=1){
+      const field=utf8Form.createTextField(`cjk_${index}`);
+      field.setText('漢'.repeat(5000));
+    }
+    const utf8Bytes=Uint8Array.from(await utf8Pdf.save({useObjectStreams:false}));
+    await expect(exportPdfFormDataJson(utf8Bytes)).rejects.toThrow(/1 MB/i);
   });
 
   it('uses the shared exportability predicate for sensitive and unsupported fields',async()=>{
@@ -292,11 +302,23 @@ describe('PDF mutation core',()=>{
     locked.enableReadOnly();
     locked.addToPage(page,{x:30,y:520,width:220,height:28});
 
+    const lockedRadio=form.createRadioGroup('locked_empty_radio');
+    lockedRadio.addOptionToPage('A',page,{x:300,y:620,width:20,height:20});
+    lockedRadio.addOptionToPage('B',page,{x:300,y:580,width:20,height:20});
+    lockedRadio.disableOffToggling();
+
     const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
-    const exportable=(await inspectPdfFormFields(bytes))
+    const inspected=await inspectPdfFormFields(bytes);
+    const exportable=inspected
       .filter(isPdfFormFieldDataExportable)
       .map((field)=>field.name);
     expect(exportable).toEqual(['normal']);
+    expect(inspected.find((field)=>field.name==='locked_empty_radio')).toMatchObject({
+      offToggleable:false,
+      selected:[],
+    });
+    const snapshot=JSON.parse(await exportPdfFormDataJson(bytes));
+    expect(snapshot.fields.map((field:{name:string})=>field.name)).toEqual(['normal']);
   });
 
   it('rejects malformed or mismatched form-data JSON before mutation',async()=>{
