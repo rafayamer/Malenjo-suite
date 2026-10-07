@@ -5,7 +5,7 @@ import {
   addPdfOptionList, addPdfRadioGroup, addPdfRectangleOverlay, addPdfTextField, addPdfTextOverlay, appendPdf,
   attachFileToPdf, clearPdfFormFields, deletePdfPage, deletePdfPages, duplicatePdfPage, exportPdfFormData, extractPdfPage, extractPdfPages,
   fillPdfFormFields, flattenPdfForm, importPdfFormData, inspectPdfFormFields, insertBlankPdfPage, insertPdfAfter, isPdfFormFieldClearable, listPdfFormFields, movePdfPage,
-  resetPdfFormFields, rotatePdfPagePermanent, rotatePdfPagesPermanent, setPdfPageBox, splitPdfAtPage,
+  resetPdfFormFields, rotatePdfPagePermanent, rotatePdfPagesPermanent, serializePdfFormDataFields, setPdfPageBox, splitPdfAtPage,
 } from './editor';
 
 async function sample(pages=3):Promise<Uint8Array>{
@@ -427,14 +427,13 @@ describe('PDF mutation core',()=>{
     expect(info.find((field)=>field.name==='invalid_reset')?.value).toBe('keep-me');
   });
 
-  it('rejects form-data exports that exceed the importer field-count limit',async()=>{
-    const pdf=await PDFDocument.create();
-    const form=pdf.getForm();
-    for(let index=0;index<5001;index+=1){
-      form.createTextField(`bulk_${index}`);
-    }
-    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
-    await expect(exportPdfFormData(bytes)).rejects.toThrow(/more than 5,000/i);
+  it('rejects form-data exports that exceed the importer field-count limit',()=>{
+    const fields=Array.from({length:5001},(_,index)=>({
+      name:`bulk_${index}`,
+      type:'text' as const,
+      value:'',
+    }));
+    expect(()=>serializePdfFormDataFields(fields)).toThrow(/more than 5,000/i);
   });
 
   it('isolates rich-text fields and reports combined password/multiline flags',async()=>{
