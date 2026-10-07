@@ -54,6 +54,7 @@ import {
   flattenPdfForm,
   importPdfFormData,
   inspectPdfFormFields,
+  isPdfFormFieldDataExportable,
   resetPdfFormFields,
   type PdfFormFieldInfo,
   type PdfFormFieldUpdate,
@@ -598,13 +599,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     return()=>{cancelled=true;};
   },[sourceBytes]);
 
-  const fillableFormFields=(formInspectedSource===sourceBytes?formFields:[]).filter((field)=>
+  const inspectedFormFields=formInspectedSource===sourceBytes?formFields:[];
+  const fillableFormFields=inspectedFormFields.filter((field)=>
     !field.readOnly
     &&!field.richText
     &&!field.duplicateChoiceExports
     &&!(field.type==='dropdown'&&field.editable&&field.multiselect)
     &&['text','checkbox','radio','dropdown','list'].includes(field.type),
   );
+  const exportableFormFields=inspectedFormFields.filter(isPdfFormFieldDataExportable);
 
   async function attachDocuments(event:React.ChangeEvent<HTMLInputElement>){
     const files=Array.from(event.target.files??[]);
@@ -1025,8 +1028,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           label:'Export PDF form data',
           keywords:'form acroform data export json values',
           detail:'Export safely editable non-password field values as MALENJO JSON',
-          enabled:!!sourceBytes && !mutating && fillableFormFields.length>0,
-          disabledReason:!sourceBytes ? 'No PDF is loaded.' : !fillableFormFields.length ? 'No safely exportable AcroForm fields detected.' : 'Wait for the current PDF edit to finish.',
+          enabled:!!sourceBytes && !mutating && exportableFormFields.length>0,
+          disabledReason:!sourceBytes ? 'No PDF is loaded.' : !exportableFormFields.length ? 'No safely exportable AcroForm values detected.' : 'Wait for the current PDF edit to finish.',
           run:()=>exportFormData(),
         },
         {
@@ -1847,7 +1850,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           <button disabled={mutating||!fillableFormFields.length} onClick={()=>void fillForm()}><ListChecks size={13}/> Apply form values</button>
           <button disabled={mutating||!fillableFormFields.length} onClick={()=>void clearForm()}>Clear editable values</button>
           <button disabled={mutating||!formFields.length} onClick={()=>void resetForm()}>Reset to PDF defaults</button>
-          <button disabled={mutating||!fillableFormFields.length} onClick={()=>void exportFormData()}>Export form data…</button>
+          <button disabled={mutating||!exportableFormFields.length} onClick={()=>void exportFormData()}>Export form data…</button>
           <button disabled={mutating||!formFields.length} onClick={()=>formDataInputRef.current?.click()}>Import form data…</button>
           <button disabled={mutating||!formFields.length} onClick={()=>void flattenForm()}><FileCheck2 size={13}/> Flatten form fields</button>
           <small>Text, checkbox, radio, dropdown and option-list values are edited in the MALENJO working copy with Undo/Redo. Clear removes safely editable values; Reset restores supported AcroForm <code>/DV</code> defaults. MALENJO JSON import/export omits password, rich-text, read-only and ambiguous choice fields. Flattening paints appearances and removes interactivity; Undo remains available until export/close.</small>
