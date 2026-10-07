@@ -1,8 +1,10 @@
 use reqwest::{multipart, redirect::Policy, Client, Method};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::{
     env,
+    io::Read,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{Mutex, OnceLock},
@@ -140,6 +142,144 @@ fn stirling_jar_path(app: &AppHandle) -> Option<PathBuf> {
     candidate_jar_paths(app)
         .into_iter()
         .find(|path| path.is_file())
+}
+
+const STIRLING_PIN: &str = "25220cbdbde2d526cebf173b94357884e180b8c1";
+const OFFICE_CONVERT_VERSION: &str = "0.2.2";
+const OFFICE_CONVERT_SOURCE_COMMIT: &str = "673aab8d6ac784524cd1d90141c95e74b9fd26ae";
+
+fn sha256_file_hex(path: &Path) -> Result<String, String> {
+    let mut file = std::fs::File::open(path)
+        .map_err(|error| format!("Unable to open {} for hashing: {error}", path.display()))?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 1024 * 1024];
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .map_err(|error| format!("Unable to hash {}: {error}", path.display()))?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+fn selected_stirling_source(jar: &Path) -> String {
+    let Ok(configured) = env::var("MALENJO_STIRLING_JAR") else {
+        return "core".into();
+    };
+    let configured = PathBuf::from(configured.trim());
+    let same = configured
+        .canonicalize()
+        .ok()
+        .zip(jar.canonicalize().ok())
+        .is_some_and(|(left, right)| left == right);
+    if same {
+        "configured".into()
+    } else {
+        "core".into()
+    }
+}
+
+fn office_convert_component_status(app: &AppHandle) -> StirlingComponentStatus {
+    let Some(jar) = stirling_jar_path(app) else {
+        return StirlingComponentStatus {
+            id: "stirling-office-convert".into(),
+            available: false,
+            version: None,
+            executable: None,
+            source: "unavailable".into(),
+            message: "The reviewed Stirling core provider pack is not installed.".into(),
+        };
+    };
+
+    let source = selected_stirling_source(&jar);
+    let manifest_path = jar
+        .parent()
+        .map(|parent| parent.join("manifest.json"))
+        .unwrap_or_default();
+    let manifest_text = match std::fs::read_to_string(&manifest_path) {
+        Ok(value) => value,
+        Err(_) => {
+            return StirlingComponentStatus {
+                id: "stirling-office-convert".into(),
+                available: false,
+                version: None,
+                executable: Some(jar.to_string_lossy().to_string()),
+                source,
+                message: "The selected Stirling JAR has no adjacent MALENJO provider manifest; embedded Office Convert cannot be source-verified.".into(),
+            };
+        }
+    };
+    let manifest: Value = match serde_json::from_str(&manifest_text) {
+        Ok(value) => value,
+        Err(_) => {
+            return StirlingComponentStatus {
+                id: "stirling-office-convert".into(),
+                available: false,
+                version: None,
+                executable: Some(jar.to_string_lossy().to_string()),
+                source,
+                message: "The selected Stirling provider manifest is invalid JSON.".into(),
+            };
+        }
+    };
+
+    let expected_hash = manifest.get("sha256").and_then(Value::as_str);
+    let actual_hash = sha256_file_hex(&jar).ok();
+    let office = manifest.get("embeddedOfficeConvert");
+    let jars = office.and_then(|value| value.get("jars")).and_then(Value::as_object);
+    let required_jars = [
+        "stirling-office-convert-0.2.2.jar",
+        "stirling-office-convert-legacy-0.2.2.jar",
+        "stirling-office-convert-topdf-0.2.2.jar",
+    ];
+    let office_jars_valid = jars.is_some_and(|items| {
+        required_jars.iter().all(|name| {
+            items
+                .get(*name)
+                .and_then(Value::as_str)
+                .is_some_and(|hash| hash.len() == 64 && hash.chars().all(|ch| ch.is_ascii_hexdigit()))
+        })
+    });
+
+    let report_relative = manifest
+        .get("dependencyLicenseReport")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let pack_dir = jar.parent().unwrap_or(Path::new(""));
+    let license_report = pack_dir.join(report_relative);
+    let office_license = pack_dir.join("malenjo-notices/stirling-office-convert-LICENSE.txt");
+
+    let valid = manifest.get("provider").and_then(Value::as_str) == Some("stirling-open-core")
+        && manifest.get("upstreamCommit").and_then(Value::as_str) == Some(STIRLING_PIN)
+        && expected_hash.is_some()
+        && actual_hash.as_deref() == expected_hash
+        && office.and_then(|value| value.get("version")).and_then(Value::as_str)
+            == Some(OFFICE_CONVERT_VERSION)
+        && office.and_then(|value| value.get("upstream")).and_then(Value::as_str)
+            == Some("Stirling-Tools/Stirling-Office-Convert")
+        && office.and_then(|value| value.get("sourceCommit")).and_then(Value::as_str)
+            == Some(OFFICE_CONVERT_SOURCE_COMMIT)
+        && office.and_then(|value| value.get("license")).and_then(Value::as_str) == Some("MIT")
+        && office_jars_valid
+        && !report_relative.is_empty()
+        && license_report.is_file()
+        && office_license.is_file();
+
+    StirlingComponentStatus {
+        id: "stirling-office-convert".into(),
+        available: valid,
+        version: valid.then(|| OFFICE_CONVERT_VERSION.into()),
+        executable: Some(jar.to_string_lossy().to_string()),
+        source,
+        message: if valid {
+            "Embedded Stirling Office Convert 0.2.2 is source-verified in the selected MALENJO core pack.".into()
+        } else {
+            "The selected Stirling JAR does not match the reviewed MALENJO Office Convert 0.2.2 pack provenance.".into()
+        },
+    }
 }
 
 fn qpdf_candidates(app: &AppHandle) -> Vec<(String, String)> {
@@ -584,7 +724,11 @@ pub async fn stirling_core_status(app: AppHandle) -> StirlingCoreStatus {
 
 #[tauri::command]
 pub async fn stirling_core_components(app: AppHandle) -> Vec<StirlingComponentStatus> {
-    vec![qpdf_component_status(&app), tesseract_component_status(&app)]
+    vec![
+        qpdf_component_status(&app),
+        tesseract_component_status(&app),
+        office_convert_component_status(&app),
+    ]
 }
 
 #[tauri::command]
@@ -765,8 +909,8 @@ pub async fn stirling_core_request(
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_qpdf_version, parse_tesseract_version, set_reviewed_provider_path, validate_api_path,
-        MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, STIRLING_BASE_URL, STIRLING_PORT,
+        parse_qpdf_version, parse_tesseract_version, set_reviewed_provider_path, sha256_file_hex,
+        validate_api_path, MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, STIRLING_BASE_URL, STIRLING_PORT,
     };
     use std::{path::PathBuf, process::Command};
 
@@ -821,6 +965,15 @@ mod tests {
             .unwrap_or_default();
         let parts = std::env::split_paths(&path).collect::<Vec<_>>();
         assert_eq!(parts, vec![first, second]);
+    }
+
+    #[test]
+    fn sha256_file_hex_is_deterministic() {
+        let path = std::env::temp_dir().join("malenjo-stirling-hash-test.txt");
+        std::fs::write(&path, b"MALENJO").unwrap();
+        let hash = sha256_file_hex(&path).unwrap();
+        std::fs::remove_file(&path).ok();
+        assert_eq!(hash, "9ce12a0a001ed0dc1a07b7f18d782616c3cfc3d0f616665b6b9f8f22c96209d5");
     }
 
     #[test]
