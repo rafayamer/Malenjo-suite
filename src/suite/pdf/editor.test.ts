@@ -3,9 +3,9 @@ import { PDFArray, PDFBool, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumb
 import {
   addPdfBatesNumbers, addPdfCheckBox, addPdfCommentAnnotation, addPdfDropdown, addPdfHeaderFooter,
   addPdfOptionList, addPdfRadioGroup, addPdfRectangleOverlay, addPdfTextField, addPdfTextOverlay, appendPdf,
-  attachFileToPdf, deletePdfPage, deletePdfPages, duplicatePdfPage, extractPdfPage, extractPdfPages,
-  fillPdfFormFields, flattenPdfForm, inspectPdfFormFields, insertBlankPdfPage, insertPdfAfter, listPdfFormFields, movePdfPage,
-  rotatePdfPagePermanent, rotatePdfPagesPermanent, setPdfPageBox, splitPdfAtPage,
+  attachFileToPdf, clearPdfFormFields, deletePdfPage, deletePdfPages, duplicatePdfPage, exportPdfFormData, extractPdfPage, extractPdfPages,
+  fillPdfFormFields, flattenPdfForm, importPdfFormData, inspectPdfFormFields, insertBlankPdfPage, insertPdfAfter, listPdfFormFields, movePdfPage,
+  resetPdfFormFields, rotatePdfPagePermanent, rotatePdfPagesPermanent, setPdfPageBox, splitPdfAtPage,
 } from './editor';
 
 async function sample(pages=3):Promise<Uint8Array>{
@@ -268,6 +268,73 @@ describe('PDF mutation core',()=>{
     await expect(fillPdfFormFields(bytes,[
       {name:'single_reviewer',selected:['Alice','Bob']},
     ])).rejects.toThrow(/accepts one selected option/i);
+  });
+
+  it('exports, clears, imports and resets safe form data without exposing passwords',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+
+    const name=form.createTextField('name');
+    name.setText('Current Name');
+    name.addToPage(page,{x:30,y:620,width:220,height:28});
+    name.acroField.dict.set(PDFName.of('DV'),PDFHexString.fromText('Default Name'));
+
+    const approved=form.createCheckBox('approved');
+    approved.check();
+    approved.addToPage(page,{x:30,y:580,width:20,height:20});
+    approved.acroField.dict.set(PDFName.of('DV'),PDFName.of('Off'));
+
+    const decision=form.createRadioGroup('decision');
+    decision.addOptionToPage('Approve',page,{x:30,y:540,width:20,height:20});
+    decision.addOptionToPage('Reject',page,{x:30,y:500,width:20,height:20});
+    decision.select('Approve');
+    const exports=decision.acroField.getExportValues()??[];
+    const onValues=decision.acroField.getOnValues();
+    const rejectIndex=exports.findIndex((value)=>value.decodeText()==='Reject');
+    expect(rejectIndex).toBeGreaterThanOrEqual(0);
+    decision.acroField.dict.set(PDFName.of('DV'),onValues[rejectIndex]);
+
+    const department=form.createDropdown('department');
+    department.addOptions(['Engineering','Finance']);
+    department.select('Finance');
+    department.addToPage(page,{x:30,y:450,width:220,height:28});
+    department.acroField.dict.set(PDFName.of('DV'),PDFHexString.fromText('Engineering'));
+
+    const secret=form.createTextField('secret');
+    secret.enablePassword();
+    secret.setText('private-value');
+    secret.addToPage(page,{x:30,y:400,width:220,height:28});
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const exported=await exportPdfFormData(bytes);
+    const payload=JSON.parse(exported) as {format:string;version:number;fields:Array<{name:string}>};
+    expect(payload.format).toBe('malenjo-pdf-form-data');
+    expect(payload.version).toBe(1);
+    expect(payload.fields.map((field)=>field.name)).toEqual(['name','approved','decision','department']);
+
+    const cleared=await clearPdfFormFields(bytes);
+    const clearedInfo=await inspectPdfFormFields(cleared);
+    expect(clearedInfo.find((field)=>field.name==='name')?.value).toBe('');
+    expect(clearedInfo.find((field)=>field.name==='approved')?.checked).toBe(false);
+    expect(clearedInfo.find((field)=>field.name==='decision')?.selected).toEqual([]);
+    expect(clearedInfo.find((field)=>field.name==='department')?.selected).toEqual([]);
+
+    const imported=await importPdfFormData(cleared,exported);
+    const importedInfo=await inspectPdfFormFields(imported);
+    expect(importedInfo.find((field)=>field.name==='name')?.value).toBe('Current Name');
+    expect(importedInfo.find((field)=>field.name==='approved')?.checked).toBe(true);
+    expect(importedInfo.find((field)=>field.name==='decision')?.selected).toEqual(['Approve']);
+    expect(importedInfo.find((field)=>field.name==='department')?.selected).toEqual(['Finance']);
+
+    const reset=await resetPdfFormFields(imported);
+    const resetInfo=await inspectPdfFormFields(reset);
+    expect(resetInfo.find((field)=>field.name==='name')?.value).toBe('Default Name');
+    expect(resetInfo.find((field)=>field.name==='approved')?.checked).toBe(false);
+    expect(resetInfo.find((field)=>field.name==='decision')?.selected).toEqual(['Reject']);
+    expect(resetInfo.find((field)=>field.name==='department')?.selected).toEqual(['Engineering']);
+
+    await expect(importPdfFormData(bytes,'{}')).rejects.toThrow(/supported MALENJO v1 schema/i);
   });
 
   it('isolates rich-text fields and reports combined password/multiline flags',async()=>{
