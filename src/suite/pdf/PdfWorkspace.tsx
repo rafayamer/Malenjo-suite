@@ -1655,7 +1655,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           </div>
 
           <button disabled={mutating} onClick={()=>void addFormField()}>Add {formDraft.type} field</button>
-          <div className="pdf-inline-actions">
+          <div>
             <button disabled={mutating||!fillableFormFields.length} onClick={()=>void exportFormData()}>Export form data</button>
             <button disabled={mutating||!fillableFormFields.length} onClick={()=>formDataInputRef.current?.click()}>Import form data</button>
           </div>
