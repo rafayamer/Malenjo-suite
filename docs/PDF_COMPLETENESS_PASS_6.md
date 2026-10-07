@@ -16,9 +16,11 @@ The PDF workspace can now edit values for existing:
 
 The existing MALENJO-owned field inventory now also reports:
 
-- current text values;
+- current non-password text values;
+- password and multiline text-field flags, while suppressing password plaintext;
 - checkbox checked state;
 - current radio/dropdown/list selections;
+- single- vs multiselect choice semantics;
 - required/read-only flags;
 - available choice options.
 
@@ -26,24 +28,28 @@ The existing MALENJO-owned field inventory now also reports:
 
 `fillPdfFormFields` in `src/suite/pdf/editor.ts`:
 
-- requires an existing named field;
+- requires an existing named field and preserves its exact PDF identifier;
 - rejects read-only fields;
-- constrains radio/dropdown/list selections to options present in the PDF;
+- validates choice selections against exact option strings already present in the PDF rather than normalizing those identifiers;
+- preserves each dropdown/list field's single- vs multiselect semantics;
 - supports clearing radio/dropdown/list selections;
-- bounds text input;
-- updates field appearances before serialization;
+- bounds text and choice-input counts/lengths without rewriting valid document values;
+- updates field appearances normally for WinAnsi-compatible content;
+- if pdf-lib's default Helvetica appearance generator cannot encode a Unicode value, preserves the field value, sets PDF `NeedAppearances`, disables the incompatible automatic appearance rewrite, and leaves appearance regeneration to a conforming reader;
 - returns a new working-copy byte array rather than overwriting the source.
 
 The workspace sends the mutation through the existing bounded per-tab history pipeline, preserving Undo/Redo, dirty state and export behavior.
 
 ## UI and commands
 
-The Forms inspector preloads current field values and exposes type-appropriate controls.
+The Forms inspector preloads current non-sensitive field values and exposes controls for every detected field rather than truncating large forms.
 
-- text → text input;
+- ordinary text → text input;
+- multiline text → textarea;
+- password text → masked replacement input; the existing plaintext value is never exposed in inventory/UI and is left unchanged unless the user enters a replacement;
 - checkbox → checkbox control;
-- radio/dropdown → bounded select;
-- option list → multi-select;
+- radio → single bounded select;
+- dropdown/list → single or multiple selection according to the field's actual multiselect flag;
 - unsupported button/signature fields remain detected but are not falsely exposed as fillable.
 
 The Forms task toolbar and Ctrl+K command bus expose **Apply field values** only when editable fillable fields exist.
@@ -58,7 +64,13 @@ The Forms task toolbar and Ctrl+K command bus expose **Apply field values** only
 - dropdown selection;
 - multiselect option-list values;
 - field re-inspection after serialization;
-- read-only rejection.
+- read-only rejection;
+- external field names with significant surrounding whitespace;
+- exact choice options with significant whitespace;
+- single- vs multiselect enforcement;
+- password/multiline metadata;
+- invalid option rejection;
+- non-WinAnsi/Unicode text serialization without the Helvetica encoding crash.
 
 ## Remaining Forms work
 
