@@ -965,8 +965,7 @@ function safeFormDataFields(fields:PdfFormFieldInfo[]):PdfFormDataField[]{
   return exported;
 }
 
-export async function exportPdfFormData(bytes:Uint8Array):Promise<string>{
-  const fields=safeFormDataFields(await inspectPdfFormFields(bytes));
+export function serializePdfFormDataFields(fields:PdfFormDataField[]):string{
   if(!fields.length)throw new Error('This PDF has no safely exportable AcroForm values.');
   if(fields.length>5000)throw new Error('This PDF has more than 5,000 safely exportable AcroForm fields.');
   const payload:PdfFormDataPackage={
@@ -975,6 +974,10 @@ export async function exportPdfFormData(bytes:Uint8Array):Promise<string>{
     fields,
   };
   return `${JSON.stringify(payload,null,2)}\n`;
+}
+
+export async function exportPdfFormData(bytes:Uint8Array):Promise<string>{
+  return serializePdfFormDataFields(safeFormDataFields(await inspectPdfFormFields(bytes)));
 }
 
 function parsePdfFormData(json:string):PdfFormDataPackage{
