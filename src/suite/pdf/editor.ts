@@ -1,4 +1,4 @@
-import { PDFArray, PDFBool, PDFDict, PDFDocument, PDFHexString, PDFName, StandardFonts, degrees, rgb } from 'pdf-lib';
+import { PDFArray, PDFBool, PDFButton, PDFCheckBox, PDFDict, PDFDocument, PDFDropdown, PDFHexString, PDFName, PDFOptionList, PDFRadioGroup, PDFSignature, PDFTextField, StandardFonts, degrees, rgb } from 'pdf-lib';
 
 function requirePage(pageNumber:number,pageCount:number):number{
   if(!Number.isInteger(pageNumber)||pageNumber<1||pageNumber>pageCount){
@@ -549,14 +549,22 @@ export interface PdfFormFieldInfo {
   richText:boolean;
   multiselect:boolean;
   editable:boolean;
+  offToggleable:boolean;
+}
+
+function pdfHasXfa(pdf:PDFDocument):boolean{
+  const acroForm=pdf.catalog.lookup(PDFName.of('AcroForm'));
+  return acroForm instanceof PDFDict && acroForm.has(PDFName.of('XFA'));
 }
 
 export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFieldInfo[]>{
   const pdf=await load(bytes);
+  if(pdfHasXfa(pdf)){
+    throw new Error('XFA/hybrid PDF forms are not supported because editing them would discard XFA form data.');
+  }
   const form=pdf.getForm();
   return form.getFields().map((field)=>{
     const name=field.getName();
-    const constructor=field.constructor.name;
     let type='unknown';
     let options:string[]=[];
     let choiceOptions:PdfFormChoiceOption[]=[];
@@ -568,26 +576,28 @@ export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFiel
     let richText=false;
     let multiselect=false;
     let editable=false;
-    if(constructor==='PDFTextField'){
+    let offToggleable=true;
+    if(field instanceof PDFTextField){
       type='text';
-      const text=form.getTextField(name);
+      const text=field;
       password=text.isPassword();
       multiline=text.isMultiline();
       richText=text.isRichFormatted();
       value=(password||richText) ? '' : (text.getText()??'');
-    }else if(constructor==='PDFCheckBox'){
+    }else if(field instanceof PDFCheckBox){
       type='checkbox';
-      checked=form.getCheckBox(name).isChecked();
-    }else if(constructor==='PDFRadioGroup'){
+      checked=field.isChecked();
+    }else if(field instanceof PDFRadioGroup){
       type='radio';
-      const radio=form.getRadioGroup(name);
+      const radio=field;
       options=radio.getOptions();
       choiceOptions=options.map((option)=>({value:option,label:option}));
       const value=radio.getSelected();
       if(value)selected=[value];
-    }else if(constructor==='PDFDropdown'){
+      offToggleable=radio.isOffToggleable();
+    }else if(field instanceof PDFDropdown){
       type='dropdown';
-      const dropdown=form.getDropdown(name);
+      const dropdown=field;
       choiceOptions=dropdown.acroField.getOptions().map(({value,display})=>({
         value:value.decodeText(),
         label:(display??value).decodeText(),
@@ -596,9 +606,9 @@ export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFiel
       selected=dropdown.getSelected();
       multiselect=dropdown.isMultiselect();
       editable=dropdown.isEditable();
-    }else if(constructor==='PDFOptionList'){
+    }else if(field instanceof PDFOptionList){
       type='list';
-      const list=form.getOptionList(name);
+      const list=field;
       choiceOptions=list.acroField.getOptions().map(({value,display})=>({
         value:value.decodeText(),
         label:(display??value).decodeText(),
@@ -606,8 +616,8 @@ export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFiel
       options=choiceOptions.map((option)=>option.label);
       selected=list.getSelected();
       multiselect=list.isMultiselect();
-    }else if(constructor==='PDFButton')type='button';
-    else if(constructor==='PDFSignature')type='signature';
+    }else if(field instanceof PDFButton)type='button';
+    else if(field instanceof PDFSignature)type='signature';
     return {
       name,
       type,
@@ -623,6 +633,7 @@ export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFiel
       richText,
       multiselect,
       editable,
+      offToggleable,
     };
   });
 }
@@ -666,6 +677,12 @@ async function saveFilledPdfForm(
   form:ReturnType<PDFDocument['getForm']>,
   forceReaderAppearances=false,
 ):Promise<Uint8Array>{
+  for(const field of form.getFields()){
+    if(field instanceof PDFTextField && field.isRichFormatted()){
+      form.markFieldAsClean(field.ref);
+      if(field.needsAppearancesUpdate())forceReaderAppearances=true;
+    }
+  }
   if(forceReaderAppearances){
     form.acroForm.dict.set(PDFName.of('NeedAppearances'),PDFBool.True);
   }
@@ -697,6 +714,9 @@ export async function fillPdfFormFields(
 ):Promise<Uint8Array>{
   if(!updates.length)throw new Error('Choose at least one PDF form field to update.');
   const pdf=await load(bytes);
+  if(pdfHasXfa(pdf)){
+    throw new Error('XFA/hybrid PDF forms are not supported because editing them would discard XFA form data.');
+  }
   const form=pdf.getForm();
   let forceReaderAppearances=false;
   for(const update of updates){
@@ -706,9 +726,8 @@ export async function fillPdfFormFields(
     if(!field)throw new Error(`PDF form field "${name}" was not found.`);
     if(field.isReadOnly())throw new Error(`PDF form field "${name}" is read-only.`);
 
-    const constructor=field.constructor.name;
-    if(constructor==='PDFTextField'){
-      const text=form.getTextField(name);
+    if(field instanceof PDFTextField){
+      const text=field;
       if(text.isRichFormatted()){
         throw new Error(`PDF form field "${name}" uses unsupported rich text.`);
       }
@@ -720,18 +739,22 @@ export async function fillPdfFormFields(
         throw new Error(`PDF form field "${name}" contains a NUL character.`);
       }
       text.setText(value);
-    }else if(constructor==='PDFCheckBox'){
-      const checkbox=form.getCheckBox(name);
+    }else if(field instanceof PDFCheckBox){
+      const checkbox=field;
       if(update.checked)checkbox.check();else checkbox.uncheck();
-    }else if(constructor==='PDFRadioGroup'){
-      const radio=form.getRadioGroup(name);
+    }else if(field instanceof PDFRadioGroup){
+      const radio=field;
       const selected=selectedFieldValues(update.selected);
       requireSelectedOptions(name,selected,radio.getOptions());
-      if(!selected.length)radio.clear();
-      else if(selected.length===1)radio.select(selected[0]);
+      if(!selected.length){
+        if(!radio.isOffToggleable()&&radio.getSelected()!==undefined){
+          throw new Error(`Radio field "${name}" cannot be cleared because off toggling is disabled.`);
+        }
+        radio.clear();
+      }else if(selected.length===1)radio.select(selected[0]);
       else throw new Error(`Radio field "${name}" accepts one selected option.`);
-    }else if(constructor==='PDFDropdown'){
-      const dropdown=form.getDropdown(name);
+    }else if(field instanceof PDFDropdown){
+      const dropdown=field;
       const selected=selectedFieldValues(update.selected);
       const choices=dropdown.acroField.getOptions().map(({value,display})=>({
         value:value.decodeText(),
@@ -739,6 +762,9 @@ export async function fillPdfFormFields(
       }));
       if(!dropdown.isEditable()){
         requireSelectedOptions(name,selected,choices.map((option)=>option.value));
+      }
+      if(dropdown.isEditable()&&dropdown.isMultiselect()){
+        throw new Error(`Dropdown field "${name}" combines editable and multiselect flags, which is not safely writable in this pass.`);
       }
       if(!dropdown.isMultiselect()&&selected.length>1){
         throw new Error(`Dropdown field "${name}" accepts one selected option.`);
@@ -756,8 +782,8 @@ export async function fillPdfFormFields(
           forceReaderAppearances=true;
         }
       }
-    }else if(constructor==='PDFOptionList'){
-      const list=form.getOptionList(name);
+    }else if(field instanceof PDFOptionList){
+      const list=field;
       const selected=selectedFieldValues(update.selected);
       const choices=list.acroField.getOptions().map(({value,display})=>({
         value:value.decodeText(),
@@ -781,7 +807,7 @@ export async function fillPdfFormFields(
         }
       }
     }else{
-      throw new Error(`PDF form field "${name}" of type ${constructor} is not fillable in this pass.`);
+      throw new Error(`PDF form field "${name}" is not fillable in this pass.`);
     }
   }
   return saveFilledPdfForm(pdf,form,forceReaderAppearances);
