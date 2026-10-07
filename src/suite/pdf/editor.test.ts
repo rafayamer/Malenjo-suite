@@ -346,6 +346,104 @@ describe('PDF mutation core',()=>{
       .toEqual(['Unlisted Custom Value']);
   });
 
+  it('lets ordinary fields update when an unsupported rich-text widget has no appearance stream',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+
+    const ordinary=form.createTextField('ordinary');
+    ordinary.setText('before');
+    ordinary.addToPage(page,{x:30,y:620,width:220,height:28});
+
+    const rich=form.createTextField('rich_missing_ap');
+    rich.addToPage(page,{x:30,y:570,width:220,height:28});
+    rich.enableRichFormatting();
+    const [richWidget]=rich.acroField.getWidgets();
+    richWidget.dict.delete(PDFName.of('AP'));
+
+    const bytes=Uint8Array.from(await pdf.save({
+      useObjectStreams:false,
+      updateFieldAppearances:false,
+    }));
+    const filled=await fillPdfFormFields(bytes,[{name:'ordinary',value:'after'}]);
+    const info=await inspectPdfFormFields(filled);
+    expect(info.find((field)=>field.name==='ordinary')?.value).toBe('after');
+    expect(info.find((field)=>field.name==='rich_missing_ap')).toMatchObject({
+      richText:true,
+    });
+  });
+
+  it('rejects hybrid XFA forms before AcroForm editing can discard XFA data',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+    const field=form.createTextField('fallback');
+    field.addToPage(page,{x:30,y:620,width:220,height:28});
+    form.acroForm.dict.set(PDFName.of('XFA'),PDFHexString.fromText('<xfa/>'));
+
+    const bytes=Uint8Array.from(await pdf.save({
+      useObjectStreams:false,
+      updateFieldAppearances:false,
+    }));
+    await expect(inspectPdfFormFields(bytes)).rejects.toThrow(/XFA\/hybrid/i);
+    await expect(fillPdfFormFields(bytes,[{name:'fallback',value:'blocked'}]))
+      .rejects.toThrow(/XFA\/hybrid/i);
+
+    const reloaded=await PDFDocument.load(bytes,{updateMetadata:false});
+    const acroForm=reloaded.catalog.lookup(PDFName.of('AcroForm'),PDFDict);
+    expect(acroForm.has(PDFName.of('XFA'))).toBe(true);
+  });
+
+  it('respects radio groups that cannot toggle back to off',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+    const radio=form.createRadioGroup('decision_locked_on');
+    radio.addOptionToPage('Approve',page,{x:30,y:620,width:20,height:20});
+    radio.addOptionToPage('Reject',page,{x:30,y:580,width:20,height:20});
+    radio.disableOffToggling();
+    radio.select('Approve');
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const info=await inspectPdfFormFields(bytes);
+    expect(info.find((field)=>field.name==='decision_locked_on')).toMatchObject({
+      type:'radio',offToggleable:false,selected:['Approve'],
+    });
+    await expect(fillPdfFormFields(bytes,[{
+      name:'decision_locked_on',
+      selected:[],
+    }])).rejects.toThrow(/cannot be cleared/i);
+
+    const changed=await fillPdfFormFields(bytes,[{
+      name:'decision_locked_on',
+      selected:['Reject'],
+    }]);
+    expect((await inspectPdfFormFields(changed))
+      .find((field)=>field.name==='decision_locked_on')?.selected).toEqual(['Reject']);
+  });
+
+  it('rejects editable multiselect dropdown writes instead of emitting invalid option indices',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+    const dropdown=form.createDropdown('editable_multi');
+    dropdown.addOptions(['Known A','Known B']);
+    dropdown.enableEditing();
+    dropdown.enableMultiselect();
+    dropdown.select(['Known A','Known B']);
+    dropdown.addToPage(page,{x:30,y:620,width:220,height:28});
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const info=await inspectPdfFormFields(bytes);
+    expect(info.find((field)=>field.name==='editable_multi')).toMatchObject({
+      editable:true,multiselect:true,
+    });
+    await expect(fillPdfFormFields(bytes,[{
+      name:'editable_multi',
+      selected:['Custom A','Custom B'],
+    }])).rejects.toThrow(/not safely writable/i);
+  });
+
   it('rejects oversized text instead of truncating the field value',async()=>{
     const bytes=await addPdfTextField(await sample(1),{
       pageNumber:1,name:'long_text',x:0.1,y:0.75,width:0.6,height:0.08,
