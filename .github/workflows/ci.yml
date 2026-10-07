@@ -365,6 +365,18 @@ jobs:
               }
             }
 
+            function Read-ZipEntryText([string]$Path, [string]$Entry) {
+              $zip = [System.IO.Compression.ZipFile]::OpenRead($Path)
+              try {
+                $item = $zip.Entries | Where-Object { $_.FullName -eq $Entry } | Select-Object -First 1
+                if (-not $item) { return "" }
+                $reader = New-Object System.IO.StreamReader($item.Open())
+                try { return $reader.ReadToEnd() } finally { $reader.Dispose() }
+              } finally {
+                $zip.Dispose()
+              }
+            }
+
             $officeText = Join-Path (Resolve-Path ".build/provider-smoke") "office-input.txt"
             Set-Content -Path $officeText -Value "MALENJO embedded Office Convert smoke test" -Encoding utf8
             $officePdfOut = Join-Path (Resolve-Path ".build/provider-smoke") "office-to-pdf.pdf"
@@ -399,6 +411,12 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Embedded Office PDF-to-XLSX operation smoke failed." }
             Assert-ZipEntry $xlsxOut "xl/workbook.xml"
             Assert-ZipEntry $xlsxOut "xl/worksheets/sheet1.xml"
+            $xlsxText = (Read-ZipEntryText $xlsxOut "xl/worksheets/sheet1.xml") + [Environment]::NewLine + (Read-ZipEntryText $xlsxOut "xl/sharedStrings.xml")
+            foreach ($expectedCell in @("Name", "Score", "MALENJO", "100")) {
+              if ($xlsxText -notmatch [regex]::Escape($expectedCell)) {
+                throw "PDF-to-XLSX output did not preserve expected table value '$expectedCell'."
+              }
+            }
 
             $repairOut = Join-Path (Resolve-Path ".build/provider-smoke") "repair.pdf"
             & $curl --fail --silent --show-error -o $repairOut -F "fileInput=@$fixture;type=application/pdf" "http://127.0.0.1:28970/api/v1/misc/repair"
