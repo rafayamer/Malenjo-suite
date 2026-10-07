@@ -668,11 +668,6 @@ async function saveFilledPdfForm(
 ):Promise<Uint8Array>{
   if(forceReaderAppearances){
     form.acroForm.dict.set(PDFName.of('NeedAppearances'),PDFBool.True);
-    form.getFields().forEach((field)=>form.markFieldAsClean(field.ref));
-    return Uint8Array.from(await pdf.save({
-      useObjectStreams:false,
-      updateFieldAppearances:false,
-    }));
   }
   try{
     form.updateFieldAppearances();
@@ -756,7 +751,10 @@ export async function fillPdfFormFields(
         );
         dropdown.select(dropdown.isMultiselect()?displayValues:displayValues[0]);
         setChoiceExportValues(dropdown.acroField.dict,selected);
-        if(selected.some((value,index)=>value!==displayValues[index]))forceReaderAppearances=true;
+        if(selected.some((value,index)=>value!==displayValues[index])){
+          form.markFieldAsClean(field.ref);
+          forceReaderAppearances=true;
+        }
       }
     }else if(constructor==='PDFOptionList'){
       const list=form.getOptionList(name);
@@ -777,7 +775,10 @@ export async function fillPdfFormFields(
         );
         list.select(list.isMultiselect()?displayValues:displayValues[0]);
         setChoiceExportValues(list.acroField.dict,selected);
-        if(selected.some((value,index)=>value!==displayValues[index]))forceReaderAppearances=true;
+        if(selected.some((value,index)=>value!==displayValues[index])){
+          form.markFieldAsClean(field.ref);
+          forceReaderAppearances=true;
+        }
       }
     }else{
       throw new Error(`PDF form field "${name}" of type ${constructor} is not fillable in this pass.`);
