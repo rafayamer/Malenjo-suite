@@ -302,7 +302,7 @@ jobs:
           $env:DISABLE_ADDITIONAL_FEATURES = "true"
           $env:ENABLE_SAAS = "false"
           $providerContext = "/malenjo-ci"
-          $providerBase = "$providerBase$providerContext"
+          $providerBase = "http://127.0.0.1:28970$providerContext"
           $process = Start-Process -FilePath $java -ArgumentList @(
             "-Xms128m",
             "-Xmx1536m",
