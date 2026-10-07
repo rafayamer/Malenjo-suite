@@ -9,7 +9,7 @@ use std::{
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{Mutex, OnceLock},
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime},
 };
 use tauri::{AppHandle, Manager};
 
@@ -819,14 +819,15 @@ fn version_from_health(value: &Value) -> Option<String> {
         .find_map(|key| value.get(*key).and_then(Value::as_str).map(str::to_owned))
 }
 
-fn new_context_path() -> String {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_nanos())
-        .unwrap_or_default();
-    let seed = format!("{}:{nanos}", std::process::id());
-    let token = format!("{:x}", Sha256::digest(seed.as_bytes()));
-    format!("/malenjo-{}", &token[..24])
+fn new_context_path() -> Result<String, String> {
+    let mut token = [0u8; 16];
+    getrandom::fill(&mut token)
+        .map_err(|error| format!("Unable to generate Stirling sidecar identity: {error}"))?;
+    let token = token
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    Ok(format!("/malenjo-{token}"))
 }
 
 fn owned_base_url() -> Option<String> {
@@ -873,7 +874,7 @@ fn spawn_core(java: &str, jar: &Path, app: &AppHandle) -> Result<String, String>
     std::fs::create_dir_all(&data_dir)
         .map_err(|error| format!("Unable to create Stirling core data directory: {error}"))?;
 
-    let context_path = new_context_path();
+    let context_path = new_context_path()?;
     let mut command = Command::new(java);
     command
         .arg("-Xms128m")
@@ -1282,10 +1283,11 @@ mod tests {
 
     #[test]
     fn owned_provider_context_path_is_scoped() {
-        let context = new_context_path();
+        let context = new_context_path().unwrap();
         assert!(context.starts_with("/malenjo-"));
         assert_eq!(context.matches('/').count(), 1);
-        assert!(context.len() >= 16);
+        assert_eq!(context.len(), "/malenjo-".len() + 32);
+        assert!(context["/malenjo-".len()..].chars().all(|ch| ch.is_ascii_hexdigit()));
     }
 
     #[test]
