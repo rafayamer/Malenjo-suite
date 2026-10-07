@@ -22,4 +22,5 @@ reqwest = { version = "0.13.5", features = ["json", "multipart", "query"] }
 tokio = { version = "1", features = ["macros", "sync", "time"] }
 zeroize = "1.8"
 sha2 = "0.10"
+getrandom = "0.3"
 zip = "2.4"
