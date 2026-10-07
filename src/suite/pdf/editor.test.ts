@@ -280,8 +280,8 @@ describe('PDF mutation core',()=>{
     ordinary.addToPage(page,{x:30,y:620,width:220,height:28});
 
     const rich=form.createTextField('rich');
-    rich.enableRichFormatting();
     rich.addToPage(page,{x:30,y:570,width:220,height:28});
+    rich.enableRichFormatting();
 
     const secret=form.createTextField('secret_multiline');
     secret.enablePassword();
