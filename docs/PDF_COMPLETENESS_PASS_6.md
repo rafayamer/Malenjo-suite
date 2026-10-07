@@ -72,6 +72,19 @@ The Forms task toolbar and Ctrl+K command bus expose **Apply field values** only
 - invalid option rejection;
 - non-WinAnsi/Unicode text serialization without the Helvetica encoding crash.
 
+## Review hardening evidence
+
+The Codex review edge cases are explicitly covered by the implementation/tests for this pass:
+
+- forms with more than 16 detected fields render editing controls for every field rather than truncating the editor;
+- password fields suppress existing plaintext in inventory/state and use a masked replacement control;
+- multiline text fields retain line breaks through a textarea editor;
+- external field names and choice option strings are matched exactly, including significant surrounding whitespace;
+- dropdown/list controls honor the PDF field's actual single- vs multiselect flag;
+- invalid choice values are rejected by regression tests;
+- non-WinAnsi text values serialize without pdf-lib's Helvetica encoding crash by preserving the value and setting `NeedAppearances` when automatic appearance generation cannot encode it;
+- read-only fields remain rejected at the mutation boundary.
+
 ## Remaining Forms work
 
 PDF Forms are not complete yet. Still open:
