@@ -672,22 +672,33 @@ function setChoiceExportValues(dict:PDFDict,values:string[]):void{
   dict.set(key,encoded.length===1?encoded[0]:dict.context.obj(encoded));
 }
 
+function updateSupportedFieldAppearances(
+  form:ReturnType<PDFDocument['getForm']>,
+  readerDeferredFields:Set<string>,
+):boolean{
+  let readerAppearancesNeeded=readerDeferredFields.size>0;
+  const font=form.getDefaultFont();
+  for(const field of form.getFields()){
+    const deferToReader=readerDeferredFields.has(field.getName())
+      || (field instanceof PDFTextField && field.isRichFormatted());
+    if(deferToReader){
+      if(field.needsAppearancesUpdate())readerAppearancesNeeded=true;
+      continue;
+    }
+    if(field.needsAppearancesUpdate())field.defaultUpdateAppearances(font);
+  }
+  return readerAppearancesNeeded;
+}
+
 async function saveFilledPdfForm(
   pdf:PDFDocument,
   form:ReturnType<PDFDocument['getForm']>,
-  forceReaderAppearances=false,
+  readerDeferredFields:Set<string>,
 ):Promise<Uint8Array>{
-  for(const field of form.getFields()){
-    if(field instanceof PDFTextField && field.isRichFormatted()){
-      form.markFieldAsClean(field.ref);
-      if(field.needsAppearancesUpdate())forceReaderAppearances=true;
-    }
-  }
-  if(forceReaderAppearances){
-    form.acroForm.dict.set(PDFName.of('NeedAppearances'),PDFBool.True);
-  }
   try{
-    form.updateFieldAppearances();
+    if(updateSupportedFieldAppearances(form,readerDeferredFields)){
+      form.acroForm.dict.set(PDFName.of('NeedAppearances'),PDFBool.True);
+    }
     return Uint8Array.from(await pdf.save({
       useObjectStreams:false,
       updateFieldAppearances:false,
@@ -718,7 +729,7 @@ export async function fillPdfFormFields(
     throw new Error('XFA/hybrid PDF forms are not supported because editing them would discard XFA form data.');
   }
   const form=pdf.getForm();
-  let forceReaderAppearances=false;
+  const readerDeferredFields=new Set<string>();
   for(const update of updates){
     const name=update.name;
     if(!name.trim())throw new Error('PDF form field name is empty.');
@@ -779,7 +790,7 @@ export async function fillPdfFormFields(
         setChoiceExportValues(dropdown.acroField.dict,selected);
         if(selected.some((value,index)=>value!==displayValues[index])){
           form.markFieldAsClean(field.ref);
-          forceReaderAppearances=true;
+          readerDeferredFields.add(name);
         }
       }
     }else if(field instanceof PDFOptionList){
@@ -803,14 +814,14 @@ export async function fillPdfFormFields(
         setChoiceExportValues(list.acroField.dict,selected);
         if(selected.some((value,index)=>value!==displayValues[index])){
           form.markFieldAsClean(field.ref);
-          forceReaderAppearances=true;
+          readerDeferredFields.add(name);
         }
       }
     }else{
       throw new Error(`PDF form field "${name}" is not fillable in this pass.`);
     }
   }
-  return saveFilledPdfForm(pdf,form,forceReaderAppearances);
+  return saveFilledPdfForm(pdf,form,readerDeferredFields);
 }
 
 export interface PdfAttachmentSpec {
