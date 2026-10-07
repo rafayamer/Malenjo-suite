@@ -1,4 +1,4 @@
-import { PDFArray, PDFBool, PDFDocument, PDFName, StandardFonts, degrees, rgb } from 'pdf-lib';
+import { PDFArray, PDFBool, PDFDict, PDFDocument, PDFHexString, PDFName, StandardFonts, degrees, rgb } from 'pdf-lib';
 
 function requirePage(pageNumber:number,pageCount:number):number{
   if(!Number.isInteger(pageNumber)||pageNumber<1||pageNumber>pageCount){
@@ -529,18 +529,26 @@ export async function listPdfFormFields(bytes:Uint8Array):Promise<string[]>{
   return pdf.getForm().getFields().map((field)=>field.getName());
 }
 
+export interface PdfFormChoiceOption {
+  value:string;
+  label:string;
+}
+
 export interface PdfFormFieldInfo {
   name:string;
   type:string;
   required:boolean;
   readOnly:boolean;
   options:string[];
+  choiceOptions:PdfFormChoiceOption[];
   selected:string[];
   value:string;
   checked:boolean|null;
   password:boolean;
   multiline:boolean;
+  richText:boolean;
   multiselect:boolean;
+  editable:boolean;
 }
 
 export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFieldInfo[]>{
@@ -551,18 +559,22 @@ export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFiel
     const constructor=field.constructor.name;
     let type='unknown';
     let options:string[]=[];
+    let choiceOptions:PdfFormChoiceOption[]=[];
     let selected:string[]=[];
     let value='';
     let checked:boolean|null=null;
     let password=false;
     let multiline=false;
+    let richText=false;
     let multiselect=false;
+    let editable=false;
     if(constructor==='PDFTextField'){
       type='text';
       const text=form.getTextField(name);
       password=text.isPassword();
       multiline=text.isMultiline();
-      value=password ? '' : (text.getText()??'');
+      richText=text.isRichFormatted();
+      value=(password||richText) ? '' : (text.getText()??'');
     }else if(constructor==='PDFCheckBox'){
       type='checkbox';
       checked=form.getCheckBox(name).isChecked();
@@ -570,18 +582,28 @@ export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFiel
       type='radio';
       const radio=form.getRadioGroup(name);
       options=radio.getOptions();
+      choiceOptions=options.map((option)=>({value:option,label:option}));
       const value=radio.getSelected();
       if(value)selected=[value];
     }else if(constructor==='PDFDropdown'){
       type='dropdown';
       const dropdown=form.getDropdown(name);
-      options=dropdown.getOptions();
+      choiceOptions=dropdown.acroField.getOptions().map(({value,display})=>({
+        value:value.decodeText(),
+        label:(display??value).decodeText(),
+      }));
+      options=choiceOptions.map((option)=>option.label);
       selected=dropdown.getSelected();
       multiselect=dropdown.isMultiselect();
+      editable=dropdown.isEditable();
     }else if(constructor==='PDFOptionList'){
       type='list';
       const list=form.getOptionList(name);
-      options=list.getOptions();
+      choiceOptions=list.acroField.getOptions().map(({value,display})=>({
+        value:value.decodeText(),
+        label:(display??value).decodeText(),
+      }));
+      options=choiceOptions.map((option)=>option.label);
       selected=list.getSelected();
       multiselect=list.isMultiselect();
     }else if(constructor==='PDFButton')type='button';
@@ -592,12 +614,15 @@ export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFiel
       required:field.isRequired(),
       readOnly:field.isReadOnly(),
       options,
+      choiceOptions,
       selected,
       value,
       checked,
       password,
       multiline,
+      richText,
       multiselect,
+      editable,
     };
   });
 }
@@ -626,10 +651,29 @@ function requireSelectedOptions(name:string,selected:string[],options:string[]):
   }
 }
 
+function setChoiceExportValues(dict:PDFDict,values:string[]):void{
+  const key=PDFName.of('V');
+  if(!values.length){
+    dict.delete(key);
+    return;
+  }
+  const encoded=values.map((value)=>PDFHexString.fromText(value));
+  dict.set(key,encoded.length===1?encoded[0]:dict.context.obj(encoded));
+}
+
 async function saveFilledPdfForm(
   pdf:PDFDocument,
   form:ReturnType<PDFDocument['getForm']>,
+  forceReaderAppearances=false,
 ):Promise<Uint8Array>{
+  if(forceReaderAppearances){
+    form.acroForm.dict.set(PDFName.of('NeedAppearances'),PDFBool.True);
+    form.getFields().forEach((field)=>form.markFieldAsClean(field.ref));
+    return Uint8Array.from(await pdf.save({
+      useObjectStreams:false,
+      updateFieldAppearances:false,
+    }));
+  }
   try{
     form.updateFieldAppearances();
     return Uint8Array.from(await pdf.save({
@@ -659,6 +703,7 @@ export async function fillPdfFormFields(
   if(!updates.length)throw new Error('Choose at least one PDF form field to update.');
   const pdf=await load(bytes);
   const form=pdf.getForm();
+  let forceReaderAppearances=false;
   for(const update of updates){
     const name=update.name;
     if(!name.trim())throw new Error('PDF form field name is empty.');
@@ -668,8 +713,18 @@ export async function fillPdfFormFields(
 
     const constructor=field.constructor.name;
     if(constructor==='PDFTextField'){
-      const value=(update.value??'').replace(/\u0000/g,'').slice(0,10000);
-      form.getTextField(name).setText(value);
+      const text=form.getTextField(name);
+      if(text.isRichFormatted()){
+        throw new Error(`PDF form field "${name}" uses unsupported rich text.`);
+      }
+      const value=update.value??'';
+      if(value.length>10000){
+        throw new Error(`PDF form field "${name}" exceeds the 10,000-character editing safety limit.`);
+      }
+      if(value.includes('\u0000')){
+        throw new Error(`PDF form field "${name}" contains a NUL character.`);
+      }
+      text.setText(value);
     }else if(constructor==='PDFCheckBox'){
       const checkbox=form.getCheckBox(name);
       if(update.checked)checkbox.check();else checkbox.uncheck();
@@ -683,26 +738,52 @@ export async function fillPdfFormFields(
     }else if(constructor==='PDFDropdown'){
       const dropdown=form.getDropdown(name);
       const selected=selectedFieldValues(update.selected);
-      requireSelectedOptions(name,selected,dropdown.getOptions());
+      const choices=dropdown.acroField.getOptions().map(({value,display})=>({
+        value:value.decodeText(),
+        label:(display??value).decodeText(),
+      }));
+      if(!dropdown.isEditable()){
+        requireSelectedOptions(name,selected,choices.map((option)=>option.value));
+      }
       if(!dropdown.isMultiselect()&&selected.length>1){
         throw new Error(`Dropdown field "${name}" accepts one selected option.`);
       }
-      if(!selected.length)dropdown.clear();
-      else dropdown.select(dropdown.isMultiselect()?selected:selected[0]);
+      if(!selected.length){
+        dropdown.clear();
+      }else{
+        const displayValues=selected.map((value)=>
+          choices.find((option)=>option.value===value)?.label??value,
+        );
+        dropdown.select(dropdown.isMultiselect()?displayValues:displayValues[0]);
+        setChoiceExportValues(dropdown.acroField.dict,selected);
+        if(selected.some((value,index)=>value!==displayValues[index]))forceReaderAppearances=true;
+      }
     }else if(constructor==='PDFOptionList'){
       const list=form.getOptionList(name);
       const selected=selectedFieldValues(update.selected);
-      requireSelectedOptions(name,selected,list.getOptions());
+      const choices=list.acroField.getOptions().map(({value,display})=>({
+        value:value.decodeText(),
+        label:(display??value).decodeText(),
+      }));
+      requireSelectedOptions(name,selected,choices.map((option)=>option.value));
       if(!list.isMultiselect()&&selected.length>1){
         throw new Error(`Option-list field "${name}" accepts one selected option.`);
       }
-      if(!selected.length)list.clear();
-      else list.select(list.isMultiselect()?selected:selected[0]);
+      if(!selected.length){
+        list.clear();
+      }else{
+        const displayValues=selected.map((value)=>
+          choices.find((option)=>option.value===value)?.label??value,
+        );
+        list.select(list.isMultiselect()?displayValues:displayValues[0]);
+        setChoiceExportValues(list.acroField.dict,selected);
+        if(selected.some((value,index)=>value!==displayValues[index]))forceReaderAppearances=true;
+      }
     }else{
       throw new Error(`PDF form field "${name}" of type ${constructor} is not fillable in this pass.`);
     }
   }
-  return saveFilledPdfForm(pdf,form);
+  return saveFilledPdfForm(pdf,form,forceReaderAppearances);
 }
 
 export interface PdfAttachmentSpec {
