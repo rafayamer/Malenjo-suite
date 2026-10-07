@@ -1601,7 +1601,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             </span>)}
           </div>
 
-          {formFields.map((field,fieldIndex)=>{
+          {formFields.map((field)=>{
             const draft=formFillDraft[field.name];
             const disabled=mutating||field.readOnly;
             if(field.type==='checkbox'){
