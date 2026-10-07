@@ -18,10 +18,14 @@ backend runtime:
 
 MALENJO does not execute the standalone Office Convert CLI asset. The feature
 runs in-process inside the local Stirling core sidecar. The provider builder
-must verify the three exact embedded JAR names, record their SHA-256 values in
-the generated provider manifest, run the pinned Stirling dependency-license
-policy gate, and package the generated dependency-license report with the
-sidecar resources.
+must verify the three exact embedded JAR names and then rebuild `core`,
+`legacy`, and `topdf` from source commit
+`673aab8d6ac784524cd1d90141c95e74b9fd26ae`. Upstream configures archive
+tasks with timestamps removed and reproducible file order, so MALENJO requires
+the source-built JAR SHA-256 values to match the embedded Maven artifacts byte
+for byte before emitting the provider manifest. The builder also runs the
+pinned Stirling dependency-license policy gate and hashes each shipped Office
+license/dependency artifact in the manifest.
 
 MALENJO enables only the reviewed in-process routes wired by the pinned
 Stirling controllers. LibreOffice-only HTML/XML/PDF-A routes remain separately
