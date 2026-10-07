@@ -192,6 +192,9 @@ jobs:
           if ($office.version -ne "0.2.2" -or $office.sourceCommit -ne "673aab8d6ac784524cd1d90141c95e74b9fd26ae" -or $office.license -ne "MIT") {
             throw "Unexpected embedded Stirling Office Convert provenance."
           }
+          if ($office.verification -ne "reproducible-source-build-match") {
+            throw "Embedded Office artifacts were not verified against the reviewed reproducible source build."
+          }
           $officeJars = @($office.jars.PSObject.Properties)
           $expectedOfficeJars = @(
             "stirling-office-convert-0.2.2.jar",
@@ -215,10 +218,29 @@ jobs:
               throw "Required Stirling core notice/report missing: $notice"
             }
           }
+          $expectedLicenseArtifacts = @(
+            "malenjo-notices/stirling-office-convert-LICENSE.txt",
+            "malenjo-notices/stirling-office-convert-DEPENDENCIES.md",
+            "malenjo-notices/stirling-dependency-licenses.json"
+          )
+          foreach ($relative in $expectedLicenseArtifacts) {
+            $property = $manifest.licenseArtifacts.PSObject.Properties | Where-Object { $_.Name -eq $relative } | Select-Object -First 1
+            $actualHash = (Get-FileHash -Algorithm SHA256 (Join-Path "provider-packs/stirling-core" $relative)).Hash.ToLowerInvariant()
+            if (-not $property -or $property.Value -ne $actualHash) {
+              throw "Stirling Office license artifact hash mismatch: $relative"
+            }
+          }
+          if ((Get-FileHash -Algorithm SHA256 "provider-packs/stirling-core/malenjo-notices/stirling-office-convert-LICENSE.txt").Hash.ToLowerInvariant() -ne "94838a9a135b813032c95d85f356e0605a0ec337ab84de422d13cac237e20ffb") {
+            throw "Office Convert MIT license notice no longer matches the reviewed baseline."
+          }
+          if ((Get-FileHash -Algorithm SHA256 "provider-packs/stirling-core/malenjo-notices/stirling-office-convert-DEPENDENCIES.md").Hash.ToLowerInvariant() -ne "87ab24690f9adbd1cc2e0a2f09d75fa2a037c698f6553c457ec5a74aa598cf0b") {
+            throw "Office Convert dependency review no longer matches the reviewed baseline."
+          }
           $licenseText = Get-Content "provider-packs/stirling-core/malenjo-notices/stirling-dependency-licenses.json" -Raw
           if ($licenseText.Length -lt 1000 -or $licenseText -notmatch "stirling-office-convert") {
             throw "Generated Stirling dependency-license report does not contain the embedded Office converter."
           }
+          $null = $licenseText | ConvertFrom-Json
       - name: Smoke-test local Windows PDF provider
         shell: pwsh
         run: |
