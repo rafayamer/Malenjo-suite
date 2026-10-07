@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName } from 'pdf-lib';
+import { PDFArray, PDFBool, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber } from 'pdf-lib';
 import {
   addPdfBatesNumbers, addPdfCheckBox, addPdfCommentAnnotation, addPdfDropdown, addPdfHeaderFooter,
   addPdfOptionList, addPdfRadioGroup, addPdfRectangleOverlay, addPdfTextField, addPdfTextOverlay, appendPdf,
@@ -442,6 +442,65 @@ describe('PDF mutation core',()=>{
       name:'editable_multi',
       selected:['Custom A','Custom B'],
     }])).rejects.toThrow(/not safely writable/i);
+  });
+
+  it('defers password appearances so the replacement secret is not painted into the widget AP',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+    const secret=form.createTextField('secret_update');
+    secret.enablePassword();
+    secret.addToPage(page,{x:30,y:620,width:220,height:28});
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const before=await PDFDocument.load(bytes,{updateMetadata:false});
+    const beforeField=before.getForm().getTextField('secret_update');
+    const beforeAppearance=beforeField.acroField.getWidgets()[0].dict.get(PDFName.of('AP'))?.toString();
+
+    const filled=await fillPdfFormFields(bytes,[{
+      name:'secret_update',
+      value:'ASCII secret replacement',
+    }]);
+    const after=await PDFDocument.load(filled,{updateMetadata:false});
+    const afterForm=after.getForm();
+    const afterField=afterForm.getTextField('secret_update');
+    const afterAppearance=afterField.acroField.getWidgets()[0].dict.get(PDFName.of('AP'))?.toString();
+    const needAppearances=afterForm.acroForm.dict
+      .lookupMaybe(PDFName.of('NeedAppearances'),PDFBool)
+      ?.asBoolean()??false;
+
+    expect(afterField.getText()).toBe('ASCII secret replacement');
+    expect(afterAppearance).toBe(beforeAppearance);
+    expect(needAppearances).toBe(true);
+    await expect(flattenPdfForm(filled)).rejects.toThrow(/reader-deferred form appearances/i);
+  });
+
+  it('preserves exact multiselect indices when distinct exports share a display label',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+    const list=form.createOptionList('duplicate_labels');
+    list.acroField.setOptions([
+      {value:PDFHexString.fromText('A'),display:PDFHexString.fromText('Same label')},
+      {value:PDFHexString.fromText('B'),display:PDFHexString.fromText('Same label')},
+      {value:PDFHexString.fromText('C'),display:PDFHexString.fromText('Other')},
+    ]);
+    list.enableMultiselect();
+    list.addToPage(page,{x:30,y:560,width:220,height:90});
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const filled=await fillPdfFormFields(bytes,[{
+      name:'duplicate_labels',
+      selected:['A','B'],
+    }]);
+    const reloaded=await PDFDocument.load(filled,{updateMetadata:false});
+    const reloadedList=reloaded.getForm().getOptionList('duplicate_labels');
+    const indices=reloadedList.acroField.dict.lookup(PDFName.of('I'),PDFArray);
+
+    expect(reloadedList.acroField.getValues().map((value)=>value.decodeText())).toEqual(['A','B']);
+    expect(indices.lookup(0,PDFNumber).asNumber()).toBe(0);
+    expect(indices.lookup(1,PDFNumber).asNumber()).toBe(1);
+    await expect(flattenPdfForm(filled)).rejects.toThrow(/reader-deferred form appearances/i);
   });
 
   it('rejects oversized text instead of truncating the field value',async()=>{
