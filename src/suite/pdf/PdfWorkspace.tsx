@@ -208,6 +208,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   });
   const [formFields, setFormFields] = useState<PdfFormFieldInfo[]>([]);
   const [formFillDraft, setFormFillDraft] = useState<Record<string,string|string[]|boolean|undefined>>({});
+  const [formFillTouched, setFormFillTouched] = useState<Record<string,boolean>>({});
   const [headerFooterDraft, setHeaderFooterDraft] = useState({
     scope:'selected' as 'selected'|'all',
     header:'',
@@ -575,17 +576,19 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           if(field.type==='text'&&field.password)return [field.name,undefined];
           return [field.name,field.value];
         })) as Record<string,string|string[]|boolean|undefined>);
+        setFormFillTouched({});
       })
       .catch(()=>{
         if(cancelled)return;
         setFormFields([]);
         setFormFillDraft({});
+        setFormFillTouched({});
       });
     return()=>{cancelled=true;};
   },[sourceBytes]);
 
   const fillableFormFields=formFields.filter((field)=>
-    !field.readOnly&&['text','checkbox','radio','dropdown','list'].includes(field.type),
+    !field.readOnly&&!field.richText&&['text','checkbox','radio','dropdown','list'].includes(field.type),
   );
 
   async function attachDocuments(event:React.ChangeEvent<HTMLInputElement>){
@@ -683,12 +686,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
   function setFormFillValue(name:string,value:string|string[]|boolean|undefined){
     setFormFillDraft((current)=>({...current,[name]:value}));
+    setFormFillTouched((current)=>({...current,[name]:true}));
   }
 
   async function fillForm(){
     if(!fillableFormFields.length)return;
     const updates:PdfFormFieldUpdate[]=[];
     for(const field of fillableFormFields){
+      if(!formFillTouched[field.name])continue;
       const draft=formFillDraft[field.name];
       if(field.type==='checkbox'){
         updates.push({name:field.name,checked:Boolean(draft)});
@@ -1071,7 +1076,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     return () => registerCommands(null);
   }, [
     session, registerCommands, sourceBytes, pdf, dirty, mutating, historyRevision, formFields.length,
-    headerFooterDraft, batesDraft, pageBoxDraft, formDraft, formFillDraft, currentPage, pageCount, selectedPages,
+    headerFooterDraft, batesDraft, pageBoxDraft, formDraft, formFillDraft, formFillTouched, currentPage, pageCount, selectedPages,
     inspectorHidden, textOverlay, shapeOverlay, commentDraft,
   ]);
 
@@ -1579,7 +1584,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             <b>{formFields.length} AcroForm field{formFields.length===1?'':'s'}</b>
             {formFields.map((field)=><span key={field.name} title={field.options.length?field.options.join(', '):undefined}>
               <strong>{field.name}</strong>
-              <em>{field.type}{field.required?' · required':''}{field.readOnly?' · read-only':''}{field.password?' · password':''}{field.multiline?' · multiline':''}{field.multiselect?' · multiselect':''}{field.type==='text'&&!field.password&&field.value?` · value: ${field.value}`:''}{field.type==='checkbox'?` · ${field.checked?'checked':'unchecked'}`:''}{field.selected.length?` · selected: ${field.selected.join(', ')}`:''}</em>
+              <em>{field.type}{field.required?' · required':''}{field.readOnly?' · read-only':''}{field.password?' · password':''}{field.multiline?' · multiline':''}{field.richText?' · rich-text unsupported':''}{field.multiselect?' · multiselect':''}{field.editable?' · editable':''}{field.type==='text'&&!field.password&&!field.richText&&field.value?` · value: ${field.value}`:''}{field.type==='checkbox'?` · ${field.checked?'checked':'unchecked'}`:''}{field.selected.length?` · selected: ${field.selected.map((value)=>field.choiceOptions.find((option)=>option.value===value)?.label??value).join(', ')}`:''}</em>
             </span>)}
           </div>
 
@@ -1594,6 +1599,34 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                 onChange={(event)=>setFormFillValue(field.name,event.target.checked)}
               /> {field.name}{field.readOnly?' · read-only':''}</label>;
             }
+            if(field.type==='dropdown'&&field.editable){
+              const selected=Array.isArray(draft)?draft:[];
+              if(field.multiselect){
+                return <label key={`fill-${field.name}`}>{field.name}
+                  <textarea
+                    value={selected.join('\n')}
+                    disabled={disabled}
+                    placeholder="One selected/custom value per line"
+                    onChange={(event)=>setFormFillValue(
+                      field.name,
+                      event.target.value.split('\n').filter((value)=>value.length>0),
+                    )}
+                  />
+                </label>;
+              }
+              const listId={`${domIdPrefix}-choice-${field.name.replace(/[^A-Za-z0-9_-]/g,'_')}`};
+              return <label key={`fill-${field.name}`}>{field.name}
+                <input
+                  list={listId}
+                  value={selected[0]??''}
+                  disabled={disabled}
+                  onChange={(event)=>setFormFillValue(field.name,event.target.value?[event.target.value]:[])}
+                />
+                <datalist id={listId}>
+                  {field.choiceOptions.map((option)=><option key={option.value} value={option.value}>{option.label}</option>)}
+                </datalist>
+              </label>;
+            }
             if(field.type==='radio'||((field.type==='dropdown'||field.type==='list')&&!field.multiselect)){
               const selected=Array.isArray(draft)?draft[0]??'':'';
               return <label key={`fill-${field.name}`}>{field.name}
@@ -1603,7 +1636,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                   onChange={(event)=>setFormFillValue(field.name,event.target.value?[event.target.value]:[])}
                 >
                   <option value="">— Clear —</option>
-                  {field.options.map((option)=><option key={option} value={option}>{option}</option>)}
+                  {field.choiceOptions.map((option)=><option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </label>;
             }
@@ -1619,11 +1652,26 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                     Array.from(event.target.selectedOptions).map((option)=>option.value),
                   )}
                 >
-                  {field.options.map((option)=><option key={option} value={option}>{option}</option>)}
+                  {field.choiceOptions.map((option)=><option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </label>;
             }
             if(field.type==='text'){
+              if(field.richText){
+                return <small key={`fill-${field.name}`}><b>{field.name}</b> uses rich-text formatting that this editor does not modify.</small>;
+              }
+              if(field.password){
+                return <label key={`fill-${field.name}`}>{field.name}
+                  <input
+                    type="password"
+                    value={typeof draft==='string'?draft:''}
+                    placeholder="Enter a replacement value to change this password field"
+                    disabled={disabled}
+                    autoComplete="new-password"
+                    onChange={(event)=>setFormFillValue(field.name,event.target.value)}
+                  />
+                </label>;
+              }
               if(field.multiline){
                 return <label key={`fill-${field.name}`}>{field.name}
                   <textarea
@@ -1635,11 +1683,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               }
               return <label key={`fill-${field.name}`}>{field.name}
                 <input
-                  type={field.password?'password':'text'}
+                  type="text"
                   value={typeof draft==='string'?draft:''}
-                  placeholder={field.password?'Enter a replacement value to change this password field':undefined}
                   disabled={disabled}
-                  autoComplete={field.password?'new-password':undefined}
                   onChange={(event)=>setFormFillValue(field.name,event.target.value)}
                 />
               </label>;
