@@ -888,6 +888,131 @@ export async function fillPdfFormFields(
   return saveFilledPdfForm(pdf,form,readerDeferredFields);
 }
 
+export interface PdfFormDataField {
+  name:string;
+  type:'text'|'checkbox'|'radio'|'dropdown'|'list';
+  value?:string;
+  checked?:boolean;
+  selected?:string[];
+}
+
+export interface PdfFormDataSnapshot {
+  format:'malenjo-pdf-form-data';
+  version:1;
+  fields:PdfFormDataField[];
+}
+
+function utf8ByteLength(value:string):number{
+  return new TextEncoder().encode(value).byteLength;
+}
+
+export function isPdfFormFieldDataExportable(field:PdfFormFieldInfo):boolean{
+  return !field.readOnly
+    &&!field.password
+    &&!field.richText
+    &&!field.duplicateChoiceExports
+    &&!(field.type==='dropdown'&&field.editable&&field.multiselect)
+    &&!(field.type==='radio'&&!field.offToggleable&&field.selected.length===0)
+    &&['text','checkbox','radio','dropdown','list'].includes(field.type);
+}
+
+export async function exportPdfFormDataJson(bytes:Uint8Array):Promise<string>{
+  const sourceFields=(await inspectPdfFormFields(bytes)).filter(isPdfFormFieldDataExportable);
+  if(sourceFields.length>1000)throw new Error('PDF form data contains more than 1,000 safely exportable fields.');
+  const fields=sourceFields.map((field):PdfFormDataField=>{
+    if(!field.name.trim()||field.name.length>512){
+      throw new Error(`PDF form field "${field.name}" has a name that cannot be represented in MALENJO form-data JSON.`);
+    }
+    if(field.type==='text'){
+      if(field.value.length>10000||field.value.includes('\u0000')){
+        throw new Error(`PDF form field "${field.name}" has a text value that exceeds MALENJO form-data safety limits.`);
+      }
+      return {name:field.name,type:'text',value:field.value};
+    }
+    if(field.type==='checkbox')return {name:field.name,type:'checkbox',checked:Boolean(field.checked)};
+    const selected=selectedFieldValues(field.selected);
+    if(field.type==='radio')return {name:field.name,type:'radio',selected};
+    if(field.type==='dropdown')return {name:field.name,type:'dropdown',selected};
+    return {name:field.name,type:'list',selected};
+  });
+  const json=JSON.stringify({
+    format:'malenjo-pdf-form-data',
+    version:1,
+    fields,
+  } satisfies PdfFormDataSnapshot,null,2);
+  if(utf8ByteLength(json)>1024*1024)throw new Error('PDF form-data JSON exceeds the 1 MB safety limit.');
+  return json;
+}
+
+function parsePdfFormDataJson(json:string):PdfFormDataSnapshot{
+  if(utf8ByteLength(json)>1024*1024)throw new Error('PDF form-data JSON exceeds the 1 MB safety limit.');
+  let parsed:unknown;
+  try{
+    parsed=JSON.parse(json);
+  }catch{
+    throw new Error('PDF form-data JSON is invalid.');
+  }
+  if(!parsed||typeof parsed!=='object')throw new Error('PDF form-data JSON must be an object.');
+  const snapshot=parsed as Partial<PdfFormDataSnapshot>;
+  if(snapshot.format!=='malenjo-pdf-form-data'||snapshot.version!==1||!Array.isArray(snapshot.fields)){
+    throw new Error('PDF form-data JSON has an unsupported format or version.');
+  }
+  if(snapshot.fields.length>1000)throw new Error('PDF form-data JSON contains too many fields.');
+  const names=new Set<string>();
+  const fields=snapshot.fields.map((raw,index):PdfFormDataField=>{
+    if(!raw||typeof raw!=='object')throw new Error(`PDF form-data field #${index+1} is invalid.`);
+    const field=raw as Partial<PdfFormDataField>;
+    if(typeof field.name!=='string'||!field.name.trim()||field.name.length>512){
+      throw new Error(`PDF form-data field #${index+1} has an invalid name.`);
+    }
+    if(names.has(field.name))throw new Error(`PDF form-data JSON repeats field "${field.name}".`);
+    names.add(field.name);
+    const type=field.type;
+    if(type!=='text'&&type!=='checkbox'&&type!=='radio'&&type!=='dropdown'&&type!=='list'){
+      throw new Error(`PDF form-data field "${field.name}" has an unsupported type.`);
+    }
+    if(type==='text'){
+      if(typeof field.value!=='string')throw new Error(`PDF form-data text field "${field.name}" must contain a string value.`);
+      if(field.value.length>10000||field.value.includes('\u0000')){
+        throw new Error(`PDF form-data text field "${field.name}" has an unsafe value.`);
+      }
+      return {name:field.name,type,value:field.value};
+    }
+    if(type==='checkbox'){
+      if(typeof field.checked!=='boolean')throw new Error(`PDF form-data checkbox "${field.name}" must contain a boolean value.`);
+      return {name:field.name,type,checked:field.checked};
+    }
+    if(!Array.isArray(field.selected)||field.selected.some((value)=>typeof value!=='string')){
+      throw new Error(`PDF form-data choice field "${field.name}" must contain a string array.`);
+    }
+    const selected=selectedFieldValues(field.selected);
+    return {name:field.name,type,selected};
+  });
+  return {format:'malenjo-pdf-form-data',version:1,fields};
+}
+
+export async function importPdfFormDataJson(bytes:Uint8Array,json:string):Promise<Uint8Array>{
+  const snapshot=parsePdfFormDataJson(json);
+  if(!snapshot.fields.length)throw new Error('PDF form-data JSON contains no editable fields.');
+  const targetFields=await inspectPdfFormFields(bytes);
+  const targetByName=new Map(targetFields.map((field)=>[field.name,field]));
+  const updates:PdfFormFieldUpdate[]=[];
+  for(const imported of snapshot.fields){
+    const target=targetByName.get(imported.name);
+    if(!target)throw new Error(`PDF form field "${imported.name}" was not found in the target PDF.`);
+    if(!isPdfFormFieldDataExportable(target)){
+      throw new Error(`PDF form field "${imported.name}" is not safely importable.`);
+    }
+    if(target.type!==imported.type){
+      throw new Error(`PDF form field "${imported.name}" has type "${target.type}", not "${imported.type}".`);
+    }
+    if(imported.type==='text')updates.push({name:imported.name,value:imported.value??''});
+    else if(imported.type==='checkbox')updates.push({name:imported.name,checked:Boolean(imported.checked)});
+    else updates.push({name:imported.name,selected:[...(imported.selected??[])]});
+  }
+  return fillPdfFormFields(bytes,updates);
+}
+
 export interface PdfAttachmentSpec {
   name:string;
   bytes:Uint8Array;

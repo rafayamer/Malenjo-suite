@@ -106,6 +106,7 @@ No module is complete merely because its navigation entry exists. Completion req
 | Zoom / fit | PDF Workspace | fit width/page + 25–400% clamp | `layout.test.ts` | Implemented |
 | Open local PDF | Native PDF boundary | `read_pdf_document` raw IPC response | Rust tests + CI | Implemented, verification pending |
 | Save/export copy | Phase 1 pipeline + PDF toolbar | desktop Save As / browser preview download | CI/manual E2E pending | Implemented |
+| AcroForm data import/export | PDF Forms | deterministic MALENJO JSON v1 via `exportPdfFormDataJson` / `importPdfFormDataJson`, workspace controls, PDF native output boundary | `editor.test.ts` round-trip + mismatch/sensitive-field tests; PR CI | Implemented |
 | Print | PDF Workspace | force-render + browser/WebView print path | Windows manual check pending | Implemented, verification pending |
 | Malformed PDF safety | Native boundary + PDF.js error state | signature check, 512 MB limit, fixtures | Rust tests + fixture corpus | Implemented |
 | Backend separation | PDF backend | `backend.ts` capability-denied default | architecture review | Implemented |

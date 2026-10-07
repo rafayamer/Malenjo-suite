@@ -16,6 +16,8 @@ export type DocumentCommandId =
   | 'attach'
   | 'add-form-field'
   | 'fill-form'
+  | 'export-form-data'
+  | 'import-form-data'
   | 'flatten-form'
   | 'header-footer'
   | 'bates'
