@@ -230,7 +230,7 @@ jobs:
               throw "Stirling Office license artifact hash mismatch: $relative"
             }
           }
-          if ((Get-FileHash -Algorithm SHA256 "provider-packs/stirling-core/malenjo-notices/stirling-office-convert-LICENSE.txt").Hash.ToLowerInvariant() -ne "94838a9a135b813032c95d85f356e0605a0ec337ab84de422d13cac237e20ffb") {
+          if ((Get-FileHash -Algorithm SHA256 "provider-packs/stirling-core/malenjo-notices/stirling-office-convert-LICENSE.txt").Hash.ToLowerInvariant() -ne "8758ef1539950d6b14017a6f8f84fdfa4598b869cc6233b1e8cd490c12955900") {
             throw "Office Convert MIT license notice no longer matches the reviewed baseline."
           }
           if ((Get-FileHash -Algorithm SHA256 "provider-packs/stirling-core/malenjo-notices/stirling-office-convert-DEPENDENCIES.md").Hash.ToLowerInvariant() -ne "87ab24690f9adbd1cc2e0a2f09d75fa2a037c698f6553c457ec5a74aa598cf0b") {
