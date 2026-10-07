@@ -54,5 +54,6 @@ Do not bypass or imitate paid-license checks from restricted Stirling code.
 
 The generated Stirling provider pack may include MALENJO-authored compatibility patches stored under `third_party/stirling-pdf/patches/`. Each patch must target the pinned reviewed commit, apply only to MIT-licensed open-core paths, pass `git apply --check`, and be recorded by path and SHA-256 in the generated provider manifest.
 
-Current patch:
+Current patches:
 - `0001-malenjo-java-effect-alternatives.patch` — registers Java as an endpoint alternative for Scanner Effect and Replace/Invert Colors because the reviewed controllers already implement those functions in Java/PDFBox. MALENJO separately filters the Ghostscript-only CMYK mode.
+- `0002-malenjo-core-license-overrides.patch` — removes the pinned upstream override entries for `com.hubspot.immutables:immutables-exceptions:1.9` and `com.hubspot:algebra:1.5` from the MALENJO **core-only** license baseline. The pinned core dependency graph does not resolve either artifact and Gradle's license task removes both as unused. The patch makes that reviewed core baseline explicit before license resolution; any subsequent mutation of `app/license-overrides.json` still fails the provider build.
