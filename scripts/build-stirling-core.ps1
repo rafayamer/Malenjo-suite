@@ -70,6 +70,9 @@ try {
     }
   }
 
+  $licenseOverridesPath = Join-Path $src "app/license-overrides.json"
+  $licenseOverridesBaselineHash = (Get-FileHash -Algorithm SHA256 $licenseOverridesPath).Hash.ToLowerInvariant()
+
   # settings.gradle always declares :proprietary even in core flavor. Provide an
   # empty MALENJO-owned stub project so Gradle can configure the graph without
   # checking out Stirling's restricted app/proprietary source.
@@ -85,9 +88,9 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "Pinned Stirling dependency license gate failed." }
   $licenseReport = Join-Path $src "build/reports/dependency-license/index.json"
   if (!(Test-Path $licenseReport)) { throw "Stirling dependency license report was not generated." }
-  $overrideChanges = (& git status --porcelain -- app/license-overrides.json | Out-String).Trim()
-  if ($overrideChanges) {
-    throw "Stirling dependency license resolution changed app/license-overrides.json; review the new metadata before packaging."
+  $licenseOverridesAfterHash = (Get-FileHash -Algorithm SHA256 $licenseOverridesPath).Hash.ToLowerInvariant()
+  if ($licenseOverridesAfterHash -ne $licenseOverridesBaselineHash) {
+    throw "Stirling dependency license resolution changed the reviewed core-only app/license-overrides.json baseline; review the new metadata before packaging."
   }
 
   Write-Host "Building backend-only Stirling core JAR..."
