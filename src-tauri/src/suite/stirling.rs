@@ -147,7 +147,7 @@ fn stirling_jar_path(app: &AppHandle) -> Option<PathBuf> {
 const STIRLING_PIN: &str = "25220cbdbde2d526cebf173b94357884e180b8c1";
 const OFFICE_CONVERT_VERSION: &str = "0.2.2";
 const OFFICE_CONVERT_SOURCE_COMMIT: &str = "673aab8d6ac784524cd1d90141c95e74b9fd26ae";
-const OFFICE_CONVERT_LICENSE_SHA256: &str = "94838a9a135b813032c95d85f356e0605a0ec337ab84de422d13cac237e20ffb";
+const OFFICE_CONVERT_LICENSE_SHA256: &str = "8758ef1539950d6b14017a6f8f84fdfa4598b869cc6233b1e8cd490c12955900";
 const OFFICE_CONVERT_DEPENDENCIES_SHA256: &str = "87ab24690f9adbd1cc2e0a2f09d75fa2a037c698f6553c457ec5a74aa598cf0b";
 const OFFICE_CONVERT_LICENSE_TEXT: &str =
     include_str!("../../../third_party/stirling-office-convert/LICENSE.txt");
