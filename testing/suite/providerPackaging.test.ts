@@ -109,6 +109,8 @@ describe('Windows PDF provider packaging contract',()=>{
     expect(native).toContain('already occupied by a process that MALENJO did not start');
     expect(native).toContain('BOOT-INF/lib/');
     expect(native).toContain('embedded_office_artifacts_match');
+    expect(native).toContain('DEPENDENCY_LICENSE_REPORT.sha256');
+    expect(native).toContain('getrandom::fill');
     expect(native).toContain('OFFICE_CONVERT_LICENSE_TEXT');
     expect(native).toContain('OFFICE_CONVERT_DEPENDENCIES_TEXT');
     expect(fixture).toContain('%PDF-1.4`n');
