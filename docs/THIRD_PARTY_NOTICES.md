@@ -48,6 +48,12 @@ The qpdf pack is injected only into the on-demand local Stirling child process a
 
 libjpeg-turbo/IJG acknowledgement required by the reviewed static dependency: **This software is based in part on the work of the Independent JPEG Group.**
 
+## Audit-stage PDF provider candidates
+
+| Component | Reviewed version | License | Status |
+|---|---:|---|---|
+| WeasyPrint | 70.0 | BSD-3-Clause project; Windows native/transitive closure under review | Inventory-only. HTML/URL/EML capability remains disabled until exact runtime-license/source obligations close. |
+
 ## Optional external engines/adapters
 
 MALENJO may call locally installed tools such as Ollama, llama.cpp, PaddleOCR/Python, ClamAV, pyHanko, Temporal and Kopia through product-owned adapter boundaries. Their executable/model/package licenses are reviewed independently from this source notice before bundling or redistribution. Availability in Help diagnostics does **not** mean the engine is bundled.
