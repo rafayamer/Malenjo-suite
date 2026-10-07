@@ -89,3 +89,43 @@ the reviewed provider PATH and must prove:
 - PDF → vector remains non-success because it is still Ghostscript-only.
 
 PDF remains partial after this pass.
+
+
+## Runtime capability provenance
+
+MALENJO does not infer Office Convert availability from OpenAPI presence or the
+`system.stirlingOfficeConversion` flag alone. The native Tauri boundary
+verifies the selected generated/bundled Stirling pack before reporting the
+`stirling-office-convert` component as available:
+
+- the adjacent MALENJO manifest names the exact pinned Stirling commit;
+- the selected `stirling-pdf.jar` SHA-256 matches the manifest;
+- embedded Office Convert is exactly `0.2.2` from source commit
+  `673aab8d6ac784524cd1d90141c95e74b9fd26ae` under MIT;
+- all three expected embedded Office Convert JAR entries have recorded
+  SHA-256 values;
+- the generated dependency-license report and retained Office Convert license
+  notice are present.
+
+The verification result is cached using JAR/manifest/notice metadata so normal
+component-status refreshes do not repeatedly hash the large provider JAR.
+
+An explicit `MALENJO_STIRLING_JAR` override is reported as `configured` and
+is **not eligible** for embedded Office Convert approval. This prevents an
+arbitrary local JAR from inheriting MALENJO's reviewed-provider claim.
+
+## Provider UI input truth
+
+File → PDF expects an Office/text input, not the currently open PDF. MALENJO
+therefore uses the operation's reviewed `accept` contract to decide whether
+the active PDF can populate a file field. Office-input fields require an
+explicit compatible local file; PDF-input conversion fields may still use the
+active working PDF.
+
+## XLSX execution proof
+
+Pass 2D includes a deterministic ruled-table PDF fixture. Windows CI validates
+the fixture with qpdf, invokes PDF → XLSX through the loopback provider, and
+requires a real OOXML workbook containing both `xl/workbook.xml` and
+`xl/worksheets/sheet1.xml`. A 204/no-table response is not accepted as
+feature evidence.
