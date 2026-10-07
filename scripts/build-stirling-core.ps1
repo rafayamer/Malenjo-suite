@@ -61,7 +61,7 @@ try {
     $patchPath = Join-Path $repoRoot $patchRelativePath
     if (!(Test-Path $patchPath)) { throw "Reviewed Stirling patch is missing: $patchPath" }
     & git apply --check $patchPath
-    if ($LASTEXITCODE -ne 0) { throw "Reviewed Stirling patch no longer applies cleanly to $Pin: $patchRelativePath" }
+    if ($LASTEXITCODE -ne 0) { throw "Reviewed Stirling patch no longer applies cleanly to ${Pin}: $patchRelativePath" }
     & git apply $patchPath
     if ($LASTEXITCODE -ne 0) { throw "Unable to apply reviewed Stirling patch: $patchRelativePath" }
     $patchRecords += [ordered]@{
