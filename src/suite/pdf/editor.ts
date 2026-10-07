@@ -902,12 +902,17 @@ export interface PdfFormDataSnapshot {
   fields:PdfFormDataField[];
 }
 
+function utf8ByteLength(value:string):number{
+  return new TextEncoder().encode(value).byteLength;
+}
+
 export function isPdfFormFieldDataExportable(field:PdfFormFieldInfo):boolean{
   return !field.readOnly
     &&!field.password
     &&!field.richText
     &&!field.duplicateChoiceExports
     &&!(field.type==='dropdown'&&field.editable&&field.multiselect)
+    &&!(field.type==='radio'&&!field.offToggleable&&field.selected.length===0)
     &&['text','checkbox','radio','dropdown','list'].includes(field.type);
 }
 
@@ -935,12 +940,12 @@ export async function exportPdfFormDataJson(bytes:Uint8Array):Promise<string>{
     version:1,
     fields,
   } satisfies PdfFormDataSnapshot,null,2);
-  if(json.length>1024*1024)throw new Error('PDF form-data JSON exceeds the 1 MB safety limit.');
+  if(utf8ByteLength(json)>1024*1024)throw new Error('PDF form-data JSON exceeds the 1 MB safety limit.');
   return json;
 }
 
 function parsePdfFormDataJson(json:string):PdfFormDataSnapshot{
-  if(json.length>1024*1024)throw new Error('PDF form-data JSON exceeds the 1 MB safety limit.');
+  if(utf8ByteLength(json)>1024*1024)throw new Error('PDF form-data JSON exceeds the 1 MB safety limit.');
   let parsed:unknown;
   try{
     parsed=JSON.parse(json);
