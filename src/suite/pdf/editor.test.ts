@@ -208,6 +208,68 @@ describe('PDF mutation core',()=>{
       .rejects.toThrow(/read-only/i);
   });
 
+  it('preserves external field names/options and reports password, multiline and multiselect semantics',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+
+    const spaced=form.createTextField(' external name ');
+    spaced.addToPage(page,{x:30,y:620,width:220,height:28});
+
+    const secret=form.createTextField('secret');
+    secret.enablePassword();
+    secret.setText('top secret');
+    secret.addToPage(page,{x:30,y:570,width:220,height:28});
+
+    const notes=form.createTextField('notes');
+    notes.enableMultiline();
+    notes.setText('line one\nline two');
+    notes.addToPage(page,{x:30,y:480,width:220,height:70});
+
+    const multi=form.createDropdown('multi_department');
+    multi.addOptions(['Engineering','Finance','  Legal  ']);
+    multi.enableMultiselect();
+    multi.select(['Engineering','Finance']);
+    multi.addToPage(page,{x:30,y:420,width:220,height:28});
+
+    const singleList=form.createOptionList('single_reviewer');
+    singleList.addOptions(['Alice','Bob']);
+    singleList.select('Alice');
+    singleList.addToPage(page,{x:280,y:480,width:160,height:90});
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const info=await inspectPdfFormFields(bytes);
+    expect(info.find((field)=>field.name==='secret')).toMatchObject({
+      password:true,value:'',
+    });
+    expect(info.find((field)=>field.name==='notes')).toMatchObject({
+      multiline:true,value:'line one\nline two',
+    });
+    expect(info.find((field)=>field.name==='multi_department')).toMatchObject({
+      multiselect:true,selected:['Engineering','Finance'],
+    });
+    expect(info.find((field)=>field.name==='single_reviewer')).toMatchObject({
+      multiselect:false,selected:['Alice'],
+    });
+
+    const filled=await fillPdfFormFields(bytes,[
+      {name:' external name ',value:'Привет MALENJO'},
+      {name:'multi_department',selected:['Engineering','  Legal  ']},
+    ]);
+    const filledInfo=await inspectPdfFormFields(filled);
+    expect(filledInfo.find((field)=>field.name===' external name ')?.value).toBe('Привет MALENJO');
+    expect(filledInfo.find((field)=>field.name==='multi_department')?.selected)
+      .toEqual(['Engineering','  Legal  ']);
+
+    await expect(fillPdfFormFields(bytes,[
+      {name:'multi_department',selected:['Missing option']},
+    ])).rejects.toThrow(/does not contain the selected option/i);
+
+    await expect(fillPdfFormFields(bytes,[
+      {name:'single_reviewer',selected:['Alice','Bob']},
+    ])).rejects.toThrow(/accepts one selected option/i);
+  });
+
   it('rejects invalid radio and choice field configurations',async()=>{
     const bytes=await sample(1);
     await expect(addPdfRadioGroup(bytes,{
