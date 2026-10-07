@@ -297,18 +297,53 @@ fn reviewed_dependency_report_hash() -> Option<&'static str> {
     })
 }
 
-fn embedded_office_artifacts_match(jar: &Path) -> bool {
+fn reviewed_office_artifacts() -> Option<Vec<(String, String)>> {
+    [
+        "stirling-office-convert-0.2.2.jar",
+        "stirling-office-convert-legacy-0.2.2.jar",
+        "stirling-office-convert-topdf-0.2.2.jar",
+    ]
+    .into_iter()
+    .map(|name| {
+        reviewed_office_artifact_hash(name)
+            .map(|hash| (name.to_string(), hash.to_string()))
+    })
+    .collect()
+}
+
+fn embedded_office_artifacts_match(
+    jar: &Path,
+    expected_artifacts: &[(String, String)],
+) -> bool {
     let Ok(file) = std::fs::File::open(jar) else {
         return false;
     };
     let Ok(mut archive) = zip::ZipArchive::new(file) else {
         return false;
     };
-    for name in [
-        "stirling-office-convert-0.2.2.jar",
-        "stirling-office-convert-legacy-0.2.2.jar",
-        "stirling-office-convert-topdf-0.2.2.jar",
-    ] {
+
+    let mut expected_entries = expected_artifacts
+        .iter()
+        .map(|(name, _)| format!("BOOT-INF/lib/{name}"))
+        .collect::<Vec<_>>();
+    expected_entries.sort();
+
+    let mut actual_entries = Vec::new();
+    for index in 0..archive.len() {
+        let Ok(artifact) = archive.by_index(index) else {
+            return false;
+        };
+        let name = artifact.name().to_string();
+        if name.starts_with("BOOT-INF/lib/stirling-office-convert") && name.ends_with(".jar") {
+            actual_entries.push(name);
+        }
+    }
+    actual_entries.sort();
+    if actual_entries != expected_entries {
+        return false;
+    }
+
+    for (name, expected) in expected_artifacts {
         let entry_name = format!("BOOT-INF/lib/{name}");
         let actual = {
             let Ok(mut artifact) = archive.by_name(&entry_name) else {
@@ -322,10 +357,7 @@ fn embedded_office_artifacts_match(jar: &Path) -> bool {
             };
             hash
         };
-        let Some(expected) = reviewed_office_artifact_hash(name) else {
-            return false;
-        };
-        if actual != expected {
+        if actual != *expected {
             return false;
         }
     }
@@ -346,7 +378,11 @@ fn license_artifact_matches(manifest: &Value, relative: &str, path: &Path) -> bo
         && sha256_file_hex(path).is_ok_and(|actual| actual == expected)
 }
 
-fn office_convert_pack_is_verified(jar: &Path) -> bool {
+fn office_convert_pack_is_verified_against(
+    jar: &Path,
+    expected_artifacts: &[(String, String)],
+    expected_report_hash: &str,
+) -> bool {
     let Some((manifest, _manifest_path, license_report, office_license, office_dependencies)) =
         office_pack_files(jar)
     else {
@@ -357,19 +393,12 @@ fn office_convert_pack_is_verified(jar: &Path) -> bool {
     let actual_hash = sha256_file_hex(jar).ok();
     let office = manifest.get("embeddedOfficeConvert");
     let jars = office.and_then(|value| value.get("jars")).and_then(Value::as_object);
-    let required_jars = [
-        "stirling-office-convert-0.2.2.jar",
-        "stirling-office-convert-legacy-0.2.2.jar",
-        "stirling-office-convert-topdf-0.2.2.jar",
-    ];
     let office_jars_valid = jars.is_some_and(|items| {
-        required_jars.iter().all(|name| {
-            let Some(expected) = reviewed_office_artifact_hash(name) else {
-                return false;
-            };
-            items.get(*name).and_then(Value::as_str) == Some(expected)
-        })
-    }) && embedded_office_artifacts_match(jar);
+        items.len() == expected_artifacts.len()
+            && expected_artifacts.iter().all(|(name, expected)| {
+                items.get(name).and_then(Value::as_str) == Some(expected.as_str())
+            })
+    }) && embedded_office_artifacts_match(jar, expected_artifacts);
 
     let office_license_text = std::fs::read_to_string(&office_license).ok();
     let office_dependencies_text = std::fs::read_to_string(&office_dependencies).ok();
@@ -379,9 +408,8 @@ fn office_convert_pack_is_verified(jar: &Path) -> bool {
             && content.contains("stirling-office-convert")
             && serde_json::from_str::<Value>(content).is_ok()
     });
-    let report_matches_reviewed_pin = reviewed_dependency_report_hash().is_some_and(|expected| {
-        sha256_file_hex(&license_report).is_ok_and(|actual| actual == expected)
-    });
+    let report_matches_reviewed_pin =
+        sha256_file_hex(&license_report).is_ok_and(|actual| actual == expected_report_hash);
 
     manifest.get("provider").and_then(Value::as_str) == Some("stirling-open-core")
         && manifest.get("upstreamCommit").and_then(Value::as_str) == Some(STIRLING_PIN)
@@ -416,6 +444,16 @@ fn office_convert_pack_is_verified(jar: &Path) -> bool {
         )
         && report_semantically_valid
         && report_matches_reviewed_pin
+}
+
+fn office_convert_pack_is_verified(jar: &Path) -> bool {
+    let Some(expected_artifacts) = reviewed_office_artifacts() else {
+        return false;
+    };
+    let Some(expected_report_hash) = reviewed_dependency_report_hash() else {
+        return false;
+    };
+    office_convert_pack_is_verified_against(jar, &expected_artifacts, expected_report_hash)
 }
 
 fn office_convert_component_status(app: &AppHandle) -> StirlingComponentStatus {
@@ -1154,7 +1192,7 @@ pub async fn stirling_core_request(
 #[cfg(test)]
 mod tests {
     use super::{
-        new_context_path, office_convert_pack_is_verified, parse_qpdf_version, reviewed_dependency_report_hash, reviewed_office_artifact_hash,
+        new_context_path, office_convert_pack_is_verified_against, parse_qpdf_version, reviewed_dependency_report_hash, reviewed_office_artifact_hash,
         parse_tesseract_version, set_reviewed_provider_path, sha256_file_hex, validate_api_path,
         MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, OFFICE_CONVERT_DEPENDENCIES_TEXT,
         OFFICE_CONVERT_LICENSE_TEXT, OFFICE_CONVERT_SOURCE_COMMIT, OFFICE_CONVERT_VERSION,
@@ -1216,7 +1254,10 @@ mod tests {
     }
 
     #[test]
-    fn office_pack_verifier_rejects_jar_and_license_tampering() {
+    fn office_pack_verifier_accepts_reviewed_fixture_then_rejects_tampering() {
+        use std::io::Write;
+        use zip::{write::SimpleFileOptions, ZipWriter};
+
         let root = std::env::temp_dir().join(format!(
             "malenjo-office-pack-test-{}",
             std::process::id()
@@ -1229,7 +1270,47 @@ mod tests {
         let office_dependencies = notices.join("stirling-office-convert-DEPENDENCIES.md");
         let license_report = notices.join("stirling-dependency-licenses.json");
 
-        std::fs::write(&jar, b"reviewed-stirling-pack").unwrap();
+        let fixture_artifacts = [
+            ("stirling-office-convert-0.2.2.jar", b"fixture-office-core".as_slice()),
+            ("stirling-office-convert-legacy-0.2.2.jar", b"fixture-office-legacy".as_slice()),
+            ("stirling-office-convert-topdf-0.2.2.jar", b"fixture-office-topdf".as_slice()),
+        ];
+        let expected_artifacts = fixture_artifacts
+            .iter()
+            .map(|(name, bytes)| {
+                let mut cursor = std::io::Cursor::new(*bytes);
+                (
+                    (*name).to_string(),
+                    super::sha256_reader_hex(&mut cursor).unwrap(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let write_jar = |include_extra: bool| {
+            let file = std::fs::File::create(&jar).unwrap();
+            let mut writer = ZipWriter::new(file);
+            for (name, bytes) in fixture_artifacts {
+                writer
+                    .start_file(
+                        format!("BOOT-INF/lib/{name}"),
+                        SimpleFileOptions::default(),
+                    )
+                    .unwrap();
+                writer.write_all(bytes).unwrap();
+            }
+            if include_extra {
+                writer
+                    .start_file(
+                        "BOOT-INF/lib/stirling-office-convert-unreviewed.jar",
+                        SimpleFileOptions::default(),
+                    )
+                    .unwrap();
+                writer.write_all(b"unreviewed").unwrap();
+            }
+            writer.finish().unwrap();
+        };
+
+        write_jar(false);
         std::fs::write(&office_license, OFFICE_CONVERT_LICENSE_TEXT.as_bytes()).unwrap();
         std::fs::write(&office_dependencies, OFFICE_CONVERT_DEPENDENCIES_TEXT.as_bytes()).unwrap();
         let report = serde_json::json!({
@@ -1238,14 +1319,17 @@ mod tests {
         });
         std::fs::write(&license_report, serde_json::to_vec(&report).unwrap()).unwrap();
 
-        let jar_hash = sha256_file_hex(&jar).unwrap();
+        let report_hash = sha256_file_hex(&license_report).unwrap();
         let license_hash = sha256_file_hex(&office_license).unwrap();
         let dependencies_hash = sha256_file_hex(&office_dependencies).unwrap();
-        let report_hash = sha256_file_hex(&license_report).unwrap();
-        let manifest = serde_json::json!({
+        let artifact_manifest = expected_artifacts
+            .iter()
+            .map(|(name, hash)| (name.clone(), Value::String(hash.clone())))
+            .collect::<serde_json::Map<_, _>>();
+        let mut manifest = serde_json::json!({
             "provider": "stirling-open-core",
             "upstreamCommit": STIRLING_PIN,
-            "sha256": jar_hash,
+            "sha256": sha256_file_hex(&jar).unwrap(),
             "dependencyLicenseReport": "malenjo-notices/stirling-dependency-licenses.json",
             "licenseArtifacts": {
                 "malenjo-notices/stirling-office-convert-LICENSE.txt": license_hash,
@@ -1258,18 +1342,35 @@ mod tests {
                 "sourceCommit": OFFICE_CONVERT_SOURCE_COMMIT,
                 "license": "MIT",
                 "verification": "pinned-published-sha256",
-                "jars": {
-                    "stirling-office-convert-0.2.2.jar": reviewed_office_artifact_hash("stirling-office-convert-0.2.2.jar").unwrap(),
-                    "stirling-office-convert-legacy-0.2.2.jar": reviewed_office_artifact_hash("stirling-office-convert-legacy-0.2.2.jar").unwrap(),
-                    "stirling-office-convert-topdf-0.2.2.jar": reviewed_office_artifact_hash("stirling-office-convert-topdf-0.2.2.jar").unwrap()
-                }
+                "jars": Value::Object(artifact_manifest)
             }
         });
-        std::fs::write(root.join("manifest.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
+        let manifest_path = root.join("manifest.json");
+        std::fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
 
-        assert!(!office_convert_pack_is_verified(&jar));
+        assert!(office_convert_pack_is_verified_against(
+            &jar,
+            &expected_artifacts,
+            &report_hash,
+        ));
+
         std::fs::write(&office_license, b"tampered license").unwrap();
-        assert!(!office_convert_pack_is_verified(&jar));
+        assert!(!office_convert_pack_is_verified_against(
+            &jar,
+            &expected_artifacts,
+            &report_hash,
+        ));
+        std::fs::write(&office_license, OFFICE_CONVERT_LICENSE_TEXT.as_bytes()).unwrap();
+
+        write_jar(true);
+        manifest["sha256"] = Value::String(sha256_file_hex(&jar).unwrap());
+        std::fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+        assert!(!office_convert_pack_is_verified_against(
+            &jar,
+            &expected_artifacts,
+            &report_hash,
+        ));
+
         std::fs::remove_dir_all(root).ok();
     }
 
