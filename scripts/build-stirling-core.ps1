@@ -52,13 +52,23 @@ try {
     }
   }
 
-  $patchPath = Join-Path $repoRoot "third_party/stirling-pdf/patches/0001-malenjo-java-effect-alternatives.patch"
-  if (!(Test-Path $patchPath)) { throw "Reviewed Stirling endpoint patch is missing: $patchPath" }
-  & git apply --check $patchPath
-  if ($LASTEXITCODE -ne 0) { throw "Reviewed Stirling endpoint patch no longer applies cleanly to $Pin." }
-  & git apply $patchPath
-  if ($LASTEXITCODE -ne 0) { throw "Unable to apply reviewed Stirling endpoint patch." }
-  $patchHash = (Get-FileHash -Algorithm SHA256 $patchPath).Hash.ToLowerInvariant()
+  $patchRelativePaths = @(
+    "third_party/stirling-pdf/patches/0001-malenjo-java-effect-alternatives.patch",
+    "third_party/stirling-pdf/patches/0002-malenjo-core-license-overrides.patch"
+  )
+  $patchRecords = @()
+  foreach ($patchRelativePath in $patchRelativePaths) {
+    $patchPath = Join-Path $repoRoot $patchRelativePath
+    if (!(Test-Path $patchPath)) { throw "Reviewed Stirling patch is missing: $patchPath" }
+    & git apply --check $patchPath
+    if ($LASTEXITCODE -ne 0) { throw "Reviewed Stirling patch no longer applies cleanly to $Pin: $patchRelativePath" }
+    & git apply $patchPath
+    if ($LASTEXITCODE -ne 0) { throw "Unable to apply reviewed Stirling patch: $patchRelativePath" }
+    $patchRecords += [ordered]@{
+      path = $patchRelativePath
+      sha256 = (Get-FileHash -Algorithm SHA256 $patchPath).Hash.ToLowerInvariant()
+    }
+  }
 
   # settings.gradle always declares :proprietary even in core flavor. Provide an
   # empty MALENJO-owned stub project so Gradle can configure the graph without
@@ -135,12 +145,7 @@ try {
     restrictedSourceMaterialized = $false
     jar = "stirling-pdf.jar"
     sha256 = $hash
-    patches = @(
-      [ordered]@{
-        path = "third_party/stirling-pdf/patches/0001-malenjo-java-effect-alternatives.patch"
-        sha256 = $patchHash
-      }
-    )
+    patches = $patchRecords
     embeddedOfficeConvert = [ordered]@{
       version = $officeVersion
       upstream = "Stirling-Tools/Stirling-Office-Convert"
