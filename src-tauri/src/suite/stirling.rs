@@ -291,6 +291,16 @@ fn office_convert_component_status(app: &AppHandle) -> StirlingComponentStatus {
     };
 
     let source = selected_stirling_source(&jar);
+    if source == "configured" {
+        return StirlingComponentStatus {
+            id: "stirling-office-convert".into(),
+            available: false,
+            version: None,
+            executable: Some(jar.to_string_lossy().to_string()),
+            source,
+            message: "A MALENJO_STIRLING_JAR override is not eligible for embedded Office Convert approval; use the reviewed generated/bundled core pack.".into(),
+        };
+    }
     if let Some(fingerprint) = office_pack_fingerprint(&jar) {
         if let Ok(cache) = office_status_cache().lock() {
             if let Some(entry) = cache.as_ref() {
