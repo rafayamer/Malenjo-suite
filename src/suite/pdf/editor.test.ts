@@ -490,6 +490,51 @@ describe('PDF mutation core',()=>{
     expect(acroForm.has(PDFName.of('XFA'))).toBe(true);
   });
 
+  it('preserves an empty-string radio export as a real selection',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+    const radio=form.createRadioGroup('empty_export_radio');
+    radio.addOptionToPage('',page,{x:30,y:620,width:20,height:20});
+    radio.addOptionToPage('Other',page,{x:30,y:580,width:20,height:20});
+    radio.select('');
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const info=await inspectPdfFormFields(bytes);
+    expect(info.find((field)=>field.name==='empty_export_radio')).toMatchObject({
+      type:'radio',
+      selected:[''],
+      duplicateChoiceExports:false,
+    });
+
+    const changed=await fillPdfFormFields(bytes,[{
+      name:'empty_export_radio',
+      selected:['Other'],
+    }]);
+    expect((await inspectPdfFormFields(changed))
+      .find((field)=>field.name==='empty_export_radio')?.selected).toEqual(['Other']);
+  });
+
+  it('detects and rejects radio groups with duplicate export values',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+    const radio=form.createRadioGroup('duplicate_radio_exports');
+    radio.addOptionToPage('DUP',page,{x:30,y:620,width:20,height:20});
+    radio.addOptionToPage('DUP',page,{x:30,y:580,width:20,height:20});
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const info=await inspectPdfFormFields(bytes);
+    expect(info.find((field)=>field.name==='duplicate_radio_exports')).toMatchObject({
+      type:'radio',
+      duplicateChoiceExports:true,
+    });
+    await expect(fillPdfFormFields(bytes,[{
+      name:'duplicate_radio_exports',
+      selected:['DUP'],
+    }])).rejects.toThrow(/duplicate export values/i);
+  });
+
   it('respects radio groups that cannot toggle back to off',async()=>{
     const pdf=await PDFDocument.create();
     const page=pdf.addPage([500,700]);
