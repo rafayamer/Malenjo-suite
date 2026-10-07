@@ -54,6 +54,7 @@ import {
   flattenPdfForm,
   importPdfFormData,
   inspectPdfFormFields,
+  isPdfFormFieldClearable,
   isPdfFormFieldDataExportable,
   resetPdfFormFields,
   type PdfFormFieldInfo,
@@ -608,6 +609,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     &&['text','checkbox','radio','dropdown','list'].includes(field.type),
   );
   const exportableFormFields=inspectedFormFields.filter(isPdfFormFieldDataExportable);
+  const clearableFormFields=inspectedFormFields.filter(isPdfFormFieldClearable);
+  const resettableFormFields=inspectedFormFields.filter((field)=>field.resettable);
 
   async function attachDocuments(event:React.ChangeEvent<HTMLInputElement>){
     const files=Array.from(event.target.files??[]);
@@ -787,16 +790,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setError('PDF form-data file exceeds the 8 MB safety limit.');
       return;
     }
-    try{
-      const json=await file.text();
-      await mutate(
-        `Imported PDF form data from ${file.name}.`,
-        (bytes)=>importPdfFormData(bytes,json),
-        currentPage,
-      );
-    }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
-    }
+    await mutate(
+      `Imported PDF form data from ${file.name}.`,
+      async(bytes)=>{
+        const json=await file.text();
+        return importPdfFormData(bytes,json);
+      },
+      currentPage,
+    );
   }
 
 
@@ -1009,18 +1010,18 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           id:'clear-form',
           label:'Clear editable PDF form values',
           keywords:'form acroform clear empty reset values',
-          detail:fillableFormFields.length ? `Clear safely editable values in ${fillableFormFields.length} field(s)` : 'No safely editable AcroForm fields detected',
-          enabled:!!sourceBytes && !mutating && fillableFormFields.length>0,
-          disabledReason:!sourceBytes ? 'No PDF is loaded.' : !fillableFormFields.length ? 'No safely editable AcroForm fields detected.' : 'Wait for the current PDF edit to finish.',
+          detail:clearableFormFields.length ? `Clear safely editable values in ${clearableFormFields.length} field(s)` : 'No safely clearable AcroForm fields detected',
+          enabled:!!sourceBytes && !mutating && clearableFormFields.length>0,
+          disabledReason:!sourceBytes ? 'No PDF is loaded.' : !clearableFormFields.length ? 'No safely clearable AcroForm fields detected.' : 'Wait for the current PDF edit to finish.',
           run:()=>clearForm(),
         },
         {
           id:'reset-form',
           label:'Reset PDF form fields to defaults',
           keywords:'form acroform reset default dv values',
-          detail:formFields.length ? 'Restore safely supported AcroForm /DV defaults' : 'No AcroForm fields detected',
-          enabled:!!sourceBytes && !mutating && formFields.length>0,
-          disabledReason:!sourceBytes ? 'No PDF is loaded.' : !formFields.length ? 'No AcroForm fields detected.' : 'Wait for the current PDF edit to finish.',
+          detail:resettableFormFields.length ? `Restore defaults in ${resettableFormFields.length} safely resettable field(s)` : 'No safely resettable AcroForm fields detected',
+          enabled:!!sourceBytes && !mutating && resettableFormFields.length>0,
+          disabledReason:!sourceBytes ? 'No PDF is loaded.' : !resettableFormFields.length ? 'No safely resettable AcroForm fields detected.' : 'Wait for the current PDF edit to finish.',
           run:()=>resetForm(),
         },
         {
@@ -1848,8 +1849,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             return <small key={`fill-${field.name}`}><b>{field.name}</b> ({field.type}) is detected but is not directly fillable in this pass.</small>;
           })}
           <button disabled={mutating||!fillableFormFields.length} onClick={()=>void fillForm()}><ListChecks size={13}/> Apply form values</button>
-          <button disabled={mutating||!fillableFormFields.length} onClick={()=>void clearForm()}>Clear editable values</button>
-          <button disabled={mutating||!formFields.length} onClick={()=>void resetForm()}>Reset to PDF defaults</button>
+          <button disabled={mutating||!clearableFormFields.length} onClick={()=>void clearForm()}>Clear editable values</button>
+          <button disabled={mutating||!resettableFormFields.length} onClick={()=>void resetForm()}>Reset to PDF defaults</button>
           <button disabled={mutating||!exportableFormFields.length} onClick={()=>void exportFormData()}>Export form data…</button>
           <button disabled={mutating||!formFields.length} onClick={()=>formDataInputRef.current?.click()}>Import form data…</button>
           <button disabled={mutating||!formFields.length} onClick={()=>void flattenForm()}><FileCheck2 size={13}/> Flatten form fields</button>
