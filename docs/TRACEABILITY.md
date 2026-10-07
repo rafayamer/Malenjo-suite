@@ -300,3 +300,17 @@ No module is complete merely because its navigation entry exists. Completion req
 | PDF → XLSX execution | Windows provider smoke | deterministic ruled-table PDF must produce OOXML workbook + worksheet through Office Convert | qpdf fixture validation + localhost operation smoke | Implemented in pass 2D; CI/review pending |
 
 | WeasyPrint Windows candidate inventory | HTML/URL/EML PDF conversion | official v70.0 onedir asset pinned by commit + SHA-256; complete runtime/native inventory generated; capability remains disabled pending transitive legal closure | builder + packaging test + Windows CI inventory | Pass 2E inventory stage; not operational |
+
+## PDF completeness pass 6 — AcroForm filling
+
+| Requirement | Component | Implementation | Test/evidence | Status |
+|---|---|---|---|---|
+| Detect current AcroForm field state | PDF Workspace | `inspectPdfFormFields` reports type, flags, options, text value, checkbox state and current selections | `editor.test.ts` form inspection coverage | Implemented |
+| Fill existing text/checkbox/radio/dropdown/list fields | PDF mutation core | `fillPdfFormFields` in `src/suite/pdf/editor.ts` | focused fill/read-only unit test + PR CI | Implemented |
+| Preserve read-only constraints | PDF mutation core | read-only fields are rejected before mutation | `editor.test.ts` read-only rejection | Implemented |
+| Bound choice values to actual PDF options | PDF mutation core | radio/dropdown/list selections validated against field options | code review + unit test coverage | Implemented |
+| Real workspace controls | PDF Forms inspector | type-appropriate fill controls preload current working-copy values | TypeScript/build CI + source audit | Implemented |
+| Undo/Redo/dirty/export semantics | PDF Workspace | fill operation routes through existing `mutate()` / per-tab history pipeline | existing history tests + source audit | Implemented |
+| Command discoverability | PDF command bus / Forms toolbar | `fill-form` command + Forms task action | typecheck/build CI | Implemented |
+| Full Forms completion | PDF module | signature authoring, buttons, property editing, tab order, validation/calculation, reset/clear, data import/export, XFA/accessibility/interoperability remain | #39 / #141 | Partial |
+
