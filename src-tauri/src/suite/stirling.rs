@@ -159,6 +159,8 @@ const OFFICE_CONVERT_DEPENDENCIES_TEXT: &str =
     include_str!("../../../third_party/stirling-office-convert/DEPENDENCIES.md");
 const OFFICE_CONVERT_ARTIFACT_PINS: &str =
     include_str!("../../../third_party/stirling-office-convert/ARTIFACTS.sha256");
+const OFFICE_CONVERT_LICENSE_REPORT_PIN: &str =
+    include_str!("../../../third_party/stirling-office-convert/DEPENDENCY_LICENSE_REPORT.sha256");
 
 fn sha256_reader_hex<R: Read>(reader: &mut R) -> Result<String, String> {
     let mut hasher = Sha256::new();
@@ -282,6 +284,19 @@ fn reviewed_office_artifact_hash(name: &str) -> Option<&'static str> {
     })
 }
 
+fn reviewed_dependency_report_hash() -> Option<&'static str> {
+    OFFICE_CONVERT_LICENSE_REPORT_PIN.lines().find_map(|line| {
+        let mut parts = line.split_whitespace();
+        let hash = parts.next()?;
+        let artifact = parts.next()?;
+        (parts.next().is_none()
+            && artifact == "stirling-dependency-licenses.json"
+            && hash.len() == 64
+            && hash.chars().all(|ch| ch.is_ascii_hexdigit()))
+        .then_some(hash)
+    })
+}
+
 fn embedded_office_artifacts_match(jar: &Path) -> bool {
     let Ok(file) = std::fs::File::open(jar) else {
         return false;
@@ -364,6 +379,9 @@ fn office_convert_pack_is_verified(jar: &Path) -> bool {
             && content.contains("stirling-office-convert")
             && serde_json::from_str::<Value>(content).is_ok()
     });
+    let report_matches_reviewed_pin = reviewed_dependency_report_hash().is_some_and(|expected| {
+        sha256_file_hex(&license_report).is_ok_and(|actual| actual == expected)
+    });
 
     manifest.get("provider").and_then(Value::as_str) == Some("stirling-open-core")
         && manifest.get("upstreamCommit").and_then(Value::as_str) == Some(STIRLING_PIN)
@@ -397,6 +415,7 @@ fn office_convert_pack_is_verified(jar: &Path) -> bool {
             &license_report,
         )
         && report_semantically_valid
+        && report_matches_reviewed_pin
 }
 
 fn office_convert_component_status(app: &AppHandle) -> StirlingComponentStatus {
@@ -1134,7 +1153,7 @@ pub async fn stirling_core_request(
 #[cfg(test)]
 mod tests {
     use super::{
-        new_context_path, office_convert_pack_is_verified, parse_qpdf_version, reviewed_office_artifact_hash,
+        new_context_path, office_convert_pack_is_verified, parse_qpdf_version, reviewed_dependency_report_hash, reviewed_office_artifact_hash,
         parse_tesseract_version, set_reviewed_provider_path, sha256_file_hex, validate_api_path,
         MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, OFFICE_CONVERT_DEPENDENCIES_TEXT,
         OFFICE_CONVERT_LICENSE_TEXT, OFFICE_CONVERT_SOURCE_COMMIT, OFFICE_CONVERT_VERSION,
@@ -1251,6 +1270,14 @@ mod tests {
         std::fs::write(&office_license, b"tampered license").unwrap();
         assert!(!office_convert_pack_is_verified(&jar));
         std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn dependency_license_report_has_an_immutable_reviewed_pin() {
+        assert_eq!(
+            reviewed_dependency_report_hash(),
+            Some("05c4ef33b49a9f16d7029c81575938bb9673ddcaea28da91d90fb50b66260cf1")
+        );
     }
 
     #[test]
