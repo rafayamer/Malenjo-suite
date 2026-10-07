@@ -951,25 +951,26 @@ function parsePdfFormDataJson(json:string):PdfFormDataSnapshot{
     }
     if(names.has(field.name))throw new Error(`PDF form-data JSON repeats field "${field.name}".`);
     names.add(field.name);
-    if(!['text','checkbox','radio','dropdown','list'].includes(String(field.type))){
+    const type=field.type;
+    if(type!=='text'&&type!=='checkbox'&&type!=='radio'&&type!=='dropdown'&&type!=='list'){
       throw new Error(`PDF form-data field "${field.name}" has an unsupported type.`);
     }
-    if(field.type==='text'){
+    if(type==='text'){
       if(typeof field.value!=='string')throw new Error(`PDF form-data text field "${field.name}" must contain a string value.`);
       if(field.value.length>10000||field.value.includes('\u0000')){
         throw new Error(`PDF form-data text field "${field.name}" has an unsafe value.`);
       }
-      return {name:field.name,type:'text',value:field.value};
+      return {name:field.name,type,value:field.value};
     }
-    if(field.type==='checkbox'){
+    if(type==='checkbox'){
       if(typeof field.checked!=='boolean')throw new Error(`PDF form-data checkbox "${field.name}" must contain a boolean value.`);
-      return {name:field.name,type:'checkbox',checked:field.checked};
+      return {name:field.name,type,checked:field.checked};
     }
     if(!Array.isArray(field.selected)||field.selected.some((value)=>typeof value!=='string')){
       throw new Error(`PDF form-data choice field "${field.name}" must contain a string array.`);
     }
     const selected=selectedFieldValues(field.selected);
-    return {name:field.name,type:field.type,selected};
+    return {name:field.name,type,selected};
   });
   return {format:'malenjo-pdf-form-data',version:1,fields};
 }
