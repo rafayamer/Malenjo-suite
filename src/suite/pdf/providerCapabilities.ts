@@ -47,11 +47,19 @@ function coreCapability(fallback?:string):PdfProviderCapability{
   });
 }
 
-function officeConvertCapability():PdfProviderCapability{
-  return capability(true,'Stirling Office Convert / Java-PDFBox-POI','stirling-office-convert',{
-    providerVersion:'0.2.2',
-    componentPack:'stirling-core-embedded',
-    fallback:'LibreOffice remains intentionally absent from the reviewed default provider pack',
+function officeConvertCapability(
+  statuses:Map<string,PdfProviderComponentStatus>,
+):PdfProviderCapability{
+  const component=statuses.get('stirling-office-convert');
+  if(component?.available){
+    return capability(true,'Stirling Office Convert / Java-PDFBox-POI','stirling-office-convert',{
+      providerVersion:component.version??'0.2.2',
+      componentPack:'stirling-core-embedded',
+      fallback:'LibreOffice remains intentionally absent from the reviewed default provider pack',
+    });
+  }
+  return capability(false,'Embedded Office conversion provider','stirling-office-convert',{
+    disabledReason:component?.message??'The reviewed embedded Office Convert component was not verified in the selected Stirling pack.',
   });
 }
 
@@ -162,7 +170,7 @@ export function resolvePdfProviderCapability(
   }
 
   if(matches('file-to-pdf','fileToPdf','processFileToPDF')){
-    return officeConvertCapability();
+    return officeConvertCapability(statuses);
   }
   if(matches(
     'pdf-to-word','pdfToWord','convertPdfToWord',
@@ -170,7 +178,7 @@ export function resolvePdfProviderCapability(
     'pdf-to-rtf','pdfToRtf','convertPdfToRtf','processPdfToRTForTXT',
     'pdf-to-xlsx','pdfToXlsx','pdfToExcel',
   )){
-    return officeConvertCapability();
+    return officeConvertCapability(statuses);
   }
   if(matches(
     'pdf-to-xml','pdfToXml','convertPdfToXml',
