@@ -119,6 +119,8 @@ describe('Windows PDF provider packaging contract',()=>{
     expect(builder).toContain("redistribution = 'inventory-only-not-approved'");
     expect(builder).toContain('capabilityEnabled = $false');
     expect(builder).toContain('WEASYPRINT_INVENTORY_BEGIN');
+    expect(builder).toContain('WEASYPRINT_PYTHON_PACKAGES_BEGIN');
+    expect(builder).toContain('pythonPackages = $PythonPackages');
     expect(provenance).toContain('HTML→PDF, URL→PDF and EML→PDF remain unavailable');
   });
 
