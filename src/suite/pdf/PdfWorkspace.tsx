@@ -596,6 +596,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const fillableFormFields=(formInspectedSource===sourceBytes?formFields:[]).filter((field)=>
     !field.readOnly
     &&!field.richText
+    &&!field.duplicateChoiceExports
     &&!(field.type==='dropdown'&&field.editable&&field.multiselect)
     &&['text','checkbox','radio','dropdown','list'].includes(field.type),
   );
@@ -1597,13 +1598,18 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             <b>{formFields.length} AcroForm field{formFields.length===1?'':'s'}</b>
             {formFields.map((field)=><span key={field.name} title={field.options.length?field.options.join(', '):undefined}>
               <strong>{field.name}</strong>
-              <em>{field.type}{field.required?' · required':''}{field.readOnly?' · read-only':''}{field.password?' · password':''}{field.multiline?' · multiline':''}{field.richText?' · rich-text unsupported':''}{field.multiselect?' · multiselect':''}{field.editable?' · editable':''}{field.type==='radio'&&!field.offToggleable?' · cannot clear':''}{field.type==='text'&&!field.password&&!field.richText&&field.value?` · value: ${field.value}`:''}{field.type==='checkbox'?` · ${field.checked?'checked':'unchecked'}`:''}{field.selected.length?` · selected: ${field.selected.map((value)=>field.choiceOptions.find((option)=>option.value===value)?.label??value).join(', ')}`:''}</em>
+              <em>{field.type}{field.required?' · required':''}{field.readOnly?' · read-only':''}{field.password?' · password':''}{field.multiline?' · multiline':''}{field.richText?' · rich-text unsupported':''}{field.multiselect?' · multiselect':''}{field.editable?' · editable':''}{field.duplicateChoiceExports?' · duplicate exports unsupported':''}{field.type==='radio'&&!field.offToggleable?' · cannot clear':''}{field.type==='text'&&!field.password&&!field.richText&&field.value?` · value: ${field.value}`:''}{field.type==='checkbox'?` · ${field.checked?'checked':'unchecked'}`:''}{field.selected.length?` · selected: ${field.selected.map((value)=>field.choiceOptions.find((option)=>option.value===value)?.label??value).join(', ')}`:''}</em>
             </span>)}
           </div>
 
           {formFields.map((field)=>{
             const draft=formFillDraft[field.name];
             const disabled=mutating||field.readOnly;
+            if(field.duplicateChoiceExports){
+              return <small key={`fill-${field.name}`}>
+                <b>{field.name}</b> contains duplicate choice export values; MALENJO inspects it but does not modify an ambiguous option mapping.
+              </small>;
+            }
             if(field.type==='checkbox'){
               return <label key={`fill-${field.name}`}><input
                 type="checkbox"
