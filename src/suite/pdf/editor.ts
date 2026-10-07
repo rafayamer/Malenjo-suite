@@ -905,7 +905,14 @@ export async function resetPdfFormValues(bytes:Uint8Array):Promise<Uint8Array>{
       const options=field.getOptions();
       if(new Set(options).size!==options.length)continue;
       if(defaultObject instanceof PDFName){
-        field.acroField.setValue(defaultObject);
+        const defaultValue=defaultObject.decodeText();
+        if(defaultValue==='Off'){
+          field.clear();
+        }else if(options.includes(defaultValue)){
+          field.select(defaultValue);
+        }else{
+          continue;
+        }
       }else{
         field.clear();
       }
