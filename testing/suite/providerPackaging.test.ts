@@ -76,6 +76,12 @@ describe('Windows PDF provider packaging contract',()=>{
       expect(source).toContain('checkLicense generateLicenseReport --no-parallel');
       expect(source).toContain('stirling-dependency-licenses.json');
       expect(source).toContain('stirling-office-convert-LICENSE.txt');
+      expect(source).toContain('reproducible-source-build-match');
+      expect(source).toContain('Stirling-Tools/Stirling-Office-Convert.git');
+      expect(source).toContain(':core:jar');
+      expect(source).toContain(':legacy:jar');
+      expect(source).toContain(':topdf:jar');
+      expect(source).toContain('licenseArtifacts');
     }
     expect(native).toContain('--system.stirlingOfficeConversion=true');
     expect(provenance).toContain('v0.2.2');
@@ -91,7 +97,12 @@ describe('Windows PDF provider packaging contract',()=>{
     expect(native).toContain('OFFICE_CONVERT_SOURCE_COMMIT');
     expect(native).toContain('sha256_file_hex');
     expect(native).toContain('dependencyLicenseReport');
+    expect(native).toContain('licenseArtifacts');
+    expect(native).toContain('reproducible-source-build-match');
     expect(native).toContain('MALENJO_STIRLING_JAR override is not eligible');
+    expect(native).toContain('Port 28970 is already serving a healthy process that MALENJO did not start');
+    expect(native).toContain('OFFICE_CONVERT_LICENSE_SHA256');
+    expect(native).toContain('OFFICE_CONVERT_DEPENDENCIES_SHA256');
     expect(fixture).toContain('%PDF-1.4`n');
     expect(fixture).toContain('(MALENJO) Tj');
   });
