@@ -48,9 +48,11 @@ import {
   rotatePdfPagesPermanent,
   setPdfPageBox,
   splitPdfAtPage,
+  fillPdfFormFields,
   flattenPdfForm,
   inspectPdfFormFields,
   type PdfFormFieldInfo,
+  type PdfFormFieldUpdate,
 } from './editor';
 import { disposePdf, loadPdfBytes, type PdfLoadResult } from './engine';
 import {
@@ -205,6 +207,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     gap:0.075,
   });
   const [formFields, setFormFields] = useState<PdfFormFieldInfo[]>([]);
+  const [formFillDraft, setFormFillDraft] = useState<Record<string,string|string[]|boolean|undefined>>({});
+  const [formFillTouched, setFormFillTouched] = useState<Set<string>>(()=>new Set());
+  const [formInspectedSource, setFormInspectedSource] = useState<Uint8Array|null>(null);
   const [headerFooterDraft, setHeaderFooterDraft] = useState({
     scope:'selected' as 'selected'|'all',
     header:'',
@@ -555,16 +560,46 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
 
   useEffect(()=>{
-    if(!sourceBytes){
-      setFormFields([]);
-      return;
-    }
+    setFormFields([]);
+    setFormFillDraft({});
+    setFormFillTouched(new Set());
+    setFormInspectedSource(null);
+    if(!sourceBytes)return;
+
+    const inspectedBytes=sourceBytes;
     let cancelled=false;
-    void inspectPdfFormFields(sourceBytes)
-      .then((fields)=>{ if(!cancelled)setFormFields(fields); })
-      .catch(()=>{ if(!cancelled)setFormFields([]); });
+    void inspectPdfFormFields(inspectedBytes)
+      .then((fields)=>{
+        if(cancelled)return;
+        setFormFields(fields);
+        setFormFillDraft(Object.fromEntries(fields.map((field)=>{
+          if(field.type==='checkbox')return [field.name,field.checked??false];
+          if(field.type==='radio'||field.type==='dropdown'||field.type==='list'){
+            return [field.name,[...field.selected]];
+          }
+          if(field.type==='text'&&field.password)return [field.name,undefined];
+          return [field.name,field.value];
+        })) as Record<string,string|string[]|boolean|undefined>);
+        setFormFillTouched(new Set());
+        setFormInspectedSource(inspectedBytes);
+      })
+      .catch(()=>{
+        if(cancelled)return;
+        setFormFields([]);
+        setFormFillDraft({});
+        setFormFillTouched(new Set());
+        setFormInspectedSource(null);
+      });
     return()=>{cancelled=true;};
   },[sourceBytes]);
+
+  const fillableFormFields=(formInspectedSource===sourceBytes?formFields:[]).filter((field)=>
+    !field.readOnly
+    &&!field.richText
+    &&!field.duplicateChoiceExports
+    &&!(field.type==='dropdown'&&field.editable&&field.multiselect)
+    &&['text','checkbox','radio','dropdown','list'].includes(field.type),
+  );
 
   async function attachDocuments(event:React.ChangeEvent<HTMLInputElement>){
     const files=Array.from(event.target.files??[]);
@@ -657,6 +692,41 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       );
     }
     setFormDraft((current)=>({...current,name:'',defaultValue:'',selectedText:''}));
+  }
+
+  function setFormFillValue(name:string,value:string|string[]|boolean|undefined){
+    setFormFillDraft((current)=>({...current,[name]:value}));
+    setFormFillTouched((current)=>{
+      const next=new Set(current);
+      next.add(name);
+      return next;
+    });
+  }
+
+  async function fillForm(){
+    if(!fillableFormFields.length)return;
+    const updates:PdfFormFieldUpdate[]=[];
+    for(const field of fillableFormFields){
+      if(!formFillTouched.has(field.name))continue;
+      const draft=formFillDraft[field.name];
+      if(field.type==='checkbox'){
+        updates.push({name:field.name,checked:Boolean(draft)});
+      }else if(field.type==='radio'||field.type==='dropdown'||field.type==='list'){
+        updates.push({name:field.name,selected:Array.isArray(draft)?draft:[]});
+      }else if(field.type==='text'){
+        if(field.password&&typeof draft!=='string')continue;
+        updates.push({name:field.name,value:typeof draft==='string'?draft:''});
+      }
+    }
+    if(!updates.length){
+      setActionNotice('No editable PDF form values have changed.');
+      return;
+    }
+    await mutate(
+      `Updated ${updates.length} PDF form field value(s).`,
+      (bytes)=>fillPdfFormFields(bytes,updates),
+      currentPage,
+    );
   }
 
   async function flattenForm(){
@@ -866,6 +936,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           run:()=>addFormField(),
         },
         {
+          id:'fill-form',
+          label:'Apply PDF form values',
+          keywords:'form acroform fill fields values input',
+          detail:fillableFormFields.length ? `Update ${fillableFormFields.length} fillable field(s)` : 'No editable AcroForm fields detected',
+          enabled:!!sourceBytes && !mutating && fillableFormFields.length>0,
+          disabledReason:!sourceBytes ? 'No PDF is loaded.' : !fillableFormFields.length ? 'No editable AcroForm fields detected.' : 'Wait for the current PDF edit to finish.',
+          run:()=>fillForm(),
+        },
+        {
           id:'flatten-form',
           label:'Flatten PDF form fields',
           keywords:'form acroform flatten fields',
@@ -1011,7 +1090,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     return () => registerCommands(null);
   }, [
     session, registerCommands, sourceBytes, pdf, dirty, mutating, historyRevision, formFields.length,
-    headerFooterDraft, batesDraft, pageBoxDraft, formDraft, currentPage, pageCount, selectedPages,
+    headerFooterDraft, batesDraft, pageBoxDraft, formDraft, formFillDraft, formFillTouched, currentPage, pageCount, selectedPages,
     inspectorHidden, textOverlay, shapeOverlay, commentDraft,
   ]);
 
@@ -1152,6 +1231,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     ],
     forms:[
       {id:'add-form-field',label:`Add ${formDraft.type} field`,enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addFormField},
+      {id:'fill-form',label:'Apply field values',enabled:!!sourceBytes&&!mutating&&fillableFormFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!fillableFormFields.length?'No editable AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:fillForm},
       {id:'flatten-form',label:'Flatten fields',enabled:!!sourceBytes&&!mutating&&formFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:flattenForm},
       {id:'configure-forms',label:'Form settings',enabled:true,run:configureProperties},
       providerAction,
@@ -1516,14 +1596,156 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
           <div className="pdf-feature-list pdf-form-inventory">
             <b>{formFields.length} AcroForm field{formFields.length===1?'':'s'}</b>
-            {formFields.slice(0,16).map((field)=><span key={field.name} title={field.options.length?field.options.join(', '):undefined}>
+            {formFields.map((field)=><span key={field.name} title={field.options.length?field.options.join(', '):undefined}>
               <strong>{field.name}</strong>
-              <em>{field.type}{field.required?' · required':''}{field.readOnly?' · read-only':''}{field.selected.length?` · selected: ${field.selected.join(', ')}`:''}</em>
+              <em>{field.type}{field.required?' · required':''}{field.readOnly?' · read-only':''}{field.password?' · password':''}{field.multiline?' · multiline':''}{field.richText?' · rich-text unsupported':''}{field.multiselect?' · multiselect':''}{field.editable?' · editable':''}{field.duplicateChoiceExports?' · duplicate exports unsupported':''}{field.type==='radio'&&!field.offToggleable?' · cannot clear':''}{field.type==='text'&&!field.password&&!field.richText&&field.value?` · value: ${field.value}`:''}{field.type==='checkbox'?` · ${field.checked?'checked':'unchecked'}`:''}{field.selected.length?` · selected: ${field.selected.map((value)=>field.choiceOptions.find((option)=>option.value===value)?.label??value).join(', ')}`:''}</em>
             </span>)}
-            {formFields.length>16&&<span>+ {formFields.length-16} more</span>}
           </div>
+
+          {formFields.map((field)=>{
+            const draft=formFillDraft[field.name];
+            const disabled=mutating||field.readOnly;
+            if(field.duplicateChoiceExports){
+              return <small key={`fill-${field.name}`}>
+                <b>{field.name}</b> contains duplicate choice export values; MALENJO inspects it but does not modify an ambiguous option mapping.
+              </small>;
+            }
+            if(field.type==='checkbox'){
+              return <label key={`fill-${field.name}`}><input
+                type="checkbox"
+                checked={Boolean(draft)}
+                disabled={disabled}
+                onChange={(event)=>setFormFillValue(field.name,event.target.checked)}
+              /> {field.name}{field.readOnly?' · read-only':''}</label>;
+            }
+            if(field.type==='dropdown'&&field.editable){
+              const selected=Array.isArray(draft)?draft:[];
+              if(field.multiselect){
+                return <small key={`fill-${field.name}`}>
+                  <b>{field.name}</b> combines editable and multiselect flags; MALENJO inspects it but does not modify that unsafe combination.
+                </small>;
+              }
+              const selectedIndex=selected.length
+                ? field.choiceOptions.findIndex((option)=>option.value===selected[0])
+                : -1;
+              const hasCustomValue=selected.length>0&&selectedIndex<0;
+              const selectedToken=selectedIndex>=0?`option-${selectedIndex}`:hasCustomValue?'custom':'clear';
+              return <label key={`fill-${field.name}`}>{field.name}
+                <select
+                  value={selectedToken}
+                  disabled={disabled}
+                  onChange={(event)=>{
+                    if(event.target.value==='clear'){
+                      setFormFillValue(field.name,[]);
+                      return;
+                    }
+                    if(event.target.value==='custom'){
+                      if(!hasCustomValue)setFormFillValue(field.name,['']);
+                      return;
+                    }
+                    const optionIndex=Number(event.target.value.replace(/^option-/,''));
+                    const option=field.choiceOptions[optionIndex];
+                    if(option)setFormFillValue(field.name,[option.value]);
+                  }}
+                >
+                  <option value="clear">— Clear —</option>
+                  {field.choiceOptions.map((option,index)=><option key={`${index}-${option.value}`} value={`option-${index}`}>{option.label}</option>)}
+                  <option value="custom">— Custom value —</option>
+                </select>
+                {selectedToken==='custom'&&<input
+                  value={hasCustomValue?selected[0]:''}
+                  disabled={disabled}
+                  placeholder="Custom value"
+                  onChange={(event)=>setFormFillValue(field.name,[event.target.value])}
+                />}
+              </label>;
+            }
+            if(field.type==='radio'||((field.type==='dropdown'||field.type==='list')&&!field.multiselect)){
+              const selectedValues=Array.isArray(draft)?draft:[];
+              const selectedIndex=selectedValues.length
+                ? field.choiceOptions.findIndex((option)=>option.value===selectedValues[0])
+                : -1;
+              const selectedToken=selectedIndex>=0?`option-${selectedIndex}`:'placeholder';
+              const canClear=field.type!=='radio'||field.offToggleable;
+              return <label key={`fill-${field.name}`}>{field.name}
+                <select
+                  value={selectedToken}
+                  disabled={disabled}
+                  onChange={(event)=>{
+                    if(event.target.value==='clear'){
+                      setFormFillValue(field.name,[]);
+                      return;
+                    }
+                    if(event.target.value==='placeholder')return;
+                    const optionIndex=Number(event.target.value.replace(/^option-/,''));
+                    const option=field.choiceOptions[optionIndex];
+                    if(option)setFormFillValue(field.name,[option.value]);
+                  }}
+                >
+                  {selectedIndex<0&&!canClear&&<option value="placeholder" disabled>— No selection —</option>}
+                  {canClear&&<option value="clear">— Clear —</option>}
+                  {field.choiceOptions.map((option,index)=><option key={`${index}-${option.value}`} value={`option-${index}`}>{option.label}</option>)}
+                </select>
+              </label>;
+            }
+            if((field.type==='dropdown'||field.type==='list')&&field.multiselect){
+              const selected=Array.isArray(draft)?draft:[];
+              return <label key={`fill-${field.name}`}>{field.name}
+                <select
+                  multiple
+                  value={selected}
+                  disabled={disabled}
+                  onChange={(event)=>setFormFillValue(
+                    field.name,
+                    Array.from(event.target.selectedOptions).map((option)=>option.value),
+                  )}
+                >
+                  {field.choiceOptions.map((option)=><option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </label>;
+            }
+            if(field.type==='text'){
+              if(field.richText){
+                return <small key={`fill-${field.name}`}><b>{field.name}</b> uses rich-text formatting that this editor does not modify.</small>;
+              }
+              if(field.password){
+                return <label key={`fill-${field.name}`}>{field.name}
+                  <input
+                    type="password"
+                    value={typeof draft==='string'?draft:''}
+                    placeholder="Enter a replacement value to change this password field"
+                    disabled={disabled}
+                    autoComplete="new-password"
+                    onChange={(event)=>setFormFillValue(
+                      field.name,
+                      event.target.value.length?event.target.value:undefined,
+                    )}
+                  />
+                </label>;
+              }
+              if(field.multiline){
+                return <label key={`fill-${field.name}`}>{field.name}
+                  <textarea
+                    value={typeof draft==='string'?draft:''}
+                    disabled={disabled}
+                    onChange={(event)=>setFormFillValue(field.name,event.target.value)}
+                  />
+                </label>;
+              }
+              return <label key={`fill-${field.name}`}>{field.name}
+                <input
+                  type="text"
+                  value={typeof draft==='string'?draft:''}
+                  disabled={disabled}
+                  onChange={(event)=>setFormFillValue(field.name,event.target.value)}
+                />
+              </label>;
+            }
+            return <small key={`fill-${field.name}`}><b>{field.name}</b> ({field.type}) is detected but is not directly fillable in this pass.</small>;
+          })}
+          <button disabled={mutating||!fillableFormFields.length} onClick={()=>void fillForm()}><ListChecks size={13}/> Apply form values</button>
           <button disabled={mutating||!formFields.length} onClick={()=>void flattenForm()}><FileCheck2 size={13}/> Flatten form fields</button>
-          <small>Text, checkbox, radio, dropdown and option-list fields are real AcroForm structures. Required/read-only flags are stored in the field. Flattening paints appearances and removes interactivity; Undo remains available in this tab until export/close.</small>
+          <small>Text, checkbox, radio, dropdown and option-list values are edited in the MALENJO working copy with Undo/Redo. Required/read-only flags remain enforced. Flattening paints appearances and removes interactivity; Undo remains available until export/close.</small>
         </div>
 
         <div className="pdf-pane-title">Headers / footers</div>
