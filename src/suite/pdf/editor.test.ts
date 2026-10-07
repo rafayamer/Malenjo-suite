@@ -337,6 +337,45 @@ describe('PDF mutation core',()=>{
     await expect(importPdfFormData(bytes,'{}')).rejects.toThrow(/supported MALENJO v1 schema/i);
   });
 
+  it('does not export values that the importer would reject',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+    const oversized=form.createTextField('oversized');
+    oversized.setText('x'.repeat(10001));
+    oversized.addToPage(page,{x:30,y:620,width:220,height:28});
+    const secret=form.createTextField('secret_only');
+    secret.enablePassword();
+    secret.setText('private');
+    secret.addToPage(page,{x:30,y:570,width:220,height:28});
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    await expect(exportPdfFormData(bytes)).rejects.toThrow(/no safely exportable/i);
+  });
+
+  it('skips stale choice defaults without blocking valid field resets',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+
+    const text=form.createTextField('resettable_text');
+    text.setText('current');
+    text.addToPage(page,{x:30,y:620,width:220,height:28});
+    text.acroField.dict.set(PDFName.of('DV'),PDFHexString.fromText('default'));
+
+    const dropdown=form.createDropdown('stale_default_choice');
+    dropdown.addOptions(['A','B']);
+    dropdown.select('B');
+    dropdown.addToPage(page,{x:30,y:570,width:220,height:28});
+    dropdown.acroField.dict.set(PDFName.of('DV'),PDFHexString.fromText('REMOVED'));
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const reset=await resetPdfFormFields(bytes);
+    const info=await inspectPdfFormFields(reset);
+    expect(info.find((field)=>field.name==='resettable_text')?.value).toBe('default');
+    expect(info.find((field)=>field.name==='stale_default_choice')?.selected).toEqual(['B']);
+  });
+
   it('isolates rich-text fields and reports combined password/multiline flags',async()=>{
     const pdf=await PDFDocument.create();
     const page=pdf.addPage([500,700]);
