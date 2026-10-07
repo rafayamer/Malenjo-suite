@@ -1,4 +1,4 @@
-import { PDFArray, PDFDocument, PDFName, StandardFonts, degrees, rgb } from 'pdf-lib';
+import { PDFArray, PDFBool, PDFDocument, PDFName, StandardFonts, degrees, rgb } from 'pdf-lib';
 
 function requirePage(pageNumber:number,pageCount:number):number{
   if(!Number.isInteger(pageNumber)||pageNumber<1||pageNumber>pageCount){
@@ -538,6 +538,9 @@ export interface PdfFormFieldInfo {
   selected:string[];
   value:string;
   checked:boolean|null;
+  password:boolean;
+  multiline:boolean;
+  multiselect:boolean;
 }
 
 export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFieldInfo[]>{
@@ -551,9 +554,15 @@ export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFiel
     let selected:string[]=[];
     let value='';
     let checked:boolean|null=null;
+    let password=false;
+    let multiline=false;
+    let multiselect=false;
     if(constructor==='PDFTextField'){
       type='text';
-      value=form.getTextField(name).getText()??'';
+      const text=form.getTextField(name);
+      password=text.isPassword();
+      multiline=text.isMultiline();
+      value=password ? '' : (text.getText()??'');
     }else if(constructor==='PDFCheckBox'){
       type='checkbox';
       checked=form.getCheckBox(name).isChecked();
@@ -568,11 +577,13 @@ export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFiel
       const dropdown=form.getDropdown(name);
       options=dropdown.getOptions();
       selected=dropdown.getSelected();
+      multiselect=dropdown.isMultiselect();
     }else if(constructor==='PDFOptionList'){
       type='list';
       const list=form.getOptionList(name);
       options=list.getOptions();
       selected=list.getSelected();
+      multiselect=list.isMultiselect();
     }else if(constructor==='PDFButton')type='button';
     else if(constructor==='PDFSignature')type='signature';
     return {
@@ -584,6 +595,9 @@ export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFiel
       selected,
       value,
       checked,
+      password,
+      multiline,
+      multiselect,
     };
   });
 }
@@ -596,15 +610,45 @@ export interface PdfFormFieldUpdate {
 }
 
 function selectedFieldValues(values:string[]|undefined):string[]{
-  return Array.from(new Set((values??[])
-    .map((value)=>value.replace(/[\u0000-\u001F]/g,' ').trim().slice(0,240))
-    .filter(Boolean)));
+  const supplied=values??[];
+  if(supplied.length>100)throw new Error('A PDF choice field cannot receive more than 100 selected values.');
+  supplied.forEach((value)=>{
+    if(typeof value!=='string')throw new Error('PDF choice values must be strings.');
+    if(value.length>4096)throw new Error('A PDF choice value exceeds the 4096-character safety limit.');
+  });
+  return Array.from(new Set(supplied));
 }
 
 function requireSelectedOptions(name:string,selected:string[],options:string[]):void{
   const invalid=selected.filter((value)=>!options.includes(value));
   if(invalid.length){
-    throw new Error(`Field "${name}" does not contain option "${invalid[0]}".`);
+    throw new Error(`Field "${name}" does not contain the selected option.`);
+  }
+}
+
+async function saveFilledPdfForm(
+  pdf:PDFDocument,
+  form:ReturnType<PDFDocument['getForm']>,
+):Promise<Uint8Array>{
+  try{
+    form.updateFieldAppearances();
+    return Uint8Array.from(await pdf.save({
+      useObjectStreams:false,
+      updateFieldAppearances:false,
+    }));
+  }catch(reason){
+    const message=reason instanceof Error?reason.message:String(reason);
+    if(!/winansi|cannot encode|encoding/i.test(message))throw reason;
+
+    // pdf-lib's default appearance font is WinAnsi Helvetica. Preserve the
+    // Unicode field values and ask conforming readers to regenerate widget
+    // appearances rather than throwing or replacing document text.
+    form.acroForm.dict.set(PDFName.of('NeedAppearances'),PDFBool.True);
+    form.getFields().forEach((field)=>form.markFieldAsClean(field.ref));
+    return Uint8Array.from(await pdf.save({
+      useObjectStreams:false,
+      updateFieldAppearances:false,
+    }));
   }
 }
 
@@ -616,8 +660,8 @@ export async function fillPdfFormFields(
   const pdf=await load(bytes);
   const form=pdf.getForm();
   for(const update of updates){
-    const name=update.name.trim();
-    if(!name)throw new Error('PDF form field name is empty.');
+    const name=update.name;
+    if(!name.trim())throw new Error('PDF form field name is empty.');
     const field=form.getFieldMaybe(name);
     if(!field)throw new Error(`PDF form field "${name}" was not found.`);
     if(field.isReadOnly())throw new Error(`PDF form field "${name}" is read-only.`);
@@ -640,20 +684,25 @@ export async function fillPdfFormFields(
       const dropdown=form.getDropdown(name);
       const selected=selectedFieldValues(update.selected);
       requireSelectedOptions(name,selected,dropdown.getOptions());
+      if(!dropdown.isMultiselect()&&selected.length>1){
+        throw new Error(`Dropdown field "${name}" accepts one selected option.`);
+      }
       if(!selected.length)dropdown.clear();
-      else dropdown.select(selected.length===1?selected[0]:selected);
+      else dropdown.select(dropdown.isMultiselect()?selected:selected[0]);
     }else if(constructor==='PDFOptionList'){
       const list=form.getOptionList(name);
       const selected=selectedFieldValues(update.selected);
       requireSelectedOptions(name,selected,list.getOptions());
+      if(!list.isMultiselect()&&selected.length>1){
+        throw new Error(`Option-list field "${name}" accepts one selected option.`);
+      }
       if(!selected.length)list.clear();
-      else list.select(selected.length===1?selected[0]:selected);
+      else list.select(list.isMultiselect()?selected:selected[0]);
     }else{
       throw new Error(`PDF form field "${name}" of type ${constructor} is not fillable in this pass.`);
     }
   }
-  form.updateFieldAppearances();
-  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+  return saveFilledPdfForm(pdf,form);
 }
 
 export interface PdfAttachmentSpec {
