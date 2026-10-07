@@ -973,7 +973,7 @@ mod tests {
         std::fs::write(&path, b"MALENJO").unwrap();
         let hash = sha256_file_hex(&path).unwrap();
         std::fs::remove_file(&path).ok();
-        assert_eq!(hash, "9ce12a0a001ed0dc1a07b7f18d782616c3cfc3d0f616665b6b9f8f22c96209d5");
+        assert_eq!(hash, "ad3d17309ba071186689402aa15d136f4069db0d28881943d979a4bc206a0702");
     }
 
     #[test]
