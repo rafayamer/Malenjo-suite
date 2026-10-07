@@ -40,6 +40,9 @@ done
 effects_patch_hash="$(sha256sum "$effects_patch" | awk '{print $1}')"
 license_patch_hash="$(sha256sum "$license_patch" | awk '{print $1}')"
 
+license_overrides="app/license-overrides.json"
+license_overrides_baseline_hash="$(sha256sum "$license_overrides" | awk '{print $1}')"
+
 mkdir -p app/proprietary
 printf '%s' '// MALENJO core-build stub. No Stirling proprietary source is present.' > app/proprietary/build.gradle
 
@@ -51,8 +54,9 @@ echo "Checking pinned Stirling runtime dependency licenses..."
 ./gradlew checkLicense generateLicenseReport --no-parallel --no-daemon
 license_report="$SRC/build/reports/dependency-license/index.json"
 [[ -f "$license_report" ]] || { echo "Stirling dependency license report was not generated" >&2; exit 1; }
-if [[ -n "$(git status --porcelain -- app/license-overrides.json)" ]]; then
-  echo "Stirling dependency license resolution changed app/license-overrides.json; review the new metadata before packaging." >&2
+license_overrides_after_hash="$(sha256sum "$license_overrides" | awk '{print $1}')"
+if [[ "$license_overrides_after_hash" != "$license_overrides_baseline_hash" ]]; then
+  echo "Stirling dependency license resolution changed the reviewed core-only app/license-overrides.json baseline; review the new metadata before packaging." >&2
   exit 1
 fi
 
