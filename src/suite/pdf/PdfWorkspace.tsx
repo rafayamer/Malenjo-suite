@@ -52,6 +52,7 @@ import {
   flattenPdfForm,
   inspectPdfFormFields,
   type PdfFormFieldInfo,
+  type PdfFormFieldUpdate,
 } from './editor';
 import { disposePdf, loadPdfBytes, type PdfLoadResult } from './engine';
 import {
@@ -686,20 +687,18 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
   async function fillForm(){
     if(!fillableFormFields.length)return;
-    const updates=fillableFormFields.flatMap((field)=>{
+    const updates:PdfFormFieldUpdate[]=[];
+    for(const field of fillableFormFields){
       const draft=formFillDraft[field.name];
       if(field.type==='checkbox'){
-        return [{name:field.name,checked:Boolean(draft)}];
+        updates.push({name:field.name,checked:Boolean(draft)});
+      }else if(field.type==='radio'||field.type==='dropdown'||field.type==='list'){
+        updates.push({name:field.name,selected:Array.isArray(draft)?draft:[]});
+      }else if(field.type==='text'){
+        if(field.password&&typeof draft!=='string')continue;
+        updates.push({name:field.name,value:typeof draft==='string'?draft:''});
       }
-      if(field.type==='radio'||field.type==='dropdown'||field.type==='list'){
-        return [{name:field.name,selected:Array.isArray(draft)?draft:[]}];
-      }
-      if(field.type==='text'){
-        if(field.password&&typeof draft!=='string')return [];
-        return [{name:field.name,value:typeof draft==='string'?draft:''}];
-      }
-      return [];
-    });
+    }
     if(!updates.length){
       setActionNotice('No editable PDF form values have changed.');
       return;
