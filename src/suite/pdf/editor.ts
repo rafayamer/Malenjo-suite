@@ -556,6 +556,7 @@ export interface PdfFormFieldInfo {
   multiselect:boolean;
   editable:boolean;
   offToggleable:boolean;
+  duplicateChoiceExports:boolean;
 }
 
 function pdfAcroFormDict(pdf:PDFDocument):PDFDict|undefined{
@@ -593,6 +594,7 @@ export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFiel
     let multiselect=false;
     let editable=false;
     let offToggleable=true;
+    let duplicateChoiceExports=false;
     if(field instanceof PDFTextField){
       type='text';
       const text=field;
@@ -619,6 +621,7 @@ export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFiel
         label:(display??value).decodeText(),
       }));
       options=choiceOptions.map((option)=>option.label);
+      duplicateChoiceExports=new Set(choiceOptions.map((option)=>option.value)).size!==choiceOptions.length;
       selected=dropdown.getSelected();
       multiselect=dropdown.isMultiselect();
       editable=dropdown.isEditable();
@@ -630,6 +633,7 @@ export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFiel
         label:(display??value).decodeText(),
       }));
       options=choiceOptions.map((option)=>option.label);
+      duplicateChoiceExports=new Set(choiceOptions.map((option)=>option.value)).size!==choiceOptions.length;
       selected=list.getSelected();
       multiselect=list.isMultiselect();
     }else if(field instanceof PDFButton)type='button';
@@ -650,6 +654,7 @@ export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFiel
       multiselect,
       editable,
       offToggleable,
+      duplicateChoiceExports,
     };
   });
 }
@@ -706,6 +711,12 @@ function setChoiceSelectedIndices(
   dict.set(key,dict.context.obj(indices.sort((a,b)=>a-b)));
 }
 
+function choiceHasDistinctDisplayValues(field:PDFDropdown|PDFOptionList):boolean{
+  return field.acroField.getOptions().some(({value,display})=>
+    display!==undefined&&display.decodeText()!==value.decodeText(),
+  );
+}
+
 function updateSupportedFieldAppearances(
   form:ReturnType<PDFDocument['getForm']>,
   readerDeferredFields:Set<string>,
@@ -714,7 +725,9 @@ function updateSupportedFieldAppearances(
   const font=form.getDefaultFont();
   for(const field of form.getFields()){
     const deferToReader=readerDeferredFields.has(field.getName())
-      || (field instanceof PDFTextField && field.isRichFormatted());
+      || (field instanceof PDFTextField && (field.isRichFormatted()||field.isPassword()))
+      || ((field instanceof PDFDropdown||field instanceof PDFOptionList)
+        && choiceHasDistinctDisplayValues(field));
     if(deferToReader){
       if(field.needsAppearancesUpdate())readerAppearancesNeeded=true;
       continue;
@@ -809,6 +822,9 @@ export async function fillPdfFormFields(
         value:value.decodeText(),
         label:(display??value).decodeText(),
       }));
+      if(new Set(choices.map((option)=>option.value)).size!==choices.length){
+        throw new Error(`Dropdown field "${name}" has duplicate export values and is not safely writable in this pass.`);
+      }
       if(!dropdown.isEditable()){
         requireSelectedOptions(name,selected,choices.map((option)=>option.value));
       }
@@ -839,6 +855,9 @@ export async function fillPdfFormFields(
         value:value.decodeText(),
         label:(display??value).decodeText(),
       }));
+      if(new Set(choices.map((option)=>option.value)).size!==choices.length){
+        throw new Error(`Option-list field "${name}" has duplicate export values and is not safely writable in this pass.`);
+      }
       requireSelectedOptions(name,selected,choices.map((option)=>option.value));
       if(!list.isMultiselect()&&selected.length>1){
         throw new Error(`Option-list field "${name}" accepts one selected option.`);
