@@ -43,6 +43,7 @@ describe('Windows PDF provider packaging contract',()=>{
     const windows=text('scripts/build-stirling-core.ps1');
     const linux=text('scripts/build-stirling-core.sh');
     const patch=text('third_party/stirling-pdf/patches/0001-malenjo-java-effect-alternatives.patch');
+    const licensePatch=text('third_party/stirling-pdf/patches/0002-malenjo-core-license-overrides.patch');
     const attributes=text('.gitattributes');
 
     expect(windows).toContain('0001-malenjo-java-effect-alternatives.patch');
@@ -53,6 +54,11 @@ describe('Windows PDF provider packaging contract',()=>{
     expect(linux).toContain('git apply --check');
     expect(patch).toContain('addEndpointAlternative("replace-invert-pdf", "Java")');
     expect(patch).toContain('addEndpointAlternative("scanner-effect", "Java")');
+    expect(windows).toContain('0002-malenjo-core-license-overrides.patch');
+    expect(linux).toContain('0002-malenjo-core-license-overrides.patch');
+    expect(licensePatch).toContain('com.hubspot.immutables:immutables-exceptions:1.9');
+    expect(licensePatch).toContain('com.hubspot:algebra:1.5');
+    expect(licensePatch).toContain('+{}');
     expect(attributes).toContain('*.patch text eol=lf');
   });
 
