@@ -30,11 +30,15 @@ do
   fi
 done
 
-PATCH="$ROOT/third_party/stirling-pdf/patches/0001-malenjo-java-effect-alternatives.patch"
-[[ -f "$PATCH" ]] || { echo "Reviewed Stirling endpoint patch is missing: $PATCH" >&2; exit 1; }
-git apply --check "$PATCH"
-git apply "$PATCH"
-patch_hash="$(sha256sum "$PATCH" | awk '{print $1}')"
+effects_patch="$ROOT/third_party/stirling-pdf/patches/0001-malenjo-java-effect-alternatives.patch"
+license_patch="$ROOT/third_party/stirling-pdf/patches/0002-malenjo-core-license-overrides.patch"
+for patch in "$effects_patch" "$license_patch"; do
+  [[ -f "$patch" ]] || { echo "Reviewed Stirling patch is missing: $patch" >&2; exit 1; }
+  git apply --check "$patch"
+  git apply "$patch"
+done
+effects_patch_hash="$(sha256sum "$effects_patch" | awk '{print $1}')"
+license_patch_hash="$(sha256sum "$license_patch" | awk '{print $1}')"
 
 mkdir -p app/proprietary
 printf '%s' '// MALENJO core-build stub. No Stirling proprietary source is present.' > app/proprietary/build.gradle
@@ -104,7 +108,11 @@ cat > "$OUT/manifest.json" <<JSON
   "patches": [
     {
       "path": "third_party/stirling-pdf/patches/0001-malenjo-java-effect-alternatives.patch",
-      "sha256": "$patch_hash"
+      "sha256": "$effects_patch_hash"
+    },
+    {
+      "path": "third_party/stirling-pdf/patches/0002-malenjo-core-license-overrides.patch",
+      "sha256": "$license_patch_hash"
     }
   ],
   "embeddedOfficeConvert": {
