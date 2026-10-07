@@ -57,9 +57,13 @@ The pinned Stirling Gradle build resolves these exact embedded modules:
 - `stirling-office-convert-topdf:0.2.2`.
 
 The MALENJO provider builder verifies all three nested JAR names inside the
-generated Spring Boot JAR and records each nested JAR SHA-256 in
-`provider-packs/stirling-core/manifest.json` together with the Office source
-commit and MIT license.
+generated Spring Boot JAR. It also checks out the exact Office source commit,
+rebuilds `core`, `legacy`, and `topdf` with the upstream reproducible
+archive settings, and requires each source-built JAR SHA-256 to be byte
+identical to the corresponding embedded Maven artifact. Only then are the
+nested hashes, source commit, MIT license, and
+`verification: reproducible-source-build-match` recorded in
+`provider-packs/stirling-core/manifest.json`.
 
 ## License gate and shipped notices
 
@@ -76,7 +80,11 @@ mutation of `app/license-overrides.json` fails the build.
 
 The generated exact dependency-license report is packaged as
 `malenjo-notices/stirling-dependency-licenses.json` beside retained Stirling
-and Office Convert license notices.
+and Office Convert license notices. The manifest records SHA-256 values for
+the Office MIT license, the MALENJO dependency review, and the generated
+dependency-license report. The native verifier recomputes those hashes; the
+static Office notice hashes are also pinned in the Tauri binary, and the
+dependency report must remain valid JSON containing the Office converter.
 
 See `third_party/stirling-office-convert/` for the source license,
 provenance, and direct dependency record.
@@ -109,9 +117,10 @@ verifies the selected generated/bundled Stirling pack before reporting the
 - embedded Office Convert is exactly `0.2.2` from source commit
   `673aab8d6ac784524cd1d90141c95e74b9fd26ae` under MIT;
 - all three expected embedded Office Convert JAR entries have recorded
-  SHA-256 values;
-- the generated dependency-license report and retained Office Convert license
-  notice are present.
+  SHA-256 values and the manifest confirms the reproducible-source-build match;
+- the generated dependency-license report and Office notice artifacts match
+  their recorded hashes, while the static Office notice hashes also match
+  MALENJO's compiled review baseline.
 
 The verification result is cached using JAR/manifest/notice metadata so normal
 component-status refreshes do not repeatedly hash the large provider JAR.
@@ -135,3 +144,14 @@ the fixture with qpdf, invokes PDF → XLSX through the loopback provider, and
 requires a real OOXML workbook containing both `xl/workbook.xml` and
 `xl/worksheets/sheet1.xml`. A 204/no-table response is not accepted as
 feature evidence.
+
+
+## Live-sidecar ownership boundary
+
+A healthy response on `127.0.0.1:28970` is not sufficient proof that the
+service is MALENJO's reviewed provider. The Tauri runtime now treats a provider
+as running only when the health check is UP **and** the process is the child
+stored in MALENJO's process slot. If another local process already occupies the
+port, start/request/OpenAPI operations fail rather than attaching to it, and
+Office component status is downgraded while that unowned healthy service is
+present.
