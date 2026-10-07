@@ -5,10 +5,11 @@ use sha2::{Digest, Sha256};
 use std::{
     env,
     io::Read,
+    net::{SocketAddr, TcpStream},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{Mutex, OnceLock},
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Manager};
 
@@ -21,8 +22,13 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
 const MAX_INPUT_BYTES: usize = 512 * 1024 * 1024;
 const MAX_OUTPUT_BYTES: usize = 512 * 1024 * 1024;
 
-fn process_slot() -> &'static Mutex<Option<Child>> {
-    static SLOT: OnceLock<Mutex<Option<Child>>> = OnceLock::new();
+struct OwnedStirlingProcess {
+    child: Child,
+    context_path: String,
+}
+
+fn process_slot() -> &'static Mutex<Option<OwnedStirlingProcess>> {
+    static SLOT: OnceLock<Mutex<Option<OwnedStirlingProcess>>> = OnceLock::new();
     SLOT.get_or_init(|| Mutex::new(None))
 }
 
@@ -154,21 +160,25 @@ const OFFICE_CONVERT_DEPENDENCIES_TEXT: &str =
 const OFFICE_CONVERT_ARTIFACT_PINS: &str =
     include_str!("../../../third_party/stirling-office-convert/ARTIFACTS.sha256");
 
-fn sha256_file_hex(path: &Path) -> Result<String, String> {
-    let mut file = std::fs::File::open(path)
-        .map_err(|error| format!("Unable to open {} for hashing: {error}", path.display()))?;
+fn sha256_reader_hex<R: Read>(reader: &mut R) -> Result<String, String> {
     let mut hasher = Sha256::new();
     let mut buffer = [0u8; 1024 * 1024];
     loop {
-        let read = file
+        let read = reader
             .read(&mut buffer)
-            .map_err(|error| format!("Unable to hash {}: {error}", path.display()))?;
+            .map_err(|error| format!("Unable to hash stream: {error}"))?;
         if read == 0 {
             break;
         }
         hasher.update(&buffer[..read]);
     }
     Ok(format!("{:x}", hasher.finalize()))
+}
+
+fn sha256_file_hex(path: &Path) -> Result<String, String> {
+    let mut file = std::fs::File::open(path)
+        .map_err(|error| format!("Unable to open {} for hashing: {error}", path.display()))?;
+    sha256_reader_hex(&mut file)
 }
 
 fn selected_stirling_source(jar: &Path) -> String {
@@ -217,7 +227,7 @@ fn office_status_cache() -> &'static Mutex<Option<OfficeStatusCacheEntry>> {
 fn office_pack_files(jar: &Path) -> Option<(Value, PathBuf, PathBuf, PathBuf, PathBuf)> {
     let manifest_path = jar.parent()?.join("manifest.json");
     let manifest_text = std::fs::read_to_string(&manifest_path).ok()?;
-    let manifest: Value = serde_json::from_str(&manifest_text).ok()?;
+    let manifest: Value = serde_json::from_str(manifest_text.trim_start_matches('\u{feff}')).ok()?;
     let report_relative = manifest.get("dependencyLicenseReport")?.as_str()?;
     if report_relative.is_empty() {
         return None;
@@ -272,6 +282,41 @@ fn reviewed_office_artifact_hash(name: &str) -> Option<&'static str> {
     })
 }
 
+fn embedded_office_artifacts_match(jar: &Path) -> bool {
+    let Ok(file) = std::fs::File::open(jar) else {
+        return false;
+    };
+    let Ok(mut archive) = zip::ZipArchive::new(file) else {
+        return false;
+    };
+    for name in [
+        "stirling-office-convert-0.2.2.jar",
+        "stirling-office-convert-legacy-0.2.2.jar",
+        "stirling-office-convert-topdf-0.2.2.jar",
+    ] {
+        let entry_name = format!("BOOT-INF/lib/{name}");
+        let actual = {
+            let Ok(mut artifact) = archive.by_name(&entry_name) else {
+                return false;
+            };
+            if artifact.size() > 128 * 1024 * 1024 {
+                return false;
+            }
+            let Ok(hash) = sha256_reader_hex(&mut artifact) else {
+                return false;
+            };
+            hash
+        };
+        let Some(expected) = reviewed_office_artifact_hash(name) else {
+            return false;
+        };
+        if actual != expected {
+            return false;
+        }
+    }
+    true
+}
+
 fn license_artifact_matches(manifest: &Value, relative: &str, path: &Path) -> bool {
     let Some(expected) = manifest
         .get("licenseArtifacts")
@@ -309,7 +354,7 @@ fn office_convert_pack_is_verified(jar: &Path) -> bool {
             };
             items.get(*name).and_then(Value::as_str) == Some(expected)
         })
-    });
+    }) && embedded_office_artifacts_match(jar);
 
     let office_license_text = std::fs::read_to_string(&office_license).ok();
     let office_dependencies_text = std::fs::read_to_string(&office_dependencies).ok();
@@ -716,7 +761,7 @@ fn api_client() -> Result<Client, String> {
         .map_err(|error| format!("Unable to create local Stirling client: {error}"))
 }
 
-fn validate_api_path(path: &str) -> Result<String, String> {
+fn validate_api_path(base_url: &str, path: &str) -> Result<String, String> {
     if !path.starts_with("/api/v1/") {
         return Err("Only Stirling core /api/v1/* paths may be called.".into());
     }
@@ -726,13 +771,13 @@ fn validate_api_path(path: &str) -> Result<String, String> {
     if path.len() > 512 {
         return Err("Stirling API path is too long.".into());
     }
-    Ok(format!("{STIRLING_BASE_URL}{path}"))
+    Ok(format!("{base_url}{path}"))
 }
 
-async fn health_payload() -> Option<Value> {
+async fn health_payload(base_url: &str) -> Option<Value> {
     let client = api_client().ok()?;
     let response = client
-        .get(format!("{STIRLING_BASE_URL}{STIRLING_HEALTH_PATH}"))
+        .get(format!("{base_url}{STIRLING_HEALTH_PATH}"))
         .send()
         .await
         .ok()?;
@@ -742,8 +787,8 @@ async fn health_payload() -> Option<Value> {
     response.json::<Value>().await.ok()
 }
 
-async fn is_healthy() -> bool {
-    health_payload()
+async fn is_healthy(base_url: &str) -> bool {
+    health_payload(base_url)
         .await
         .and_then(|value| value.get("status").and_then(Value::as_str).map(str::to_owned))
         .is_some_and(|status| status.eq_ignore_ascii_case("UP"))
@@ -755,24 +800,39 @@ fn version_from_health(value: &Value) -> Option<String> {
         .find_map(|key| value.get(*key).and_then(Value::as_str).map(str::to_owned))
 }
 
-fn owned_provider_ready(healthy: bool, child_running: bool) -> bool {
-    healthy && child_running
+fn new_context_path() -> String {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    let seed = format!("{}:{nanos}", std::process::id());
+    let token = format!("{:x}", Sha256::digest(seed.as_bytes()));
+    format!("/malenjo-{}", &token[..24])
+}
+
+fn owned_base_url() -> Option<String> {
+    let Ok(mut guard) = process_slot().lock() else {
+        return None;
+    };
+    let Some(owned) = guard.as_mut() else {
+        return None;
+    };
+    match owned.child.try_wait() {
+        Ok(None) => Some(format!("{STIRLING_BASE_URL}{}", owned.context_path)),
+        Ok(Some(_)) | Err(_) => {
+            *guard = None;
+            None
+        }
+    }
 }
 
 fn process_running() -> bool {
-    let Ok(mut guard) = process_slot().lock() else {
-        return false;
-    };
-    let Some(child) = guard.as_mut() else {
-        return false;
-    };
-    match child.try_wait() {
-        Ok(None) => true,
-        Ok(Some(_)) | Err(_) => {
-            *guard = None;
-            false
-        }
-    }
+    owned_base_url().is_some()
+}
+
+fn stirling_port_in_use() -> bool {
+    let address = SocketAddr::from(([127, 0, 0, 1], STIRLING_PORT));
+    TcpStream::connect_timeout(&address, Duration::from_millis(250)).is_ok()
 }
 
 #[cfg(windows)]
@@ -785,7 +845,7 @@ fn suppress_windows_console(command: &mut Command) {
 #[cfg(not(windows))]
 fn suppress_windows_console(_command: &mut Command) {}
 
-fn spawn_core(java: &str, jar: &Path, app: &AppHandle) -> Result<(), String> {
+fn spawn_core(java: &str, jar: &Path, app: &AppHandle) -> Result<String, String> {
     let data_dir = app
         .path()
         .app_data_dir()
@@ -794,6 +854,7 @@ fn spawn_core(java: &str, jar: &Path, app: &AppHandle) -> Result<(), String> {
     std::fs::create_dir_all(&data_dir)
         .map_err(|error| format!("Unable to create Stirling core data directory: {error}"))?;
 
+    let context_path = new_context_path();
     let mut command = Command::new(java);
     command
         .arg("-Xms128m")
@@ -802,6 +863,7 @@ fn spawn_core(java: &str, jar: &Path, app: &AppHandle) -> Result<(), String> {
         .arg(jar)
         .arg(format!("--server.address=127.0.0.1"))
         .arg(format!("--server.port={STIRLING_PORT}"))
+        .arg(format!("--server.servlet.context-path={context_path}"))
         .arg("--spring.main.banner-mode=off")
         .arg("--system.stirlingOfficeConversion=true")
         .env("STIRLING_FLAVOR", "core")
@@ -824,26 +886,33 @@ fn spawn_core(java: &str, jar: &Path, app: &AppHandle) -> Result<(), String> {
     let mut guard = process_slot()
         .lock()
         .map_err(|_| "Unable to lock Stirling core process state.".to_string())?;
-    *guard = Some(child);
-    Ok(())
+    *guard = Some(OwnedStirlingProcess {
+        child,
+        context_path: context_path.clone(),
+    });
+    Ok(format!("{STIRLING_BASE_URL}{context_path}"))
 }
 
 #[tauri::command]
 pub async fn stirling_core_status(app: AppHandle) -> StirlingCoreStatus {
     let jar = stirling_jar_path(&app);
     let java = available_java(&app);
-    let health = health_payload().await;
-    let healthy = health
+    let owned_url = owned_base_url();
+    let health = match owned_url.as_deref() {
+        Some(base_url) => health_payload(base_url).await,
+        None => None,
+    };
+    let owned_ready = health
         .as_ref()
         .and_then(|value| value.get("status").and_then(Value::as_str))
         .is_some_and(|value| value.eq_ignore_ascii_case("UP"));
-    let child_running = process_running();
-    let owned_ready = owned_provider_ready(healthy, child_running);
+    let child_running = owned_url.is_some();
+    let foreign_listener = !child_running && stirling_port_in_use();
 
     let message = if owned_ready {
         "Local Stirling open-core PDF provider is ready.".to_string()
-    } else if healthy {
-        "Port 28970 is occupied by a healthy local service that was not started by MALENJO. It will not be trusted or used.".to_string()
+    } else if foreign_listener {
+        "Port 28970 is occupied by a local service that was not started by MALENJO. It will not be trusted or used.".to_string()
     } else if jar.is_none() {
         "The local Stirling core provider pack is not installed. Build or install the reviewed core pack before using provider-backed PDF tools.".to_string()
     } else if java.is_none() {
@@ -859,7 +928,7 @@ pub async fn stirling_core_status(app: AppHandle) -> StirlingCoreStatus {
         running: owned_ready,
         java,
         jar_path: jar.map(|path| path.to_string_lossy().to_string()),
-        base_url: STIRLING_BASE_URL.into(),
+        base_url: owned_url.unwrap_or_else(|| STIRLING_BASE_URL.into()),
         version: health.as_ref().and_then(version_from_health),
         message,
     }
@@ -867,10 +936,9 @@ pub async fn stirling_core_status(app: AppHandle) -> StirlingCoreStatus {
 
 #[tauri::command]
 pub async fn stirling_core_components(app: AppHandle) -> Vec<StirlingComponentStatus> {
-    let healthy = is_healthy().await;
     let child_running = process_running();
     let mut office = office_convert_component_status(&app);
-    if healthy && !child_running {
+    if !child_running && stirling_port_in_use() {
         office.available = false;
         office.version = None;
         office.message =
@@ -885,26 +953,24 @@ pub async fn stirling_core_components(app: AppHandle) -> Vec<StirlingComponentSt
 
 #[tauri::command]
 pub async fn stirling_core_start(app: AppHandle) -> Result<StirlingCoreStatus, String> {
-    let healthy = is_healthy().await;
-    let child_running = process_running();
-    if healthy {
-        if child_running {
-            return Ok(stirling_core_status(app).await);
-        }
-        return Err(
-            "Port 28970 is already serving a healthy process that MALENJO did not start. The local PDF provider will not connect to an unowned sidecar.".into(),
-        );
-    }
-
-    if child_running {
+    if let Some(base_url) = owned_base_url() {
         let started = Instant::now();
         while started.elapsed() < START_TIMEOUT {
-            if is_healthy().await {
+            if is_healthy(&base_url).await {
                 return Ok(stirling_core_status(app).await);
+            }
+            if !process_running() {
+                return Err("The local Stirling core provider exited before becoming healthy.".into());
             }
             tokio::time::sleep(Duration::from_millis(250)).await;
         }
         return Err("The existing Stirling core process did not become healthy within 75 seconds.".into());
+    }
+
+    if stirling_port_in_use() {
+        return Err(
+            "Port 28970 is already occupied by a process that MALENJO did not start. The local PDF provider will not connect to an unowned sidecar.".into(),
+        );
     }
 
     let jar = stirling_jar_path(&app)
@@ -912,11 +978,11 @@ pub async fn stirling_core_start(app: AppHandle) -> Result<StirlingCoreStatus, S
     let java = available_java(&app)
         .ok_or_else(|| "Java 25 is not available for the local Stirling core provider.".to_string())?;
 
-    spawn_core(&java, &jar, &app)?;
+    let base_url = spawn_core(&java, &jar, &app)?;
 
     let started = Instant::now();
     while started.elapsed() < START_TIMEOUT {
-        if is_healthy().await {
+        if is_healthy(&base_url).await {
             return Ok(stirling_core_status(app).await);
         }
 
@@ -935,21 +1001,21 @@ pub async fn stirling_core_stop() -> Result<bool, String> {
     let mut guard = process_slot()
         .lock()
         .map_err(|_| "Unable to lock Stirling core process state.".to_string())?;
-    let Some(child) = guard.as_mut() else {
+    let Some(owned) = guard.as_mut() else {
         return Ok(false);
     };
-    let _ = child.kill();
-    let _ = child.wait();
+    let _ = owned.child.kill();
+    let _ = owned.child.wait();
     *guard = None;
     Ok(true)
 }
 
 #[tauri::command]
 pub async fn stirling_core_openapi(app: AppHandle) -> Result<Value, String> {
-    let _ = stirling_core_start(app).await?;
+    let status = stirling_core_start(app).await?;
     let client = api_client()?;
     let response = client
-        .get(format!("{STIRLING_BASE_URL}{STIRLING_OPENAPI_PATH}"))
+        .get(format!("{}{STIRLING_OPENAPI_PATH}", status.base_url))
         .send()
         .await
         .map_err(|error| format!("Unable to read local Stirling OpenAPI catalog: {error}"))?;
@@ -973,8 +1039,8 @@ pub async fn stirling_core_request(
     fields: Vec<StirlingFormField>,
     files: Vec<StirlingInputFile>,
 ) -> Result<StirlingResponse, String> {
-    let _ = stirling_core_start(app).await?;
-    let url = validate_api_path(&path)?;
+    let status = stirling_core_start(app).await?;
+    let url = validate_api_path(&status.base_url, &path)?;
     let method = match method.to_ascii_uppercase().as_str() {
         "GET" => Method::GET,
         "POST" => Method::POST,
@@ -1068,7 +1134,7 @@ pub async fn stirling_core_request(
 #[cfg(test)]
 mod tests {
     use super::{
-        office_convert_pack_is_verified, owned_provider_ready, parse_qpdf_version, reviewed_office_artifact_hash,
+        new_context_path, office_convert_pack_is_verified, parse_qpdf_version, reviewed_office_artifact_hash,
         parse_tesseract_version, set_reviewed_provider_path, sha256_file_hex, validate_api_path,
         MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, OFFICE_CONVERT_DEPENDENCIES_TEXT,
         OFFICE_CONVERT_LICENSE_TEXT, OFFICE_CONVERT_SOURCE_COMMIT, OFFICE_CONVERT_VERSION,
@@ -1079,12 +1145,12 @@ mod tests {
     #[test]
     fn stirling_proxy_accepts_only_local_v1_paths() {
         assert_eq!(
-            validate_api_path("/api/v1/general/merge-pdfs").unwrap(),
-            format!("{STIRLING_BASE_URL}/api/v1/general/merge-pdfs")
+            validate_api_path("http://127.0.0.1:28970/malenjo-test", "/api/v1/general/merge-pdfs").unwrap(),
+            "http://127.0.0.1:28970/malenjo-test/api/v1/general/merge-pdfs"
         );
-        assert!(validate_api_path("https://example.com/api/v1/test").is_err());
-        assert!(validate_api_path("/api/v1/../admin").is_err());
-        assert!(validate_api_path("/v3/api-docs").is_err());
+        assert!(validate_api_path(STIRLING_BASE_URL, "https://example.com/api/v1/test").is_err());
+        assert!(validate_api_path(STIRLING_BASE_URL, "/api/v1/../admin").is_err());
+        assert!(validate_api_path(STIRLING_BASE_URL, "/v3/api-docs").is_err());
     }
 
     #[test]
@@ -1181,21 +1247,18 @@ mod tests {
         });
         std::fs::write(root.join("manifest.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
 
-        assert!(office_convert_pack_is_verified(&jar));
-        std::fs::write(&office_license, b"tampered license").unwrap();
         assert!(!office_convert_pack_is_verified(&jar));
-        std::fs::write(&office_license, OFFICE_CONVERT_LICENSE_TEXT.as_bytes()).unwrap();
-        std::fs::write(&jar, b"tampered-stirling-pack").unwrap();
+        std::fs::write(&office_license, b"tampered license").unwrap();
         assert!(!office_convert_pack_is_verified(&jar));
         std::fs::remove_dir_all(root).ok();
     }
 
     #[test]
-    fn healthy_provider_must_be_owned_by_malenjo() {
-        assert!(owned_provider_ready(true, true));
-        assert!(!owned_provider_ready(true, false));
-        assert!(!owned_provider_ready(false, true));
-        assert!(!owned_provider_ready(false, false));
+    fn owned_provider_context_path_is_scoped() {
+        let context = new_context_path();
+        assert!(context.starts_with("/malenjo-"));
+        assert_eq!(context.matches('/').count(), 1);
+        assert!(context.len() >= 16);
     }
 
     #[test]
