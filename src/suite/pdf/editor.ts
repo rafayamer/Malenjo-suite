@@ -902,7 +902,7 @@ export interface PdfFormDataSnapshot {
   fields:PdfFormDataField[];
 }
 
-function exportableFormField(field:PdfFormFieldInfo):boolean{
+export function isPdfFormFieldDataExportable(field:PdfFormFieldInfo):boolean{
   return !field.readOnly
     &&!field.password
     &&!field.richText
@@ -912,20 +912,31 @@ function exportableFormField(field:PdfFormFieldInfo):boolean{
 }
 
 export async function exportPdfFormDataJson(bytes:Uint8Array):Promise<string>{
-  const fields=(await inspectPdfFormFields(bytes))
-    .filter(exportableFormField)
-    .map((field):PdfFormDataField=>{
-      if(field.type==='text')return {name:field.name,type:'text',value:field.value};
-      if(field.type==='checkbox')return {name:field.name,type:'checkbox',checked:Boolean(field.checked)};
-      if(field.type==='radio')return {name:field.name,type:'radio',selected:[...field.selected]};
-      if(field.type==='dropdown')return {name:field.name,type:'dropdown',selected:[...field.selected]};
-      return {name:field.name,type:'list',selected:[...field.selected]};
-    });
-  return JSON.stringify({
+  const sourceFields=(await inspectPdfFormFields(bytes)).filter(isPdfFormFieldDataExportable);
+  if(sourceFields.length>1000)throw new Error('PDF form data contains more than 1,000 safely exportable fields.');
+  const fields=sourceFields.map((field):PdfFormDataField=>{
+    if(!field.name.trim()||field.name.length>512){
+      throw new Error(`PDF form field "${field.name}" has a name that cannot be represented in MALENJO form-data JSON.`);
+    }
+    if(field.type==='text'){
+      if(field.value.length>10000||field.value.includes('\u0000')){
+        throw new Error(`PDF form field "${field.name}" has a text value that exceeds MALENJO form-data safety limits.`);
+      }
+      return {name:field.name,type:'text',value:field.value};
+    }
+    if(field.type==='checkbox')return {name:field.name,type:'checkbox',checked:Boolean(field.checked)};
+    const selected=selectedFieldValues(field.selected);
+    if(field.type==='radio')return {name:field.name,type:'radio',selected};
+    if(field.type==='dropdown')return {name:field.name,type:'dropdown',selected};
+    return {name:field.name,type:'list',selected};
+  });
+  const json=JSON.stringify({
     format:'malenjo-pdf-form-data',
     version:1,
     fields,
   } satisfies PdfFormDataSnapshot,null,2);
+  if(json.length>1024*1024)throw new Error('PDF form-data JSON exceeds the 1 MB safety limit.');
+  return json;
 }
 
 function parsePdfFormDataJson(json:string):PdfFormDataSnapshot{
@@ -984,7 +995,7 @@ export async function importPdfFormDataJson(bytes:Uint8Array,json:string):Promis
   for(const imported of snapshot.fields){
     const target=targetByName.get(imported.name);
     if(!target)throw new Error(`PDF form field "${imported.name}" was not found in the target PDF.`);
-    if(!exportableFormField(target)){
+    if(!isPdfFormFieldDataExportable(target)){
       throw new Error(`PDF form field "${imported.name}" is not safely importable.`);
     }
     if(target.type!==imported.type){
