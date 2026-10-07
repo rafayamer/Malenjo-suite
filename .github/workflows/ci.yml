@@ -154,6 +154,37 @@ jobs:
           if ($languages -notmatch "(?m)^eng\s*$" -or $languages -notmatch "(?m)^osd\s*$") {
             throw "Tesseract pack is missing reviewed eng/osd model data."
           }
+      - name: Inventory WeasyPrint Windows provider candidate
+        shell: pwsh
+        run: |
+          ./scripts/build-weasyprint-windows.ps1
+          $manifest = Get-Content "provider-packs/weasyprint/manifest.json" -Raw | ConvertFrom-Json
+          $inventory = Get-Content "provider-packs/weasyprint/inventory.json" -Raw | ConvertFrom-Json
+          if ($manifest.version -ne "70.0") { throw "Unexpected WeasyPrint version." }
+          if ($manifest.releaseCommit -ne "4d3b7b6449e3494f59c7c2f36b512d129225679c") {
+            throw "Unexpected WeasyPrint source commit."
+          }
+          if ($manifest.sha256 -ne "ab1151f210b4e6bb7aa7a79e91a67e8ddb760094c107bfda55241b6aaefe7d53") {
+            throw "Unexpected WeasyPrint release asset checksum."
+          }
+          if ($manifest.redistribution -ne "inventory-only-not-approved" -or $manifest.capabilityEnabled -ne $false) {
+            throw "WeasyPrint must remain inventory-only until the complete Windows transitive license closure is reviewed."
+          }
+          if (@($inventory.runtimeFiles).Count -lt 10 -or @($inventory.nativeFiles).Count -lt 2) {
+            throw "WeasyPrint runtime/native inventory is missing or unexpectedly small."
+          }
+          if (!(Test-Path "provider-packs/weasyprint/runtime/malenjo-notices/weasyprint-LICENSE.txt")) {
+            throw "WeasyPrint BSD license notice is missing from the audit pack."
+          }
+          $weasy = Resolve-Path "provider-packs/weasyprint/runtime/bin/weasyprint.exe"
+          $info = (& $weasy --info 2>&1 | Out-String)
+          if ($LASTEXITCODE -ne 0 -or $info -notmatch "70\.0") {
+            throw "WeasyPrint candidate failed its executable identity check."
+          }
+          Write-Host "WeasyPrint native inventory for legal mapping:"
+          @($inventory.nativeFiles) | ForEach-Object {
+            Write-Host ("WEASY_NATIVE|{0}|{1}|{2}" -f $_.path,$_.size,$_.sha256)
+          }
       - name: Build reviewed Stirling open-core provider pack
         shell: pwsh
         run: |
