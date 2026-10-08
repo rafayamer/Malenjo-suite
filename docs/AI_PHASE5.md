@@ -54,7 +54,7 @@ The index is lexical and local. It uses bounded character windows with overlap a
 - 240 chunks;
 - about 700 characters per chunk;
 - top 3 retrieved passages;
-- 1,536-token requested Ollama context in Codespaces;
+- 4,096-token requested Ollama context in Codespaces;
 - 128-token Lite answer cap;
 - streamed Ollama output;
 - two-minute Lite keep-alive to avoid reloading the model for every question;
