@@ -23,7 +23,7 @@ interface Props{
   sourceBytes:Uint8Array|null;
   sourceName:string;
   category:PdfProviderToolCategory;
-  onApplyPdf(label:string,bytes:Uint8Array):void|Promise<void>;
+  onApplyPdf(label:string,bytes:Uint8Array):boolean|Promise<boolean>;
 }
 
 function defaultFieldValue(field:PdfProviderOperationField):string{
@@ -213,11 +213,31 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         if(value.trim()||field.kind==='boolean')fields.push({name:field.name,value});
       }
       const response=await provider.run(selected,fields,files);
+      // Never save an unsuccessful HTTP response as a PDF, and never replace
+      // the working copy with an empty or over-limit provider payload.
+      if(response.status<200||response.status>=300){
+        throw new Error(`Local PDF provider failed (${response.status}); the current document was not changed.`);
+      }
+      if(!response.bytes.length||response.bytes.length>512*1024*1024){
+        throw new Error('Local PDF output is empty or exceeds the 512 MB safety limit; no changes were made.');
+      }
+      if((response.contentType??'').toLowerCase().includes('application/pdf')&&!provider.responseIsPdf(response)){
+        throw new Error('Local provider labelled invalid bytes as a PDF. No changes were made.');
+      }
       if(provider.responseIsPdf(response)){
-        await onApplyPdf(`Local PDF core: ${selected.summary}`,Uint8Array.from(response.bytes));
-        setNotice(`${selected.summary} completed and was applied to the current MALENJO working copy.`);
+        // A password-protected result cannot be loaded back into the active
+        // editing view without credentials. Preserve the source and export
+        // the new protected PDF as a separate local file instead.
+        if(/\\/add-password(?:\\/|$)/i.test(selected.path)){
+          const saved=await provider.saveResponse(response,sourceName.replace(/\\.pdf$/i,'')+'-protected');
+          setNotice(saved?'Protected PDF copy saved; original remains unchanged.':'Protected PDF export cancelled; original unchanged.');
+        }else{
+          const applied=await onApplyPdf(`Local PDF core: ${selected.summary}`,Uint8Array.from(response.bytes));
+          if(!applied)throw new Error('Local provider produced a PDF that could not be applied. The original working document was preserved.');
+          setNotice(`${selected.summary} completed and was applied to the current MALENJO working copy.`);
+        }
       }else{
-        const saved=await provider.saveResponse(response,sourceName.replace(/\.pdf$/i,'')||'malenjo-output');
+        const saved=await provider.saveResponse(response,sourceName.replace(/\\.pdf$/i,'')||'malenjo-output');
         setNotice(saved?`${selected.summary} completed. Output saved.`:`${selected.summary} completed; output save was cancelled.`);
       }
     }catch(reason){setError(reason instanceof Error?reason.message:String(reason));}
