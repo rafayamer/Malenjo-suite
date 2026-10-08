@@ -59,6 +59,9 @@ export function hasPriorPdfSignatureEvidence(bytes:Uint8Array):boolean{
        bytes[i+1]===37&&bytes[i+2]===69&&
        bytes[i+3]===79&&bytes[i+4]===70){
       eofCount++;
+      // %%EOF is itself a comment. Evaluate before the comment handler
+      // skips the final line of an incremental revision.
+      if(eofCount>=2&&byteRange&&contents)return true;
     }
     if(comment){
       if(char===10||char===13)comment=false;
