@@ -57,6 +57,10 @@ import {
 } from './editor';
 import { disposePdf, loadPdfBytes, type PdfLoadResult } from './engine';
 import {
+  addPdfRegionMarkup, deletePdfReviewAnnotation, listPdfReviewAnnotations,
+  setPdfReviewResolved, updatePdfReviewText, type PdfRegionMarkup, type PdfReviewItem,
+} from './review';
+import {
   canRedoPdfHistory,
   canUndoPdfHistory,
   createPdfHistory,
@@ -194,6 +198,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [textOverlay, setTextOverlay] = useState({ text:'', x:0.12, y:0.82, size:12 });
   const [shapeOverlay, setShapeOverlay] = useState({ x:0.12, y:0.68, width:0.35, height:0.08, mode:'highlight' as 'highlight'|'outline' });
   const [commentDraft, setCommentDraft] = useState({ text:'', author:'MALENJO User', x:0.86, y:0.86 });
+  const [markupDraft, setMarkupDraft] = useState({
+    kind:'Highlight' as PdfRegionMarkup['kind'],
+    x:0.12,y:0.62,width:0.35,height:0.05,
+  });
+  const [reviewAnnotations, setReviewAnnotations] = useState<PdfReviewItem[]>([]);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewFailure, setReviewFailure] = useState('');
+  const [reviewEdit, setReviewEdit] = useState<{item:PdfReviewItem;text:string}|null>(null);
   const [formDraft, setFormDraft] = useState({
     type:'text' as 'text'|'checkbox'|'radio'|'dropdown'|'list',
     name:'',
@@ -646,13 +658,77 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     );
   }
 
+  useEffect(()=>{
+    if(!sourceBytes){
+      setReviewAnnotations([]);
+      setReviewFailure('');
+      setReviewLoading(false);
+      return;
+    }
+    let cancelled=false;
+    setReviewLoading(true);
+    setReviewFailure('');
+    void listPdfReviewAnnotations(sourceBytes)
+      .then(items=>{if(!cancelled)setReviewAnnotations(items);})
+      .catch(reason=>{
+        if(!cancelled){
+          setReviewAnnotations([]);
+          setReviewFailure(reason instanceof Error?reason.message:String(reason));
+        }
+      })
+      .finally(()=>{if(!cancelled)setReviewLoading(false);});
+    return ()=>{cancelled=true;};
+  },[sourceBytes]);
+
   async function addComment(){
-    await mutate(
+    const added=await mutate(
       'Added a PDF comment annotation.',
       (bytes)=>addPdfCommentAnnotation(bytes,{pageNumber:currentPage,...commentDraft}),
       currentPage,
     );
-    setCommentDraft((current)=>({...current,text:''}));
+    if(added)setCommentDraft((current)=>({...current,text:''}));
+  }
+
+  async function addReviewMarkup(){
+    const kind=markupDraft.kind;
+    await mutate(
+      'Added PDF '+kind+' region annotation.',
+      (bytes)=>addPdfRegionMarkup(bytes,{
+        ...markupDraft,pageNumber:currentPage,
+        author:commentDraft.author,
+        text:commentDraft.text,
+      }),
+      currentPage,
+    );
+  }
+
+  async function saveReviewText(){
+    if(!reviewEdit)return;
+    const {item,text}=reviewEdit;
+    const changed=await mutate(
+      'Updated PDF '+item.kind+' annotation.',
+      (bytes)=>updatePdfReviewText(bytes,item,text),
+      item.pageNumber,
+    );
+    if(changed)setReviewEdit(null);
+  }
+
+  async function toggleReviewResolved(item:PdfReviewItem){
+    await mutate(
+      item.resolved?'Reopened PDF review item.':'Resolved PDF review item.',
+      (bytes)=>setPdfReviewResolved(bytes,item,!item.resolved),
+      item.pageNumber,
+    );
+  }
+
+  async function removeReviewItem(item:PdfReviewItem){
+    if(!window.confirm('Delete the selected PDF annotation from page '+item.pageNumber+'? You can Undo the deletion.'))return;
+    const removed=await mutate(
+      'Deleted PDF '+item.kind+' annotation.',
+      (bytes)=>deletePdfReviewAnnotation(bytes,item),
+      item.pageNumber,
+    );
+    if(removed)setReviewEdit(null);
   }
 
   async function addFormField(){
@@ -1288,6 +1364,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     comment:[
       {id:'comments-panel',label:'Comments panel',enabled:true,run:()=>openLeftPanel('comments')},
       {id:'add-comment',label:'Add comment',enabled:!!sourceBytes&&!mutating&&!!commentDraft.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!commentDraft.text.trim()?'Enter comment text in the Comments panel first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addComment},
+      {id:'markup-region',label:'Add '+markupDraft.kind+' region',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addReviewMarkup},
       providerAction,
     ],
     sign:[
@@ -1524,8 +1601,44 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                 <label>X<input type="number" min="0" max="1" step="0.01" value={commentDraft.x} onChange={(event)=>setCommentDraft({...commentDraft,x:Number(event.target.value)})}/></label>
                 <label>Y<input type="number" min="0" max="1" step="0.01" value={commentDraft.y} onChange={(event)=>setCommentDraft({...commentDraft,y:Number(event.target.value)})}/></label>
               </div>
-              <button disabled={mutating||!commentDraft.text.trim()} onClick={()=>void addComment()}>Add PDF comment</button>
-              <small>Creates a real PDF /Text annotation and participates in this tab's Undo/Redo history.</small>
+              <button disabled={mutating||!sourceBytes||!commentDraft.text.trim()} onClick={()=>void addComment()}>Add PDF comment</button>
+              <small>Creates a PDF /Text annotation. Review changes participate in Undo/Redo.</small>
+            </div>
+            <div className="pdf-edit-form">
+              <b>Markup a page region</b>
+              <label>Type<select value={markupDraft.kind} onChange={(event)=>setMarkupDraft({...markupDraft,kind:event.target.value as PdfRegionMarkup['kind']})}>
+                <option value="Highlight">Highlight</option>
+                <option value="Underline">Underline</option>
+                <option value="StrikeOut">Strikeout</option>
+              </select></label>
+              <div className="pdf-coordinate-grid">
+                {(['x','y','width','height'] as const).map(key=><label key={key}>{key}<input type="number" min="0" max="1" step="0.01" value={markupDraft[key]} onChange={(event)=>setMarkupDraft({...markupDraft,[key]:Number(event.target.value)})}/></label>)}
+              </div>
+              <button disabled={mutating||!sourceBytes} onClick={()=>void addReviewMarkup()}>Add {markupDraft.kind} annotation</button>
+              <small>Coordinates represent a rectangular region, not a verified text selection. Uses standard PDF markup QuadPoints.</small>
+            </div>
+            <div className="pdf-edit-form">
+              <b>Review annotations ({reviewAnnotations.length})</b>
+              {reviewLoading&&<small role="status">Reading PDF review annotations…</small>}
+              {reviewFailure&&<small role="alert">{reviewFailure}</small>}
+              {!reviewLoading&&!reviewFailure&&reviewAnnotations.length===0&&<small>No review annotations in the loaded PDF.</small>}
+              {reviewAnnotations.map(item=><div key={item.pageNumber+'-'+item.index+'-'+item.ref} className="pdf-left-info">
+                <b>{item.kind} · Page {item.pageNumber}{item.resolved?' · Completed':''}</b>
+                <div>{item.author||'Unknown author'}</div>
+                <p>{item.text||'(No comment text)'}</p>
+                <button onClick={()=>goToPage(item.pageNumber)}>Go to page</button>
+                {item.ref&&<div>
+                  <button disabled={mutating} onClick={()=>setReviewEdit({item,text:item.text})}>Edit text</button>
+                  <button disabled={mutating} onClick={()=>void toggleReviewResolved(item)}>{item.resolved?'Reopen':'Complete'}</button>
+                  <button disabled={mutating} onClick={()=>void removeReviewItem(item)}>Delete</button>
+                </div>}
+                {reviewEdit?.item.ref===item.ref&&reviewEdit.item.index===item.index&&reviewEdit.item.pageNumber===item.pageNumber&&<div>
+                  <label>Edit annotation<textarea value={reviewEdit.text} onChange={(event)=>setReviewEdit({...reviewEdit,text:event.target.value})} maxLength={4000}/></label>
+                  <button disabled={mutating||!reviewEdit.text.trim()} onClick={()=>void saveReviewText()}>Save text</button>
+                  <button onClick={()=>setReviewEdit(null)}>Cancel</button>
+                </div>}
+                {!item.ref&&<small>This imported annotation has no indirect reference and is read-only.</small>}
+              </div>)}
             </div>
           </div>}
 
