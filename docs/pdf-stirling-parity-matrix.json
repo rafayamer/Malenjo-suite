@@ -2402,7 +2402,11 @@
         "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
         "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
         "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
-        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88",
+        "pinnedControllerEndpoint": "/api/v1/security/timestamp-pdf",
+        "pinnedControllerPath": "app/core/src/main/java/stirling/software/SPDF/controller/api/security/TimestampController.java",
+        "pinnedControllerBlobSha": "2329ca2484693bacd003a947dac69438e5a36c38",
+        "controllerEvidenceOnly": true
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2424,7 +2428,8 @@
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "RFC 3161 time stamp requires contacting a trusted remote TSA; not an offline-capable operation."
       ]
     },
     {
@@ -2540,7 +2545,11 @@
         "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
         "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
         "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
-        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88",
+        "pinnedControllerEndpoint": "/api/v1/security/verify-pdf",
+        "pinnedControllerPath": "app/core/src/main/java/stirling/software/SPDF/controller/api/security/VerifyPDFController.java",
+        "pinnedControllerBlobSha": "4226005c8ed4eabc789b0110ae5126853eb36809",
+        "controllerEvidenceOnly": true
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2562,7 +2571,8 @@
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Uses veraPDF for PDF/A, PDF/UA and standards compliance; must verify bundled provider before enabling."
       ]
     },
     {
@@ -3273,7 +3283,11 @@
         "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
         "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
         "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
-        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88",
+        "pinnedControllerEndpoint": "/api/v1/misc/scanner-effect",
+        "pinnedControllerPath": "app/core/src/main/java/stirling/software/SPDF/controller/api/misc/ScannerEffectController.java",
+        "pinnedControllerBlobSha": "eb6b74fd58b5b984e909e59e5870e0e70d7badb2",
+        "controllerEvidenceOnly": true
       },
       "malenjo": {
         "implementationPaths": [],
@@ -3295,7 +3309,8 @@
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Pinned Java/PDFBox source exists, but resource bounds, provider deployment and golden render tests remain open."
       ]
     },
     {
@@ -3403,7 +3418,11 @@
         "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
         "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
         "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
-        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88",
+        "pinnedControllerEndpoint": "/api/v1/form/fields",
+        "pinnedControllerPath": "app/core/src/main/java/stirling/software/SPDF/controller/api/form/FormFillController.java",
+        "pinnedControllerBlobSha": "b1a8464c729002ff0b81944a4918a4dd27e84830",
+        "controllerEvidenceOnly": true
       },
       "malenjo": {
         "implementationPaths": [
@@ -3432,7 +3451,8 @@
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
         "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
-        "Existing MALENJO implementation and unit test found; this covers only part of the upstream operation semantics. Runtime Windows provider, full handoff edge cases, and export/reopen acceptance are not verified."
+        "Existing MALENJO implementation and unit test found; this covers only part of the upstream operation semantics. Runtime Windows provider, full handoff edge cases, and export/reopen acceptance are not verified.",
+        "Pinned form-fields POST handler; verify OpenAPI multipart binding and output shape on Windows."
       ]
     },
     {
@@ -3454,7 +3474,11 @@
         "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
         "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
         "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
-        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88",
+        "pinnedControllerEndpoint": "/api/v1/form/fill",
+        "pinnedControllerPath": "app/core/src/main/java/stirling/software/SPDF/controller/api/form/FormFillController.java",
+        "pinnedControllerBlobSha": "b1a8464c729002ff0b81944a4918a4dd27e84830",
+        "controllerEvidenceOnly": true
       },
       "malenjo": {
         "implementationPaths": [
@@ -3483,7 +3507,8 @@
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
         "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
-        "Existing MALENJO implementation and unit test found; this covers only part of the upstream operation semantics. Runtime Windows provider, full handoff edge cases, and export/reopen acceptance are not verified."
+        "Existing MALENJO implementation and unit test found; this covers only part of the upstream operation semantics. Runtime Windows provider, full handoff edge cases, and export/reopen acceptance are not verified.",
+        "Pinned form-fill POST handler; confirm fill/flatten output and error behavior offline."
       ]
     },
     {
@@ -3505,7 +3530,11 @@
         "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
         "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
         "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
-        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88",
+        "pinnedControllerEndpoint": "/api/v1/form/modify-fields",
+        "pinnedControllerPath": "app/core/src/main/java/stirling/software/SPDF/controller/api/form/FormFillController.java",
+        "pinnedControllerBlobSha": "b1a8464c729002ff0b81944a4918a4dd27e84830",
+        "controllerEvidenceOnly": true
       },
       "malenjo": {
         "implementationPaths": [],
@@ -3527,7 +3556,8 @@
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Pinned form-modify POST handler; complex field updates require specific negative tests."
       ]
     },
     {
@@ -3549,7 +3579,11 @@
         "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
         "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
         "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
-        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88",
+        "pinnedControllerEndpoint": "/api/v1/form/delete-fields",
+        "pinnedControllerPath": "app/core/src/main/java/stirling/software/SPDF/controller/api/form/FormFillController.java",
+        "pinnedControllerBlobSha": "b1a8464c729002ff0b81944a4918a4dd27e84830",
+        "controllerEvidenceOnly": true
       },
       "malenjo": {
         "implementationPaths": [],
@@ -3571,7 +3605,8 @@
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Pinned form-delete POST handler; protect unrelated form structures."
       ]
     },
     {
@@ -4081,7 +4116,11 @@
         "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
         "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
         "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
-        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88",
+        "pinnedControllerEndpoint": "/api/v1/pipeline/handleData",
+        "pinnedControllerPath": "app/core/src/main/java/stirling/software/SPDF/controller/api/pipeline/PipelineController.java",
+        "pinnedControllerBlobSha": "dbef080a4db6fa12df4f657d111d1b7e27448a6c",
+        "controllerEvidenceOnly": true
       },
       "malenjo": {
         "implementationPaths": [],
@@ -4103,7 +4142,8 @@
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Pinned controller is explicitly excluded in STIRLING_PDF_TAURI_MODE; cannot call it locally without a separately reviewed replacement."
       ]
     }
   ],
@@ -4126,6 +4166,13 @@
     "localSourcePartialCount": 21,
     "unverifiedSourceCount": 69,
     "frontendRouteMatchesOutsideTestedAPI": 22,
-    "pendingFurtherUpstreamSourceClassification": 14
+    "pendingFurtherUpstreamSourceClassification": 6,
+    "pinnedControllerOnlyRouteMatches": 8,
+    "routeAvailabilityClassification": {
+      "pinnedEndpointFixture": 54,
+      "pinnedControllerOnly": 8,
+      "pinnedFrontendOnly": 22,
+      "noDirectSourceSignal": 6
+    }
   }
 }
