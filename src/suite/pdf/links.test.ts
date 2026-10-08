@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {PDFArray,PDFDict,PDFDocument,PDFName,PDFRef,PDFString} from 'pdf-lib';
+import {PDFArray,PDFDict,PDFDocument,PDFName,PDFString} from 'pdf-lib';
 import {addPdfCommentAnnotation} from './editor';
 import {
   addPdfLinkAnnotation,deletePdfLinkAnnotation,listPdfLinkAnnotations,
