@@ -6,7 +6,7 @@ describe('AI prompt/version policy',()=>{
     expect(new Set(AI_PROMPT_POLICIES.map((item)=>item.id)).size).toBe(AI_PROMPT_POLICIES.length);
     const first=aiPromptPolicy('document-chat');
     first.maxSources=0;
-    expect(()=>Reflect.set(AI_PROMPT_POLICIES[0] as object,'maxSources',0)).toThrow();
+    expect(Reflect.set(AI_PROMPT_POLICIES[0] as object,'maxSources',0)).toBe(false);
     const second=aiPromptPolicy('document-chat');
     expect(second.id).toBe('document-chat-v1');
     expect(second.maxSources).toBeGreaterThan(0);
