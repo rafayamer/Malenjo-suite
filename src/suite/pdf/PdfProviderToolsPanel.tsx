@@ -299,7 +299,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     </details>}
     <details className="stirling-component-details" aria-label="Stirling PDF parity inventory">
       <summary>
-        Stirling 90-tool parity register: {parity.upstreamFixtureMatched} tested API matches, {parity.pinnedControllerOnlyRouteMatches} additional Java controller matches, {parity.frontendOnlyRouteMatches} frontend-only matches, {parity.sourceClassificationPending} source items awaiting classification;
+        Stirling 90-tool parity register: {parity.upstreamFixtureMatched} tested API matches, {parity.pinnedControllerOnlyRouteMatches} additional Java controller matches, {parity.frontendOnlyRouteMatches} frontend-only matches, {parity.configurationOnlyMatches} configuration-only entries; {parity.sourceClassificationPending} unclassified;
         {catalogLoaded?` ${parity.liveRoutes} live routes / ${parity.providerEnabled} provider-enabled (unverified)`:' load local provider to check runtime'}
       </summary>
       <p className="stirling-provider-message">
@@ -318,7 +318,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
                 :row.state==='provider-disabled'?'Provider disabled'
                 :row.state==='not-in-live-openapi'?'Missing from loaded OpenAPI'
                 :row.state==='provider-not-loaded'?'Start local provider'
-                :row.frontendCoreToolId?`Frontend ${row.frontendCoreToolId}; provider route unverified`:'Needs upstream source investigation'}</td>
+                :row.frontendCoreToolId?`Frontend ${row.frontendCoreToolId}; provider route unverified`:row.configurationOnly?'Configured upstream, no verified handler':'Needs upstream source investigation'}</td>
               <td><button type="button"
                 disabled={!row.operation?.capability.available}
                 onClick={()=>{if(row.operation){setAllCategories(true);setSearch('');setSelectedId(row.operation.id);}}}>
