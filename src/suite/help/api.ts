@@ -3,6 +3,7 @@ import packageJson from '../../../package.json';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
 import { getLocalAiStatus } from '../ai/api';
+import { approvedInstalledModels } from '../ai/modelProfiles';
 import { getPaddleStatus } from '../scanner/ocr';
 import type { ProviderDiagnostic, SupportBundle } from './supportModel';
 import { serializeSupportBundle } from './supportModel';
@@ -60,12 +61,13 @@ async function nativeAdapter(command: string, id: string, name: string): Promise
 async function aiDiagnostic(provider: 'ollama' | 'llama-cpp'): Promise<ProviderDiagnostic> {
   try {
     const status = await getLocalAiStatus(provider);
+    const approved = provider === 'ollama' ? approvedInstalledModels(status.models) : [];
     return {
       id: `ai-${provider}`,
       name: provider === 'ollama' ? 'Malenjo AI — Ollama' : 'Malenjo AI — llama.cpp',
-      state: status.available ? 'ready' : 'unavailable',
-      detail: status.message,
-      version: status.models.length ? `${status.models.length} model(s) detected` : undefined,
+      state: status.available && approved.length > 0 ? 'ready' : 'unavailable',
+      detail: status.available && approved.length === 0 ? 'No approved MALENJO AI model is installed.' : status.message,
+      version: approved.length ? `${approved.length} approved model(s) detected` : undefined,
     };
   } catch (reason) {
     return {
