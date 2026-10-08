@@ -759,8 +759,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   },[pdf]);
 
   useEffect(()=>{
+    // Never leave actionable bookmark refs/drafts from a previous PDF available
+    // while asynchronously inspecting a newly opened or edited working copy.
+    setEditableBookmarks([]);
+    setBookmarkEdit(null);
     if(!sourceBytes){
-      setEditableBookmarks([]);
       setBookmarkEditError('');
       return;
     }
