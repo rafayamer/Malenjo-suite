@@ -61,6 +61,24 @@ describe('local RAG', () => {
     expect((prompt.match(/SOURCE_DATA=/g)??[]).length).toBeLessThanOrEqual(RAG_LIMITS.lite.topK);
   });
 
+  it('budgets quote-heavy source excerpts after JSON escaping', () => {
+    const citations = Array.from({ length: 3 }, (_, index) => ({
+      id: `S${index + 1}`,
+      sourceId: `s${index}`,
+      sourceName: 'quotes.pdf',
+      chunkId: `c${index}`,
+      excerpt: ('"\\\\\\n\\t').repeat(1200),
+      score: 1,
+    }));
+    for (const liteMode of [true, false]) {
+      const prompt = buildGroundedPrompt('Summarize', citations, [], { liteMode });
+      expect(utf8Length(prompt)).toBeLessThanOrEqual(
+        liteMode ? RAG_PROMPT_LIMITS.lite.maxUtf8Bytes : RAG_PROMPT_LIMITS.normal.maxUtf8Bytes,
+      );
+      expect(prompt).toContain('SOURCE_DATA=');
+    }
+  });
+
   it('truncates oversized local corpora', () => {
     const index = buildRagIndex([{ id: 'big', name: 'big.txt', text: 'document '.repeat(100_000) }], true);
     expect(index.indexedChars).toBeLessThanOrEqual(RAG_LIMITS.lite.maxChars);
