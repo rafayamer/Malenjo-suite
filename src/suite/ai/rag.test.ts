@@ -17,7 +17,28 @@ describe('local RAG', () => {
     const results = retrieveCitations(index, 'How are backups stored?');
     expect(results[0]?.sourceName).toBe('policy.txt');
     expect(results[0]?.id).toBe('S1');
+    it('keeps Lite grounded prompts within a conservative context budget',()=>{
+    const citations=Array.from({length:3},(_,index)=>({
+      id:`S${index+1}`,
+      sourceId:`doc-${index}`,
+      sourceName:`Doc ${index}.pdf`,
+      chunkId:`chunk-${index}`,
+      excerpt:'source '.repeat(1000),
+      score:1,
+    }));
+    const history=Array.from({length:10},()=>({role:'user' as const,content:'history '.repeat(1000)}));
+    const prompt=buildGroundedPrompt(
+      'question '.repeat(2000),
+      citations,
+      history,
+      GROUNDED_PROMPT_LIMITS.lite,
+    );
+    expect(prompt.length).toBeLessThan(7_500);
+    expect(prompt).toContain('SECURITY RULE');
+    expect(prompt).toContain('USER QUESTION');
+    expect(prompt).toContain('[S1]');
   });
+});
 
   it('enforces much smaller Lite Mode memory bounds', () => {
     expect(RAG_LIMITS.lite.maxChars).toBeLessThan(RAG_LIMITS.normal.maxChars);
