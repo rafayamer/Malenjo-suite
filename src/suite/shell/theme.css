@@ -677,3 +677,7 @@
 .pdf-compare-pages { max-height: 220px; overflow: auto; display: grid; gap: 6px; padding-top: 8px; }
 .pdf-compare-pages article { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border-bottom: 1px solid #455263; padding: 4px; }
 .pdf-compare-pages article div { flex: 1 0 100%; overflow-wrap: anywhere; font-size: 12px; }
+
+/* Viewer-only optional-content (OCG) visibility controls in the PDF rail. */
+.pdf-layer-visibility { display: flex; align-items: center; gap: 8px; min-height: 32px; overflow-wrap: anywhere; }
+.pdf-layer-visibility input[type='checkbox'] { flex: none; }

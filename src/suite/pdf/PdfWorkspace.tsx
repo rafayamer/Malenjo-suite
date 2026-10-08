@@ -34,6 +34,11 @@ import {
 } from './navigation';
 import { extractPdfDocumentText } from './textExport';
 import {
+  listPdfOptionalLayers, restorePdfOptionalLayerVisibility,
+  setPdfOptionalLayerVisibility, type PdfOptionalContentConfig,
+  type PdfOptionalLayer,
+} from './optionalLayers';
+import {
   clearPdfPageLabelRanges, listPdfPageLabelRanges, setPdfPageLabelRange,
   type PdfPageLabelRange,
 } from './pageLabels';
@@ -222,6 +227,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<Array<{page:number;excerpt:string}>>([]);
   const [leftPanel, setLeftPanel] = useState<PdfLeftPanelId>(DEFAULT_PDF_LEFT_PANEL);
+  const [optionalLayers, setOptionalLayers] = useState<{
+    document:PdfLoadResult['document'];
+    config:PdfOptionalContentConfig;
+    original:PdfOptionalLayer[];
+    current:PdfOptionalLayer[];
+  }|null>(null);
+  const [layerRevision, setLayerRevision] = useState(0);
+  const [layersLoading, setLayersLoading] = useState(false);
+  const [layersError, setLayersError] = useState('');
   const [pdfOutline, setPdfOutline] = useState<PdfOutlineModel>({entries:[],truncated:false});
   const [editableBookmarks, setEditableBookmarks] = useState<PdfTopLevelBookmark[]>([]);
   const [bookmarkTitle, setBookmarkTitle] = useState('');
@@ -734,6 +748,53 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       .finally(()=>{if(!cancelled)setReviewLoading(false);});
     return ()=>{cancelled=true;};
   },[sourceBytes]);
+
+  useEffect(()=>{
+    setOptionalLayers(null);
+    setLayersError('');
+    if(!pdf){setLayersLoading(false);return;}
+    let cancelled=false;
+    const activeDocument=pdf.document;
+    setLayersLoading(true);
+    void activeDocument.getOptionalContentConfig({intent:'display'})
+      .then(config=>{
+        if(cancelled)return;
+        const inventory=listPdfOptionalLayers(config);
+        setOptionalLayers({document:activeDocument,config,original:inventory,current:inventory});
+      })
+      .catch(reason=>{
+        if(cancelled)return;
+        setLayersError(reason instanceof Error?reason.message:String(reason));
+        setOptionalLayers(null);
+      })
+      .finally(()=>{if(!cancelled)setLayersLoading(false);});
+    return()=>{cancelled=true;};
+  },[pdf]);
+
+  const currentLayers=optionalLayers?.document===pdf?.document?optionalLayers:null;
+
+  function changeLayerVisibility(id:string,visible:boolean){
+    if(!currentLayers||mutating||loading)return;
+    try{
+      const entries=setPdfOptionalLayerVisibility(currentLayers.config,id,visible);
+      setOptionalLayers({...currentLayers,current:entries});
+      setLayerRevision(value=>value+1);
+    }catch(reason){
+      setLayersError(reason instanceof Error?reason.message:String(reason));
+    }
+  }
+
+  function resetLayerVisibility(){
+    if(!currentLayers||mutating||loading)return;
+    try{
+      const entries=restorePdfOptionalLayerVisibility(currentLayers.config,currentLayers.original);
+      setOptionalLayers({...currentLayers,current:entries});
+      setLayerRevision(value=>value+1);
+      setLayersError('');
+    }catch(reason){
+      setLayersError(reason instanceof Error?reason.message:String(reason));
+    }
+  }
 
   useEffect(()=>{
     if(!pdf){
@@ -2031,6 +2092,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                 <PdfThumbnail
                   key={page}
                   document={pdf.document}
+                  optionalContentConfig={currentLayers?.config}
+                  layerRevision={layerRevision}
                   pageNumber={page}
                   logicalLabel={logicalPageLabels[page-1]}
                   active={page === currentPage}
@@ -2168,7 +2231,18 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             </div>
           </div>}
           {leftPanel==='layers'&&<div className="pdf-left-panel-body">
-            <div className="pdf-left-info">Optional-content/layer discovery and visibility controls are not yet implemented.</div>
+            <div className="pdf-edit-form">
+              <b>PDF optional-content groups</b>
+              {layersLoading&&<small role="status">Reading PDF layers…</small>}
+              {layersError&&<small role="alert">{layersError}</small>}
+              {!layersLoading&&!layersError&&!currentLayers?.current.length&&<small>This PDF has no selectable optional-content groups.</small>}
+              {currentLayers?.current.map(group=><label key={group.id} className="pdf-layer-visibility">
+                <input type="checkbox" checked={group.visible} disabled={mutating||loading} onChange={event=>changeLayerVisibility(group.id,event.target.checked)}/>
+                {group.name}
+              </label>)}
+              <button disabled={!currentLayers?.current.length||mutating||loading} onClick={resetLayerVisibility}>Restore original visibility</button>
+              <small>These switches control the local preview and thumbnails only. Export retains the original PDF layer visibility settings; changing layers here does not flatten or rewrite objects.</small>
+            </div>
           </div>}
         </section>}
       </aside>
@@ -2180,6 +2254,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             return <PdfPageCanvas
               key={page}
               document={pdf.document}
+              optionalContentConfig={currentLayers?.config}
+              layerRevision={layerRevision}
               pageNumber={page}
               fitMode={fitMode}
               zoom={zoom}
