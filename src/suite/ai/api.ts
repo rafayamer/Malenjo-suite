@@ -256,6 +256,9 @@ export async function runLocalAiChat(
 ): Promise<AiChatResult> {
   if (!isTauri()) return runBrowserAiChat(jobId, provider, model, prompt, liteMode, onToken);
   const result = await invoke<AiChatResult>('local_ai_chat', { jobId, provider, model, prompt, liteMode });
+  if (hasDegenerateRepetition(result.content)) {
+    throw new Error('Local model entered a repetition loop. Generation was stopped.');
+  }
   onToken?.(result.content);
   return result;
 }
