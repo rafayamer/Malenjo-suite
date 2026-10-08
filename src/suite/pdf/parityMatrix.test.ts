@@ -1,5 +1,6 @@
 import {describe,expect,it} from 'vitest';
 import matrix from '../../../docs/pdf-stirling-parity-matrix.json';
+import frontend from '../../../docs/pdf-stirling-pinned-frontend-routes.json';
 
 describe('MALENJO PDF Stirling parity evidence inventory',()=>{
   it('enumerates 90 source-pinned operation IDs exactly once and in handoff order',()=>{
@@ -76,5 +77,28 @@ describe('MALENJO PDF Stirling parity evidence inventory',()=>{
     expect(matched).toHaveLength(54);
     expect(matrix.operations.every(op=>op.evidence.functionalStatus!=='implemented')).toBe(true);
     expect(matrix.auditSnapshot.unmappedUpstreamFixtureRoutes).toHaveLength(8);
+  });
+
+  it('uses the exact pinned 105-URL core frontend registry as additional source evidence',()=>{
+    expect(matrix.upstream.pinnedFrontendURLMap.urlCount).toBe(105);
+    expect(matrix.upstream.pinnedFrontendURLMap.blobSha).toBe('67328c8ab22e775d544c8910387a37aec962628d');
+    expect(matrix.upstream.pinnedFrontendCoreToolList.blobSha).toBe('de647e2b6e91c6bb9fb66735fd5db748adf75a88');
+    expect(matrix.upstream.pinnedFrontendCoreToolList.coreToolCount).toBe(61);
+    expect(Object.keys(frontend.routeToCoreToolId)).toHaveLength(105);
+    expect(new Set(frontend.coreToolIds).size).toBe(61);
+    const routes=frontend.routeToCoreToolId as Record<string,string>;
+    const missingApi=matrix.operations.filter(x=>!x.source.upstreamEndpoint);
+    expect(missingApi).toHaveLength(36);
+    expect(missingApi.filter(x=>x.source.pinnedFrontendCoreToolId)).toHaveLength(22);
+    expect(missingApi.filter(x=>!x.source.pinnedFrontendCoreToolId)).toHaveLength(14);
+    for(const op of matrix.operations){
+      if(op.source.pinnedFrontendCoreToolId){
+        expect(op.source.pinnedFrontendRoute).toBeTruthy();
+        expect(routes[op.source.pinnedFrontendRoute!]).toBe(op.source.pinnedFrontendCoreToolId);
+        expect(frontend.coreToolIds).toContain(op.source.pinnedFrontendCoreToolId);
+      }else expect(op.source.pinnedFrontendRoute).toBeNull();
+      expect(op.evidence.windowsOffline).toBe('unverified');
+      expect(op.evidence.functionalStatus).not.toBe('implemented');
+    }
   });
 });
