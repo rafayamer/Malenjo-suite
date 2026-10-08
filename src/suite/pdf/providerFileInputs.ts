@@ -22,12 +22,14 @@ export function isPdfProviderInput(file:Pick<PdfProviderInputFile,'filename'|'co
   if(/\.pdf$/i.test(file.filename.trim())||
      file.contentType?.split(';')[0].trim().toLowerCase()==='application/pdf')return true;
   const bytes=file.bytes;
-  // Do not interpret arbitrary text/HTML containing "%PDF-" as a PDF.
-  // Only a true file header (optionally preceded by a UTF-8 BOM or small
-  // whitespace prefix) qualifies when the filename/MIME do not say PDF.
+  // Match the full 1,024-byte header prefix tolerated by PDF parsers,
+  // without treating arbitrary embedded "%PDF-" prose as a PDF. A renamed
+  // PDF can have a BOM and hundreds of leading whitespace bytes.
+  const MAX_PDF_HEADER_PREFIX=1024;
   let index=bytes[0]===239&&bytes[1]===187&&bytes[2]===191?3:0;
-  while(index<bytes.length&&index<32&&
-        (bytes[index]===32||bytes[index]===9||bytes[index]===10||bytes[index]===13)){
+  while(index<bytes.length&&index<MAX_PDF_HEADER_PREFIX&&
+        (bytes[index]===32||bytes[index]===9||bytes[index]===10||bytes[index]===13||
+         bytes[index]===0||bytes[index]===12)){
     index++;
   }
   return bytes[index]===37&&bytes[index+1]===80&&bytes[index+2]===68&&
