@@ -286,9 +286,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       }
     } catch (reason) {
       if (requestId === requestIdRef.current) {
-        setPdf(null);
-        setSourceBytes(null);
-        setPageCount(0);
+        // Loading is transactional: a corrupt replacement must not discard the
+        // previously opened PDF, its unsaved bytes, or its undo/redo history.
         setError(reason instanceof Error ? reason.message : String(reason));
       }
     } finally {
