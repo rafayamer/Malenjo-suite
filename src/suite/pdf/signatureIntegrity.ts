@@ -21,6 +21,8 @@ const SIG=PDFName.of('Sig');
 const BYTE_RANGE=PDFName.of('ByteRange');
 const CONTENTS=PDFName.of('Contents');
 const ANN=PDFName.of('Annots');
+const PARENT=PDFName.of('Parent');
+const MAX_PARENT_DEPTH=32;
 
 /**
  * Conservative local structural inspection, not a cryptographic signature
@@ -85,8 +87,10 @@ export async function inspectPdfSigningIntegrity(bytes:Uint8Array):Promise<PdfSi
     // /FT and /V can both be indirect in imported PDFs. Resolve them
     // rather than comparing serialized PDF objects (or untrusted huge names).
     const rawType=dict.get(FT);
-    const directSig=Boolean(rawType&&pdf.context.lookup(rawType)===PDFName.of('Sig'));
-    const signature=inheritedSig||directSig;
+    const directSig=Boolean(rawType&&pdf.context.lookup(rawType)===SIG);
+    // PDF field inheritance is overridden by an explicitly supplied /FT.
+    // An inherited /Sig must not classify a descendant /FT /Tx as signed.
+    const signature=dict.has(FT)?directSig:inheritedSig;
     if(directSig)signatureFieldCount++;
     // Both /FT and /V may be inherited independently. An ancestor can
     // supply /V before a descendant introduces /FT /Sig.
@@ -129,6 +133,44 @@ export async function inspectPdfSigningIntegrity(bytes:Uint8Array):Promise<PdfSi
       break;
     }
   }
+  // Orphaned widgets may omit both /FT and /V and inherit them through
+  // one or more /Parent dictionaries. Resolve the nearest explicit value of
+  // each independently; do not stop at /AcroForm/Fields or trust parent
+  // references to be acyclic. All imported objects are kept inert.
+  function orphanWidgetHasSignature(widget:PDFDict):boolean{
+    let field:PDFDict=widget;
+    let foundType=false;
+    let isSignature=false;
+    let foundValue=false;
+    let inheritedValue:ReturnType<PDFDict['get']>;
+    const seen=new WeakSet<PDFDict>();
+    for(let depth=0;;depth++){
+      if(depth>=MAX_PARENT_DEPTH||seen.has(field)){
+        throw new Error('PDF widget parent tree contains a cycle or exceeds signature inspection limits.');
+      }
+      seen.add(field);
+      if(!foundType&&field.has(FT)){
+        foundType=true;
+        const stored=field.get(FT);
+        isSignature=Boolean(stored&&pdf.context.lookup(stored)===SIG);
+      }
+      if(!foundValue&&field.has(VALUE)){
+        foundValue=true;
+        inheritedValue=field.get(VALUE);
+      }
+      const parent=field.get(PARENT);
+      if(!parent)break;
+      const resolved=pdf.context.lookup(parent);
+      if(!(resolved instanceof PDFDict)){
+        throw new Error('PDF widget has a malformed parent; signatures cannot be ruled out.');
+      }
+      field=resolved;
+    }
+    if(isSignature&&nonNull(inheritedValue))return true;
+    const linked=inheritedValue?pdf.context.lookup(inheritedValue):undefined;
+    return linked instanceof PDFDict&&signatureEvidence(linked);
+  }
+
   if(!detachedSignatureEvidence){
     const pages=pdf.getPages();
     let annotationSlots=0;
@@ -144,12 +186,7 @@ export async function inspectPdfSigningIntegrity(bytes:Uint8Array):Promise<PdfSi
         if(!entry)throw new Error('PDF annotation array contains a malformed entry.');
         const dict=pdf.context.lookup(entry);
         if(!(dict instanceof PDFDict))continue;
-        const rawType=dict.get(FT);
-        const isSig=Boolean(rawType&&pdf.context.lookup(rawType)===SIG);
-        const value=dict.get(VALUE);
-        const linked=value?pdf.context.lookup(value):undefined;
-        if((isSig&&nonNull(value))||
-           (linked instanceof PDFDict&&signatureEvidence(linked))){
+        if(orphanWidgetHasSignature(dict)){
           detachedSignatureEvidence=true;
           break;
         }
