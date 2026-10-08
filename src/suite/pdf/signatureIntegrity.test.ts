@@ -131,4 +131,70 @@ describe('signed PDF mutation safety',()=>{
       signatureFieldCount:0,populatedSignatureCount:0,mayRewrite:true,
     });
   });
+
+  it('rejects an orphaned populated signature widget omitted from AcroForm Fields',async()=>{
+    const pdf=await PDFDocument.create();
+    pdf.addPage([300,400]);
+    const signedValue=pdf.context.obj({
+      Type:PDFName.of('Sig'),ByteRange:[0,10,20,30],
+      Contents:PDFHexString.of('A0B0C0'),
+    });
+    const orphan=pdf.context.register(pdf.context.obj({
+      Type:PDFName.of('Annot'),Subtype:PDFName.of('Widget'),
+      FT:PDFName.of('Sig'),Rect:[10,10,40,30],V:signedValue,
+    }));
+    pdf.getPage(0).node.set(PDFName.of('Annots'),pdf.context.obj([orphan]));
+    pdf.catalog.set(PDFName.of('AcroForm'),pdf.context.register(
+      pdf.context.obj({Fields:[]}),
+    ));
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    expect(await inspectPdfSigningIntegrity(bytes)).toMatchObject({
+      signatureFieldCount:0,populatedSignatureCount:0,mayRewrite:false,
+    });
+    await expect(requirePdfUnsignedForMutation(bytes))
+      .rejects.toThrow(/invalidate signatures/i);
+  });
+
+  it('finds orphaned indirect signature dictionaries with ByteRange evidence',async()=>{
+    const pdf=await PDFDocument.create();
+    pdf.addPage([300,400]);
+    pdf.context.register(pdf.context.obj({
+      Type:PDFName.of('Sig'),ByteRange:[0,100,200,300],
+      Contents:PDFHexString.of('ABCD'),
+    }));
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    expect(await inspectPdfSigningIntegrity(bytes)).toMatchObject({
+      signatureFieldCount:0,mayRewrite:false,
+    });
+  });
+
+  it('inherits a signature value supplied by a non-signature ancestor',async()=>{
+    const pdf=await PDFDocument.create();
+    pdf.addPage([300,400]);
+    const child=pdf.context.register(pdf.context.obj({
+      FT:PDFName.of('Sig'),T:PDFString.of('Approval'),
+    }));
+    const parent=pdf.context.register(pdf.context.obj({
+      T:PDFString.of('Parent'),Kids:[child],
+      V:pdf.context.obj({
+        Type:PDFName.of('Sig'),ByteRange:[0,100,200,300],
+        Contents:PDFHexString.of('ABCD'),
+      }),
+    }));
+    pdf.catalog.set(PDFName.of('AcroForm'),pdf.context.register(
+      pdf.context.obj({Fields:[parent]}),
+    ));
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    expect(await inspectPdfSigningIntegrity(bytes)).toMatchObject({
+      signatureFieldCount:1,populatedSignatureCount:1,mayRewrite:false,
+    });
+  });
+
+  it('checks a signed secondary document separately from an unsigned merge source',async()=>{
+    const unsigned=await fixture();
+    const signedSecondary=await fixture({field:true,populated:true});
+    await expect(requirePdfUnsignedForMutation(unsigned)).resolves.toBeUndefined();
+    await expect(requirePdfUnsignedForMutation(signedSecondary))
+      .rejects.toThrow(/invalidate signatures/i);
+  });
 });
