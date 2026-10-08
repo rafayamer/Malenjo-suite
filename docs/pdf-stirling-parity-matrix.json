@@ -3614,25 +3614,34 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfMetadataEdit.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Edit PDF metadata (offline)",
+        "provider": "MALENJO native pdf-lib (not Stirling sidecar)",
         "dependency": null,
         "providerCatalogMatchKey": "/api/v1/misc/update-metadata",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "updatePdfBasicMetadata"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfMetadataEdit.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfMetadataEdit.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Local bounded Info dictionary editor supports title/author/subject/keywords and verifies output by reopening; refuses signature dictionary. XMP synchronization, hidden metadata scrubbing, signature preservation and full upstream options unimplemented."
       ]
     },
     {
@@ -4161,18 +4170,26 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
+        "implementationPaths": [
+          "src/suite/pdf/formManagement.ts",
+          "src/suite/pdf/PdfWorkspace.tsx"
+        ],
+        "frontendCommand": "Apply field flags",
+        "provider": "MALENJO native pdf-lib (not Stirling sidecar)",
         "dependency": null,
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "updatePdfExistingFieldProperties"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/formManagement.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/formManagement.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
@@ -4181,7 +4198,8 @@
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
         "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
-        "Pinned form-modify POST handler; complex field updates require specific negative tests."
+        "Pinned form-modify POST handler; complex field updates require specific negative tests.",
+        "Existing form inspector changes required/read-only flags of selected AcroForm field through PDF working-copy/Undo path. Does not cover full upstream field creation, renaming, validation JavaScript, appearance editing, XFA or signature fields."
       ]
     },
     {
@@ -4214,18 +4232,26 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
+        "implementationPaths": [
+          "src/suite/pdf/formManagement.ts",
+          "src/suite/pdf/PdfWorkspace.tsx"
+        ],
+        "frontendCommand": "Delete field and widgets",
+        "provider": "MALENJO native pdf-lib (not Stirling sidecar)",
         "dependency": null,
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "deletePdfExistingFormField"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/formManagement.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/formManagement.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
@@ -4234,7 +4260,8 @@
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
         "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
-        "Pinned form-delete POST handler; protect unrelated form structures."
+        "Pinned form-delete POST handler; protect unrelated form structures.",
+        "Existing local form inspector deletes the explicitly selected AcroForm field and its widget annotations through PDF working-copy/Undo path; refuses XFA and signature fields. Full upstream batch behavior and Windows save/reopen fidelity unverified."
       ]
     },
     {
@@ -4883,8 +4910,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 21,
-    "unverifiedSourceCount": 69,
+    "localSourcePartialCount": 24,
+    "unverifiedSourceCount": 66,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
