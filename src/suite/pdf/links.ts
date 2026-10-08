@@ -91,6 +91,12 @@ function destination(pdf:PDFDocument,dict:PDFDict):{
     return {kind:'unsupported',destination:'Unsupported PDF link action dictionary'};
   }
   const type=action?.get(PDFName.of('S'))?.toString();
+  // A visible HTTPS /URI or /Dest is NOT sufficient proof of a safe link:
+  // imported annotation-level /AA and action chains /Next can execute other
+  // actions in external PDF readers. Keep those entries inert/read-only.
+  if(dict.has(PDFName.of('AA')) || action?.has(PDFName.of('Next'))){
+    return {kind:'unsupported',destination:'Imported link has additional or chained actions'};
+  }
   if(type==='/URI'){
     const uri=action?.get(URI);
     if(uri instanceof PDFHexString||uri instanceof PDFString){
