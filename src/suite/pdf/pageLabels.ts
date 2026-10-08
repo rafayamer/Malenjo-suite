@@ -102,9 +102,9 @@ export async function setPdfPageLabelRange(
   if(existing.length>PDF_PAGE_LABEL_MAX_RANGES){
     throw new Error('PDF page labels support at most 200 ranges.');
   }
-  const nums:unknown[]=[];
+  const nums:Array<PDFNumber|PDFDict>=[];
   for(const item of existing){
-    const attrs:Record<string,unknown>={St:PDFNumber.of(item.startNumber)};
+    const attrs:Record<string,PDFNumber|PDFName|PDFHexString>={St:PDFNumber.of(item.startNumber)};
     if(item.style!=='none')attrs.S=PDFName.of(item.style);
     if(item.prefix)attrs.P=PDFHexString.fromText(item.prefix);
     nums.push(PDFNumber.of(item.startPage-1),pdf.context.obj(attrs));
