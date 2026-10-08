@@ -18,8 +18,8 @@ if data.get("schemaVersion") != 2:
     fail("schemaVersion must be 2")
 
 models = data.get("models")
-if not isinstance(models, list) or not models:
-    fail("models must be a non-empty list")
+if not isinstance(models, list) or len(models) != 1:
+    fail("models must contain exactly one reviewed MALENJO model")
 
 ids = set()
 tags = set()
@@ -56,7 +56,13 @@ if not default.get("installable") or default.get("reviewState") != "reviewed":
     fail("default profile must be reviewed and installable")
 if default.get("license") != "MIT":
     fail("default profile must be MIT-licensed")
-if default.get("resourceClass") not in {"ultralite", "lite"}:
-    fail("default profile must remain resource-bounded")
+if default.get("provider") != "ollama":
+    fail("default profile must use the Ollama local provider")
+if default.get("upstreamModel") != "microsoft/Phi-4-mini-instruct":
+    fail("default profile must be the reviewed Phi-4 Mini upstream")
+if not default.get("upstreamRevision"):
+    fail("default profile requires a pinned upstream revision")
+if default.get("fineTunable") is not True:
+    fail("default profile must remain fine-tunable")
 
 print(f"AI model manifest OK: {len(models)} profiles; default={default_id}; license={default['license']}")
