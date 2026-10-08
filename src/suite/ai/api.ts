@@ -32,7 +32,8 @@ const browserJobs = new Map<string, AbortController>();
 export function hasDegenerateRepetition(content:string):boolean {
   const tokens=content.trim().split(/\s+/).filter(Boolean).slice(-64);
   for(let width=1;width<=4;width+=1){
-    const minimumRepeats=6;
+    const minimumRepeats=16;
+    // Short intentional repeated answers must not trip the loop guard.
     if(tokens.length<width*minimumRepeats)continue;
     const pattern=tokens.slice(-width);
     let repeats=0;
