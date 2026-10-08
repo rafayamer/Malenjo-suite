@@ -15,6 +15,7 @@ export interface PdfReviewItem {
   author: string;
   text: string;
   resolved: boolean;
+  replyToRef: string | null;
 }
 export type PdfReviewTarget = Pick<PdfReviewItem, 'pageNumber' | 'index' | 'ref' | 'kind'>;
 export interface PdfRegionMarkup {
@@ -34,6 +35,7 @@ const contentsKey = PDFName.of('Contents');
 const authorKey = PDFName.of('T');
 const stateKey = PDFName.of('State');
 const stateModelKey = PDFName.of('StateModel');
+const replyToKey=PDFName.of('IRT');
 const allowedKinds = new Set<PdfReviewKind>(['Text', 'Highlight', 'Underline', 'StrikeOut']);
 export const PDF_REVIEW_PAGE_LIMIT = 2000;
 export const PDF_REVIEW_ANNOTATION_LIMIT = 4000;
@@ -124,6 +126,8 @@ export async function listPdfReviewAnnotations(bytes: Uint8Array): Promise<PdfRe
         text: decode(dict.get(contentsKey)),
         resolved: name(dict.get(stateModelKey)) === 'Review' &&
           name(dict.get(stateKey)) === 'Completed',
+        replyToRef: dict.get(replyToKey) instanceof PDFRef
+          ? (dict.get(replyToKey) as PDFRef).toString():null,
       });
     }
   }
@@ -156,7 +160,60 @@ export async function deletePdfReviewAnnotation(
 ): Promise<Uint8Array> {
   const pdf = await load(bytes);
   const { annots } = annotationAt(pdf, target);
+  const targetRef=annots.get(target.index);
+  // Never orphan a PDF-native review thread. A reply must be deleted first.
+  // Check across all page annotation arrays, not only the reply's parent page.
+  if(!(targetRef instanceof PDFRef))throw new Error('Annotation identity is invalid.');
+  for(let page=1;page<=pdf.getPageCount();page++){
+    const siblings=getAnnotations(pdf,page);
+    if(!siblings)continue;
+    for(let i=0;i<siblings.size();i++){
+      const entry=siblings.get(i);
+      let annotation:PDFDict;
+      try{annotation=pdf.context.lookup(entry,PDFDict);}catch{continue;}
+      const replyTo=annotation.get(replyToKey);
+      if(replyTo instanceof PDFRef && replyTo.toString()===targetRef.toString()){
+        throw new Error('Delete the annotation replies first to avoid orphaned review threads.');
+      }
+    }
+  }
   annots.remove(target.index);
+  return save(pdf);
+}
+
+
+/**
+ * Append a real PDF /Text reply with /IRT and /RT /R linking to its parent.
+ * The reply stays on the same page and does not replace or flatten the parent.
+ */
+export async function replyToPdfReviewAnnotation(
+  bytes:Uint8Array, parent:PdfReviewTarget, text:string, author='MALENJO User',
+):Promise<Uint8Array>{
+  const message=textInput(text,'Reply text',4000,true);
+  const signer=textInput(author,'Reply author',160,false);
+  const pdf=await load(bytes);
+  const {annots,dict}=annotationAt(pdf,parent);
+  if(annots.size()>=PDF_REVIEW_ANNOTATION_LIMIT){
+    throw new Error('Page exceeds the 4,000-annotation safety limit.');
+  }
+  const parentRef=annots.get(parent.index);
+  if(!(parentRef instanceof PDFRef))throw new Error('Parent annotation has no supported identity.');
+  const page=pdf.getPage(parent.pageNumber-1);
+  const rect=dict.lookupMaybe(PDFName.of('Rect'),PDFArray);
+  // A reply is a separate note at the parent's location when possible.
+  const defaultRect=pdf.context.obj([20,20,44,44]);
+  const annotation=pdf.context.obj({
+    Type:PDFName.of('Annot'),
+    Subtype:PDFName.of('Text'),
+    Rect:rect??defaultRect,
+    P:page.ref,
+    Contents:PDFHexString.fromText(message),
+    T:PDFHexString.fromText(signer),
+    IRT:parentRef,
+    RT:PDFName.of('R'),
+    F:4,
+  });
+  annots.push(pdf.context.register(annotation));
   return save(pdf);
 }
 
