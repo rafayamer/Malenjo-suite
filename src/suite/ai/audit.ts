@@ -32,7 +32,9 @@ const MAX_LOG_RECORDS=500;
 
 function cleanLabel(value:string|null|undefined,max=160):string|null{
   if(!value)return null;
-  const clean=value.replace(/[\u0000-\u001F\u007F-\u009F]/g,' ').trim().slice(0,max);
+  const scanLimit=Math.max(max+32,max*4);
+  const bounded=value.slice(0,scanLimit);
+  const clean=bounded.replace(/[\u0000-\u001F\u007F-\u009F]/g,' ').trim().slice(0,max);
   return clean||null;
 }
 
@@ -86,7 +88,7 @@ function snapshotAiAuditRecord(record:AiAuditRecord):AiAuditRecord{
     citationCount:record.citationCount,
     inputChars:record.inputChars,
     outputChars:record.outputChars,
-    policyWarnings:[...record.policyWarnings],
+    policyWarnings:record.policyWarnings,
     errorCode:record.errorCode,
   });
 }
