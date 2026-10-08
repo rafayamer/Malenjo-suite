@@ -259,10 +259,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       const result = await loadPdfBytes(owned);
       if (requestId !== requestIdRef.current) {
         await disposePdf(result);
-        return;
+        return false;
       }
 
-      await disposePdf(activeLoadRef.current);
+      const previousLoad = activeLoadRef.current;
       activeLoadRef.current = result;
       setPdf(result);
       setSourceBytes(owned);
@@ -284,13 +284,21 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         historyRef.current=createPdfHistory(owned,1);
         setHistoryRevision((value)=>value+1);
       }
+      // The new PDF is now active. A previous worker's teardown failure must
+      // not roll back a successful installation or leave a destroyed PDF active.
+      try {
+        await disposePdf(previousLoad);
+      } catch {
+        // Best-effort old-worker cleanup; retain the successfully loaded PDF.
+      }
+      return true;
     } catch (reason) {
       if (requestId === requestIdRef.current) {
-        setPdf(null);
-        setSourceBytes(null);
-        setPageCount(0);
+        // Loading is transactional: a corrupt replacement must not discard the
+        // previously opened PDF, its unsaved bytes, or its undo/redo history.
         setError(reason instanceof Error ? reason.message : String(reason));
       }
+      return false;
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
@@ -426,7 +434,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     try{
       const result=await operation(Uint8Array.from(sourceBytes));
       const targetPage=Math.max(1,preferredPage);
-      await installPdf(result,sourceName,browserFile,true);
+      if (!await installPdf(result,sourceName,browserFile,true)) return false;
       historyRef.current=historyRef.current
         ? recordPdfHistory(historyRef.current,result,targetPage,label)
         : recordPdfHistory(createPdfHistory(sourceBytes,currentPage),result,targetPage,label);
@@ -489,7 +497,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         result=owned;
       }
       const label=`Appended ${files.length} PDF file(s).`;
-      await installPdf(result,sourceName,browserFile,true);
+      if (!await installPdf(result,sourceName,browserFile,true)) return;
       historyRef.current=historyRef.current
         ? recordPdfHistory(historyRef.current,result,currentPage,label)
         : recordPdfHistory(createPdfHistory(sourceBytes,currentPage),result,currentPage,label);
@@ -513,7 +521,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setMutating(true);
     setError('');
     try{
-      await installPdf(transition.entry.bytes,sourceName,browserFile,true);
+      if (!await installPdf(transition.entry.bytes,sourceName,browserFile,true)) return;
       historyRef.current=transition.history;
       setHistoryRevision((value)=>value+1);
       setCurrentPage(transition.entry.page);
@@ -535,7 +543,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setMutating(true);
     setError('');
     try{
-      await installPdf(transition.entry.bytes,sourceName,browserFile,true);
+      if (!await installPdf(transition.entry.bytes,sourceName,browserFile,true)) return;
       historyRef.current=transition.history;
       setHistoryRevision((value)=>value+1);
       setCurrentPage(transition.entry.page);
