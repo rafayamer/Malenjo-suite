@@ -25,89 +25,32 @@ const PARENT=PDFName.of('Parent');
 const MAX_PARENT_DEPTH=32;
 
 /**
- * Structural PDF libraries normally expose only the latest xref definition.
- * Preserve older signed revisions as well: a prior incremental update may
- * contain /ByteRange and /Contents even after those objects were superseded.
+ * pdf-lib resolves the latest xref state only. Any preceding incremental
+ * revision may contain a valid signature that was subsequently superseded.
  *
- * Inspect raw ASCII PDF name tokens without decoding or allocating strings
- * proportional to the document. Requiring a second EOF marker limits this
- * conservative check to files with multiple revision terminators.
+ * Do not attempt partial lexical parsing of arbitrary historical PDF bytes:
+ * binary stream payloads, PDF name escapes, strings, and comments make such
+ * scanning unsafe. Instead, conservatively refuse full rewrites when two
+ * physical %%EOF revision terminators exist, regardless of visible signature
+ * fields. This errs on the side of protecting even potentially signed PDFs.
+ *
+ * This is a revision-presence gate, NOT cryptographic signature verification.
+ * Byte-identical downloads and read-only inspection remain available.
  */
 export function hasPriorPdfSignatureEvidence(bytes:Uint8Array):boolean{
-  const isNameDelimiter=(byte:number|undefined):boolean=>
-    byte===undefined||byte<=32||
-    byte===40||byte===41||byte===60||byte===62||
-    byte===91||byte===93||byte===47||byte===37;
-  const hexDigit=(byte:number|undefined):number=>{
-    if(byte===undefined)return -1;
-    if(byte>=48&&byte<=57)return byte-48;
-    if(byte>=65&&byte<=70)return byte-55;
-    if(byte>=97&&byte<=102)return byte-87;
-    return -1;
-  };
-  // PDF names can legally encode any character as # followed by two
-  // hexadecimal digits. Compare decoded bytes in-place without stringifying
-  // attacker-controlled names or allocating a decoded buffer.
-  const nameEnd=(offset:number,token:string):number=>{
-    if(bytes[offset]!==47)return -1;
-    let i=offset+1;
-    for(let n=1;n<token.length;n++){
-      let decoded=bytes[i];
-      if(decoded===35){
-        const hi=hexDigit(bytes[i+1]);
-        const lo=hexDigit(bytes[i+2]);
-        if(hi<0||lo<0)return -1;
-        decoded=(hi<<4)|lo;
-        i+=3;
-      }else i++;
-      if(decoded!==token.charCodeAt(n))return -1;
-    }
-    return isNameDelimiter(bytes[i])?i:-1;
-  };
-  const hasNameValue=(at:number,token:string,start:number[]):boolean=>{
-    const end=nameEnd(at,token);
-    if(end<0)return false;
-    let i=end;
-    while(i<bytes.length&&bytes[i]<=32&&i<end+64)i++;
-    return start.includes(bytes[i]);
-  };
-  let eofCount=0;
-  let byteRange=false;
-  let contents=false;
-  let comment=false;
-  let literalDepth=0;
-  let escapedLiteral=false;
-  for(let i=0;i<bytes.length;i++){
-    const char=bytes[i];
-    // A real EOF marker is normally on its own line, and is also a PDF comment.
-    if(char===37&&(i===0||bytes[i-1]===10||bytes[i-1]===13)&&
-       bytes[i+1]===37&&bytes[i+2]===69&&
-       bytes[i+3]===79&&bytes[i+4]===70){
-      eofCount++;
-      // %%EOF is itself a comment. Evaluate before the comment handler
-      // skips the final line of an incremental revision.
-      if(eofCount>=2&&byteRange&&contents)return true;
-    }
-    if(comment){
-      if(char===10||char===13)comment=false;
-      continue;
-    }
-    if(literalDepth){
-      // '%' is data inside PDF literal strings, even on the same line as
-      // later signature keys. PDF strings may nest and escape parentheses.
-      if(escapedLiteral){escapedLiteral=false;continue;}
-      if(char===92){escapedLiteral=true;continue;}
-      if(char===40)literalDepth++;
-      if(char===41)literalDepth--;
-      continue;
-    }
-    if(char===40){literalDepth=1;continue;}
-    if(char===37){comment=true;continue;}
-    if(char===47){
-      if(!byteRange&&hasNameValue(i,'/ByteRange',[91]))byteRange=true;
-      if(!contents&&hasNameValue(i,'/Contents',[60,40]))contents=true;
-    }
-    if(eofCount>=2&&byteRange&&contents)return true;
+  let revisions=0;
+  for(let i=0;i+4<bytes.length;i++){
+    if(bytes[i]!==37||bytes[i+1]!==37||bytes[i+2]!==69||
+       bytes[i+3]!==79||bytes[i+4]!==70)continue;
+    // EOF belongs on its own line; allow horizontal whitespace before it.
+    let before=i-1;
+    while(before>=0&&(bytes[before]===32||bytes[before]===9))before--;
+    if(before>=0&&bytes[before]!==10&&bytes[before]!==13)continue;
+    const after=bytes[i+5];
+    if(after!==undefined&&after!==10&&after!==13&&
+       after!==32&&after!==9&&after!==0)continue;
+    if(++revisions>=2)return true;
+    i+=4;
   }
   return false;
 }
@@ -303,9 +246,10 @@ export async function requirePdfUnsignedForMutation(bytes:Uint8Array):Promise<vo
   const integrity=await inspectPdfSigningIntegrity(bytes);
   if(!integrity.mayRewrite){
     throw new Error(
-      'This PDF contains digital-signature or certification evidence. '+
-      'Editing and re-saving it would invalidate signatures. No changes were made. '+
-      'Use MALENJO Sign to inspect the original, or work from an unsigned PDF.'
+      'This PDF contains digital-signature or certification evidence, or earlier '+
+      'incremental revisions that cannot be proved unsigned. Editing and re-saving '+
+      'could invalidate signatures. No changes were made. Use MALENJO Sign to inspect '+
+      'the original, or work from a verified unsigned PDF.'
     );
   }
 }
