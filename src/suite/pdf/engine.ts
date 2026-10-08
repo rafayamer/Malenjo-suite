@@ -4,7 +4,9 @@ import {
   type PDFDocumentLoadingTask,
   type PDFDocumentProxy,
 } from 'pdfjs-dist';
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+// Bundle the PDF.js worker as a Vite worker asset. A plain ?url import can
+// resolve to a module endpoint that is not importable via Codespaces forwarding.
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?worker&url';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 
