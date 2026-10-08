@@ -29,7 +29,8 @@ import {
   type Citation,
   type SourceDocument,
 } from './rag';
-import { extractSourceDocument } from './sources';
+import { extractOpenDocumentSource, extractSourceDocument, isOpenDocumentAiSource } from './sources';
+import type { LibraryDocument } from '../files/types';
 import {
   DEFAULT_AI_MODEL_PROFILE,
   aiModelProfileByTag,
@@ -40,6 +41,7 @@ import {
 
 interface Props {
   onBackToFiles(): void;
+  openDocuments: LibraryDocument[];
 }
 
 interface ChatMessage {
@@ -60,10 +62,15 @@ function formatBytes(value: number | null): string {
   return `${(value / 1024 ** 3).toFixed(1)} GB`;
 }
 
-export default function AiWorkspace({ onBackToFiles }: Props) {
+export default function AiWorkspace({ onBackToFiles, openDocuments }: Props) {
   const sourceInputRef = useRef<HTMLInputElement>(null);
   const activeJobRef = useRef<string | null>(null);
-  const [sources, setSources] = useState<SourceDocument[]>([]);
+  const [manualSources, setManualSources] = useState<SourceDocument[]>([]);
+  const [openSources, setOpenSources] = useState<SourceDocument[]>([]);
+  const [openSourceError, setOpenSourceError] = useState('');
+  const openSourceCacheRef = useRef(new Map<string,SourceDocument>());
+  const sources = useMemo(()=>[...openSources,...manualSources],[openSources,manualSources]);
+  const openSourceIds = useMemo(()=>new Set(openSources.map((source)=>source.id)),[openSources]);
   const [liteMode, setLiteMode] = useState(true);
   const provider: AiProvider = 'ollama';
   const [statuses, setStatuses] = useState<Partial<Record<AiProvider, AiProviderStatus>>>({});
@@ -133,6 +140,42 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
     }
   }, [model, provider, statuses]);
 
+  useEffect(()=>{
+    let cancelled=false;
+    const indexable=openDocuments.filter(isOpenDocumentAiSource);
+    const liveKeys=new Set(indexable.map((document)=>`${document.id}:${document.modifiedMs}:${document.sizeBytes}`));
+
+    for(const key of Array.from(openSourceCacheRef.current.keys())){
+      if(!liveKeys.has(key))openSourceCacheRef.current.delete(key);
+    }
+
+    async function syncOpenSources(){
+      const next:SourceDocument[]=[];
+      const failures:string[]=[];
+      for(const document of indexable){
+        const key=`${document.id}:${document.modifiedMs}:${document.sizeBytes}`;
+        try{
+          let source=openSourceCacheRef.current.get(key);
+          if(!source){
+            source=await extractOpenDocumentSource(document);
+            openSourceCacheRef.current.set(key,source);
+          }
+          next.push(source);
+        }catch(reason){
+          failures.push(`${document.name}: ${reason instanceof Error?reason.message:String(reason)}`);
+        }
+      }
+      if(cancelled)return;
+      setOpenSources(next);
+      setOpenSourceError(failures.length
+        ? `${failures.length} open document(s) could not be linked to AI knowledge. ${failures[0]}`
+        : '');
+    }
+
+    void syncOpenSources();
+    return ()=>{cancelled=true;};
+  },[openDocuments]);
+
   async function addSources(files: FileList | null) {
     if (!files?.length) return;
     setError('');
@@ -146,12 +189,12 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
         setError(reason instanceof Error ? reason.message : String(reason));
       }
     }
-    if (additions.length) setSources((current) => [...current, ...additions]);
+    if (additions.length) setManualSources((current) => [...current, ...additions]);
     setNotice(additions.length ? `Indexed ${additions.length} local source file(s).` : '');
   }
 
   function removeSource(sourceId: string) {
-    setSources((current) => current.filter((source) => source.id !== sourceId));
+    setManualSources((current) => current.filter((source) => source.id !== sourceId));
   }
 
   async function ask() {
@@ -253,7 +296,7 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
       </div>
     </div>
 
-    {(notice || error) && <div className={error ? 'ai-message error' : 'ai-message'}>{error || notice}</div>}
+    {(notice || error || openSourceError) && <div className={(error || openSourceError) ? 'ai-message error' : 'ai-message'}>{error || openSourceError || notice}</div>}
 
     <div className="ai-layout">
       <aside className="ai-sources">
@@ -266,16 +309,21 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
         </div>
 
         <div className="source-list">
-          {sources.map((source) => <div key={source.id}>
-            <span><b>{source.name}</b><small>{source.text.length.toLocaleString()} chars</small></span>
-            <button title="Remove source" onClick={() => removeSource(source.id)}><X size={14}/></button>
-          </div>)}
-          {!sources.length && <p>Add PDF, Office, text, Markdown, CSV or JSON files. Source content remains in this browser/desktop session.</p>}
+          {sources.map((source) => {
+            const linked=openSourceIds.has(source.id);
+            return <div key={source.id}>
+              <span><b>{source.name}</b><small>{linked?'Open tab · ':''}{source.text.length.toLocaleString()} chars</small></span>
+              {linked
+                ? <small title="This source follows an open MALENJO document tab.">Linked</small>
+                : <button title="Remove source" onClick={() => removeSource(source.id)}><X size={14}/></button>}
+            </div>;
+          })}
+          {!sources.length && <p>Open PDF/Office documents in MALENJO or add local sources here. Open supported tabs are linked automatically.</p>}
         </div>
 
         <div className="ai-security-card">
           <ShieldCheck size={16}/>
-          <div><b>Untrusted-document boundary</b><span>Retrieved source text is quoted as data. Embedded prompts and role-change instructions are not trusted.</span></div>
+          <div><b>Untrusted-document boundary</b><span>Open tabs are indexed automatically from their opened/saved bytes. Unsaved editor changes are not yet included. Retrieved source text is quoted as data; embedded prompts are not trusted.</span></div>
         </div>
       </aside>
 
