@@ -96,6 +96,12 @@ fn write_export_with_recovery(path: &Path, bytes: &[u8]) -> Result<(), String> {
 
     let had_original = path.exists();
     if had_original {
+        let metadata = fs::symlink_metadata(path)
+            .map_err(|error| format!("Unable to recheck prior PDF destination: {error}"))?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            let _ = fs::remove_file(&temp);
+            return Err("Refusing to replace a symlink or non-file PDF destination.".into());
+        }
         if let Err(error) = fs::rename(path, &backup) {
             let _ = fs::remove_file(&temp);
             return Err(format!("Unable to retain prior PDF export: {error}"));
