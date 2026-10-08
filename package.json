@@ -18,7 +18,8 @@
     "ai:codespace:check": "bash scripts/check-codespace-ai.sh",
     "ai:codespace:setup": "bash scripts/setup-codespace-ai.sh runtime",
     "ai:codespace:setup:model": "bash scripts/setup-codespace-ai.sh model",
-    "ai:models:validate": "python3 scripts/validate-ai-model-manifest.py"
+    "ai:models:validate": "python3 scripts/validate-ai-model-manifest.py",
+    "ai:train:data:validate": "python3 training/ai/validate_dataset.py training/ai/data/seed.jsonl"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.1",
