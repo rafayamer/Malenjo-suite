@@ -198,4 +198,83 @@ describe('signed PDF mutation safety',()=>{
     await expect(requirePdfUnsignedForMutation(signedSecondary))
       .rejects.toThrow(/invalidate signatures/i);
   });
+
+  it('blocks an orphaned widget inheriting /FT and direct /V from an indirect parent chain',async()=>{
+    const pdf=await PDFDocument.create();
+    pdf.addPage([300,400]);
+    const ancestor=pdf.context.register(pdf.context.obj({
+      FT:PDFName.of('Sig'),
+      V:pdf.context.obj({
+        Type:PDFName.of('Sig'),ByteRange:[0,100,200,300],
+        Contents:PDFHexString.of('1234ABCD'),
+      }),
+    }));
+    const middle=pdf.context.register(pdf.context.obj({Parent:ancestor}));
+    const widget=pdf.context.register(pdf.context.obj({
+      Type:PDFName.of('Annot'),Subtype:PDFName.of('Widget'),
+      Rect:[10,10,50,40],Parent:middle,
+    }));
+    pdf.getPage(0).node.set(PDFName.of('Annots'),pdf.context.obj([widget]));
+    pdf.catalog.set(PDFName.of('AcroForm'),pdf.context.register(pdf.context.obj({Fields:[]})));
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    expect(await inspectPdfSigningIntegrity(bytes)).toMatchObject({
+      signatureFieldCount:0,populatedSignatureCount:0,mayRewrite:false,
+    });
+    await expect(requirePdfUnsignedForMutation(bytes)).rejects.toThrow(/invalidate signatures/i);
+  });
+
+  it('does not carry inherited /FT Sig past an explicit /FT Tx override',async()=>{
+    const pdf=await PDFDocument.create();
+    pdf.addPage([300,400]);
+    const child=pdf.context.register(pdf.context.obj({
+      FT:PDFName.of('Tx'),T:PDFString.of('FreeText'),
+      V:PDFString.of('ordinary unsigned text'),
+    }));
+    const parent=pdf.context.register(pdf.context.obj({
+      FT:PDFName.of('Sig'),T:PDFString.of('AncestorSignature'),Kids:[child],
+    }));
+    pdf.catalog.set(PDFName.of('AcroForm'),pdf.context.register(
+      pdf.context.obj({Fields:[parent]}),
+    ));
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    expect(await inspectPdfSigningIntegrity(bytes)).toMatchObject({
+      signatureFieldCount:1,populatedSignatureCount:0,mayRewrite:true,
+    });
+    await expect(requirePdfUnsignedForMutation(bytes)).resolves.toBeUndefined();
+  });
+
+  it('honors a widget /FT Tx override even if its orphan parent has /FT Sig',async()=>{
+    const pdf=await PDFDocument.create();
+    pdf.addPage([300,400]);
+    const parent=pdf.context.register(pdf.context.obj({
+      FT:PDFName.of('Sig'),
+    }));
+    const widget=pdf.context.register(pdf.context.obj({
+      Type:PDFName.of('Annot'),Subtype:PDFName.of('Widget'),
+      Parent:parent,FT:PDFName.of('Tx'),V:PDFString.of('Unsigned'),
+      Rect:[10,10,50,40],
+    }));
+    pdf.getPage(0).node.set(PDFName.of('Annots'),pdf.context.obj([widget]));
+    pdf.catalog.set(PDFName.of('AcroForm'),pdf.context.register(pdf.context.obj({Fields:[]})));
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    expect(await inspectPdfSigningIntegrity(bytes)).toMatchObject({mayRewrite:true});
+  });
+
+  it('fails closed for cyclic orphan widget parent chains',async()=>{
+    const pdf=await PDFDocument.create();
+    pdf.addPage([300,400]);
+    const a=pdf.context.obj({FT:PDFName.of('Tx')});
+    const b=pdf.context.obj({});
+    const aRef=pdf.context.register(a);
+    const bRef=pdf.context.register(b);
+    a.set(PDFName.of('Parent'),bRef);
+    b.set(PDFName.of('Parent'),aRef);
+    const widget=pdf.context.register(pdf.context.obj({
+      Type:PDFName.of('Annot'),Subtype:PDFName.of('Widget'),
+      Parent:aRef,Rect:[10,10,50,40],
+    }));
+    pdf.getPage(0).node.set(PDFName.of('Annots'),pdf.context.obj([widget]));
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    await expect(requirePdfUnsignedForMutation(bytes)).rejects.toThrow(/cycle|parent tree/i);
+  });
 });
