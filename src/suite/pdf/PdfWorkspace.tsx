@@ -31,6 +31,11 @@ import {
 } from './navigation';
 import { extractPdfDocumentText } from './textExport';
 import {
+  addPdfTopLevelBookmark, deletePdfTopLevelBookmark,
+  listPdfTopLevelBookmarks, renamePdfTopLevelBookmark,
+  type PdfTopLevelBookmark,
+} from './bookmarkEditor';
+import {
   addPdfBatesNumbers,
   addPdfCheckBox,
   addPdfCommentAnnotation,
@@ -204,6 +209,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [searchResults, setSearchResults] = useState<Array<{page:number;excerpt:string}>>([]);
   const [leftPanel, setLeftPanel] = useState<PdfLeftPanelId>(DEFAULT_PDF_LEFT_PANEL);
   const [pdfOutline, setPdfOutline] = useState<PdfOutlineModel>({entries:[],truncated:false});
+  const [editableBookmarks, setEditableBookmarks] = useState<PdfTopLevelBookmark[]>([]);
+  const [bookmarkTitle, setBookmarkTitle] = useState('');
+  const [bookmarkEdit, setBookmarkEdit] = useState<{ref:string;title:string}|null>(null);
+  const [bookmarkEditError, setBookmarkEditError] = useState('');
   const [pdfAttachments, setPdfAttachments] = useState<PdfAttachmentModel>({entries:[],truncated:false});
   const [navigatorLoading, setNavigatorLoading] = useState(false);
   const [bookmarkError, setBookmarkError] = useState('');
@@ -735,6 +744,55 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       .finally(()=>{if(!cancelled)setNavigatorLoading(false);});
     return ()=>{cancelled=true;};
   },[pdf]);
+
+  useEffect(()=>{
+    if(!sourceBytes){
+      setEditableBookmarks([]);
+      setBookmarkEditError('');
+      return;
+    }
+    let cancelled=false;
+    void listPdfTopLevelBookmarks(sourceBytes)
+      .then(items=>{if(!cancelled){setEditableBookmarks(items);setBookmarkEditError('');}})
+      .catch(reason=>{
+        if(!cancelled){
+          setEditableBookmarks([]);
+          setBookmarkEditError(reason instanceof Error?reason.message:String(reason));
+        }
+      });
+    return ()=>{cancelled=true;};
+  },[sourceBytes]);
+
+  async function addCurrentPageBookmark(){
+    const title=bookmarkTitle;
+    const added=await mutate(
+      'Added PDF bookmark for page '+currentPage+'.',
+      bytes=>addPdfTopLevelBookmark(bytes,title,currentPage),
+      currentPage,
+    );
+    if(added)setBookmarkTitle('');
+  }
+
+  async function renameCurrentBookmark(){
+    if(!bookmarkEdit)return;
+    const {ref,title}=bookmarkEdit;
+    const renamed=await mutate(
+      'Renamed PDF bookmark.',
+      bytes=>renamePdfTopLevelBookmark(bytes,ref,title),
+      currentPage,
+    );
+    if(renamed)setBookmarkEdit(null);
+  }
+
+  async function deleteCurrentBookmark(item:PdfTopLevelBookmark){
+    if(!window.confirm('Delete bookmark "'+item.title+'"? This can be undone.'))return;
+    const removed=await mutate(
+      'Deleted PDF bookmark.',
+      bytes=>deletePdfTopLevelBookmark(bytes,item.ref),
+      currentPage,
+    );
+    if(removed)setBookmarkEdit(null);
+  }
 
   async function openBookmark(entry:PdfOutlineEntry){
     if(!pdf)return;
@@ -1397,6 +1455,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           run:()=>splitCurrent(),
         },
         {
+          id:'pdf-bookmark-create',
+          label:'Bookmark current PDF page',
+          keywords:'pdf bookmarks outline add chapter navigate',
+          detail:bookmarkTitle.trim()?'Add named top-level bookmark':'Enter a bookmark title in Bookmarks panel',
+          enabled:!!sourceBytes&&!mutating&&!!bookmarkTitle.trim(),
+          disabledReason:!sourceBytes?'Open a PDF first.':!bookmarkTitle.trim()?'Enter a bookmark title in Bookmarks panel.':'Wait for the PDF edit to finish.',
+          run:()=>addCurrentPageBookmark(),
+        },
+        {
           id:'pdf-comments-open',
           label:'Open PDF Comments panel',
           keywords:'pdf comment annotations notes',
@@ -1427,7 +1494,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   }, [
     session, registerCommands, sourceBytes, pdf, dirty, mutating, loading, exportingPageImages, exportingText, creatingImagePdf, historyRevision, formFields.length,
     headerFooterDraft, batesDraft, pageBoxDraft, formDraft, formFillDraft, formFillTouched, currentPage, pageCount, selectedPages,
-    inspectorHidden, textOverlay, shapeOverlay, commentDraft,
+    inspectorHidden, textOverlay, shapeOverlay, commentDraft, bookmarkTitle,
   ]);
 
   useEffect(() => {
@@ -1885,7 +1952,28 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                 onClick={()=>void openBookmark(entry)}
               >{entry.title}{entry.url?' (external)':''}</button>)}
               {pdfOutline.truncated&&<small>Bookmark display capped at 1,000 entries.</small>}
-              <small>Existing bookmarks are navigable. Authoring, editing and deleting bookmark trees remain to be implemented.</small>
+              <div className="pdf-edit-form">
+                <b>Bookmark current page {currentPage}</b>
+                <label>Title<input maxLength={200} value={bookmarkTitle} placeholder="Chapter title" onChange={(event)=>setBookmarkTitle(event.target.value)}/></label>
+                <button disabled={!sourceBytes||mutating||!bookmarkTitle.trim()} onClick={()=>void addCurrentPageBookmark()}>Add top-level bookmark</button>
+                {bookmarkEditError&&<small role="alert">{bookmarkEditError}</small>}
+                <b>Manage top-level bookmarks</b>
+                {editableBookmarks.map(item=><div className="pdf-left-info" key={item.ref}>
+                  <strong>{item.title}</strong>
+                  {item.editable
+                    ? <div>
+                        <button disabled={mutating} onClick={()=>setBookmarkEdit({ref:item.ref,title:item.title})}>Rename</button>
+                        <button disabled={mutating} onClick={()=>void deleteCurrentBookmark(item)}>Delete</button>
+                      </div>
+                    : <small>Contains nested bookmarks; editing is disabled to protect the subtree.</small>}
+                  {bookmarkEdit?.ref===item.ref&&<div>
+                    <label>New title<input maxLength={200} value={bookmarkEdit.title} onChange={(event)=>setBookmarkEdit({...bookmarkEdit,title:event.target.value})}/></label>
+                    <button disabled={mutating||!bookmarkEdit.title.trim()} onClick={()=>void renameCurrentBookmark()}>Save title</button>
+                    <button onClick={()=>setBookmarkEdit(null)}>Cancel</button>
+                  </div>}
+                </div>)}
+                <small>Only top-level leaf bookmarks can be renamed or deleted safely. Existing nested outline trees are preserved.</small>
+              </div>
             </div>
           </div>}
           {leftPanel==='layers'&&<div className="pdf-left-panel-body">
