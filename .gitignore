@@ -19,7 +19,8 @@ cache/
 backups/
 
 # Generated offline Java runtime (bundled only after its review-gated build)
-runtime/java/
+runtime/java/*
+!runtime/java/README.md
 .build/temurin/
 
 # Generated local provider packs
