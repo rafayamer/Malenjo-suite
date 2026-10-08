@@ -1690,11 +1690,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               <option value="radio">Radio group</option>
               <option value="dropdown">Dropdown</option>
               <option value="list">Option list</option>
+              <option value="button">Push button</option>
             </select>
           </label>
           <label>Name<input value={formDraft.name} onChange={(event)=>setFormDraft({...formDraft,name:event.target.value})} placeholder="field_name"/></label>
 
           {formDraft.type==='text'&&<label>Default value<input value={formDraft.defaultValue} onChange={(event)=>setFormDraft({...formDraft,defaultValue:event.target.value})}/></label>}
+          {formDraft.type==='button'&&<label>Button label<input value={formDraft.buttonLabel} onChange={(event)=>setFormDraft({...formDraft,buttonLabel:event.target.value})} placeholder="Button"/></label>}
 
           {['radio','dropdown','list'].includes(formDraft.type)&&<>
             <label>Options<textarea value={formDraft.optionsText} onChange={(event)=>setFormDraft({...formDraft,optionsText:event.target.value})} placeholder={'One option per line\nOption A\nOption B'}/></label>
@@ -1720,6 +1722,41 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           </div>
 
           <button disabled={mutating} onClick={()=>void addFormField()}>Add {formDraft.type} field</button>
+
+          {formFields.length>0&&<>
+            <label>Existing field properties
+              <select value={formPropertyName} onChange={(event)=>setFormPropertyName(event.target.value)}>
+                {formFields.map((field)=><option key={field.name} value={field.name}>{field.name} · {field.type}</option>)}
+              </select>
+            </label>
+            {formPropertyField&&<div className="pdf-field-flags">
+              <label><input
+                type="checkbox"
+                checked={formPropertyField.required}
+                disabled={mutating}
+                onChange={(event)=>void setFormFieldProperty(formPropertyField.name,{required:event.target.checked})}
+              /> Required</label>
+              <label><input
+                type="checkbox"
+                checked={formPropertyField.readOnly}
+                disabled={mutating}
+                onChange={(event)=>void setFormFieldProperty(formPropertyField.name,{readOnly:event.target.checked})}
+              /> Read-only</label>
+              <label><input
+                type="checkbox"
+                checked={formPropertyField.exported}
+                disabled={mutating}
+                onChange={(event)=>void setFormFieldProperty(formPropertyField.name,{exported:event.target.checked})}
+              /> Export with form data</label>
+            </div>}
+          </>}
+
+          <div className="pdf-form-actions">
+            <button disabled={mutating||!fillableFormFields.length} onClick={()=>void clearFormValues()}>Clear values</button>
+            <button disabled={mutating||!formFields.length} onClick={()=>void exportFormData()}>Export JSON data</button>
+            <button disabled={mutating||!formFields.length} onClick={()=>formDataInputRef.current?.click()}>Import JSON data</button>
+          </div>
+          <small>Clear values preserves field structure and skips unsafe/read-only fields. Password values are redacted from JSON export. True reset-to-/DV defaults and JavaScript validation/calculation rules remain separate compatibility work.</small>
 
           <div className="pdf-feature-list pdf-form-inventory">
             <b>{formFields.length} AcroForm field{formFields.length===1?'':'s'}</b>
