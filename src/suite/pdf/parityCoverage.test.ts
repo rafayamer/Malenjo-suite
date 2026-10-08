@@ -24,7 +24,7 @@ describe('runtime evidence for all 90 Stirling parity items',()=>{
     expect(coverage.liveRoutes).toBe(0);
     expect(coverage.providerEnabled).toBe(0);
     expect(coverage.functionallyVerified).toBe(0);
-    expect(coverage.locallySourceAuditedPartial).toBe(13);
+    expect(coverage.locallySourceAuditedPartial).toBe(20);
     expect(coverage.rows.find(item=>item.id==='merge-pdfs')?.state).toBe('provider-not-loaded');
     expect(coverage.rows.find(item=>item.id==='pdf-to-epub')?.state).toBe('not-in-pinned-endpoint-fixture');
   });
@@ -39,7 +39,7 @@ describe('runtime evidence for all 90 Stirling parity items',()=>{
     expect(coverage.liveRoutes).toBe(2);
     expect(coverage.providerEnabled).toBe(1);
     expect(coverage.functionallyVerified).toBe(0);
-    expect(coverage.locallySourceAuditedPartial).toBe(13);
+    expect(coverage.locallySourceAuditedPartial).toBe(20);
     const merge=coverage.rows.find(item=>item.id==='merge-pdfs')!;
     expect(merge.operation?.id).toBe('mergePDF');
     expect(merge.state).toBe('provider-reports-available');
