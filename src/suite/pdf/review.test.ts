@@ -36,6 +36,25 @@ describe('PDF review lifecycle',()=>{
     expect(await listPdfReviewAnnotations(added)).toHaveLength(1);
   });
 
+  it('reads legacy MALENJO PDF names used as comment strings',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([320,480]);
+    const annotation=pdf.context.obj({
+      Type:PDFName.of('Annot'),
+      Subtype:PDFName.of('Text'),
+      Rect:[10,10,30,30],
+      Contents:'Legacy comment text',
+      T:'Previous reviewer',
+    });
+    const annots=pdf.context.obj([pdf.context.register(annotation)]);
+    page.node.set(PDFName.of('Annots'),annots);
+    const legacy=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const list=await listPdfReviewAnnotations(legacy);
+    expect(list[0]).toMatchObject({text:'Legacy comment text',author:'Previous reviewer'});
+    const changed=await updatePdfReviewText(legacy,list[0],'Converted to Unicode');
+    expect((await listPdfReviewAnnotations(changed))[0].text).toBe('Converted to Unicode');
+  });
+
   it('creates standard PDF markup with a real QuadPoints array',async()=>{
     const base=await sample(1);
     const added=await addPdfRegionMarkup(base,{
