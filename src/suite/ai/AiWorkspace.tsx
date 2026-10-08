@@ -33,6 +33,7 @@ import { extractSourceDocument } from './sources';
 import {
   DEFAULT_AI_MODEL_PROFILE,
   aiModelProfileByTag,
+  approvedInstalledModels,
   formatModelDownloadSize,
   preferredInstalledModel,
 } from './modelProfiles';
@@ -64,7 +65,7 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
   const activeJobRef = useRef<string | null>(null);
   const [sources, setSources] = useState<SourceDocument[]>([]);
   const [liteMode, setLiteMode] = useState(true);
-  const [provider, setProvider] = useState<AiProvider>('ollama');
+  const provider: AiProvider = 'ollama';
   const [statuses, setStatuses] = useState<Partial<Record<AiProvider, AiProviderStatus>>>({});
   const [model, setModel] = useState('');
   const [question, setQuestion] = useState('');
@@ -83,7 +84,7 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
   const limits = liteMode ? RAG_LIMITS.lite : RAG_LIMITS.normal;
   const desktopRuntime = isTauri();
   const setupCommand = desktopRuntime
-    ? (provider === 'ollama' ? 'ollama pull <reviewed-model>' : 'llama-server -m model.gguf --port 8080')
+    ? `ollama pull ${DEFAULT_AI_MODEL_PROFILE.tag}`
     : !currentStatus?.available
       ? 'npm run ai:codespace:setup'
       : !currentStatus.models.length
@@ -91,28 +92,28 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
         : 'npm run ai:codespace:check';
 
   async function refreshProviders() {
-    setNotice('Checking local model runtimes…');
-    const [ollama, llama] = await Promise.all([
-      getLocalAiStatus('ollama').catch((reason) => ({
-        provider: 'ollama' as const,
-        available: false,
-        baseUrl: 'http://127.0.0.1:11434',
-        models: [],
-        message: String(reason),
-      })),
-      getLocalAiStatus('llama-cpp').catch((reason) => ({
-        provider: 'llama-cpp' as const,
-        available: false,
-        baseUrl: 'http://127.0.0.1:8080',
-        models: [],
-        message: String(reason),
-      })),
-    ]);
-    setStatuses({ ollama, 'llama-cpp': llama });
+    setNotice('Checking local model runtime…');
+    const ollama = await getLocalAiStatus('ollama').catch((reason) => ({
+      provider: 'ollama' as const,
+      available: false,
+      baseUrl: 'http://127.0.0.1:11434',
+      models: [],
+      message: String(reason),
+    }));
+    const reviewedModels=approvedInstalledModels(ollama.models);
+    const reviewedStatus:AiProviderStatus={
+      ...ollama,
+      models:reviewedModels,
+      message:ollama.available
+        ? reviewedModels.length
+          ? 'Codespaces bridge reached the reviewed MALENJO Phi-4 model.'
+          : 'Ollama is reachable, but the reviewed MALENJO Phi-4 model is not installed.'
+        : ollama.message,
+    };
+    setStatuses({ ollama:reviewedStatus });
     setNotice('');
 
-    const preferred = provider === 'ollama' ? ollama : llama;
-    if (!model && preferred.models[0]) setModel(preferredInstalledModel(preferred.models,provider));
+    if (!model && reviewedModels[0]) setModel(preferredInstalledModel(reviewedModels,'ollama'));
   }
 
   useEffect(() => {
@@ -330,21 +331,14 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
 
       <aside className="ai-runtime">
         <div className="ai-pane-title">Local runtime</div>
-        <label>Provider
-          <select value={provider} onChange={(event) => setProvider(event.target.value as AiProvider)}>
-            <option value="ollama">Ollama</option>
-            <option value="llama-cpp">llama.cpp server</option>
-          </select>
-        </label>
-
         <div className={currentStatus?.available ? 'runtime-card online' : 'runtime-card'}>
           <Cpu size={18}/>
-          <div><b>{provider === 'ollama' ? 'Ollama' : 'llama.cpp'}</b><span>{currentStatus?.message ?? 'Status not checked.'}</span><code>{currentStatus?.baseUrl ?? 'loopback only'}</code></div>
+          <div><b>Ollama · MALENJO Phi-4</b><span>{currentStatus?.message ?? 'Status not checked.'}</span><code>{currentStatus?.baseUrl ?? 'loopback only'}</code></div>
         </div>
 
         <label>Model
-          <select value={model} disabled={!currentStatus?.models.length} onChange={(event) => setModel(event.target.value)}>
-            {!currentStatus?.models.length && <option value="">No local model reported</option>}
+          <select value={model} disabled>
+            {!currentStatus?.models.length && <option value="">Reviewed Phi-4 not installed</option>}
             {currentStatus?.models.map((item) => <option key={item.name} value={item.name}>{item.name}</option>)}
           </select>
         </label>
@@ -385,7 +379,7 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
           <code>{setupCommand}</code>
           {!desktopRuntime&&<p>
             Reviewed default: <b>{DEFAULT_AI_MODEL_PROFILE.displayName}</b> · {DEFAULT_AI_MODEL_PROFILE.license} · {formatModelDownloadSize(DEFAULT_AI_MODEL_PROFILE.approximateDownloadBytes)}.
-            The runtime adapter is model-agnostic, so future reviewed profiles can replace it without changing chat/RAG code.
+            MALENJO exposes this single reviewed model at runtime. Future model upgrades replace this profile after review rather than adding parallel model choices.
           </p>}
         </section>
       </aside>
