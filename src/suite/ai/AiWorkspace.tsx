@@ -178,19 +178,28 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
     }
 
     const job = id('ai');
+    const assistantMessageId = id('msg');
     setActiveJob(job);
     activeJobRef.current = job;
     setBusy(true);
+    setMessages((current) => [...current, {
+      id: assistantMessageId,
+      role: 'assistant',
+      content: '',
+      citations,
+    }]);
     try {
       const prompt = buildGroundedPrompt(value, citations, conversation);
-      const result = await runLocalAiChat(job, provider, model, prompt, liteMode);
-      setMessages((current) => [...current, {
-        id: id('msg'),
-        role: 'assistant',
-        content: result.content,
-        citations,
-        latencyMs: result.latencyMs,
-      }]);
+      const result = await runLocalAiChat(job, provider, model, prompt, liteMode, (content) => {
+        setMessages((current) => current.map((message) =>
+          message.id === assistantMessageId ? { ...message, content } : message,
+        ));
+      });
+      setMessages((current) => current.map((message) =>
+        message.id === assistantMessageId
+          ? { ...message, content: result.content, latencyMs: result.latencyMs }
+          : message,
+      ));
     } catch (reason) {
       const text = reason instanceof Error ? reason.message : String(reason);
       if (!/cancelled/i.test(text)) setError(text);
@@ -285,7 +294,7 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
             </div> : null}
             {message.latencyMs !== undefined && <small className="ai-latency">{message.latencyMs} ms local inference</small>}
           </article>)}
-          {busy && <div className="ai-thinking"><LoaderCircle className="spin" size={17}/> Running local model…</div>}
+          {busy && <div className="ai-thinking"><LoaderCircle className="spin" size={17}/> {messages.some((message)=>message.role==='assistant'&&message.content) ? 'Generating locally…' : 'Loading local model…'}</div>}
         </div>
 
         <div className="retrieval-preview">
@@ -352,8 +361,9 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
           <span>Corpus cap <b>{(limits.maxChars / 1000).toFixed(0)}k chars</b></span>
           <span>Chunk cap <b>{limits.maxChunks}</b></span>
           <span>Retrieved passages <b>{limits.topK}</b></span>
-          <span>Model context <b>{liteMode ? '2,048' : '4,096'} tokens</b></span>
-          <p>{liteMode ? 'The model is requested with keep_alive=0 on Ollama to release memory after each answer.' : 'Ollama may keep the selected model warm for up to five minutes.'}</p>
+          <span>Model context <b>{liteMode ? '1,536' : '4,096'} tokens</b></span>
+          <span>Answer cap <b>{liteMode ? '192' : '768'} tokens</b></span>
+          <p>{liteMode ? 'Codespaces streams tokens as they arrive and keeps Ollama warm for two minutes to avoid a full model reload on every question.' : 'Ollama may keep the selected model warm for up to five minutes.'}</p>
         </section>
 
         <section className="model-install-note">
