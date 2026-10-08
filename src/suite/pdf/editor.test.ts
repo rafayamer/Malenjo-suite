@@ -217,6 +217,21 @@ describe('PDF mutation core',()=>{
     expect(info.find((field)=>field.name==='clear_choice')?.selected).toEqual([]);
   });
 
+  it('rejects form-data export when a text value cannot satisfy the import contract',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+    const field=form.createTextField('oversized_export');
+    field.setText('x'.repeat(10001));
+    field.addToPage(page,{x:30,y:620,width:220,height:28});
+
+    const bytes=Uint8Array.from(await pdf.save({
+      useObjectStreams:false,
+      updateFieldAppearances:false,
+    }));
+    await expect(exportPdfFormData(bytes)).rejects.toThrow(/10,000-character form-data export limit/i);
+  });
+
   it('exports versioned form data without password values and imports writable values',async()=>{
     const pdf=await PDFDocument.create();
     const page=pdf.addPage([500,700]);
