@@ -101,4 +101,28 @@ describe('MALENJO PDF Stirling parity evidence inventory',()=>{
       expect(op.evidence.functionalStatus).not.toBe('implemented');
     }
   });
+
+  it('classifies every source item without mistaking controller/configuration entries for acceptance',()=>{
+    expect(matrix.auditSnapshot.pinnedControllerOnlyRouteMatches).toBe(8);
+    expect(matrix.auditSnapshot.pinnedConfigurationOnlyMatches).toBe(6);
+    expect(matrix.auditSnapshot.pendingFurtherUpstreamSourceClassification).toBe(0);
+    const categories={fixture:0,controller:0,frontend:0,configuration:0,unknown:0};
+    for(const item of matrix.operations){
+      if(item.source.upstreamEndpoint)categories.fixture++;
+      else if(item.source.pinnedControllerEndpoint){
+        categories.controller++;
+        expect(item.source.pinnedControllerPath).toMatch(/app\\/core\\/src\\/main\\/java/);
+        expect(item.source.pinnedControllerBlobSha).toMatch(/^[a-f0-9]{40}$/);
+      }else if(item.source.pinnedFrontendCoreToolId)categories.frontend++;
+      else if(item.source.pinnedConfigurationOnly){
+        categories.configuration++;
+        expect(item.source.pinnedConfigurationBlobSha).toBe('8aaeba37e8dee12d99c4fa0ceda10d141a44ba7e');
+        expect(item.source.pinnedConfigurationGroups.length).toBeGreaterThan(0);
+      }else categories.unknown++;
+      expect(item.evidence.windowsOffline).toBe('unverified');
+      expect(item.evidence.functionalStatus).not.toBe('implemented');
+    }
+    expect(categories).toEqual({fixture:54,controller:8,frontend:22,configuration:6,unknown:0});
+    expect(matrix.operations.filter(item=>item.evidence.functionalStatus==='partial')).toHaveLength(21);
+  });
 });
