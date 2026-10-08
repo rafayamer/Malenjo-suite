@@ -303,6 +303,12 @@ pub async fn local_ai_chat(
 
     cancellations().lock().ok().map(|mut jobs| jobs.remove(&job_id));
 
+    if let Some(error) = value.get("error").and_then(Value::as_str) {
+        if !error.trim().is_empty() {
+            return Err(format!("Local model runtime error: {}", error.trim()));
+        }
+    }
+
     let content = match provider {
         Provider::Ollama => value
             .pointer("/message/content")
