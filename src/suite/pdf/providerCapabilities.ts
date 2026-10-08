@@ -120,6 +120,24 @@ export function resolvePdfProviderCapability(
     ...components,
   ].map((item)=>[item.id,item] as const));
 
+  // These controllers are present in the pinned source but are not
+  // demonstrated as safe, offline-capable Windows operations in this pack.
+  if(matches('timestamp-pdf','timestampPdf')){
+    return capability(false,'RFC 3161 timestamp authority','tsa',{
+      disabledReason:'An RFC 3161 trusted timestamp requires contacting an external TSA. Offline operation is not available or approved.',
+    });
+  }
+  if(matches('verify-pdf','verifyPdf')){
+    return capability(false,'veraPDF PDF/A and PDF/UA verification','verapdf',{
+      disabledReason:'veraPDF runtime, rules and redistributable Windows pack have not been verified. Do not claim standards verification.',
+    });
+  }
+  if(matches('handleData')){
+    return capability(false,'Stirling automation pipeline','stirling-pipeline',{
+      disabledReason:'Pinned Stirling PipelineController excludes STIRLING_PDF_TAURI_MODE; a reviewed local MALENJO implementation is required.',
+    });
+  }
+
   if(matches('repair')){
     const qpdf=statuses.get('qpdf');
     if(qpdf?.available){
