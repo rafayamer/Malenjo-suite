@@ -12,6 +12,15 @@ Of the **90 handoff requirements**, **54 have an explicit path in that pinned en
 
 The local PDF tools panel now cross-references the 90 items with **live** provider OpenAPI operation paths: `provider-not-loaded`, `not-in-live-openapi`, `provider-disabled`, or `provider-reports-available`. The final state means only that the local capability resolver advertises availability, **not that any document was processed, saved, reopened or validated offline**. No tools are assigned the evidence status `implemented` by this operation.
 
+## Runnable, local-only PDF utilities added to the panel
+
+An open PDF can now be exported without starting the Java Stirling sidecar:
+
+- **PDF information → JSON**: uses MALENJO's new bounded `src/suite/pdf/pdfInfo.ts` reader to report metadata, page count, page dimensions and rotation. Tests in `pdfInfo.test.ts` cover real PDF output, byte preservation, malformed input and oversized metadata. This is **partial** parity with upstream `get-info-on-pdf`: security/signatures, full resources and permission diagnostics are not equivalent.
+- **Selectable text → TXT**: reuses `src/suite/pdf/textExport.ts`, the existing PDF.js worker and tested per-page limits. Rejects scanned/image-only PDFs without an OCR layer rather than silently exporting an empty document. This is **partial** parity with upstream `pdf-to-text`.
+
+Both use the MALENJO local save implementation and carry the same Windows final-output verification gate as other tools. Neither sends the PDF to an internet service. The buttons remain usable even when the Java provider is stopped.
+
 ## Release and license constraints
 
 Root Stirling MIT does **not** apply without exception. Independently verify each source file's terms; do not copy Stirling `engine/`, proprietary, SaaS or restricted editor/desktop subtrees under the MIT assumption. Keep source provenance, copyright notices and dependency audits. Provider binary startup alone does not prove an operation works offline.
