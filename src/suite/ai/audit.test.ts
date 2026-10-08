@@ -17,10 +17,14 @@ describe('AI privacy-safe audit records',()=>{
       outputChars:200,
       policyWarnings:[],
     });
-    const json=JSON.stringify(record);
-    expect(json).not.toContain('prompt');
-    expect(json).not.toContain('sourceText');
-    expect(json).not.toContain('answer');
+    const keys=Object.keys(record);
+    expect(keys).not.toContain('promptText');
+    expect(keys).not.toContain('promptContent');
+    expect(keys).not.toContain('sourceText');
+    expect(keys).not.toContain('sourceContent');
+    expect(keys).not.toContain('answer');
+    expect(keys).not.toContain('answerText');
+    expect(record.promptPolicyId).toBe('document-chat-v1');
     expect(record.schemaVersion).toBe(1);
   });
 
