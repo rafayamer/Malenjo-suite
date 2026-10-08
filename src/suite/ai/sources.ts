@@ -7,6 +7,10 @@ import type { SourceDocument } from './rag';
 
 const MAX_SOURCE_FILE_BYTES = 100 * 1024 * 1024;
 
+export function isAiSourceSizeAllowed(sizeBytes:number):boolean{
+  return Number.isFinite(sizeBytes)&&sizeBytes>0&&sizeBytes<=MAX_SOURCE_FILE_BYTES;
+}
+
 function sourceId(name: string): string {
   return `source-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -71,7 +75,7 @@ async function extractNamedBytes(
 }
 
 export async function extractSourceDocument(file: File): Promise<SourceDocument> {
-  if (file.size <= 0 || file.size > MAX_SOURCE_FILE_BYTES) {
+  if (!isAiSourceSizeAllowed(file.size)) {
     throw new Error(`${file.name}: source files must be between 1 byte and 100 MB.`);
   }
   return extractNamedBytes(file.name,new Uint8Array(await file.arrayBuffer()));
@@ -96,10 +100,14 @@ export async function extractOpenDocumentSource(document:LibraryDocument):Promis
   }
   if(document.browserFile){
     const file=document.browserFile;
-    if(file.size<=0||file.size>MAX_SOURCE_FILE_BYTES){
+    if(!isAiSourceSizeAllowed(file.size)){
       throw new Error(`${file.name}: source files must be between 1 byte and 100 MB.`);
     }
     return extractNamedBytes(file.name,new Uint8Array(await file.arrayBuffer()),stableId);
+  }
+
+  if(!isAiSourceSizeAllowed(document.sizeBytes)){
+    throw new Error(`${document.name}: source files must be between 1 byte and 100 MB.`);
   }
 
   if(document.kind==='pdf'){
