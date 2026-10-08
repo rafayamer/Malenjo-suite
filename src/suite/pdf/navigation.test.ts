@@ -108,4 +108,3 @@ describe('PDF embedded attachments', () => {
     expect(result.truncated).toBe(true);
   });
 });
-});
