@@ -13,6 +13,7 @@ import type {
   PdfToolProvider,
 } from './backend';
 import { fieldAcceptsActivePdf } from './providerFileInputs';
+import { computePdfParityCoverage } from './parityCoverage';
 
 interface Props{
   provider:PdfToolProvider;
@@ -46,6 +47,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   const [status,setStatus]=useState<PdfProviderStatus|null>(null);
   const [components,setComponents]=useState<PdfProviderComponentStatus[]>([]);
   const [operations,setOperations]=useState<PdfProviderOperation[]>([]);
+  const [catalogLoaded,setCatalogLoaded]=useState(false);
   const [search,setSearch]=useState('');
   const [selectedId,setSelectedId]=useState('');
   const [values,setValues]=useState<Record<string,string>>({});
@@ -63,7 +65,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       setStatus(next);setComponents(nextComponents);
       if(loadCatalog&&next.running){
         const catalog=await provider.listOperations();
-        setOperations(catalog);
+        setOperations(catalog);setCatalogLoaded(true);
       }
     }catch(reason){setError(reason instanceof Error?reason.message:String(reason));}
   };
@@ -81,6 +83,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   },[allCategories,category,operations,search]);
 
   const selected=useMemo(()=>operations.find((operation)=>operation.id===selectedId)??null,[operations,selectedId]);
+  const parity=useMemo(()=>computePdfParityCoverage(operations,catalogLoaded),[operations,catalogLoaded]);
 
   useEffect(()=>{
     if(selectedId&&filtered.some((operation)=>operation.id===selectedId))return;
@@ -107,7 +110,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     try{
       const next=await provider.start();setStatus(next);
       const [catalog,nextComponents]=await Promise.all([provider.listOperations(),provider.componentStatus()]);
-      setOperations(catalog);setComponents(nextComponents);
+      setOperations(catalog);setComponents(nextComponents);setCatalogLoaded(true);
       const available=catalog.filter((operation)=>operation.capability.available).length;
       setNotice(`Loaded ${catalog.length} local PDF API operations; ${available} are available through reviewed providers/fallbacks.`);
     }catch(reason){setError(reason instanceof Error?reason.message:String(reason));await refresh(false);}
@@ -117,7 +120,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   async function stopProvider(){
     setBusy(true);setError('');
     try{
-      await provider.stop();setOperations([]);setSelectedId('');await refresh(false);
+      await provider.stop();setOperations([]);setSelectedId('');setCatalogLoaded(false);await refresh(false);
       setNotice('Local PDF provider stopped.');
     }catch(reason){setError(reason instanceof Error?reason.message:String(reason));}
     finally{setBusy(false);}
@@ -230,6 +233,38 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         </div>)}
       </div>
     </details>}
+    <details className="stirling-component-details" aria-label="Stirling PDF parity inventory">
+      <summary>
+        Stirling 90-tool parity register: {parity.upstreamFixtureMatched} pinned endpoint matches;
+        {catalogLoaded?` ${parity.liveRoutes} live routes / ${parity.providerEnabled} provider-enabled (unverified)`:' load local provider to check runtime'}
+      </summary>
+      <p className="stirling-provider-message">
+        All 90 requirements are tracked. A provider reporting an available endpoint is
+        NOT proof of functional correctness, offline Windows operation, safe licensing,
+        or export/reopen fidelity. None has passed the complete parity acceptance gate.
+      </p>
+      <div style={{maxHeight:340,overflowY:'auto'}}>
+        <table aria-label="Stirling PDF tool parity by requirement">
+          <thead><tr><th scope="col"># / Tool</th><th scope="col">Pinned API</th><th scope="col">Local provider</th><th scope="col">Action</th></tr></thead>
+          <tbody>
+            {parity.rows.map((row)=><tr key={row.id}>
+              <th scope="row">{row.order}. {row.id}</th>
+              <td>{row.expectedEndpoint??'Not in pinned endpoint fixture'}</td>
+              <td>{row.state==='provider-reports-available'?'Reported enabled; unverified'
+                :row.state==='provider-disabled'?'Provider disabled'
+                :row.state==='not-in-live-openapi'?'Missing from loaded OpenAPI'
+                :row.state==='provider-not-loaded'?'Start local provider'
+                :'Needs upstream source investigation'}</td>
+              <td><button type="button"
+                disabled={!row.operation?.capability.available}
+                onClick={()=>{if(row.operation){setAllCategories(true);setSelectedId(row.operation.id);}}}>
+                Open
+              </button></td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+    </details>
     {!status?.installed&&<p className="stirling-provider-help">Windows development pack: <code>powershell -ExecutionPolicy Bypass -File scripts/build-stirling-core.ps1</code>. The provider runs on 127.0.0.1 only and never starts at MALENJO launch.</p>}
     {status?.running&&<div className="stirling-catalog">
       <div className="stirling-catalog-filter">
