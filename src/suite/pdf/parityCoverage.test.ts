@@ -23,7 +23,8 @@ describe('runtime evidence for all 90 Stirling parity items',()=>{
     expect(coverage.upstreamFixtureMatched).toBe(54);
     expect(coverage.pinnedControllerOnlyRouteMatches).toBe(8);
     expect(coverage.frontendOnlyRouteMatches).toBe(22);
-    expect(coverage.sourceClassificationPending).toBe(6);
+    expect(coverage.configurationOnlyMatches).toBe(6);
+    expect(coverage.sourceClassificationPending).toBe(0);
     expect(coverage.liveRoutes).toBe(0);
     expect(coverage.providerEnabled).toBe(0);
     expect(coverage.functionallyVerified).toBe(0);
@@ -58,6 +59,7 @@ describe('runtime evidence for all 90 Stirling parity items',()=>{
     expect(coverage.rows.filter(item=>item.controllerOnly)).toHaveLength(8);
     expect(coverage.rows.filter(item=>item.frontendRoute&&!item.expectedEndpoint)).toHaveLength(22);
     expect(coverage.rows.filter(item=>!item.frontendRoute&&!item.expectedEndpoint)).toHaveLength(6);
+    expect(coverage.rows.filter(item=>item.configurationOnly)).toHaveLength(6);
     expect(coverage.rows.filter(item=>item.state==='not-in-live-openapi')).toHaveLength(62);
     expect(coverage.rows.every(item=>!item.functionallyVerified)).toBe(true);
   });
