@@ -23,6 +23,7 @@ export type DocumentCommandId =
   | 'flatten-form'
   | 'header-footer'
   | 'bates'
+  | 'pdf-page-label'
   | 'page-box'
   | 'toggle-inspector'
   | 'pdf-text-place'
