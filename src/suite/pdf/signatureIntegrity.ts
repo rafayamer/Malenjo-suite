@@ -52,9 +52,6 @@ export function hasPriorPdfSignatureEvidence(bytes:Uint8Array):boolean{
   let byteRange=false;
   let contents=false;
   let comment=false;
-  let hexString=false;
-  let literalDepth=0;
-  let escaped=false;
   for(let i=0;i<bytes.length;i++){
     const char=bytes[i];
     // A real EOF marker is normally on its own line, and is also a PDF comment.
@@ -67,24 +64,11 @@ export function hasPriorPdfSignatureEvidence(bytes:Uint8Array):boolean{
       if(char===10||char===13)comment=false;
       continue;
     }
-    if(literalDepth){
-      if(escaped){escaped=false;continue;}
-      if(char===92){escaped=true;continue;}
-      if(char===40)literalDepth++;
-      else if(char===41)literalDepth--;
-      continue;
-    }
-    if(hexString){
-      if(char===62)hexString=false;
-      continue;
-    }
+    // Do not attempt to parse binary streams as literal/hex strings here:
+    // content stream bytes can contain arbitrary parentheses. The raw marker
+    // search must never miss a later incremental signature due to a binary
+    // byte resembling a string delimiter. Comment lines are ignored.
     if(char===37){comment=true;continue;}
-    if(char===40){literalDepth=1;continue;}
-    if(char===60){
-      if(bytes[i+1]===60){i++;continue;} // dictionary opener
-      hexString=true;continue;
-    }
-    if(char===62&&bytes[i+1]===62){i++;continue;} // dictionary closer
     if(char===47){
       if(!byteRange&&hasNameValue(i,'/ByteRange',[91]))byteRange=true;
       if(!contents&&hasNameValue(i,'/Contents',[60,40]))contents=true;
