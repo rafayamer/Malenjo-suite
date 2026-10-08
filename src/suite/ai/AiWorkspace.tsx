@@ -30,6 +30,12 @@ import {
   type SourceDocument,
 } from './rag';
 import { extractSourceDocument } from './sources';
+import {
+  DEFAULT_AI_MODEL_PROFILE,
+  aiModelProfileByTag,
+  formatModelDownloadSize,
+  preferredInstalledModel,
+} from './modelProfiles';
 
 interface Props {
   onBackToFiles(): void;
@@ -106,7 +112,7 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
     setNotice('');
 
     const preferred = provider === 'ollama' ? ollama : llama;
-    if (!model && preferred.models[0]) setModel(preferred.models[0].name);
+    if (!model && preferred.models[0]) setModel(preferredInstalledModel(preferred.models,provider));
   }
 
   useEffect(() => {
@@ -122,7 +128,7 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
     const status = statuses[provider];
     if (!status) return;
     if (!status.models.some((item) => item.name === model)) {
-      setModel(status.models[0]?.name ?? '');
+      setModel(preferredInstalledModel(status.models,provider));
     }
   }, [model, provider, statuses]);
 
@@ -330,10 +336,13 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
         {currentStatus?.models.find((item) => item.name === model) && <div className="model-meta">
           {(() => {
             const item = currentStatus.models.find((entry) => entry.name === model)!;
+            const profile=aiModelProfileByTag(item.name);
             return <>
               <span>Size <b>{formatBytes(item.sizeBytes)}</b></span>
               <span>Parameters <b>{item.parameterSize ?? 'not reported'}</b></span>
               <span>Quantization <b>{item.quantization ?? 'not reported'}</b></span>
+              <span>Profile <b>{profile?.resourceClass ?? 'custom local'}</b></span>
+              <span>License <b>{profile?.license ?? 'not registry-reviewed'}</b></span>
             </>;
           })()}
         </div>}
@@ -357,6 +366,10 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
                 ? 'The runtime is reachable, but it reports no installed model. Use the reviewed development-model bootstrap, then refresh status.'
                 : 'No local model runtime is reachable inside this Codespace. Start the explicit loopback runtime bootstrap first.'}</p>
           <code>{setupCommand}</code>
+          {!desktopRuntime&&<p>
+            Reviewed default: <b>{DEFAULT_AI_MODEL_PROFILE.displayName}</b> · {DEFAULT_AI_MODEL_PROFILE.license} · {formatModelDownloadSize(DEFAULT_AI_MODEL_PROFILE.approximateDownloadBytes)}.
+            The runtime adapter is model-agnostic, so future reviewed profiles can replace it without changing chat/RAG code.
+          </p>}
         </section>
       </aside>
     </div>
