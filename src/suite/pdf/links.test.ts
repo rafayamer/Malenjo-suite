@@ -32,7 +32,7 @@ describe('native PDF link annotations',()=>{
     expect(await listPdfLinkAnnotations(original)).toEqual([]);
   });
 
-  it('writes HTTPS-only URI actions and supports editing link targets with a stable ref',async()=>{
+  it('writes HTTPS-only URI actions and supports editing link targets through refreshed references',async()=>{
     let bytes=await addPdfLinkAnnotation(await sample(),bounds,{
       kind:'https',url:'https://example.org/path?q=1',
     });
@@ -40,7 +40,11 @@ describe('native PDF link annotations',()=>{
     expect(link).toMatchObject({kind:'https',destination:'https://example.org/path?q=1'});
     bytes=await updatePdfLinkAnnotation(bytes,link,{kind:'page',pageNumber:2});
     const [revised]=await listPdfLinkAnnotations(bytes);
-    expect(revised).toMatchObject({kind:'page',destination:'2',ref:link.ref});
+    expect(revised).toMatchObject({kind:'page',destination:'2'});
+    // Editing detaches the dictionary from any non-page aliases; its ref changes.
+    expect(revised.ref).not.toBe(link.ref);
+    await expect(updatePdfLinkAnnotation(bytes,link,{kind:'page',pageNumber:1}))
+      .rejects.toThrow(/identity changed/i);
     bytes=await updatePdfLinkAnnotation(bytes,revised,{
       kind:'https',url:'https://example.com/new',
     });
@@ -359,5 +363,99 @@ describe('native PDF link annotations',()=>{
     const [link]=await listPdfLinkAnnotations(source);
     expect(link).toMatchObject({ref:null,kind:'page',destination:'2'});
     await expect(deletePdfLinkAnnotation(source,link)).rejects.toThrow(/indirect/i);
+  });
+
+  it('inspects 4,000 imported annotation slots without serializing a giant shared subtype',async()=>{
+    const pdf=await PDFDocument.load(await sample());
+    const giant=PDFName.of('Q'.repeat(70_000));
+    const alien=pdf.context.register(pdf.context.obj({
+      Subtype:giant,Rect:[10,10,30,30],
+    }));
+    pdf.getPage(0).node.set(PDFName.of('Annots'),
+      pdf.context.obj(Array.from({length:4000},()=>alien)));
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    expect(await listPdfLinkAnnotations(bytes)).toEqual([]);
+    const added=await addPdfLinkAnnotation(bytes,bounds,{kind:'page',pageNumber:2});
+    expect((await listPdfLinkAnnotations(added))).toMatchObject([
+      {kind:'page',destination:'2',index:4000},
+    ]);
+  });
+
+  it('clones an imported link before editing when a non-page object also references it',async()=>{
+    const original=await addPdfLinkAnnotation(await sample(),bounds,{
+      kind:'page',pageNumber:2,
+    });
+    const pdf=await PDFDocument.load(original);
+    const ref=pdf.getPage(0).node.lookup(PDFName.of('Annots'),PDFArray).get(0);
+    pdf.catalog.set(PDFName.of('AcroForm'),pdf.context.register(pdf.context.obj({
+      Fields:[],LinkedData:ref,
+    })));
+    const source=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const [selected]=await listPdfLinkAnnotations(source);
+    const modified=await updatePdfLinkAnnotation(source,selected,{
+      kind:'https',url:'https://example.com/new',
+    });
+    const [changed]=await listPdfLinkAnnotations(modified);
+    expect(changed).toMatchObject({kind:'https',destination:'https://example.com/new'});
+    expect(changed.ref).not.toBe(selected.ref);
+    const reopened=await PDFDocument.load(modified);
+    const external=reopened.catalog.lookup(PDFName.of('AcroForm'),PDFDict)
+      .lookup(PDFName.of('LinkedData'),PDFDict);
+    const oldDest=external.lookup(PDFName.of('Dest'),PDFArray);
+    expect(oldDest.get(0)?.toString()).toBe(reopened.getPage(1).ref.toString());
+    expect(external.get(PDFName.of('A'))).toBeUndefined();
+    const pageAnnots=reopened.getPage(0).node.lookup(PDFName.of('Annots'),PDFArray);
+    expect(pageAnnots.get(0)?.toString()).not.toBe(ref?.toString());
+    expect(reopened.context.lookup(pageAnnots.get(0),PDFDict)
+      .lookup(PDFName.of('Rect'),PDFArray).size()).toBe(4);
+    expect((await listPdfLinkAnnotations(source))[0].kind).toBe('page');
+  });
+
+  it('resolves indirect HTTPS URI strings but rejects indirect HTTP and JS despite fallback Dest',async()=>{
+    const pdf=await PDFDocument.load(await sample());
+    const links=['https://example.org/safe','http://example.org/unsafe','javascript:alert(1)']
+      .map(uri=>pdf.context.register(pdf.context.obj({
+        Subtype:PDFName.of('Link'),Rect:[10,10,30,30],
+        A:pdf.context.obj({
+          S:PDFName.of('URI'),
+          URI:pdf.context.register(PDFString.of(uri)),
+        }),
+        Dest:pdf.context.obj([pdf.getPage(1).ref,PDFName.of('Fit')]),
+      })));
+    pdf.getPage(0).node.set(PDFName.of('Annots'),pdf.context.obj(links));
+    const source=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const found=await listPdfLinkAnnotations(source);
+    expect(found.map(link=>link.kind)).toEqual(['https','unsupported','unsupported']);
+    expect(found[0].destination).toBe('https://example.org/safe');
+    expect(found.slice(1).every(link=>!link.destination.includes('2'))).toBe(true);
+    for(const unsafe of found.slice(1)){
+      await expect(updatePdfLinkAnnotation(source,unsafe,{kind:'page',pageNumber:2}))
+        .rejects.toThrow(/unsupported imported/i);
+    }
+  });
+
+  it('does not treat Dest as a fallback for malformed or incomplete explicit actions',async()=>{
+    const pdf=await PDFDocument.load(await sample());
+    const dest=pdf.context.obj([pdf.getPage(1).ref,PDFName.of('Fit')]);
+    const links=[
+      pdf.context.obj({
+        Subtype:PDFName.of('Link'),Rect:[10,10,30,30],
+        A:pdf.context.register(PDFString.of('not an action dictionary')),Dest:dest,
+      }),
+      pdf.context.obj({
+        Subtype:PDFName.of('Link'),Rect:[10,10,30,30],
+        A:pdf.context.obj({S:PDFName.of('GoTo')}),Dest:dest,
+      }),
+      pdf.context.obj({
+        Subtype:PDFName.of('Link'),Rect:[10,10,30,30],
+        A:pdf.context.obj({S:PDFName.of('URI'),URI:PDFName.of('nonstr')}),Dest:dest,
+      }),
+    ];
+    pdf.getPage(0).node.set(PDFName.of('Annots'),
+      pdf.context.obj(links.map(link=>pdf.context.register(link))));
+    const source=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const found=await listPdfLinkAnnotations(source);
+    expect(found).toHaveLength(3);
+    expect(found.map(link=>link.kind)).toEqual(['unsupported','unsupported','unsupported']);
   });
 });
