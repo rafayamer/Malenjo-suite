@@ -1,7 +1,7 @@
 import {describe,expect,it} from 'vitest';
 import {PDFDocument,PDFHexString,PDFName,PDFRef,PDFString} from 'pdf-lib';
 import {
-  inspectPdfSigningIntegrity,requirePdfUnsignedForMutation,
+  hasPriorPdfSignatureEvidence,inspectPdfSigningIntegrity,requirePdfUnsignedForMutation,
 } from './signatureIntegrity';
 
 async function fixture({field=false,populated=false,certified=false}:{
@@ -276,5 +276,49 @@ describe('signed PDF mutation safety',()=>{
     pdf.getPage(0).node.set(PDFName.of('Annots'),pdf.context.obj([widget]));
     const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
     await expect(requirePdfUnsignedForMutation(bytes)).rejects.toThrow(/cycle|parent tree/i);
+  });
+
+  it('detects a detached indirect signature field with a direct /V dictionary',async()=>{
+    const pdf=await PDFDocument.create();
+    pdf.addPage([300,400]);
+    pdf.context.register(pdf.context.obj({
+      FT:PDFName.of('Sig'),
+      V:pdf.context.obj({
+        Type:PDFName.of('Sig'),ByteRange:[0,100,200,300],
+        Contents:PDFHexString.of('FACE'),
+      }),
+    }));
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    expect(await inspectPdfSigningIntegrity(bytes)).toMatchObject({
+      signatureFieldCount:0,populatedSignatureCount:0,mayRewrite:false,
+    });
+    await expect(requirePdfUnsignedForMutation(bytes)).rejects.toThrow(/invalidate signatures/i);
+  });
+
+  it('recognizes older raw signature ByteRanges in incremental revisions',async()=>{
+    const pdf=await PDFDocument.create();
+    pdf.addPage([300,400]);
+    const unsigned=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    expect(hasPriorPdfSignatureEvidence(unsigned)).toBe(false);
+
+    const older=new TextEncoder().encode(
+      '\n% an earlier /ByteRange [0 100 200 300] /Contents <CAFE> signature revision\n'+
+      'startxref\n0\n%%EOF\n',
+    );
+    const withOldRevision=new Uint8Array(unsigned.length+older.length);
+    withOldRevision.set(unsigned);
+    withOldRevision.set(older,unsigned.length);
+    expect(hasPriorPdfSignatureEvidence(withOldRevision)).toBe(true);
+  });
+
+  it('does not mistake ByteRange-like words without an incremental revision for a signature',async()=>{
+    const doc=new TextEncoder().encode(
+      '%PDF-1.7 /ByteRange [0 1 2 3] /Contents <CAFE> startxref 0 %%EOF',
+    );
+    expect(hasPriorPdfSignatureEvidence(doc)).toBe(false);
+    const text=new TextEncoder().encode(
+      '%PDF-1.7 /ByteRangeCounter /ContentsNote %%EOF %%EOF',
+    );
+    expect(hasPriorPdfSignatureEvidence(text)).toBe(false);
   });
 });
