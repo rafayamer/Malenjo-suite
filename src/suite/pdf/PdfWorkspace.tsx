@@ -56,6 +56,7 @@ import {
   type PdfFormFieldUpdate,
 } from './editor';
 import { disposePdf, loadPdfBytes, type PdfLoadResult } from './engine';
+import { createPdfFromImages, PDF_IMAGE_MAX_COUNT, PDF_IMAGE_MAX_BYTES, PDF_IMAGE_MAX_TOTAL_BYTES } from './imageConvert';
 import {
   addPdfRegionMarkup, deletePdfReviewAnnotation, listPdfReviewAnnotations,
   setPdfReviewResolved, updatePdfReviewText, type PdfRegionMarkup, type PdfReviewItem,
@@ -149,6 +150,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const workspaceRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imagesInputRef = useRef<HTMLInputElement>(null);
   const appendInputRef = useRef<HTMLInputElement>(null);
   const insertInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -160,6 +162,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const previewIdRef = useRef(`pdf-preview-${Math.random().toString(36).slice(2)}`);
   const historyRef = useRef<PdfHistory | null>(null);
   const textExportAbortRef = useRef<AbortController | null>(null);
+  const imagesAbortRef = useRef<AbortController | null>(null);
 
   const [pdf, setPdf] = useState<PdfLoadResult | null>(null);
   const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
@@ -177,6 +180,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [loading, setLoading] = useState(false);
   const [mutating, setMutating] = useState(false);
   const [exportingText, setExportingText] = useState(false);
+  const [creatingImagePdf, setCreatingImagePdf] = useState(false);
+  const [imagePdfProgress, setImagePdfProgress] = useState(0);
   const [textExportProgress, setTextExportProgress] = useState(0);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState('');
@@ -354,6 +359,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   useEffect(() => () => {
     requestIdRef.current += 1;
     textExportAbortRef.current?.abort();
+    imagesAbortRef.current?.abort();
     void disposePdf(activeLoadRef.current);
   }, []);
 
@@ -953,6 +959,50 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }
   }
 
+  async function chooseImagesForPdf(event:React.ChangeEvent<HTMLInputElement>){
+    const files=Array.from(event.target.files??[]);
+    event.target.value='';
+    if(!files.length||creatingImagePdf)return;
+    const controller=new AbortController();
+    imagesAbortRef.current=controller;
+    setCreatingImagePdf(true);
+    setImagePdfProgress(0);
+    setError('');
+    setActionNotice('Creating PDF from local image files…');
+    onSavingChange?.(true);
+    try{
+      if(files.length>PDF_IMAGE_MAX_COUNT)throw new Error('Select at most 100 images.');
+      let totalSize=0;
+      for(const file of files){
+        if(!file.size||file.size>PDF_IMAGE_MAX_BYTES)throw new Error(file.name+' must be 32 MB or smaller.');
+        totalSize+=file.size;
+        if(totalSize>PDF_IMAGE_MAX_TOTAL_BYTES)throw new Error('The selected images exceed the 128 MB input limit.');
+      }
+      const images=[];
+      for(const file of files){
+        if(controller.signal.aborted)throw new DOMException('Cancelled','AbortError');
+        images.push({name:file.name,bytes:new Uint8Array(await file.arrayBuffer())});
+      }
+      const bytes=await createPdfFromImages(images,{
+        signal:controller.signal,
+        onProgress:(completed,total)=>setImagePdfProgress(Math.round(100*completed/total)),
+      });
+      if(controller.signal.aborted)throw new DOMException('Cancelled','AbortError');
+      const saved=await exportPdfBytes('MALENJO-images.pdf',bytes);
+      if(saved)setActionNotice('Created '+files.length+'-page PDF from local images. Open the exported file to edit it.');
+    }catch(reason){
+      if(reason instanceof Error&&reason.name==='AbortError'){
+        setActionNotice('Image-to-PDF conversion cancelled. No partial file was saved.');
+      }else{
+        setError(reason instanceof Error?reason.message:String(reason));
+      }
+    }finally{
+      if(imagesAbortRef.current===controller)imagesAbortRef.current=null;
+      setCreatingImagePdf(false);
+      onSavingChange?.(false);
+    }
+  }
+
   async function exportCurrent(){
     if(!sourceBytes){
       setActionNotice('Open a PDF first.');
@@ -1036,6 +1086,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           enabled:!!pdf&&!mutating&&!exportingText,
           disabledReason:!pdf?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':exportingText?'A text export is in progress.':undefined,
           run:()=>exportText(),
+        },
+        {
+          id:'images-to-pdf',
+          label:'Create PDF from images',
+          keywords:'convert png jpeg jpg images photos create pdf',
+          detail:'Choose up to 100 local PNG/JPEG images and export a new PDF',
+          enabled:!creatingImagePdf&&!mutating,
+          disabledReason:creatingImagePdf?'Image conversion is running.':mutating?'Wait for the current PDF edit to finish.':undefined,
+          run:()=>imagesInputRef.current?.click(),
         },
         {
           id:'undo',
@@ -1231,7 +1290,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     });
     return () => registerCommands(null);
   }, [
-    session, registerCommands, sourceBytes, pdf, dirty, mutating, exportingText, historyRevision, formFields.length,
+    session, registerCommands, sourceBytes, pdf, dirty, mutating, exportingText, creatingImagePdf, historyRevision, formFields.length,
     headerFooterDraft, batesDraft, pageBoxDraft, formDraft, formFillDraft, formFillTouched, currentPage, pageCount, selectedPages,
     inspectorHidden, textOverlay, shapeOverlay, commentDraft,
   ]);
@@ -1345,7 +1404,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     ],
     convert:[
       {id:'export-text',label:exportingText?'Extracting text '+textExportProgress+'%':'PDF to text (.txt)',enabled:!!pdf&&!mutating&&!exportingText,disabledReason:!pdf?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':exportingText?'PDF text export is running.':undefined,run:exportText},
+      {id:'images-to-pdf',label:creatingImagePdf?'Images '+imagePdfProgress+'%':'Images to PDF…',enabled:!creatingImagePdf&&!mutating,disabledReason:creatingImagePdf?'Image conversion is running.':mutating?'Wait for the current PDF mutation to finish.':undefined,run:()=>imagesInputRef.current?.click()},
       ...(exportingText?[{id:'cancel-text',label:'Cancel text export',enabled:true,run:()=>textExportAbortRef.current?.abort()}]:[]),
+      ...(creatingImagePdf?[{id:'cancel-images',label:'Cancel image conversion',enabled:true,run:()=>imagesAbortRef.current?.abort()}]:[]),
       providerAction,
     ],
     organize:[
@@ -1403,6 +1464,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       type="file"
       accept="application/pdf,.pdf"
       onChange={(event) => void chooseBrowserPdf(event)}
+    />
+    <input
+      ref={imagesInputRef}
+      className="visually-hidden"
+      type="file"
+      accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+      multiple
+      onChange={(event)=>void chooseImagesForPdf(event)}
     />
     <input
       ref={appendInputRef}

@@ -3,6 +3,7 @@ export type DocumentCommandId =
   | 'save-as'
   | 'export'
   | 'export-text'
+  | 'images-to-pdf'
   | 'undo'
   | 'redo'
   | 'print'
