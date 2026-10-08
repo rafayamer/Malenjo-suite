@@ -34,6 +34,10 @@ import {
 } from './navigation';
 import { extractPdfDocumentText } from './textExport';
 import {
+  inspectPdfSigningIntegrity,requirePdfUnsignedForMutation,
+  type PdfSigningIntegrity,
+} from './signatureIntegrity';
+import {
   addPdfLinkAnnotation,deletePdfLinkAnnotation,listPdfLinkAnnotations,
   updatePdfLinkAnnotation,type PdfLinkAnnotation,type PdfLinkTarget,
 } from './links';
@@ -261,6 +265,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     targetPage:number;
     url:string;
   }|null>(null);
+  const [signingIntegrity, setSigningIntegrity] = useState<PdfSigningIntegrity|null>(null);
+  const [signingIntegrityError, setSigningIntegrityError] = useState('');
   const [pdfAttachments, setPdfAttachments] = useState<PdfAttachmentModel>({entries:[],truncated:false});
   const [navigatorLoading, setNavigatorLoading] = useState(false);
   const [bookmarkError, setBookmarkError] = useState('');
@@ -542,6 +548,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setMutating(true);
     setError('');
     try{
+      await requirePdfUnsignedForMutation(sourceBytes);
       const result=await operation(Uint8Array.from(sourceBytes));
       const targetPage=Math.max(1,preferredPage);
       if (!await installPdf(result,sourceName,browserFile,true)) return false;
@@ -598,6 +605,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setMutating(true);
     setError('');
     try{
+      await requirePdfUnsignedForMutation(sourceBytes);
       let result=Uint8Array.from(sourceBytes);
       for(const file of files){
         if(file.size>512*1024*1024)throw new Error(`${file.name} exceeds the 512 MB safety limit.`);
@@ -718,6 +726,19 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         setFormFillDraft({});
         setFormFillTouched(new Set());
         setFormInspectedSource(null);
+      });
+    return()=>{cancelled=true;};
+  },[sourceBytes]);
+
+  useEffect(()=>{
+    setSigningIntegrity(null);
+    setSigningIntegrityError('');
+    if(!sourceBytes)return;
+    let cancelled=false;
+    void inspectPdfSigningIntegrity(sourceBytes)
+      .then(status=>{if(!cancelled)setSigningIntegrity(status);})
+      .catch(reason=>{
+        if(!cancelled)setSigningIntegrityError(reason instanceof Error?reason.message:String(reason));
       });
     return()=>{cancelled=true;};
   },[sourceBytes]);
@@ -1535,6 +1556,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     onSavingChange?.(true);
     try{
       const pages=operationPages;
+      // Extraction creates a reserialized PDF, not a byte-identical copy.
+      await requirePdfUnsignedForMutation(sourceBytes);
       const bytes=await extractPdfPages(sourceBytes,pages);
       const base=sourceName.replace(/\.pdf$/i,'')||'MALENJO-document';
       const label=pages.length===1?`page-${pages[0]}`:`pages-${pages[0]}-${pages[pages.length-1]}`;
@@ -1551,6 +1574,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     if(!sourceBytes||currentPage>=pageCount)return;
     onSavingChange?.(true);
     try{
+      // Splitting rewrites signed revisions in the derivative documents.
+      await requirePdfUnsignedForMutation(sourceBytes);
       const [left,right]=await splitPdfAtPage(sourceBytes,currentPage);
       const base=sourceName.replace(/\.pdf$/i,'')||'MALENJO-document';
       await exportPdfBytes(`${base}-part-1.pdf`,left);
@@ -2333,7 +2358,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               {formFields.filter((field)=>field.type==='signature').slice(0,24).map((field)=><span key={field.name}><strong>{field.name}</strong><em>{field.readOnly?'read-only':'interactive'}</em></span>)}
               {!formFields.some((field)=>field.type==='signature')&&<span>No AcroForm signature fields detected in the current working copy.</span>}
             </div>
-            <div className="pdf-left-info">Cryptographic validation and signed-copy workflows remain in MALENJO Sign. This panel only reports signature fields already present in the PDF.</div>
+            <div className="pdf-left-info">
+              {signingIntegrityError&&<small role="alert">Signature-integrity inspection failed: {signingIntegrityError}. Editing is not recommended.</small>}
+              {signingIntegrity&&!signingIntegrity.mayRewrite&&<small role="alert">
+                Signed or certified PDF detected. Rewriting in the PDF editor is blocked because that would invalidate the original signatures. View/export the unmodified PDF, or use MALENJO Sign.
+              </small>}
+              {signingIntegrity?.mayRewrite&&<small>No populated signature or certification entry was found in the structural check. This is not cryptographic validation.</small>}
+              <small>Cryptographic validation and signed-copy workflows remain in MALENJO Sign.</small>
+            </div>
           </div>}
 
           {leftPanel==='bookmarks'&&<div className="pdf-left-panel-body">
