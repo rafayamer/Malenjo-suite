@@ -86,7 +86,7 @@ if ! command -v ollama >/dev/null 2>&1; then
   curl -fsSL https://ollama.com/install.sh | sh
 fi
 
-OLLAMA_VERSION="$(ollama --version 2>&1 | head -n 1)"
+OLLAMA_VERSION="$(ollama --version 2>&1)"
 echo "Ollama: $OLLAMA_VERSION"
 if ! python3 - "$OLLAMA_VERSION" <<'PY'
 import re,sys
