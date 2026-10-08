@@ -62,7 +62,7 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 2
 fi
 
-if ! command -v zstd >/dev/null 2>&1; then
+if ! command -v ollama >/dev/null 2>&1 && ! command -v zstd >/dev/null 2>&1; then
   echo "zstd is required by the current Ollama Linux installer."
   if command -v apt-get >/dev/null 2>&1; then
     echo "Installing zstd with apt..."
@@ -75,7 +75,7 @@ if ! command -v zstd >/dev/null 2>&1; then
   fi
 fi
 
-if ! command -v zstd >/dev/null 2>&1; then
+if ! command -v ollama >/dev/null 2>&1 && ! command -v zstd >/dev/null 2>&1; then
   echo "zstd installation did not succeed."
   exit 2
 fi
