@@ -115,14 +115,25 @@ fn java_candidates(app: &AppHandle) -> Vec<String> {
     candidates
 }
 
+/// Only Java 25 is supported by MALENJO's pinned Stirling provider pack.
+fn java_major_version(output: &str) -> Option<u32> {
+    let line = output
+        .lines()
+        .find(|line| line.contains("version \""))?;
+    let version = line.split_once("version \"")?.1.split('"').next()?;
+    version.split('.').next()?.parse::<u32>().ok()
+}
+
 fn available_java(app: &AppHandle) -> Option<String> {
     java_candidates(app).into_iter().find(|candidate| {
-        Command::new(candidate)
-            .arg("-version")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .is_ok_and(|status| status.success())
+        let Ok(output) = Command::new(candidate).arg("-version").output() else {
+            return false;
+        };
+        if !output.status.success() {
+            return false;
+        }
+        let version = String::from_utf8_lossy(&output.stderr);
+        java_major_version(&version) == Some(25)
     })
 }
 
@@ -1196,7 +1207,7 @@ pub async fn stirling_core_request(
 #[cfg(test)]
 mod tests {
     use super::{
-        new_context_path, office_convert_pack_is_verified_against, parse_qpdf_version, reviewed_dependency_report_hash, reviewed_office_artifact_hash,
+        java_major_version, new_context_path, office_convert_pack_is_verified_against, parse_qpdf_version, reviewed_dependency_report_hash, reviewed_office_artifact_hash,
         parse_tesseract_version, set_reviewed_provider_path, sha256_file_hex, validate_api_path,
         MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, OFFICE_CONVERT_DEPENDENCIES_TEXT,
         OFFICE_CONVERT_LICENSE_TEXT, OFFICE_CONVERT_SOURCE_COMMIT, OFFICE_CONVERT_VERSION,
@@ -1213,6 +1224,15 @@ mod tests {
         assert!(validate_api_path(STIRLING_BASE_URL, "https://example.com/api/v1/test").is_err());
         assert!(validate_api_path(STIRLING_BASE_URL, "/api/v1/../admin").is_err());
         assert!(validate_api_path(STIRLING_BASE_URL, "/v3/api-docs").is_err());
+    }
+
+    #[test]
+    fn stirling_requires_java_25_not_just_any_jvm_that_runs() {
+        assert_eq!(java_major_version("openjdk version \"25.0.4.1\" 2026-08-21"), Some(25));
+        assert_eq!(java_major_version("java version \"25\" 2025-09-16"), Some(25));
+        assert_eq!(java_major_version("openjdk version \"17.0.16\" 2025-07-15"), Some(17));
+        assert_eq!(java_major_version("openjdk version \"1.8.0_452\""), Some(1));
+        assert_eq!(java_major_version("unexpected output"), None);
     }
 
     #[test]
