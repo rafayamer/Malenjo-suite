@@ -419,8 +419,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     label:string,
     operation:(bytes:Uint8Array)=>Promise<Uint8Array>,
     preferredPage=currentPage,
-  ){
-    if(!sourceBytes||mutating)return;
+  ):Promise<boolean>{
+    if(!sourceBytes||mutating)return false;
     setMutating(true);
     setError('');
     try{
@@ -437,11 +437,21 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setDirty(true);
       onDirtyChange?.(true);
       setActionNotice(label);
+      return true;
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
+      return false;
     }finally{
       setMutating(false);
     }
+  }
+
+  async function mutateAction(
+    label:string,
+    operation:(bytes:Uint8Array)=>Promise<Uint8Array>,
+    preferredPage=currentPage,
+  ):Promise<void>{
+    await mutate(label,operation,preferredPage);
   }
 
   async function insertDocuments(event:React.ChangeEvent<HTMLInputElement>){
@@ -633,19 +643,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   }
 
   async function addFormField(){
-    const name=formDraft.name.trim()||`field_${Date.now().toString(36)}`;
+    const name=formDraft.name;
     const flags={required:formDraft.required,readOnly:formDraft.readOnly};
-    const options=formDraft.optionsText
-      .split(/[\n,]+/)
-      .map((value)=>value.trim())
-      .filter(Boolean);
-    const selected=formDraft.selectedText
-      .split(/[\n,]+/)
-      .map((value)=>value.trim())
-      .filter(Boolean);
+    const options=formDraft.optionsText===''?[]:formDraft.optionsText.split(/\r?\n/);
+    const selected=formDraft.selectedText===''?[]:formDraft.selectedText.split(/\r?\n/);
+    let created=false;
 
     if(formDraft.type==='checkbox'){
-      await mutate(
+      created=await mutate(
         `Added checkbox field "${name}".`,
         (bytes)=>addPdfCheckBox(bytes,{
           pageNumber:currentPage,name,x:formDraft.x,y:formDraft.y,size:formDraft.size,...flags,
@@ -653,7 +658,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         currentPage,
       );
     }else if(formDraft.type==='radio'){
-      await mutate(
+      created=await mutate(
         `Added radio group "${name}".`,
         (bytes)=>addPdfRadioGroup(bytes,{
           pageNumber:currentPage,name,options,selected:selected[0],
@@ -662,7 +667,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         currentPage,
       );
     }else if(formDraft.type==='dropdown'){
-      await mutate(
+      created=await mutate(
         `Added dropdown field "${name}".`,
         (bytes)=>addPdfDropdown(bytes,{
           pageNumber:currentPage,name,options,selected,
@@ -672,7 +677,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         currentPage,
       );
     }else if(formDraft.type==='list'){
-      await mutate(
+      created=await mutate(
         `Added option-list field "${name}".`,
         (bytes)=>addPdfOptionList(bytes,{
           pageNumber:currentPage,name,options,selected,
@@ -682,7 +687,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         currentPage,
       );
     }else{
-      await mutate(
+      created=await mutate(
         `Added text field "${name}".`,
         (bytes)=>addPdfTextField(bytes,{
           pageNumber:currentPage,name,defaultValue:formDraft.defaultValue,
@@ -691,7 +696,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         currentPage,
       );
     }
-    setFormDraft((current)=>({...current,name:'',defaultValue:'',selectedText:''}));
+    if(created)setFormDraft((current)=>({...current,name:'',defaultValue:'',selectedText:''}));
   }
 
   function setFormFillValue(name:string,value:string|string[]|boolean|undefined){
@@ -930,9 +935,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           id:'add-form-field',
           label:'Add configured PDF form field',
           keywords:'form acroform field text checkbox radio dropdown list required readonly',
-          detail:`${formDraft.type} · ${formDraft.name.trim()||'auto field name'}`,
-          enabled:!!sourceBytes && !mutating,
-          disabledReason:!sourceBytes ? 'No PDF is loaded.' : 'Wait for the current PDF edit to finish.',
+          detail:`${formDraft.type} · ${formDraft.name.trim()||'field name required'}`,
+          enabled:!!sourceBytes && !mutating && !!formDraft.name.trim(),
+          disabledReason:!sourceBytes
+            ? 'No PDF is loaded.'
+            : !formDraft.name.trim()
+              ? 'Enter a form field name first.'
+              : 'Wait for the current PDF edit to finish.',
           run:()=>addFormField(),
         },
         {
@@ -1004,7 +1013,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           detail:textOverlay.text.trim()?'Uses text and coordinates from Properties inspector':'Enter text in the Properties inspector first',
           enabled:!!sourceBytes&&!mutating&&!!textOverlay.text.trim(),
           disabledReason:!sourceBytes?'No PDF is loaded.':!textOverlay.text.trim()?'Enter text in the Properties inspector first.':'Wait for the current PDF edit to finish.',
-          run:()=>mutate('Added permanent text to the PDF.',bytes=>addPdfTextOverlay(bytes,{pageNumber:currentPage,...textOverlay}),currentPage),
+          run:()=>mutateAction('Added permanent text to the PDF.',bytes=>addPdfTextOverlay(bytes,{pageNumber:currentPage,...textOverlay}),currentPage),
         },
         {
           id:'pdf-rectangle-add',
@@ -1013,7 +1022,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           detail:'Uses geometry from Properties inspector',
           enabled:!!sourceBytes&&!mutating,
           disabledReason:!sourceBytes?'No PDF is loaded.':'Wait for the current PDF edit to finish.',
-          run:()=>mutate(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage),
+          run:()=>mutateAction(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage),
         },
         {
           id:'pdf-pages-remove',
@@ -1022,7 +1031,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           detail:'Permanent working-copy page removal; Undo is available before export',
           enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,
           disabledReason:operationPages.length>=pageCount?'A PDF must retain at least one page.':!sourceBytes?'No PDF is loaded.':'Wait for the current PDF edit to finish.',
-          run:()=>mutate(`Deleted ${operationPages.length} selected page(s).`,bytes=>operationPages.length===1?deletePdfPage(bytes,operationPages[0]):deletePdfPages(bytes,operationPages),Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length))),
+          run:()=>mutateAction(`Deleted ${operationPages.length} selected page(s).`,bytes=>operationPages.length===1?deletePdfPage(bytes,operationPages[0]):deletePdfPages(bytes,operationPages),Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length))),
         },
         {
           id:'pdf-page-copy',
@@ -1031,7 +1040,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           detail:'Requires exactly one selected page',
           enabled:!!sourceBytes&&!mutating&&operationPages.length===1,
           disabledReason:operationPages.length!==1?'Select exactly one page.':!sourceBytes?'No PDF is loaded.':'Wait for the current PDF edit to finish.',
-          run:()=>mutate(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1),
+          run:()=>mutateAction(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1),
         },
         {
           id:'pdf-pages-turn',
@@ -1040,7 +1049,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           detail:`${operationPages.length} selected page(s)`,
           enabled:!!sourceBytes&&!mutating,
           disabledReason:!sourceBytes?'No PDF is loaded.':'Wait for the current PDF edit to finish.',
-          run:()=>mutate(`Permanently rotated ${operationPages.length} selected page(s) by 90°.`,bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),operationPages[0]),
+          run:()=>mutateAction(`Permanently rotated ${operationPages.length} selected page(s) by 90°.`,bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),operationPages[0]),
         },
         {
           id:'pdf-pages-extract',
@@ -1196,23 +1205,23 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     edit:[
       {id:'undo',label:'Undo',enabled:!!historyRef.current&&!mutating&&canUndoPdfHistory(historyRef.current),disabledReason:mutating?'Wait for the current PDF edit to finish.':'There is no PDF edit to undo.',run:undoEdit},
       {id:'redo',label:'Redo',enabled:!!historyRef.current&&!mutating&&canRedoPdfHistory(historyRef.current),disabledReason:mutating?'Wait for the current PDF edit to finish.':'There is no PDF edit to redo.',run:redoEdit},
-      {id:'place-text',label:'Place text',enabled:!!sourceBytes&&!mutating&&!!textOverlay.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!textOverlay.text.trim()?'Enter text in the Properties inspector first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate('Added permanent text to the PDF.',bytes=>addPdfTextOverlay(bytes,{pageNumber:currentPage,...textOverlay}),currentPage)},
-      {id:'rectangle',label:shapeOverlay.mode==='highlight'?'Highlight rectangle':'Outline rectangle',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage)},
+      {id:'place-text',label:'Place text',enabled:!!sourceBytes&&!mutating&&!!textOverlay.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!textOverlay.text.trim()?'Enter text in the Properties inspector first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Added permanent text to the PDF.',bytes=>addPdfTextOverlay(bytes,{pageNumber:currentPage,...textOverlay}),currentPage)},
+      {id:'rectangle',label:shapeOverlay.mode==='highlight'?'Highlight rectangle':'Outline rectangle',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage)},
       {id:'configure-edit',label:'Edit settings',enabled:true,run:configureProperties},
       providerAction,
     ],
     convert:[providerAction],
     organize:[
-      {id:'turn-pages',label:'Rotate selected',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate(`Permanently rotated ${operationPages.length} selected page(s) by 90°.`,bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),operationPages[0])},
-      {id:'remove-pages',label:`Delete ${operationPages.length} page${operationPages.length===1?'':'s'}`,enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length>=pageCount?'A PDF must retain at least one page.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate(`Deleted ${operationPages.length} selected page(s).`,bytes=>operationPages.length===1?deletePdfPage(bytes,operationPages[0]):deletePdfPages(bytes,operationPages),Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length)))},
-      {id:'copy-page',label:'Duplicate page',enabled:!!sourceBytes&&!mutating&&operationPages.length===1,disabledReason:operationPages.length!==1?'Select exactly one page.':mutating?'Wait for the current PDF edit to finish.':!sourceBytes?'No PDF is loaded.':undefined,run:()=>mutate(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)},
+      {id:'turn-pages',label:'Rotate selected',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Permanently rotated ${operationPages.length} selected page(s) by 90°.`,bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),operationPages[0])},
+      {id:'remove-pages',label:`Delete ${operationPages.length} page${operationPages.length===1?'':'s'}`,enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length>=pageCount?'A PDF must retain at least one page.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Deleted ${operationPages.length} selected page(s).`,bytes=>operationPages.length===1?deletePdfPage(bytes,operationPages[0]):deletePdfPages(bytes,operationPages),Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length)))},
+      {id:'copy-page',label:'Duplicate page',enabled:!!sourceBytes&&!mutating&&operationPages.length===1,disabledReason:operationPages.length!==1?'Select exactly one page.':mutating?'Wait for the current PDF edit to finish.':!sourceBytes?'No PDF is loaded.':undefined,run:()=>mutateAction(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)},
       {id:'extract-pages',label:'Extract selected',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:extractSelected},
       {id:'split',label:'Split here',enabled:!!sourceBytes&&!mutating&&currentPage<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':currentPage>=pageCount?'Move before the final page to split the PDF.':mutating?'Wait for the current PDF edit to finish.':undefined,run:splitCurrent},
       {id:'insert',label:'Insert PDF…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>insertInputRef.current?.click()},
       {id:'append',label:'Append PDF…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>appendInputRef.current?.click()},
-      {id:'blank',label:'Blank after',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate(`Inserted a blank page after page ${currentPage}.`,bytes=>insertBlankPdfPage(bytes,currentPage),currentPage+1)},
-      {id:'earlier',label:'Move earlier',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&currentPage>1,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':currentPage<=1?'The first page cannot move earlier.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate('Moved page earlier.',bytes=>movePdfPage(bytes,currentPage,currentPage-1),currentPage-1)},
-      {id:'later',label:'Move later',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&currentPage<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':currentPage>=pageCount?'The final page cannot move later.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutate('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)},
+      {id:'blank',label:'Blank after',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Inserted a blank page after page ${currentPage}.`,bytes=>insertBlankPdfPage(bytes,currentPage),currentPage+1)},
+      {id:'earlier',label:'Move earlier',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&currentPage>1,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':currentPage<=1?'The first page cannot move earlier.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Moved page earlier.',bytes=>movePdfPage(bytes,currentPage,currentPage-1),currentPage-1)},
+      {id:'later',label:'Move later',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&currentPage<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':currentPage>=pageCount?'The final page cannot move later.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)},
       providerAction,
     ],
     comment:[
@@ -1367,7 +1376,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       sourceBytes={sourceBytes}
       sourceName={sourceName}
       category={providerCategory}
-      onApplyPdf={(label,bytes)=>mutate(label,async()=>bytes,currentPage)}
+      onApplyPdf={(label,bytes)=>mutateAction(label,async()=>bytes,currentPage)}
     />}
 
     {(notice || actionNotice) && <div className="pdf-notice">{notice || actionNotice}</div>}
@@ -1571,7 +1580,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
           {['radio','dropdown','list'].includes(formDraft.type)&&<>
             <label>Options<textarea value={formDraft.optionsText} onChange={(event)=>setFormDraft({...formDraft,optionsText:event.target.value})} placeholder={'One option per line\nOption A\nOption B'}/></label>
-            <label>{formDraft.type==='radio'?'Selected option':'Selected value(s)'}<input value={formDraft.selectedText} onChange={(event)=>setFormDraft({...formDraft,selectedText:event.target.value})} placeholder={formDraft.multiselect?'Comma-separated selections':'Optional default selection'}/></label>
+            <label>{formDraft.type==='radio'?'Selected option':'Selected value(s)'}<textarea value={formDraft.selectedText} onChange={(event)=>setFormDraft({...formDraft,selectedText:event.target.value})} placeholder={formDraft.multiselect?'One selection per line':'Optional default selection'}/></label>
           </>}
 
           <div className="pdf-field-flags">

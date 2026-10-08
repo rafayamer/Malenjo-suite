@@ -166,6 +166,56 @@ describe('PDF mutation core',()=>{
     expect(info.find((field)=>field.name==='must_accept')).toMatchObject({required:true,readOnly:false});
   });
 
+  it('preserves exact creation names/options and rejects silent normalization',async()=>{
+    let bytes=await addPdfDropdown(await sample(1),{
+      pageNumber:1,
+      name:'department code',
+      options:['Engineering','  Legal  '],
+      selected:['  Legal  '],
+      x:0.1,
+      y:0.45,
+      width:0.45,
+      height:0.08,
+    });
+    const info=await inspectPdfFormFields(bytes);
+    expect(info[0]).toMatchObject({
+      name:'department code',
+      options:['Engineering','  Legal  '],
+      selected:['  Legal  '],
+    });
+
+    await expect(addPdfTextField(bytes,{
+      pageNumber:1,name:'department code',x:0.1,y:0.75,width:0.5,height:0.08,
+    })).rejects.toThrow(/already exists/i);
+
+    await expect(addPdfDropdown(await sample(1),{
+      pageNumber:1,name:'duplicate_options',options:['Same','Same'],
+      x:0.1,y:0.45,width:0.45,height:0.08,
+    })).rejects.toThrow(/unique|duplicate/i);
+
+    await expect(addPdfDropdown(await sample(1),{
+      pageNumber:1,name:'invalid_selection',options:['One','Two'],selected:['Missing'],
+      x:0.1,y:0.45,width:0.45,height:0.08,
+    })).rejects.toThrow(/must exist/i);
+
+    await expect(addPdfTextField(await sample(1),{
+      pageNumber:1,name:'too_long',x:0.1,y:0.75,width:0.5,height:0.08,
+      defaultValue:'x'.repeat(2001),
+    })).rejects.toThrow(/2000 characters/i);
+  });
+
+  it('rejects AcroForm field creation in XFA/hybrid PDFs',async()=>{
+    const pdf=await PDFDocument.create();
+    pdf.addPage([300,400]);
+    const form=pdf.getForm();
+    form.acroForm.dict.set(PDFName.of('XFA'),PDFHexString.fromText('synthetic-xfa'));
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+
+    await expect(addPdfCheckBox(bytes,{
+      pageNumber:1,name:'unsafe',x:0.1,y:0.1,size:0.05,
+    })).rejects.toThrow(/XFA\/hybrid/i);
+  });
+
   it('fills existing text, checkbox and choice fields while respecting read-only fields',async()=>{
     let bytes=await addPdfTextField(await sample(1),{
       pageNumber:1,name:'student_name',x:0.1,y:0.82,width:0.5,height:0.07,
@@ -735,6 +785,8 @@ describe('PDF mutation core',()=>{
     const bytes=await sample(1);
     await expect(addPdfCommentAnnotation(bytes,{pageNumber:1,text:'',x:0.2,y:0.2})).rejects.toThrow(/empty/i);
     await expect(addPdfTextField(bytes,{pageNumber:1,name:'x',x:0.9,y:0.1,width:0.2,height:0.1})).rejects.toThrow(/inside the page/i);
+    await expect(addPdfTextField(bytes,{pageNumber:1,name:'bad\u0085name',x:0.1,y:0.1,width:0.2,height:0.1})).rejects.toThrow(/control characters/i);
+    await expect(addPdfDropdown(bytes,{pageNumber:1,name:'choice',options:['ok','bad\u009Foption'],x:0.1,y:0.1,width:0.2,height:0.1})).rejects.toThrow(/control characters/i);
     await expect(attachFileToPdf(bytes,{name:'empty.bin',bytes:new Uint8Array()})).rejects.toThrow(/empty/i);
   });
 

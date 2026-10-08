@@ -314,3 +314,15 @@ No module is complete merely because its navigation entry exists. Completion req
 | Command discoverability | PDF command bus / Forms toolbar | `fill-form` command + Forms task action | typecheck/build CI | Implemented |
 | Full Forms completion | PDF module | signature authoring, buttons, property editing, tab order, validation/calculation, reset/clear, data import/export, XFA/accessibility/interoperability remain | #39 / #141 | Partial |
 
+
+## PDF completeness pass 7 — AcroForm field creation hardening
+
+| Requirement | Component | Implementation | Test/evidence | Status |
+|---|---|---|---|---|
+| Create basic AcroForm fields | PDF mutation core | existing `addPdfTextField`, `addPdfCheckBox`, `addPdfRadioGroup`, `addPdfDropdown`, `addPdfOptionList` | creation + save/reinspect tests | Implemented |
+| Preserve exact creation identifiers | PDF mutation core / Forms UI | names/options are no longer silently normalized; invalid or ambiguous values are rejected | exact-name/options + duplicate-option tests | Implemented |
+| Validate initial choice state | PDF mutation core | invalid, duplicate, and illegal multi-selection inputs reject instead of disappearing silently | focused choice regression tests | Implemented |
+| XFA/hybrid safety | PDF mutation core | all basic AcroForm creation rejects XFA/hybrid documents | synthetic XFA regression test | Implemented |
+| Active-page placement + field flags | PDF Workspace / mutation core | normalized page coordinates with required/read-only flags | existing creation tests + source audit | Implemented |
+| Undo/Redo/dirty/export semantics | PDF Workspace | creation continues through existing `mutate()` / per-tab history path | history architecture + source audit | Implemented |
+| Full Forms completion | PDF module | property editing, reset/import/export, tab order/accessibility, buttons/signatures, designer/interoperability remain | #39 / #141 | Partial |
