@@ -15,6 +15,8 @@ import type {
 import { fieldAcceptsActivePdf } from './providerFileInputs';
 import { computePdfParityCoverage } from './parityCoverage';
 import { inspectPdfDocumentInfo } from './pdfInfo';
+import { loadPdfBytes,disposePdf } from './engine';
+import { extractPdfDocumentText } from './textExport';
 
 interface Props{
   provider:PdfToolProvider;
@@ -37,6 +39,11 @@ function operationHaystack(operation:PdfProviderOperation):string{
     operation.capability.disabledReason??'',operation.capability.fallback??'',
     ...operation.fields.flatMap((field)=>[field.name,field.label,field.description??'']),
   ].join(' ').toLowerCase();
+}
+
+function localExportStem(name:string):string{
+  const stem=name.replace(/\.pdf$/i,'').replace(/[^A-Za-z0-9._-]/g,'_').replace(/^\.+/,'').slice(0,100);
+  return stem||'MALENJO-document';
 }
 
 function providerFilename(name:string):string{
@@ -116,15 +123,39 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     try{
       const info=await inspectPdfDocumentInfo(sourceBytes);
       const output=new TextEncoder().encode(JSON.stringify(info,null,2)+'\n');
-      const base=(sourceName.replace(/\.pdf$/i,'')||'document')+'-info';
       const saved=await provider.saveResponse({
-        status:200,contentType:'application/json',
-        bytes:Array.from(output),
-      },base);
+        status:200,contentType:'application/json',bytes:Array.from(output),
+      },localExportStem(sourceName)+'-info');
       setNotice(saved?`Saved local PDF information: ${saved}`:'PDF information save cancelled.');
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
+      setBusy(false);
+    }
+  }
+
+  async function saveLocalSelectableText(){
+    if(!sourceBytes||busy)return;
+    setBusy(true);setError('');setNotice('');
+    let loaded:Awaited<ReturnType<typeof loadPdfBytes>>|null=null;
+    try{
+      if(!sourceBytes.byteLength||sourceBytes.byteLength>512*1024*1024){
+        throw new Error('Selectable-text export requires a PDF of at most 512 MB.');
+      }
+      loaded=await loadPdfBytes(sourceBytes);
+      const result=await extractPdfDocumentText(loaded.document,{
+        onProgress:(done,total)=>setNotice(`Reading selectable text: ${done}/${total} pages…`),
+      });
+      const output=new TextEncoder().encode(result);
+      const saved=await provider.saveResponse({
+        status:200,contentType:'text/plain; charset=utf-8',bytes:Array.from(output),
+      },localExportStem(sourceName)+'-selectable-text');
+      setNotice(saved?`Saved selectable PDF text: ${saved}`:'Text export save cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+      setNotice('');
+    }finally{
+      await disposePdf(loaded);
       setBusy(false);
     }
   }
@@ -248,6 +279,9 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       <button disabled={busy} onClick={()=>void refresh(Boolean(status?.running))}><RefreshCw size={14}/>Refresh</button>
       <button disabled={busy||!sourceBytes} onClick={()=>void saveLocalPdfInfo()}>
         <FileOutput size={14}/>Export PDF information (offline)
+      </button>
+      <button disabled={busy||!sourceBytes} onClick={()=>void saveLocalSelectableText()}>
+        <FileOutput size={14}/>Export selectable text (offline)
       </button>
     </div>
     <p className="stirling-provider-message">{status?.message??'Checking local provider…'}</p>
