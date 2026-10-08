@@ -10,7 +10,7 @@ export function fieldAcceptsActivePdf(field:PdfProviderOperationField):boolean{
     .some((part)=>part==='.pdf'||part==='application/pdf'||part==='application/*'||part==='*/*');
 }
 
-import type { PdfProviderInputFile } from './backend';
+import type { PdfProviderInputFile,PdfProviderOperation } from './backend';
 import { requirePdfUnsignedForMutation } from './signatureIntegrity';
 
 /**
@@ -22,13 +22,16 @@ export function isPdfProviderInput(file:Pick<PdfProviderInputFile,'filename'|'co
   if(/\.pdf$/i.test(file.filename.trim())||
      file.contentType?.split(';')[0].trim().toLowerCase()==='application/pdf')return true;
   const bytes=file.bytes;
-  // A PDF header may be preceded by junk in imported PDFs. Bound sniffing to
-  // the first 1,024 bytes; the structural guard still does the full inspection.
-  for(let i=0;i+4<bytes.length&&i<1024;i++){
-    if(bytes[i]===37&&bytes[i+1]===80&&bytes[i+2]===68&&
-       bytes[i+3]===70&&bytes[i+4]===45)return true;
+  // Do not interpret arbitrary text/HTML containing "%PDF-" as a PDF.
+  // Only a true file header (optionally preceded by a UTF-8 BOM or small
+  // whitespace prefix) qualifies when the filename/MIME do not say PDF.
+  let index=bytes[0]===239&&bytes[1]===187&&bytes[2]===191?3:0;
+  while(index<bytes.length&&index<32&&
+        (bytes[index]===32||bytes[index]===9||bytes[index]===10||bytes[index]===13)){
+    index++;
   }
-  return false;
+  return bytes[index]===37&&bytes[index+1]===80&&bytes[index+2]===68&&
+    bytes[index+3]===70&&bytes[index+4]===45;
 }
 
 export async function requireUnsignedPdfProviderInputs(
@@ -41,4 +44,16 @@ export async function requireUnsignedPdfProviderInputs(
     }
     await requirePdfUnsignedForMutation(Uint8Array.from(file.bytes));
   }
+}
+
+/**
+ * The local provider's signature validator reads rather than reserializes
+ * the document. This is an explicit allowlist (not a substring match); every
+ * other provider operation is treated as potentially rewriting imported PDFs.
+ */
+export function providerOperationMayRewritePdfInputs(
+  operation:Pick<PdfProviderOperation,'id'|'category'>,
+):boolean{
+  return !(operation.category==='sign'&&
+    /^(?:ValidateSignature|validateSignature)$/i.test(operation.id));
 }
