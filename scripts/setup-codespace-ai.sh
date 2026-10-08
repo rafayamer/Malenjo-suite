@@ -156,7 +156,28 @@ fi
 echo
 echo "Running a local smoke test..."
 SMOKE_PAYLOAD="$(printf '{"model":"%s","stream":false,"messages":[{"role":"user","content":"Reply with exactly: MALENJO_AI_READY"}],"options":{"temperature":0,"num_ctx":1024}}' "$MODEL")"
-SMOKE="$(curl -fsS --max-time 180 http://127.0.0.1:11434/api/chat -H 'Content-Type: application/json' -d "$SMOKE_PAYLOAD")"
+SMOKE_FILE="$STATE_DIR/smoke-response.json"
+HTTP_CODE="$(curl -sS --max-time 180 -o "$SMOKE_FILE" -w '%{http_code}' http://127.0.0.1:11434/api/chat -H 'Content-Type: application/json' -d "$SMOKE_PAYLOAD" || true)"
+SMOKE="$(cat "$SMOKE_FILE" 2>/dev/null || true)"
+
+if [[ ! "$HTTP_CODE" =~ ^2 ]]; then
+  echo "Local model smoke test failed with HTTP $HTTP_CODE."
+  if [[ -n "$SMOKE" ]]; then
+    echo "Ollama response:"
+    echo "$SMOKE"
+  fi
+  echo
+  echo "System memory:"
+  free -h || true
+  echo
+  echo "Recent Ollama server log:"
+  tail -n 120 "$LOG_FILE" || true
+  echo
+  echo "The model download itself succeeded; this failure occurred while Ollama tried to load/run it."
+  echo "To try the reviewed newer MIT fallback profile:"
+  echo "  MALENJO_AI_MODEL_PROFILE=phi4-mini-q4-mit npm run ai:codespace:setup:model"
+  exit 6
+fi
 
 if ! grep -q "MALENJO_AI_READY" <<<"$SMOKE"; then
   echo "The model responded, but the smoke-test marker was not found."
