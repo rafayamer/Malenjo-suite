@@ -59,16 +59,24 @@ export function aiModelProfileByTag(tag:string):AiModelProfile|undefined{
   return tag===DEFAULT_AI_MODEL_PROFILE.tag?DEFAULT_AI_MODEL_PROFILE:undefined;
 }
 
-export function approvedInstalledModels<T extends {name:string}>(models:T[]):T[]{
-  return models.filter((model)=>model.name===DEFAULT_AI_MODEL_PROFILE.tag);
+function normalizeDigest(value:string|null|undefined):string{
+  return (value??'').trim().replace(/^sha256:/i,'').toLocaleLowerCase();
+}
+
+export function approvedInstalledModels<T extends {name:string;digest?:string|null}>(models:T[]):T[]{
+  const expected=DEFAULT_AI_MODEL_PROFILE.expectedDigestPrefix.toLocaleLowerCase();
+  return models.filter((model)=>
+    model.name===DEFAULT_AI_MODEL_PROFILE.tag
+    &&normalizeDigest(model.digest).startsWith(expected),
+  );
 }
 
 export function preferredInstalledModel(
-  models:Array<{name:string}>,
+  models:Array<{name:string;digest?:string|null}>,
   provider:'ollama'|'llama-cpp',
 ):string{
   if(provider!==DEFAULT_AI_MODEL_PROFILE.provider)return '';
-  return models.some((model)=>model.name===DEFAULT_AI_MODEL_PROFILE.tag)
+  return approvedInstalledModels(models).length
     ? DEFAULT_AI_MODEL_PROFILE.tag
     : '';
 }
