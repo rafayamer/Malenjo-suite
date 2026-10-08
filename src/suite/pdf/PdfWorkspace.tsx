@@ -568,8 +568,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     label:string,
     operation:(bytes:Uint8Array)=>Promise<Uint8Array>,
     preferredPage=currentPage,
-  ):Promise<boolean>{
-    return mutate(label,operation,preferredPage);
+  ):Promise<void>{
+    await mutate(label,operation,preferredPage);
   }
 
   async function insertDocuments(event:React.ChangeEvent<HTMLInputElement>){
@@ -2173,7 +2173,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       sourceBytes={sourceBytes}
       sourceName={sourceName}
       category={providerCategory}
-      onApplyPdf={(label,bytes)=>mutateAction(label,async()=>bytes,currentPage)}
+      onApplyPdf={(label,bytes)=>mutate(label,async()=>bytes,currentPage)}
     />}
 
     {(notice || actionNotice) && <div className="pdf-notice">{notice || actionNotice}</div>}
