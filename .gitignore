@@ -18,6 +18,10 @@ models/
 cache/
 backups/
 
+# Generated offline Java runtime (bundled only after its review-gated build)
+runtime/java/
+.build/temurin/
+
 # Generated local provider packs
 provider-packs/stirling-core/stirling-pdf.jar
 provider-packs/stirling-core/manifest.json
