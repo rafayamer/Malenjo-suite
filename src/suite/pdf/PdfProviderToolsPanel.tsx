@@ -15,6 +15,7 @@ import type {
 import { fieldAcceptsActivePdf } from './providerFileInputs';
 import { computePdfParityCoverage } from './parityCoverage';
 import { inspectPdfDocumentInfo } from './pdfInfo';
+import { updatePdfBasicMetadata,type PdfBasicMetadataUpdate } from './pdfMetadataEdit';
 import { classifyPdfProviderResult } from './providerResultGuard';
 import { ensurePdfProviderRunning } from './providerLifecycle';
 import { isDesktopRuntime } from '../files/api';
@@ -68,6 +69,14 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   const [notice,setNotice]=useState('');
   const [error,setError]=useState('');
   const [allCategories,setAllCategories]=useState(false);
+  const [metadataEditorOpen,setMetadataEditorOpen]=useState(false);
+  const [metadataDraft,setMetadataDraft]=useState<PdfBasicMetadataUpdate>({
+    title:'',author:'',subject:'',keywords:'',
+  });
+
+  useEffect(()=>{
+    setMetadataEditorOpen(false);
+  },[sourceBytes]);
 
   const refresh=async(loadCatalog=false)=>{
     setError('');
@@ -149,6 +158,45 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         status:200,contentType:'application/json',bytes:Array.from(output),
       },localExportStem(sourceName)+'-info');
       setNotice(saved?`Saved local PDF information: ${saved}`:'PDF information save cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }finally{
+      setBusy(false);
+    }
+  }
+
+  async function openLocalMetadataEditor(){
+    if(!sourceBytes||busy)return;
+    if(metadataEditorOpen){
+      setMetadataEditorOpen(false);
+      return;
+    }
+    setBusy(true);setError('');setNotice('');
+    try{
+      const inspected=await inspectPdfDocumentInfo(sourceBytes);
+      setMetadataDraft({
+        title:inspected.metadata.title??'',
+        author:inspected.metadata.author??'',
+        subject:inspected.metadata.subject??'',
+        keywords:inspected.metadata.keywords??'',
+      });
+      setMetadataEditorOpen(true);
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }finally{
+      setBusy(false);
+    }
+  }
+
+  async function applyLocalMetadata(){
+    if(!sourceBytes||busy)return;
+    setBusy(true);setError('');setNotice('');
+    try{
+      const output=await updatePdfBasicMetadata(sourceBytes,metadataDraft);
+      const applied=await onApplyPdf('Updated PDF metadata (offline)',output);
+      if(!applied)throw new Error('PDF metadata changes could not be applied; the original working copy was preserved.');
+      setMetadataEditorOpen(false);
+      setNotice('PDF metadata updated in the working copy. Save or export the document to keep the change.');
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
@@ -315,10 +363,28 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       <button disabled={busy||!sourceBytes} onClick={()=>void saveLocalPdfInfo()}>
         <FileOutput size={14}/>Export PDF information (offline)
       </button>
+      <button disabled={busy||!sourceBytes} aria-expanded={metadataEditorOpen}
+        onClick={()=>void openLocalMetadataEditor()}>
+        <FileOutput size={14}/>{metadataEditorOpen?'Close metadata editor':'Edit PDF metadata (offline)'}
+      </button>
       <button disabled={busy||!sourceBytes} onClick={()=>void saveLocalSelectableText()}>
         <FileOutput size={14}/>Export selectable text (offline)
       </button>
     </div>
+    {metadataEditorOpen&&sourceBytes&&<div className="stirling-operation" aria-label="Edit PDF metadata offline">
+      <b>Edit standard PDF metadata</b>
+      <p>Changes the PDF Info title, author, subject and keywords locally. This is not privacy sanitization or XMP removal. Signed PDFs are refused because rewriting may invalidate signatures.</p>
+      <div className="stirling-fields">
+        {(['title','author','subject','keywords'] as const).map(field=><label className="stirling-field" key={field}>
+          <span>{field==='title'?'Title':field==='author'?'Author':field==='subject'?'Subject':'Keywords (comma-separated)'}</span>
+          <input value={metadataDraft[field]} maxLength={4096}
+            onChange={event=>setMetadataDraft(current=>({...current,[field]:event.target.value}))}/>
+        </label>)}
+      </div>
+      <button className="stirling-run" disabled={busy} onClick={()=>void applyLocalMetadata()}>
+        Apply metadata to working PDF
+      </button>
+    </div>}
     <p className="stirling-provider-message">{status?.message??'Checking local provider…'}</p>
     {!!components.length&&<details className="stirling-component-details">
       <summary>{components.filter((component)=>component.available).length}/{components.length} reviewed provider components available</summary>
