@@ -34,10 +34,10 @@ describe('MALENJO PDF Stirling parity evidence inventory',()=>{
     }
   });
 
-  it('credits only the 13 source-inspected native foundations as partial',()=>{
+  it('credits only the 20 source-inspected native foundations as partial',()=>{
     expect(matrix.upstream.licensingAudited).toBe(false);
-    expect(matrix.operations.filter(op=>op.evidence.functionalStatus==='partial')).toHaveLength(13);
-    expect(matrix.operations.filter(op=>op.evidence.functionalStatus===null)).toHaveLength(77);
+    expect(matrix.operations.filter(op=>op.evidence.functionalStatus==='partial')).toHaveLength(20);
+    expect(matrix.operations.filter(op=>op.evidence.functionalStatus===null)).toHaveLength(70);
     expect(matrix.operations.some(op=>op.evidence.functionalStatus==='implemented')).toBe(false);
     for(const op of matrix.operations.filter(op=>op.evidence.functionalStatus==='partial')){
       expect(op.malenjo.implementationPaths.length).toBeGreaterThan(0);
@@ -45,8 +45,8 @@ describe('MALENJO PDF Stirling parity evidence inventory',()=>{
       expect(op.evidence.windowsOffline).toBe('unverified');
       expect(op.evidence.exportReopenVerified).toBe(false);
     }
-    expect(matrix.auditSnapshot.localSourcePartialCount).toBe(13);
-    expect(matrix.auditSnapshot.unverifiedSourceCount).toBe(77);
+    expect(matrix.auditSnapshot.localSourcePartialCount).toBe(20);
+    expect(matrix.auditSnapshot.unverifiedSourceCount).toBe(70);
   });
 
   it('separates pinned API evidence from actual Windows functionality',()=>{
