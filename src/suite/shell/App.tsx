@@ -557,7 +557,15 @@ export default function App() {
           />
         : active === 'files'
           ? <FileLibrary onOpen={openFromLibrary}/>
-          : active === 'scanner'
+          : active === 'pdf'
+            ? <PdfWorkspace
+                session={null}
+                active
+                notice={workspaceNotices.__open ?? ''}
+                onBackToFiles={()=>selectModule('files')}
+                onNavigateModule={(id)=>selectModule(id)}
+              />
+            : active === 'scanner'
             ? <ScannerWorkspace mode="scanner" onBackToFiles={()=>selectModule('files')}/>
             : active === 'ocr'
               ? <ScannerWorkspace mode="ocr" onBackToFiles={()=>selectModule('files')}/>
