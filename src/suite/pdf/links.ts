@@ -79,9 +79,10 @@ function isLinkSubtype(pdf:PDFDocument,dict:PDFDict):boolean{
 }
 
 /**
- * Imported page dictionaries may point to one shared /Annots array.
- * Copy only the selected page's array before a push/removal. Never mutate
- * the shared container in place.
+ * An imported /Annots array can be referenced from *any* indirect object,
+ * not just another page (/AcroForm /Fields is one example).
+ * Always copy and rebind before mutation; attempting alias detection across
+ * only page dictionaries can silently corrupt non-page structures.
  */
 function ownedAnnotationList(pdf:PDFDocument,pageNumber:number):PDFArray{
   const page=pdf.getPage(pageNumber-1);
@@ -91,10 +92,6 @@ function ownedAnnotationList(pdf:PDFDocument,pageNumber:number):PDFArray{
     page.node.set(ANN,empty);
     return empty;
   }
-  const shared=pdf.getPages().some((other,index)=>
-    index!==pageNumber-1 && other.node.lookupMaybe(ANN,PDFArray)===current,
-  );
-  if(!shared)return current;
   const clone=pdf.context.obj([]) as PDFArray;
   for(let i=0;i<current.size();i++){
     const entry=current.get(i);
@@ -148,9 +145,21 @@ function destination(pdf:PDFDocument,dict:PDFDict,uriBudget?:{used:number}):{
     return {kind:'unsupported',destination:'Unsupported PDF link action dictionary'};
   }
   const storedType=action?.get(PDFName.of('S'));
-  let type:string|undefined;
-  try{type=storedType?pdf.context.lookup(storedType)?.toString():undefined;}catch{
-    return {kind:'unsupported',destination:'Malformed PDF link action'};
+  let type:'URI'|'GoTo'|undefined;
+  if(action){
+    // Never stringify imported /S data before checking its type and
+    // encoded length. Huge PDFName/PDFString values must stay inert and
+    // must not be copied into the visible link inventory.
+    let resolved:unknown;
+    try{resolved=storedType?pdf.context.lookup(storedType):undefined;}catch{
+      return {kind:'unsupported',destination:'Malformed PDF link action'};
+    }
+    if(!(resolved instanceof PDFName) || resolved.encodedName.length > 8){
+      return {kind:'unsupported',destination:'Unsupported PDF link action'};
+    }
+    if(resolved.encodedName==='URI')type='URI';
+    else if(resolved.encodedName==='GoTo')type='GoTo';
+    else return {kind:'unsupported',destination:'Unsupported PDF link action'};
   }
   // A visible HTTPS /URI or /Dest is NOT sufficient proof of a safe link:
   // imported annotation-level /AA and action chains /Next can execute other
@@ -158,7 +167,7 @@ function destination(pdf:PDFDocument,dict:PDFDict,uriBudget?:{used:number}):{
   if(dict.has(PDFName.of('AA')) || action?.has(PDFName.of('Next'))){
     return {kind:'unsupported',destination:'Imported link has additional or chained actions'};
   }
-  if(type==='/URI'){
+  if(type==='URI'){
     const uri=action?.get(URI);
     if(uri instanceof PDFHexString||uri instanceof PDFString){
       // Both PDFString and PDFHexString expose their encoded source without
@@ -180,9 +189,8 @@ function destination(pdf:PDFDocument,dict:PDFDict,uriBudget?:{used:number}):{
       }
     }
   }
-  if(action && type && type!=='/GoTo'){
-    return {kind:'unsupported',destination:'Unsupported document action '+type};
-  }
+  // Unknown action subtypes have already been classified without
+  // rendering untrusted serialized names or strings.
   const storedDest=dict.get(DEST)??action?.get(PDFName.of('D'));
   let dest:PDFArray|undefined;
   try{
