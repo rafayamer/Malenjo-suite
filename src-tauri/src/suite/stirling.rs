@@ -1104,6 +1104,25 @@ pub async fn stirling_core_openapi(app: AppHandle) -> Result<Value, String> {
         .map_err(|error| format!("Local Stirling OpenAPI catalog returned invalid JSON: {error}"))
 }
 
+/// The local Java provider may return chunked responses without a known
+/// Content-Length. Enforce the limit before each copy, not after allocating the
+/// entire response. Keep error bodies much smaller than successful PDF output.
+fn append_bounded_response_chunk(
+    received: &mut Vec<u8>,
+    chunk: &[u8],
+    limit: usize,
+) -> Result<(), String> {
+    if received
+        .len()
+        .checked_add(chunk.len())
+        .is_none_or(|total| total > limit)
+    {
+        return Err("Local Stirling response exceeds the bounded output safety limit.".into());
+    }
+    received.extend_from_slice(chunk);
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn stirling_core_request(
     app: AppHandle,
@@ -1161,7 +1180,7 @@ pub async fn stirling_core_request(
         );
     }
 
-    let response = request
+    let mut response = request
         .send()
         .await
         .map_err(|error| format!("Local Stirling request failed: {error}"))?;
@@ -1182,12 +1201,21 @@ pub async fn stirling_core_request(
         return Err("Local Stirling response exceeds the 512 MB output safety limit.".into());
     }
 
-    let bytes = response
-        .bytes()
+    // Do not trust Content-Length: HTTP chunked responses often omit it.
+    // Error pages are capped at 64 KiB; successful operations at 512 MiB.
+    const MAX_HTTP_ERROR_BODY_BYTES: usize = 64 * 1024;
+    let limit = if (200..300).contains(&status) {
+        MAX_OUTPUT_BYTES
+    } else {
+        MAX_HTTP_ERROR_BODY_BYTES
+    };
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
         .await
-        .map_err(|error| format!("Unable to read local Stirling response: {error}"))?;
-    if bytes.len() > MAX_OUTPUT_BYTES {
-        return Err("Local Stirling response exceeds the 512 MB output safety limit.".into());
+        .map_err(|error| format!("Unable to stream local Stirling response: {error}"))?
+    {
+        append_bounded_response_chunk(&mut bytes, &chunk, limit)?;
     }
 
     if !(200..300).contains(&status) {
@@ -1200,20 +1228,33 @@ pub async fn stirling_core_request(
         status,
         content_type,
         content_disposition,
-        bytes: bytes.to_vec(),
+        bytes,
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        java_major_version, new_context_path, office_convert_pack_is_verified_against, parse_qpdf_version, reviewed_dependency_report_hash, reviewed_office_artifact_hash,
+        append_bounded_response_chunk, java_major_version, new_context_path, office_convert_pack_is_verified_against, parse_qpdf_version, reviewed_dependency_report_hash, reviewed_office_artifact_hash,
         parse_tesseract_version, set_reviewed_provider_path, sha256_file_hex, validate_api_path,
         MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, OFFICE_CONVERT_DEPENDENCIES_TEXT,
         OFFICE_CONVERT_LICENSE_TEXT, OFFICE_CONVERT_SOURCE_COMMIT, OFFICE_CONVERT_VERSION,
         STIRLING_BASE_URL, STIRLING_PIN, STIRLING_PORT,
     };
     use std::{path::PathBuf, process::Command};
+
+    #[test]
+    fn provider_stream_enforces_size_before_appending_untrusted_chunk() {
+        let mut data = vec![1u8, 2, 3];
+        append_bounded_response_chunk(&mut data, &[4, 5], 5).unwrap();
+        assert_eq!(data, [1, 2, 3, 4, 5]);
+        assert!(append_bounded_response_chunk(&mut data, &[6], 5).is_err());
+        assert_eq!(data, [1, 2, 3, 4, 5]);
+        assert!(append_bounded_response_chunk(&mut data, &[0u8; 100], 5).is_err());
+        assert_eq!(data.len(), 5);
+        assert!(append_bounded_response_chunk(&mut data, &[], 5).is_ok());
+        assert!(append_bounded_response_chunk(&mut data, &[0u8; 2], 0).is_err());
+    }
 
     #[test]
     fn stirling_proxy_accepts_only_local_v1_paths() {
