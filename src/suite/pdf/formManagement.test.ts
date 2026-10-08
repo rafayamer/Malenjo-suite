@@ -48,6 +48,20 @@ describe('existing PDF AcroForm field management',()=>{
     expect((await PDFDocument.load(original)).getForm().getFields()).toHaveLength(2);
   });
 
+  it('removes imported direct Widget dictionaries without deleting other widgets',async()=>{
+    const pdf=await PDFDocument.load(await sample());
+    const annots=pdf.getPage(0).node.lookup(PDFName.of('Annots'),PDFArray);
+    const widget=pdf.context.lookup(annots.get(0),PDFDict);
+    // Imported files sometimes hold direct dictionaries in /Annots.
+    annots.set(0,widget);
+    const withDirectWidget=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const result=await deletePdfExistingFormField(withDirectWidget,'document.owner');
+    const reopened=await PDFDocument.load(result);
+    const remaining=reopened.getPage(0).node.lookup(PDFName.of('Annots'),PDFArray);
+    expect(remaining.size()).toBe(1);
+    expect(reopened.getForm().getCheckBox('approved').isChecked()).toBe(true);
+  });
+
   it('rejects missing fields and improper property types without modifying original',async()=>{
     const original=await sample();
     await expect(deletePdfExistingFormField(original,'missing')).rejects.toThrow(/no longer exists/i);
