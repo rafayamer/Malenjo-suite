@@ -115,8 +115,8 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     setBusy(true);setError('');setNotice('');
     try{
       const info=await inspectPdfDocumentInfo(sourceBytes);
-      const output=new TextEncoder().encode(JSON.stringify(info,null,2)+'\\n');
-      const base=(sourceName.replace(/\\.pdf$/i,'')||'document')+'-info';
+      const output=new TextEncoder().encode(JSON.stringify(info,null,2)+'\n');
+      const base=(sourceName.replace(/\.pdf$/i,'')||'document')+'-info';
       const saved=await provider.saveResponse({
         status:200,contentType:'application/json',
         bytes:Array.from(output),
