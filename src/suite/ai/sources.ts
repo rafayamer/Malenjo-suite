@@ -86,7 +86,8 @@ export function isOpenDocumentAiSource(document:LibraryDocument):boolean {
     const extension=document.name.split('.').pop()?.toLowerCase()??'';
     return ['pdf','docx','xlsx','pptx','txt','md','csv','json','log','xml','html'].includes(extension);
   }
-  return document.available&&['pdf','docx','xlsx','pptx'].includes(document.kind);
+  const extension=document.name.split('.').pop()?.toLowerCase()??'';
+  return document.available&&['pdf','docx','xlsx','pptx'].includes(extension);
 }
 
 export async function extractOpenDocumentSource(document:LibraryDocument):Promise<SourceDocument> {
