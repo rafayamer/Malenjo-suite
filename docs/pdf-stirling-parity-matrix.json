@@ -5,7 +5,14 @@
     "repository": "Stirling-Tools/Stirling-PDF",
     "baselineCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
     "rootLicenseCaution": "MIT only where root LICENSE applies; engine and specified proprietary/desktop subtrees are separately restricted",
-    "licensingAudited": false
+    "licensingAudited": false,
+    "pinnedEndpointList": {
+      "repository": "Stirling-Tools/Stirling-PDF",
+      "commit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+      "path": "testing/endpoints.txt",
+      "blobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+      "endpointCount": 62
+    }
   },
   "legend": {
     "functionalStatus": [
@@ -34,13 +41,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/general/merge-pdfs",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/general/merge-pdfs",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -65,13 +78,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/general/split-pages",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/general/split-pages",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -96,13 +115,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -115,7 +140,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -127,13 +153,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/general/remove-pages",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/general/remove-pages",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -158,13 +190,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/general/rearrange-pages",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/general/rearrange-pages",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -189,13 +227,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/general/rotate-pdf",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/general/rotate-pdf",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -220,13 +264,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/general/crop",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/general/crop",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -251,13 +301,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/general/scale-pages",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/general/scale-pages",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -282,13 +338,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/misc/add-page-numbers",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/misc/add-page-numbers",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -313,13 +375,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/general/pdf-to-single-page",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/general/pdf-to-single-page",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -344,13 +412,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/general/multi-page-layout",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/general/multi-page-layout",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -375,13 +449,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -394,7 +474,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -406,13 +487,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/general/overlay-pdfs",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/general/overlay-pdfs",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -437,13 +524,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/general/split-pdf-by-sections",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/general/split-pdf-by-sections",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -468,13 +561,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/general/split-pdf-by-chapters",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/general/split-pdf-by-chapters",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -499,13 +598,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/misc/auto-split-pdf",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/misc/auto-split-pdf",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -530,13 +635,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/general/split-by-size-or-count",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/general/split-by-size-or-count",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -561,13 +672,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/misc/add-attachments",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/misc/add-attachments",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -592,13 +709,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/convert/pdf/img",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/convert/pdf/img",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -623,13 +746,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/convert/img/pdf",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/convert/img/pdf",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -654,13 +783,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/convert/file/pdf",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/convert/file/pdf",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -685,13 +820,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/convert/pdf/word",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/convert/pdf/word",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -716,13 +857,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/convert/pdf/presentation",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/convert/pdf/presentation",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -747,13 +894,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/convert/pdf/text",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/convert/pdf/text",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -778,13 +931,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/convert/pdf/html",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/convert/pdf/html",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -809,13 +968,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/convert/pdf/xml",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/convert/pdf/xml",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -840,13 +1005,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/convert/pdf/markdown",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/convert/pdf/markdown",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -871,13 +1042,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/convert/pdf/csv",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/convert/pdf/csv",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -902,13 +1079,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -921,7 +1104,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -933,13 +1117,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -952,7 +1142,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -964,13 +1155,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -983,7 +1180,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -995,13 +1193,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1014,7 +1218,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -1026,13 +1231,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1045,7 +1256,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -1057,13 +1269,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1076,7 +1294,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -1088,13 +1307,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/convert/pdf/pdfa",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/convert/pdf/pdfa",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1119,13 +1344,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/convert/html/pdf",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/convert/html/pdf",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1150,13 +1381,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/convert/url/pdf",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/convert/url/pdf",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1181,13 +1418,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/convert/markdown/pdf",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/convert/markdown/pdf",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1212,13 +1455,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1231,7 +1480,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -1243,13 +1493,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1262,7 +1518,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -1274,13 +1531,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1293,7 +1556,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -1305,13 +1569,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1324,7 +1594,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -1336,13 +1607,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/security/add-password",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/security/add-password",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1367,13 +1644,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/security/remove-password",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/security/remove-password",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1398,13 +1681,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1417,7 +1706,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -1429,13 +1719,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/security/add-watermark",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/security/add-watermark",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1460,13 +1756,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/misc/add-stamp",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/misc/add-stamp",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1491,13 +1793,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/security/sanitize-pdf",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/security/sanitize-pdf",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1522,13 +1830,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/misc/flatten",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/misc/flatten",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1553,13 +1867,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1572,7 +1892,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -1584,13 +1905,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/security/cert-sign",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/security/cert-sign",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1615,13 +1942,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1634,7 +1967,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -1646,13 +1980,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1665,7 +2005,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -1677,13 +2018,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/security/remove-cert-sign",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/security/remove-cert-sign",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1708,13 +2055,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/security/validate-signature",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/security/validate-signature",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1739,13 +2092,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1758,7 +2117,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -1770,13 +2130,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/security/redact",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/security/redact",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1801,13 +2167,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/security/auto-redact",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/security/auto-redact",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1832,13 +2204,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/misc/extract-images",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/misc/extract-images",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1863,13 +2241,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/misc/extract-image-scans",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/misc/extract-image-scans",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1894,13 +2278,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/general/remove-image-pdf",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/general/remove-image-pdf",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1925,13 +2315,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1944,7 +2340,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -1956,13 +2353,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/misc/remove-blanks",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/misc/remove-blanks",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -1987,13 +2390,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/misc/ocr-pdf",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/misc/ocr-pdf",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2018,13 +2427,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2037,7 +2452,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -2049,13 +2465,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2068,7 +2490,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -2080,13 +2503,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/misc/update-metadata",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/misc/update-metadata",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2111,13 +2540,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/security/get-info-on-pdf",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/security/get-info-on-pdf",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2142,13 +2577,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2161,7 +2602,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -2173,13 +2615,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2192,7 +2640,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -2204,13 +2653,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/misc/replace-invert-pdf",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/misc/replace-invert-pdf",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2235,13 +2690,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2254,7 +2715,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -2266,13 +2728,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/misc/repair",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/misc/repair",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2297,13 +2765,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/misc/add-image",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/misc/add-image",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2328,13 +2802,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2347,7 +2827,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -2359,13 +2840,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2378,7 +2865,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -2390,13 +2878,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2409,7 +2903,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -2421,13 +2916,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2440,7 +2941,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -2452,13 +2954,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2471,7 +2979,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -2483,13 +2992,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/misc/compress-pdf",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/misc/compress-pdf",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2514,13 +3029,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2533,7 +3054,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -2545,13 +3067,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2564,7 +3092,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -2576,13 +3105,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/misc/auto-rename",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/misc/auto-rename",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2607,13 +3142,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2626,7 +3167,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -2638,13 +3180,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": "/api/v1/misc/show-javascript",
+        "endpointInPinnedFixture": true
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": "/api/v1/misc/show-javascript",
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2669,13 +3217,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2688,7 +3242,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -2700,13 +3255,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2719,7 +3280,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -2731,13 +3293,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2750,7 +3318,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -2762,13 +3331,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2781,7 +3356,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     },
     {
@@ -2793,13 +3369,19 @@
         "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
         "path": null,
         "license": null,
-        "attributionVerified": false
+        "attributionVerified": false,
+        "endpointTestPath": "testing/endpoints.txt",
+        "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
+        "upstreamEndpoint": null,
+        "endpointInPinnedFixture": false
       },
       "malenjo": {
         "implementationPaths": [],
         "frontendCommand": null,
         "provider": null,
-        "dependency": null
+        "dependency": null,
+        "providerCatalogMatchKey": null,
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
         "functionalStatus": null,
@@ -2812,8 +3394,26 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
       ]
     }
-  ]
+  ],
+  "auditSnapshot": {
+    "type": "source-fixture-only",
+    "evidence": "Pinned upstream smoke-test endpoint names, not implementation/functional execution.",
+    "routeMatches": 54,
+    "notMatched": 36,
+    "unmappedUpstreamFixtureRoutes": [
+      "/api/v1/filter/filter-page-size",
+      "/api/v1/filter/filter-page-rotation",
+      "/api/v1/filter/filter-page-count",
+      "/api/v1/filter/filter-file-size",
+      "/api/v1/filter/filter-contains-text",
+      "/api/v1/filter/filter-contains-image",
+      "/api/v1/misc/decompress-pdf",
+      "/api/v1/convert/ebook/pdf"
+    ],
+    "windowsOperationResults": "unverified"
+  }
 }
