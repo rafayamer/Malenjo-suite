@@ -17,9 +17,10 @@ describe('MALENJO PDF Stirling parity evidence inventory',()=>{
   it('never declares completed functionality without concrete offline Windows evidence',()=>{
     for(const operation of matrix.operations){
       const evidence=operation.evidence;
+      const status=evidence.functionalStatus as string|null;
       const approved=['implemented','partial','unavailable','excluded-by-license',null];
-      expect(approved).toContain(evidence.functionalStatus);
-      if(evidence.functionalStatus==='implemented'){
+      expect(approved).toContain(status);
+      if(status==='implemented'){
         expect(operation.malenjo.implementationPaths.length).toBeGreaterThan(0);
         expect(operation.malenjo.frontendCommand).toBeTruthy();
         expect(operation.source.license).toBeTruthy();
