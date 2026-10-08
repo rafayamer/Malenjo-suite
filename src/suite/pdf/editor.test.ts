@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { PDFArray, PDFBool, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber } from 'pdf-lib';
 import {
-  addPdfBatesNumbers, addPdfCheckBox, addPdfCommentAnnotation, addPdfDropdown, addPdfHeaderFooter,
+  addPdfBatesNumbers, addPdfButton, addPdfCheckBox, addPdfCommentAnnotation, addPdfDropdown, addPdfHeaderFooter,
   addPdfOptionList, addPdfRadioGroup, addPdfRectangleOverlay, addPdfTextField, addPdfTextOverlay, appendPdf,
-  attachFileToPdf, deletePdfPage, deletePdfPages, duplicatePdfPage, extractPdfPage, extractPdfPages,
-  fillPdfFormFields, flattenPdfForm, inspectPdfFormFields, insertBlankPdfPage, insertPdfAfter, listPdfFormFields, movePdfPage,
-  rotatePdfPagePermanent, rotatePdfPagesPermanent, setPdfPageBox, splitPdfAtPage,
+  attachFileToPdf, clearPdfFormFields, deletePdfPage, deletePdfPages, duplicatePdfPage, exportPdfFormData,
+  extractPdfPage, extractPdfPages, fillPdfFormFields, flattenPdfForm, importPdfFormData, inspectPdfFormFields,
+  insertBlankPdfPage, insertPdfAfter, listPdfFormFields, movePdfPage, rotatePdfPagePermanent, rotatePdfPagesPermanent,
+  setPdfPageBox, splitPdfAtPage, updatePdfFormFieldProperties,
 } from './editor';
 
 async function sample(pages=3):Promise<Uint8Array>{
@@ -164,6 +165,99 @@ describe('PDF mutation core',()=>{
     const info=await inspectPdfFormFields(bytes);
     expect(info.find((field)=>field.name==='readonly_name')).toMatchObject({required:true,readOnly:true});
     expect(info.find((field)=>field.name==='must_accept')).toMatchObject({required:true,readOnly:false});
+  });
+
+  it('creates push-button fields and edits supported field properties',async()=>{
+    let bytes=await addPdfButton(await sample(1),{
+      pageNumber:1,
+      name:'review_submit',
+      label:'Submit review',
+      x:0.12,
+      y:0.72,
+      width:0.28,
+      height:0.09,
+    });
+    let info=await inspectPdfFormFields(bytes);
+    expect(info.find((field)=>field.name==='review_submit')).toMatchObject({
+      type:'button',
+      required:false,
+      readOnly:false,
+      exported:true,
+    });
+
+    bytes=await updatePdfFormFieldProperties(bytes,[{
+      name:'review_submit',
+      required:true,
+      readOnly:true,
+      exported:false,
+    }]);
+    info=await inspectPdfFormFields(bytes);
+    expect(info.find((field)=>field.name==='review_submit')).toMatchObject({
+      required:true,
+      readOnly:true,
+      exported:false,
+    });
+  });
+
+  it('clears safely editable AcroForm values',async()=>{
+    let bytes=await addPdfTextField(await sample(1),{
+      pageNumber:1,name:'clear_name',x:0.1,y:0.82,width:0.5,height:0.07,defaultValue:'Before',
+    });
+    bytes=await addPdfCheckBox(bytes,{
+      pageNumber:1,name:'clear_check',x:0.1,y:0.7,size:0.05,checked:true,
+    });
+    bytes=await addPdfDropdown(bytes,{
+      pageNumber:1,name:'clear_choice',options:['A','B'],selected:['B'],
+      x:0.1,y:0.5,width:0.4,height:0.07,
+    });
+    const cleared=await clearPdfFormFields(bytes);
+    const info=await inspectPdfFormFields(cleared);
+    expect(info.find((field)=>field.name==='clear_name')?.value).toBe('');
+    expect(info.find((field)=>field.name==='clear_check')?.checked).toBe(false);
+    expect(info.find((field)=>field.name==='clear_choice')?.selected).toEqual([]);
+  });
+
+  it('exports versioned form data without password values and imports writable values',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([500,700]);
+    const form=pdf.getForm();
+    const name=form.createTextField('student');
+    name.setText('Before');
+    name.addToPage(page,{x:30,y:620,width:220,height:28});
+    const secret=form.createTextField('secret');
+    secret.enablePassword();
+    secret.setText('never export this');
+    secret.addToPage(page,{x:30,y:570,width:220,height:28});
+    const check=form.createCheckBox('accepted');
+    check.check();
+    check.addToPage(page,{x:30,y:520,width:20,height:20});
+
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const data=await exportPdfFormData(bytes);
+    expect(data).toMatchObject({
+      format:'malenjo-pdf-form-data',
+      version:1,
+    });
+    expect(data.fields.find((field)=>field.name==='student')).toMatchObject({
+      type:'text',value:'Before',
+    });
+    expect(data.fields.find((field)=>field.name==='secret')).toEqual({
+      name:'secret',type:'text',redacted:true,
+    });
+
+    const imported=await importPdfFormData(bytes,{
+      format:'malenjo-pdf-form-data',
+      version:1,
+      fields:[
+        {name:'student',type:'text',value:'After'},
+        {name:'accepted',type:'checkbox',checked:false},
+        {name:'secret',type:'text',redacted:true},
+      ],
+    });
+    const info=await inspectPdfFormFields(imported);
+    expect(info.find((field)=>field.name==='student')?.value).toBe('After');
+    expect(info.find((field)=>field.name==='accepted')?.checked).toBe(false);
+    expect(info.find((field)=>field.name==='secret')?.value).toBe('');
   });
 
   it('fills existing text, checkbox and choice fields while respecting read-only fields',async()=>{
