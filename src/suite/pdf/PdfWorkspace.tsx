@@ -76,7 +76,7 @@ import { disposePdf, loadPdfBytes, type PdfLoadResult } from './engine';
 import { createPdfFromImages, PDF_IMAGE_MAX_COUNT, PDF_IMAGE_MAX_BYTES, PDF_IMAGE_MAX_TOTAL_BYTES } from './imageConvert';
 import {
   addPdfRegionMarkup, deletePdfReviewAnnotation, listPdfReviewAnnotations,
-  setPdfReviewResolved, updatePdfReviewText, type PdfRegionMarkup, type PdfReviewItem,
+  setPdfReviewResolved, updatePdfReviewText, replyToPdfReviewAnnotation, type PdfRegionMarkup, type PdfReviewItem,
 } from './review';
 import {
   canRedoPdfHistory,
@@ -248,6 +248,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewFailure, setReviewFailure] = useState('');
   const [reviewEdit, setReviewEdit] = useState<{item:PdfReviewItem;text:string}|null>(null);
+  const [reviewReply, setReviewReply] = useState<{parent:PdfReviewItem;text:string}|null>(null);
   const [formDraft, setFormDraft] = useState({
     type:'text' as 'text'|'checkbox'|'radio'|'dropdown'|'list',
     name:'',
@@ -714,6 +715,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   }
 
   useEffect(()=>{
+    setReviewReply(null);
+    setReviewEdit(null);
+    setReviewAnnotations([]);
     if(!sourceBytes){
       setReviewAnnotations([]);
       setReviewFailure('');
@@ -883,6 +887,17 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       }),
       currentPage,
     );
+  }
+
+  async function sendReviewReply(){
+    if(!reviewReply)return;
+    const {parent,text}=reviewReply;
+    const added=await mutate(
+      'Replied to PDF review annotation.',
+      bytes=>replyToPdfReviewAnnotation(bytes,parent,text,commentDraft.author),
+      parent.pageNumber,
+    );
+    if(added)setReviewReply(null);
   }
 
   async function saveReviewText(){
@@ -2087,14 +2102,21 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               {reviewFailure&&<small role="alert">{reviewFailure}</small>}
               {!reviewLoading&&!reviewFailure&&reviewAnnotations.length===0&&<small>No review annotations in the loaded PDF.</small>}
               {reviewAnnotations.map(item=><div key={item.pageNumber+'-'+item.index+'-'+item.ref} className="pdf-left-info">
-                <b>{item.kind} · Page {item.pageNumber}{item.resolved?' · Completed':''}</b>
+                <b>{item.replyToRef?'Reply · ':''}{item.kind} · Page {item.pageNumber}{item.resolved?' · Completed':''}</b>
+                {item.replyToRef&&<small>In reply to annotation {item.replyToRef}</small>}
                 <div>{item.author||'Unknown author'}</div>
                 <p>{item.text||'(No comment text)'}</p>
                 <button onClick={()=>goToPage(item.pageNumber)}>Go to page</button>
                 {item.ref&&<div>
                   <button disabled={mutating} onClick={()=>setReviewEdit({item,text:item.text})}>Edit text</button>
+                  <button disabled={mutating} onClick={()=>setReviewReply({parent:item,text:''})}>Reply</button>
                   <button disabled={mutating} onClick={()=>void toggleReviewResolved(item)}>{item.resolved?'Reopen':'Complete'}</button>
                   <button disabled={mutating} onClick={()=>void removeReviewItem(item)}>Delete</button>
+                </div>}
+                {reviewReply?.parent.ref===item.ref&&reviewReply.parent.index===item.index&&reviewReply.parent.pageNumber===item.pageNumber&&<div>
+                  <label>Reply to {item.author||'reviewer'}<textarea maxLength={4000} value={reviewReply.text} onChange={event=>setReviewReply({...reviewReply,text:event.target.value})}/></label>
+                  <button disabled={mutating||!reviewReply.text.trim()} onClick={()=>void sendReviewReply()}>Post reply</button>
+                  <button onClick={()=>setReviewReply(null)}>Cancel</button>
                 </div>}
                 {reviewEdit?.item.ref===item.ref&&reviewEdit.item.index===item.index&&reviewEdit.item.pageNumber===item.pageNumber&&<div>
                   <label>Edit annotation<textarea value={reviewEdit.text} onChange={(event)=>setReviewEdit({...reviewEdit,text:event.target.value})} maxLength={4000}/></label>
