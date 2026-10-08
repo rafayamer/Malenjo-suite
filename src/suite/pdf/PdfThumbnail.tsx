@@ -5,6 +5,7 @@ import { PDF_PAGE_DRAG_TYPE, createPdfPageDragPayload, readPdfPageDragPayload } 
 interface Props {
   document: PDFDocumentProxy;
   pageNumber: number;
+  logicalLabel?: string;
   active: boolean;
   selected: boolean;
   renderAllowed: boolean;
@@ -15,7 +16,7 @@ interface Props {
   onReorder?(fromPage:number,toPage:number):void;
 }
 
-export default function PdfThumbnail({ document, pageNumber, active, selected, renderAllowed, onSelect, dragScope='', reorderEnabled=false, pageCount=0, onReorder }: Props) {
+export default function PdfThumbnail({ document, pageNumber, logicalLabel, active, selected, renderAllowed, onSelect, dragScope='', reorderEnabled=false, pageCount=0, onReorder }: Props) {
   const wrapperRef = useRef<HTMLButtonElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [visible, setVisible] = useState(pageNumber <= 3);
@@ -118,6 +119,6 @@ export default function PdfThumbnail({ document, pageNumber, active, selected, r
     <div className="pdf-thumb-canvas">
       {failed ? <span>Preview unavailable</span> : <canvas ref={canvasRef}/>}
     </div>
-    <span>Page {pageNumber}</span>
+    <span>Page {pageNumber}{logicalLabel && logicalLabel !== String(pageNumber) ? ` · ${logicalLabel}` : ''}</span>
   </button>;
 }
