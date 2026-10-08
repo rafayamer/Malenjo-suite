@@ -17,6 +17,7 @@ export interface PdfParityCoverageRow{
   frontendCoreToolId:string|null;
   sourcePinned:boolean;
   controllerOnly:boolean;
+  configurationOnly:boolean;
   state:PdfParityRouteState;
   operation:PdfProviderOperation|null;
   // A responsive API provider is not enough to claim functional parity.
@@ -29,6 +30,7 @@ export interface PdfParityCoverage{
   upstreamFixtureMatched:number;
   pinnedControllerOnlyRouteMatches:number;
   frontendOnlyRouteMatches:number;
+  configurationOnlyMatches:number;
   sourceClassificationPending:number;
   liveRoutes:number;
   providerEnabled:number;
@@ -56,6 +58,7 @@ export function computePdfParityCoverage(
   let upstreamFixtureMatched=0;
   let pinnedControllerOnlyRouteMatches=0;
   let frontendOnlyRouteMatches=0;
+  let configurationOnlyMatches=0;
   let sourceClassificationPending=0;
   let liveRoutes=0;
   let providerEnabled=0;
@@ -65,6 +68,7 @@ export function computePdfParityCoverage(
     if(entry.source.upstreamEndpoint)upstreamFixtureMatched++;
     else if(entry.source.pinnedControllerEndpoint)pinnedControllerOnlyRouteMatches++;
     else if(entry.source.pinnedFrontendCoreToolId)frontendOnlyRouteMatches++;
+    else if(entry.source.pinnedConfigurationOnly)configurationOnlyMatches++;
     else sourceClassificationPending++;
     if(entry.evidence.functionalStatus==='partial')locallySourceAuditedPartial++;
     const operation=expectedEndpoint?byPath.get(expectedEndpoint)??null:null;
@@ -86,13 +90,14 @@ export function computePdfParityCoverage(
       frontendCoreToolId:entry.source.pinnedFrontendCoreToolId,
       sourcePinned:Boolean(entry.source.endpointInPinnedFixture),
       controllerOnly:!entry.source.upstreamEndpoint&&Boolean(entry.source.pinnedControllerEndpoint),
+      configurationOnly:Boolean(entry.source.pinnedConfigurationOnly),
       state,operation,functionallyVerified:false,
       locallySourceAuditedPartial:entry.evidence.functionalStatus==='partial',
     };
   });
   return {
     total:rows.length,upstreamFixtureMatched,pinnedControllerOnlyRouteMatches,
-    frontendOnlyRouteMatches,sourceClassificationPending,liveRoutes,providerEnabled,
+    frontendOnlyRouteMatches,configurationOnlyMatches,sourceClassificationPending,liveRoutes,providerEnabled,
     functionallyVerified:0,locallySourceAuditedPartial,rows,
   };
 }
