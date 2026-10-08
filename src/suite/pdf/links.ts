@@ -154,11 +154,11 @@ function destination(pdf:PDFDocument,dict:PDFDict,uriBudget?:{used:number}):{
     try{resolved=storedType?pdf.context.lookup(storedType):undefined;}catch{
       return {kind:'unsupported',destination:'Malformed PDF link action'};
     }
-    if(!(resolved instanceof PDFName) || resolved.encodedName.length > 8){
-      return {kind:'unsupported',destination:'Unsupported PDF link action'};
-    }
-    if(resolved.encodedName==='URI')type='URI';
-    else if(resolved.encodedName==='GoTo')type='GoTo';
+    // pdf-lib interns PDFName instances through PDFName.of(). Check only
+    // canonical known-safe names by identity: no untrusted object is
+    // serialized or decoded, regardless of its encoded length.
+    if(resolved===PDFName.of('URI'))type='URI';
+    else if(resolved===PDFName.of('GoTo'))type='GoTo';
     else return {kind:'unsupported',destination:'Unsupported PDF link action'};
   }
   // A visible HTTPS /URI or /Dest is NOT sufficient proof of a safe link:
