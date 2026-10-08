@@ -16,6 +16,7 @@ export interface PdfParityCoverageRow{
   frontendRoute:string|null;
   frontendCoreToolId:string|null;
   sourcePinned:boolean;
+  controllerOnly:boolean;
   state:PdfParityRouteState;
   operation:PdfProviderOperation|null;
   // A responsive API provider is not enough to claim functional parity.
@@ -26,6 +27,7 @@ export interface PdfParityCoverageRow{
 export interface PdfParityCoverage{
   total:number;
   upstreamFixtureMatched:number;
+  pinnedControllerOnlyRouteMatches:number;
   frontendOnlyRouteMatches:number;
   sourceClassificationPending:number;
   liveRoutes:number;
@@ -52,14 +54,16 @@ export function computePdfParityCoverage(
     if(!byPath.has(canonical))byPath.set(canonical,operation);
   }
   let upstreamFixtureMatched=0;
+  let pinnedControllerOnlyRouteMatches=0;
   let frontendOnlyRouteMatches=0;
   let sourceClassificationPending=0;
   let liveRoutes=0;
   let providerEnabled=0;
   let locallySourceAuditedPartial=0;
   const rows:PdfParityCoverageRow[]=matrix.operations.map((entry)=>{
-    const expectedEndpoint=entry.source.upstreamEndpoint;
-    if(expectedEndpoint)upstreamFixtureMatched++;
+    const expectedEndpoint=entry.source.upstreamEndpoint??entry.source.pinnedControllerEndpoint??null;
+    if(entry.source.upstreamEndpoint)upstreamFixtureMatched++;
+    else if(entry.source.pinnedControllerEndpoint)pinnedControllerOnlyRouteMatches++;
     else if(entry.source.pinnedFrontendCoreToolId)frontendOnlyRouteMatches++;
     else sourceClassificationPending++;
     if(entry.evidence.functionalStatus==='partial')locallySourceAuditedPartial++;
@@ -81,12 +85,13 @@ export function computePdfParityCoverage(
       frontendRoute:entry.source.pinnedFrontendRoute,
       frontendCoreToolId:entry.source.pinnedFrontendCoreToolId,
       sourcePinned:Boolean(entry.source.endpointInPinnedFixture),
+      controllerOnly:!entry.source.upstreamEndpoint&&Boolean(entry.source.pinnedControllerEndpoint),
       state,operation,functionallyVerified:false,
       locallySourceAuditedPartial:entry.evidence.functionalStatus==='partial',
     };
   });
   return {
-    total:rows.length,upstreamFixtureMatched,
+    total:rows.length,upstreamFixtureMatched,pinnedControllerOnlyRouteMatches,
     frontendOnlyRouteMatches,sourceClassificationPending,liveRoutes,providerEnabled,
     functionallyVerified:0,locallySourceAuditedPartial,rows,
   };
