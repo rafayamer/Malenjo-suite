@@ -4,6 +4,7 @@ export type DocumentCommandId =
   | 'export'
   | 'export-text'
   | 'images-to-pdf'
+  | 'export-page-images'
   | 'undo'
   | 'redo'
   | 'print'
