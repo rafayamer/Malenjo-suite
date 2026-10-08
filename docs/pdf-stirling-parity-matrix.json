@@ -964,17 +964,23 @@
         "endpointInPinnedFixture": true
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/pdf/textExport.ts",
+          "src/suite/pdf/PdfWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": "/api/v1/convert/pdf/text",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "extractPdfDocumentText"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/textExport.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -982,7 +988,9 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Extracts the selectable text layer; does not OCR scanned documents or preserve full visual structure.",
+        "Full per-operation Windows offline execution, negative fixtures, output/save/reopen and legal traceability remain unverified."
       ]
     },
     {
@@ -1789,17 +1797,23 @@
         "endpointInPinnedFixture": true
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/security/secureExport.ts",
+          "src/suite/security/SecurityWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": "/api/v1/security/add-watermark",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "watermarkPdfPreservingContent"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/security/secureExport.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -1807,7 +1821,9 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Local text watermark exists in Security Workspace; complete Stirling watermarks/position/font support and PDF workspace routing remain unverified.",
+        "Full per-operation Windows offline execution, negative fixtures, output/save/reopen and legal traceability remain unverified."
       ]
     },
     {
@@ -2132,17 +2148,23 @@
         "endpointInPinnedFixture": true
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src-tauri/src/suite/security.rs",
+          "src/suite/security/SignWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": "/api/v1/security/validate-signature",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "pyhanko_validate_document"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "testing/suite/fixtures/signatures/README.md"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -2150,7 +2172,9 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Optional local pyHanko validation adapter exists in Sign Workspace; optional dependency Windows availability and detailed signature correctness remain unverified.",
+        "Full per-operation Windows offline execution, negative fixtures, output/save/reopen and legal traceability remain unverified."
       ]
     },
     {
@@ -2207,17 +2231,23 @@
         "endpointInPinnedFixture": true
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/security/secureExport.ts",
+          "src/suite/security/SecurityWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": "/api/v1/security/redact",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "destructivePdfCdr"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/security/secureExport.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -2225,7 +2255,9 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Rasterized destructive CDR with rectangles exists in Security Workspace; PDF-native redaction UI, action semantics and audit workflow remain incomplete.",
+        "Full per-operation Windows offline execution, negative fixtures, output/save/reopen and legal traceability remain unverified."
       ]
     },
     {
@@ -2392,17 +2424,23 @@
         "endpointInPinnedFixture": false
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/pdf/review.ts",
+          "src/suite/pdf/PdfWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "deletePdfReviewAnnotation"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/review.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -2411,7 +2449,9 @@
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Can delete selected review annotations; not the complete Stirling RemoveAnnotations class/group workflow.",
+        "Full per-operation Windows offline execution, negative fixtures, output/save/reopen and legal traceability remain unverified."
       ]
     },
     {
@@ -2504,17 +2544,23 @@
         "endpointInPinnedFixture": false
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/pdf/editor.ts",
+          "src/suite/pdf/PdfWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "addPdfTextOverlay"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/editor.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -2523,7 +2569,9 @@
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Permanent new text overlay exists; editing previously embedded text objects is not implemented.",
+        "Full per-operation Windows offline execution, negative fixtures, output/save/reopen and legal traceability remain unverified."
       ]
     },
     {
@@ -2654,17 +2702,23 @@
         "endpointInPinnedFixture": false
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/pdf/textCompare.ts",
+          "src/suite/pdf/PdfWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "comparePdfSelectableText"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/textCompare.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -2673,7 +2727,9 @@
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Compares selectable text, not pixels, visual layout, OCR-only scans, graphics, metadata or signatures.",
+        "Full per-operation Windows offline execution, negative fixtures, output/save/reopen and legal traceability remain unverified."
       ]
     },
     {
@@ -3506,7 +3562,7 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 13,
-    "unverifiedSourceCount": 77
+    "localSourcePartialCount": 20,
+    "unverifiedSourceCount": 70
   }
 }
