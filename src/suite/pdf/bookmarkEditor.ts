@@ -76,7 +76,7 @@ function outlineNodes(pdf:PDFDocument, root:PDFDict):Array<{ref:PDFRef;dict:PDFD
 function rootCount(root:PDFDict, entries:number):number{
   const count=root.lookupMaybe(COUNT,PDFNumber)?.asNumber();
   if(count===undefined && entries===0)return 0;
-  if(!Number.isSafeInteger(count)||count!<0||count!<entries){
+  if(count===undefined||!Number.isSafeInteger(count)||count<0||count<entries){
     throw new Error('Imported PDF outline count is inconsistent; bookmarks were not changed.');
   }
   return count!;
