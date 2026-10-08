@@ -33,6 +33,7 @@ import {
   type PdfOutlineModel, type PdfOutlineEntry, type PdfAttachmentModel, type PdfAttachmentEntry,
 } from './navigation';
 import { extractPdfDocumentText } from './textExport';
+import {deletePdfExistingFormField,updatePdfExistingFieldProperties} from './formManagement';
 import {
   listPdfOptionalLayers, restorePdfOptionalLayerVisibility,
   setPdfOptionalLayerVisibility, type PdfOptionalContentConfig,
@@ -263,6 +264,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [reviewFailure, setReviewFailure] = useState('');
   const [reviewEdit, setReviewEdit] = useState<{item:PdfReviewItem;text:string}|null>(null);
   const [reviewReply, setReviewReply] = useState<{parent:PdfReviewItem;text:string}|null>(null);
+  const [managedFormField, setManagedFormField] = useState<{
+    name:string;required:boolean;readOnly:boolean;
+  }|null>(null);
   const [formDraft, setFormDraft] = useState({
     type:'text' as 'text'|'checkbox'|'radio'|'dropdown'|'list',
     name:'',
@@ -669,6 +673,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setFormFillDraft({});
     setFormFillTouched(new Set());
     setFormInspectedSource(null);
+    setManagedFormField(null);
     if(!sourceBytes)return;
 
     const inspectedBytes=sourceBytes;
@@ -988,6 +993,31 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       item.pageNumber,
     );
     if(removed)setReviewEdit(null);
+  }
+
+  function chooseManagedFormField(name:string){
+    const field=formFields.find(item=>item.name===name&&item.type!=='signature');
+    if(!field){setManagedFormField(null);return;}
+    setManagedFormField({name:field.name,required:field.required,readOnly:field.readOnly});
+  }
+
+  async function applyManagedFormFlags(){
+    if(!managedFormField)return;
+    await mutate(
+      'Updated existing PDF field "'+managedFormField.name+'" flags.',
+      bytes=>updatePdfExistingFieldProperties(bytes,managedFormField),
+      currentPage,
+    );
+  }
+
+  async function removeManagedFormField(){
+    if(!managedFormField)return;
+    if(!window.confirm('Permanently remove PDF field "'+managedFormField.name+'" and its widgets from the exported copy? You can Undo this change.'))return;
+    await mutate(
+      'Deleted PDF form field "'+managedFormField.name+'".',
+      bytes=>deletePdfExistingFormField(bytes,managedFormField.name),
+      currentPage,
+    );
   }
 
   async function addFormField(){
@@ -2393,6 +2423,21 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               <strong>{field.name}</strong>
               <em>{field.type}{field.required?' · required':''}{field.readOnly?' · read-only':''}{field.password?' · password':''}{field.multiline?' · multiline':''}{field.richText?' · rich-text unsupported':''}{field.multiselect?' · multiselect':''}{field.editable?' · editable':''}{field.duplicateChoiceExports?' · duplicate exports unsupported':''}{field.type==='radio'&&!field.offToggleable?' · cannot clear':''}{field.type==='text'&&!field.password&&!field.richText&&field.value?` · value: ${field.value}`:''}{field.type==='checkbox'?` · ${field.checked?'checked':'unchecked'}`:''}{field.selected.length?` · selected: ${field.selected.map((value)=>field.choiceOptions.find((option)=>option.value===value)?.label??value).join(', ')}`:''}</em>
             </span>)}
+          </div>
+
+          <div className="pdf-edit-form">
+            <b>Manage existing AcroForm field</b>
+            <small>Change the required/read-only flags or remove a field from this PDF. Signatures, XFA and unsupported structures are protected. Use Undo if needed.</small>
+            <label>Field<select value={managedFormField?.name??''} disabled={mutating||formInspectedSource!==sourceBytes} onChange={event=>chooseManagedFormField(event.target.value)}>
+              <option value="">— Choose existing field —</option>
+              {formFields.filter(field=>field.type!=='signature').map(field=><option key={field.name} value={field.name}>{field.name} · {field.type}</option>)}
+            </select></label>
+            {managedFormField&&<>
+              <label><input type="checkbox" checked={managedFormField.required} onChange={event=>setManagedFormField({...managedFormField,required:event.target.checked})}/> Required</label>
+              <label><input type="checkbox" checked={managedFormField.readOnly} onChange={event=>setManagedFormField({...managedFormField,readOnly:event.target.checked})}/> Read-only</label>
+              <button disabled={mutating||formInspectedSource!==sourceBytes} onClick={()=>void applyManagedFormFlags()}>Apply field flags</button>
+              <button disabled={mutating||formInspectedSource!==sourceBytes} onClick={()=>void removeManagedFormField()}>Delete field and widgets</button>
+            </>}
           </div>
 
           {formFields.map((field)=>{
