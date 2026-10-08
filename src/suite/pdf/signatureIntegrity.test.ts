@@ -353,14 +353,32 @@ describe('signed PDF mutation safety',()=>{
     expect(hasPriorPdfSignatureEvidence(joined)).toBe(true);
   });
 
-  it('ignores comments and incomplete escaped names in unsigned revisions',()=>{
-    const data=new TextEncoder().encode(
-      '%PDF-1.7\n%%EOF\n% /Byte#52ange [0 1 2 3] /Cont#65nts <CAFE>\n%%EOF\n',
+  it('fails closed for old revisions even when no visible signatures remain',()=>{
+    const unsignedRevision=new TextEncoder().encode(
+      '%PDF-1.7\n%%EOF\n% No signature markers in this update\n%%EOF\n',
     );
-    expect(hasPriorPdfSignatureEvidence(data)).toBe(false);
-    const wrong=new TextEncoder().encode(
-      '%PDF-1.7\n%%EOF\n/Byte#52angeExtra [0 1 2 3] /Contents <CAFE>\n%%EOF\n',
+    expect(hasPriorPdfSignatureEvidence(unsignedRevision)).toBe(true);
+    // This may exclude truly unsigned incrementally updated PDFs. That
+    // conservative result is intentional until all older xrefs can be audited.
+  });
+
+  it('does not allow binary stream parentheses to mask incremental revisions',()=>{
+    const stream=new TextEncoder().encode(
+      '%PDF-1.7\n1 0 obj\n<< /Length 7 >>\nstream\n((\u0000\u0001\u0002\nendstream\n'+
+      'endobj\nstartxref\n0\n%%EOF\n'+
+      '2 0 obj\n<< /Type /Sig /ByteRange [0 1 2 3] /Contents <CAFE> >>\n'+
+      'endobj\nstartxref\n123\n%%EOF\n',
     );
-    expect(hasPriorPdfSignatureEvidence(wrong)).toBe(false);
+    expect(hasPriorPdfSignatureEvidence(stream)).toBe(true);
+  });
+
+  it('detects prior revisions regardless of long whitespace and comments between names and values',()=>{
+    const separator=' '.repeat(256)+'% a legal PDF comment\n'+ '\t'.repeat(65);
+    const bytes=new TextEncoder().encode(
+      '%PDF-1.7\n%%EOF\n'+
+      '3 0 obj\n<< /Type /Sig /ByteRange '+separator+'[0 1 2 3] '+ 
+      '/Contents '+separator+'<CAFE> >>\nendobj\nstartxref\n0\n%%EOF\n',
+    );
+    expect(hasPriorPdfSignatureEvidence(bytes)).toBe(true);
   });
 });
