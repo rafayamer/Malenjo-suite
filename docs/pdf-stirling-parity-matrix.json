@@ -25,7 +25,7 @@
       "commit": "25220cbdbde2d526cebf173b94357884e180b8c1",
       "path": "frontend/editor/src/core/types/toolId.ts",
       "blobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88",
-      "coreToolCount": 64
+      "coreToolCount": 61
     }
   },
   "legend": {
