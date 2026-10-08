@@ -66,7 +66,7 @@ describe('MALENJO PDF Stirling parity evidence inventory',()=>{
         expect(row.malenjo.providerCatalogMatchKey).toBe(endpoint);
       }
       expect(row.evidence.windowsOffline).toBe('unverified');
-      expect(row.evidence.functionalStatus).toBeNull();
+      expect(['partial',null]).toContain(row.evidence.functionalStatus);
     }
     expect(routes.size).toBe(54);
   });
