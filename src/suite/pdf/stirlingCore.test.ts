@@ -103,9 +103,14 @@ describe('Stirling open-core PDF integration contract',()=>{
     ]);
   });
 
-  it('recognizes PDF output by content type or signature',()=>{
-    expect(responseIsPdf({status:200,contentType:'application/pdf',bytes:[]})).toBe(true);
+  it('requires a real PDF output header rather than trusting provider MIME',()=>{
+    expect(responseIsPdf({status:200,contentType:'application/pdf',bytes:[]})).toBe(false);
+    expect(responseIsPdf({status:200,contentType:'application/pdf',bytes:[60,104,116,109,108,62]})).toBe(false);
+    expect(responseIsPdf({status:500,contentType:'application/pdf',bytes:[37,80,68,70,45]})).toBe(false);
     expect(responseIsPdf({status:200,contentType:'application/octet-stream',bytes:[37,80,68,70,45]})).toBe(true);
+    expect(responseIsPdf({status:200,contentType:'application/octet-stream',bytes:[32,10,37,80,68,70,45]})).toBe(true);
+    expect(responseIsPdf({status:200,contentType:'application/pdf',bytes:[239,187,191,37,80,68,70,45]})).toBe(true);
+    expect(responseIsPdf({status:200,contentType:'text/plain',bytes:[116,101,120,116,32,37,80,68,70,45]})).toBe(false);
     expect(responseIsPdf({status:200,contentType:'application/zip',bytes:[80,75,3,4]})).toBe(false);
   });
 });
