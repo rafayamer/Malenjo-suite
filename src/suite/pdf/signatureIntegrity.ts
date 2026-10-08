@@ -14,6 +14,13 @@ const KIDS=PDFName.of('Kids');
 const VALUE=PDFName.of('V');
 const PERMS=PDFName.of('Perms');
 const MAX_FORM_NODES=4000;
+const MAX_INDIRECT_OBJECTS=100_000;
+const MAX_ANNOTATION_SLOTS=10_000;
+const TYPE=PDFName.of('Type');
+const SIG=PDFName.of('Sig');
+const BYTE_RANGE=PDFName.of('ByteRange');
+const CONTENTS=PDFName.of('Contents');
+const ANN=PDFName.of('Annots');
 
 /**
  * Conservative local structural inspection, not a cryptographic signature
@@ -43,7 +50,26 @@ export async function inspectPdfSigningIntegrity(bytes:Uint8Array):Promise<PdfSi
   const seenRefs=new Set<string>();
   const seenDirect=new WeakSet<object>();
 
-  function visit(value:PDFRef|PDFDict,inheritedSig=false,depth=0):void{
+  function signatureEvidence(dict:PDFDict):boolean{
+    // Do not assume every signed revision still has a reachable AcroForm
+    // field. A detached signature dictionary with /ByteRange and /Contents
+    // is sufficient evidence to refuse a loss-inducing full PDF rewrite.
+    const rawType=dict.get(TYPE);
+    const type=rawType?pdf.context.lookup(rawType):undefined;
+    return (type===SIG&&(dict.has(BYTE_RANGE)||dict.has(CONTENTS)))||
+      (dict.has(BYTE_RANGE)&&dict.has(CONTENTS));
+  }
+
+  function nonNull(value:ReturnType<PDFDict['get']>):boolean{
+    return Boolean(value&&pdf.context.lookup(value)!==nullObject);
+  }
+
+  function visit(
+    value:PDFRef|PDFDict,
+    inheritedSig=false,
+    inheritedValue?:ReturnType<PDFDict['get']>,
+    depth=0,
+  ):void{
     if(++visitedCount>MAX_FORM_NODES||depth>32){
       throw new Error('PDF form field tree is too large or deeply nested to check signatures safely.');
     }
@@ -62,10 +88,10 @@ export async function inspectPdfSigningIntegrity(bytes:Uint8Array):Promise<PdfSi
     const directSig=Boolean(rawType&&pdf.context.lookup(rawType)===PDFName.of('Sig'));
     const signature=inheritedSig||directSig;
     if(directSig)signatureFieldCount++;
-    const signedValue=signature?dict.get(VALUE):undefined;
-    if(signedValue&&pdf.context.lookup(signedValue)!==nullObject){
-      populatedSignatureCount++;
-    }
+    // Both /FT and /V may be inherited independently. An ancestor can
+    // supply /V before a descendant introduces /FT /Sig.
+    const effectiveValue=dict.has(VALUE)?dict.get(VALUE):inheritedValue;
+    if(signature&&nonNull(effectiveValue))populatedSignatureCount++;
     const children=dict.lookupMaybe(KIDS,PDFArray);
     if(children){
       for(let i=0;i<children.size();i++){
@@ -73,7 +99,7 @@ export async function inspectPdfSigningIntegrity(bytes:Uint8Array):Promise<PdfSi
         if(!(child instanceof PDFRef)&&!(child instanceof PDFDict)){
           throw new Error('PDF signature form field tree has an unsupported child.');
         }
-        visit(child,signature,depth+1);
+        visit(child,signature,effectiveValue,depth+1);
       }
     }
   }
@@ -87,11 +113,55 @@ export async function inspectPdfSigningIntegrity(bytes:Uint8Array):Promise<PdfSi
       visit(child);
     }
   }
+
+  // A signature can survive outside the formal field tree after damaged or
+  // incremental edits. Scan indirect signature dictionaries and page widget
+  // annotations as well, including direct /V dictionaries. Do not inspect
+  // arbitrary serialized names, strings or signature contents.
+  const objects=pdf.context.enumerateIndirectObjects();
+  if(objects.length>MAX_INDIRECT_OBJECTS){
+    throw new Error('PDF has too many indirect objects to rule out existing signatures safely.');
+  }
+  let detachedSignatureEvidence=false;
+  for(const [,object] of objects){
+    if(object instanceof PDFDict&&signatureEvidence(object)){
+      detachedSignatureEvidence=true;
+      break;
+    }
+  }
+  if(!detachedSignatureEvidence){
+    const pages=pdf.getPages();
+    let annotationSlots=0;
+    for(const page of pages){
+      const annots=page.node.lookupMaybe(ANN,PDFArray);
+      if(!annots)continue;
+      annotationSlots+=annots.size();
+      if(annotationSlots>MAX_ANNOTATION_SLOTS){
+        throw new Error('PDF has too many annotation slots to rule out existing signatures safely.');
+      }
+      for(let i=0;i<annots.size();i++){
+        const entry=annots.get(i);
+        if(!entry)throw new Error('PDF annotation array contains a malformed entry.');
+        const dict=pdf.context.lookup(entry);
+        if(!(dict instanceof PDFDict))continue;
+        const rawType=dict.get(FT);
+        const isSig=Boolean(rawType&&pdf.context.lookup(rawType)===SIG);
+        const value=dict.get(VALUE);
+        const linked=value?pdf.context.lookup(value):undefined;
+        if((isSig&&nonNull(value))||
+           (linked instanceof PDFDict&&signatureEvidence(linked))){
+          detachedSignatureEvidence=true;
+          break;
+        }
+      }
+      if(detachedSignatureEvidence)break;
+    }
+  }
   return {
     signatureFieldCount,
     populatedSignatureCount,
     certifiedDocument,
-    mayRewrite:!certifiedDocument&&!populatedSignatureCount,
+    mayRewrite:!certifiedDocument&&!populatedSignatureCount&&!detachedSignatureEvidence,
   };
 }
 
