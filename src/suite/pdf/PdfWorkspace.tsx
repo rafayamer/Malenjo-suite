@@ -608,6 +608,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     &&!(field.type==='dropdown'&&field.editable&&field.multiselect)
     &&['text','checkbox','radio','dropdown','list'].includes(field.type),
   );
+  const clearableFormFields=fillableFormFields.filter((field)=>
+    !(field.type==='radio'&&!field.offToggleable),
+  );
 
   useEffect(()=>{
     if(!formFields.length){
@@ -1349,7 +1352,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     forms:[
       {id:'add-form-field',label:`Add ${formDraft.type} field`,enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addFormField},
       {id:'fill-form',label:'Apply field values',enabled:!!sourceBytes&&!mutating&&fillableFormFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!fillableFormFields.length?'No editable AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:fillForm},
-      {id:'clear-form',label:'Clear values',enabled:!!sourceBytes&&!mutating&&fillableFormFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!fillableFormFields.length?'No safely clearable AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:clearFormValues},
+      {id:'clear-form',label:'Clear values',enabled:!!sourceBytes&&!mutating&&clearableFormFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!clearableFormFields.length?'No safely clearable AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:clearFormValues},
       {id:'export-form-data',label:'Export data',enabled:!!sourceBytes&&!mutating&&formFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:exportFormData},
       {id:'import-form-data',label:'Import data',enabled:!!sourceBytes&&!mutating&&formFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>formDataInputRef.current?.click()},
       {id:'flatten-form',label:'Flatten fields',enabled:!!sourceBytes&&!mutating&&formFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:flattenForm},
@@ -1752,7 +1755,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           </>}
 
           <div className="pdf-form-actions">
-            <button disabled={mutating||!fillableFormFields.length} onClick={()=>void clearFormValues()}>Clear values</button>
+            <button disabled={mutating||!clearableFormFields.length} onClick={()=>void clearFormValues()}>Clear values</button>
             <button disabled={mutating||!formFields.length} onClick={()=>void exportFormData()}>Export JSON data</button>
             <button disabled={mutating||!formFields.length} onClick={()=>formDataInputRef.current?.click()}>Import JSON data</button>
           </div>
