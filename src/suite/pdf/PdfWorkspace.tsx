@@ -568,8 +568,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     label:string,
     operation:(bytes:Uint8Array)=>Promise<Uint8Array>,
     preferredPage=currentPage,
-  ):Promise<void>{
-    await mutate(label,operation,preferredPage);
+  ):Promise<boolean>{
+    return mutate(label,operation,preferredPage);
   }
 
   async function insertDocuments(event:React.ChangeEvent<HTMLInputElement>){
