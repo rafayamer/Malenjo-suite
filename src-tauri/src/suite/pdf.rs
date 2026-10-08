@@ -151,7 +151,7 @@ const PDF_TOOL_OUTPUT_EXTENSIONS: &[&str] = &[
     "txt", "csv", "json", "xml", "html", "md",
     "doc", "docx", "odt", "rtf",
     "xls", "xlsx", "ods",
-    "ppt", "pptx", "odp", "bin",
+    "ppt", "pptx", "odp", "epub", "cbz", "cbr", "svg", "bin",
 ];
 
 fn validate_tool_output_destination(destination: &str) -> Result<PathBuf, String> {
@@ -238,6 +238,14 @@ mod tests {
         assert!(write_export_with_recovery(&path, b"new").is_err());
         assert!(path.is_dir());
         let _ = fs::remove_dir(path);
+    }
+
+    #[test]
+    fn tool_output_allows_document_conversion_formats() {
+        for extension in ["epub", "cbz", "cbr", "svg", "docx", "pdf"] {
+            let path = temp_path(&format!("converted.{extension}"));
+            assert!(validate_tool_output_destination(path.to_string_lossy().as_ref()).is_ok());
+        }
     }
 
     #[test]
