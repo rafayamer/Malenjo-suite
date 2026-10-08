@@ -86,6 +86,42 @@ describe('native PDF link annotations',()=>{
     expect(await listPdfLinkAnnotations(removed)).toHaveLength(0);
   });
 
+  it('rejects seemingly HTTPS links that hide additional or chained PDF actions',async()=>{
+    const pdf=await PDFDocument.load(await sample());
+    const page=pdf.getPage(0);
+    const javascript=pdf.context.obj({
+      S:PDFName.of('JavaScript'),JS:PDFString.of('app.alert("unsafe")'),
+    });
+    const chained=pdf.context.obj({
+      S:PDFName.of('URI'),URI:PDFString.of('https://example.com/'),
+      Next:javascript,
+    });
+    const extra=pdf.context.obj({
+      E:javascript,
+    });
+    const annots=pdf.context.obj([
+      pdf.context.register(pdf.context.obj({
+        Subtype:PDFName.of('Link'),Rect:[0,0,40,40],A:chained,
+      })),
+      pdf.context.register(pdf.context.obj({
+        Subtype:PDFName.of('Link'),Rect:[40,0,80,40],
+        A:pdf.context.obj({S:PDFName.of('URI'),URI:PDFString.of('https://example.org/')}),
+        AA:extra,
+      })),
+    ]);
+    page.node.set(PDFName.of('Annots'),annots);
+    const source=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const links=await listPdfLinkAnnotations(source);
+    expect(links.map(x=>x.kind)).toEqual(['unsupported','unsupported']);
+    for(const item of links){
+      expect(item.destination).toMatch(/chained|additional/i);
+      await expect(updatePdfLinkAnnotation(source,item,{kind:'page',pageNumber:2}))
+        .rejects.toThrow(/Unsupported imported link actions/i);
+    }
+    const withoutChained=await deletePdfLinkAnnotation(source,links[0]);
+    expect(await listPdfLinkAnnotations(withoutChained)).toHaveLength(1);
+  });
+
   it('deletes only the selected link while preserving unrelated annotations',async()=>{
     let bytes=await addPdfCommentAnnotation(await sample(),{
       pageNumber:1,text:'Preserve note',x:0.3,y:0.4,
