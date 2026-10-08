@@ -42,6 +42,22 @@ describe('open documents as AI sources',()=>{
     expect(first.text).toContain('Transformer testing interval');
   });
 
+  it('rejects oversized native documents before any native byte read',async()=>{
+    const oversized:LibraryDocument={
+      id:'native-large',
+      name:'large.pdf',
+      extension:'pdf',
+      kind:'pdf',
+      sizeBytes:101*1024*1024,
+      modifiedMs:1,
+      addedMs:1,
+      lastOpenedMs:1,
+      available:true,
+      locationLabel:'Desktop library',
+    };
+    await expect(extractOpenDocumentSource(oversized)).rejects.toThrow(/between 1 byte and 100 MB/);
+  });
+
   it('does not claim unsupported native document kinds are indexable',()=>{
     const native:LibraryDocument={
       id:'native-image',
