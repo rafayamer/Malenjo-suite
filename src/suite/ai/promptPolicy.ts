@@ -92,7 +92,7 @@ export const AI_PROMPT_POLICIES:readonly AiPromptPolicy[]=[
 export function aiPromptPolicy(feature:AiFeature):AiPromptPolicy{
   const policy=AI_PROMPT_POLICIES.find((item)=>item.feature===feature);
   if(!policy)throw new Error(`No AI prompt policy registered for ${feature}.`);
-  return policy;
+  return {...policy};
 }
 
 function bounded(value:string,max:number):string{
@@ -100,9 +100,23 @@ function bounded(value:string,max:number):string{
   return value.replace(/\u0000/g,'').slice(0,max);
 }
 
-function canonicalSourceId(value:string,index:number):string{
-  const candidate=bounded(value,80);
-  return /^[A-Za-z0-9_-]{1,80}$/.test(candidate)?candidate:`S${index+1}`;
+function canonicalSourceIds(sources:AiPromptSource[]):string[]{
+  const used=new Set<string>();
+  let generated=1;
+  return sources.map((source)=>{
+    const candidate=bounded(source.id,80);
+    if(/^[A-Za-z0-9_-]{1,80}$/.test(candidate)&&!used.has(candidate)){
+      used.add(candidate);
+      return candidate;
+    }
+    let fallback='';
+    do{
+      fallback=`S${generated}`;
+      generated+=1;
+    }while(used.has(fallback));
+    used.add(fallback);
+    return fallback;
+  });
 }
 
 export function buildVersionedAiPrompt(
@@ -113,9 +127,10 @@ export function buildVersionedAiPrompt(
 ):string{
   const policy=aiPromptPolicy(feature);
   const acceptedSources=sources.slice(0,policy.maxSources);
+  const acceptedSourceIds=canonicalSourceIds(acceptedSources);
   const sourceBlock=acceptedSources.length
     ? acceptedSources.map((source,index)=>[
-        `[${canonicalSourceId(source.id,index)}] name=${JSON.stringify(bounded(source.name,240))}`,
+        `[${acceptedSourceIds[index]}] name=${JSON.stringify(bounded(source.name,240))}`,
         `SOURCE_DATA=${JSON.stringify(bounded(source.text,policy.maxSourceChars))}`,
       ].join('\n')).join('\n\n')
     : '(No local source passages supplied.)';
@@ -123,7 +138,7 @@ export function buildVersionedAiPrompt(
     ? history.slice(-policy.maxHistoryMessages)
     : [];
   const historyBlock=acceptedHistory
-    .map((message)=>`${message.role.toUpperCase()}: ${bounded(message.content,policy.maxHistoryMessageChars)}`)
+    .map((message)=>`HISTORY_MESSAGE role=${message.role} data=${JSON.stringify(bounded(message.content,policy.maxHistoryMessageChars))}`)
     .join('\n');
 
   return [
