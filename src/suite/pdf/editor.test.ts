@@ -66,6 +66,14 @@ describe('PDF mutation core',()=>{
     await expect(splitPdfAtPage(source,3)).rejects.toThrow(/before the last/i);
   });
 
+  it('reorders nonadjacent PDF pages into the thumbnail drop position',async()=>{
+    const original=await sample(4);
+    const moved=await movePdfPage(original,4,2);
+    const result=await PDFDocument.load(moved);
+    expect(result.getPages().map(page=>page.getWidth())).toEqual([300,303,301,302]);
+    expect((await PDFDocument.load(original)).getPages().map(page=>page.getWidth())).toEqual([300,301,302,303]);
+  });
+
   it('moves pages and permanently rotates a page',async()=>{
     const bytes=await sample(3);
     const moved=await movePdfPage(bytes,1,3);
