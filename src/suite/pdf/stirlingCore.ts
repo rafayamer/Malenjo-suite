@@ -431,9 +431,28 @@ function outputFilename(response:PdfProviderResponse,fallbackBaseName:string):st
   return `${fallbackBaseName}.${extension}`;
 }
 
+/**
+ * Response MIME types are hints, not proof of document format. A provider
+ * may return an error page (or a zero-byte payload) labelled application/pdf.
+ * Requiring an actual header prevents blindly applying those bytes to the
+ * current working document. PDF viewers tolerate limited whitespace/BOM
+ * before the header, but not arbitrary embedded %PDF- text.
+ */
 export function responseIsPdf(response:PdfProviderResponse):boolean{
-  if((response.contentType??'').toLowerCase().includes('application/pdf'))return true;
-  return response.bytes.length>=5&&String.fromCharCode(...response.bytes.slice(0,5))==='%PDF-';
+  if(response.status<200||response.status>=300)return false;
+  const bytes=response.bytes;
+  const limit=Math.min(bytes.length,1024);
+  let i=0;
+  if(limit>=3&&bytes[0]===239&&bytes[1]===187&&bytes[2]===191)i=3;
+  for(;i<limit;i++){
+    const b=bytes[i];
+    if(b===37){
+      return i+5<=bytes.length&&bytes[i+1]===80&&bytes[i+2]===68&&
+        bytes[i+3]===70&&bytes[i+4]===45;
+    }
+    if(b!==0&&b!==9&&b!==10&&b!==12&&b!==13&&b!==32)return false;
+  }
+  return false;
 }
 
 export async function savePdfProviderResponse(
