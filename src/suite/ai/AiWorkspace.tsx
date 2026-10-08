@@ -23,6 +23,7 @@ import {
 } from './api';
 import {
   RAG_LIMITS,
+  GROUNDED_PROMPT_LIMITS,
   buildGroundedPrompt,
   buildRagIndex,
   retrieveCitations,
@@ -253,7 +254,9 @@ export default function AiWorkspace({ onBackToFiles, openDocuments }: Props) {
       ));
     } catch (reason) {
       const text = reason instanceof Error ? reason.message : String(reason);
-      if (!/cancelled/i.test(text)) {
+      if (/cancelled/i.test(text)) {
+        setMessages((current)=>current.filter((message)=>message.id!==assistantMessageId));
+      } else {
         setError(text);
         setMessages((current)=>current.map((message)=>
           message.id===assistantMessageId
