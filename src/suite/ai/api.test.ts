@@ -48,7 +48,7 @@ describe('Codespaces AI bridge', () => {
     const request = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.body));
     expect(request.stream).toBe(true);
     expect(request.keep_alive).toBe('2m');
-    expect(request.options.num_ctx).toBe(2048);
+    expect(request.options.num_ctx).toBe(4096);
     expect(request.options.num_predict).toBe(128);
     expect(request.options.repeat_penalty).toBe(1.18);
     expect(streamed.at(-1)).toBe('Grounded answer [S1]');
