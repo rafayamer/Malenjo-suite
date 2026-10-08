@@ -23,7 +23,6 @@ import {
 } from './api';
 import {
   RAG_LIMITS,
-  GROUNDED_PROMPT_LIMITS,
   buildGroundedPrompt,
   buildRagIndex,
   retrieveCitations,
