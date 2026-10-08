@@ -268,6 +268,85 @@ describe('native PDF link annotations',()=>{
     expect(rect.lookup(3,PDFNumber).asNumber()).toBeCloseTo(290);
   });
 
+  it('keeps malicious oversized action subtypes inert without echoing their source',async()=>{
+    const pdf=await PDFDocument.load(await sample());
+    const largeName='A'.repeat(25_000);
+    const largeString='B'.repeat(25_000);
+    const types=[
+      PDFName.of(largeName),
+      PDFString.of(largeString),
+      PDFHexString.of('43'.repeat(25_000)),
+      PDFName.of('JavaScript'),
+    ];
+    const links=types.map(kind=>pdf.context.register(pdf.context.obj({
+      Type:PDFName.of('Annot'),
+      Subtype:PDFName.of('Link'),
+      Rect:[10,10,30,30],
+      A:pdf.context.obj({S:kind}),
+    })));
+    pdf.getPage(0).node.set(PDFName.of('Annots'),pdf.context.obj(links));
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const found=await listPdfLinkAnnotations(bytes);
+    expect(found).toHaveLength(types.length);
+    for(const link of found){
+      expect(link.kind).toBe('unsupported');
+      expect(link.destination).toBe('Unsupported PDF link action');
+      expect(link.destination.length).toBeLessThan(60);
+    }
+    await expect(updatePdfLinkAnnotation(bytes,found[0],{kind:'page',pageNumber:2}))
+      .rejects.toThrow(/unsupported imported/i);
+  });
+
+  it('keeps AcroForm Fields array unchanged when imported Annots aliases a non-page object',async()=>{
+    const pdf=await PDFDocument.load(await sample());
+    const originalField=pdf.context.register(pdf.context.obj({
+      FT:PDFName.of('Tx'),T:PDFString.of('original-field'),
+    }));
+    const shared=pdf.context.register(pdf.context.obj([originalField]));
+    pdf.getPage(0).node.set(PDFName.of('Annots'),shared);
+    pdf.catalog.set(PDFName.of('AcroForm'),pdf.context.register(
+      pdf.context.obj({Fields:shared}),
+    ));
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const added=await addPdfLinkAnnotation(bytes,bounds,{
+      kind:'page',pageNumber:2,
+    });
+    const addedPdf=await PDFDocument.load(added);
+    const acro=addedPdf.catalog.lookup(PDFName.of('AcroForm'),PDFDict);
+    const fields=acro.lookup(PDFName.of('Fields'),PDFArray);
+    const pageAnnots=addedPdf.getPage(0).node.lookup(PDFName.of('Annots'),PDFArray);
+    expect(fields.size()).toBe(1);
+    expect(fields.get(0)?.toString()).toBe(originalField.toString());
+    expect(pageAnnots.size()).toBe(2);
+    const [addedLink]=await listPdfLinkAnnotations(added);
+    const deleted=await deletePdfLinkAnnotation(added,addedLink);
+    const deletedPdf=await PDFDocument.load(deleted);
+    expect(deletedPdf.catalog.lookup(PDFName.of('AcroForm'),PDFDict)
+      .lookup(PDFName.of('Fields'),PDFArray).size()).toBe(1);
+    expect(deletedPdf.getPage(0).node.lookup(PDFName.of('Annots'),PDFArray).size()).toBe(1);
+  });
+
+  it('removes only a link from a page when its Annots aliases AcroForm Fields',async()=>{
+    const pdf=await PDFDocument.load(await sample());
+    const link=pdf.context.register(pdf.context.obj({
+      Type:PDFName.of('Annot'),Subtype:PDFName.of('Link'),Rect:[10,10,30,30],
+      Dest:pdf.context.obj([pdf.getPage(1).ref,PDFName.of('Fit')]),
+    }));
+    const shared=pdf.context.register(pdf.context.obj([link]));
+    pdf.getPage(0).node.set(PDFName.of('Annots'),shared);
+    pdf.catalog.set(PDFName.of('AcroForm'),pdf.context.register(
+      pdf.context.obj({Fields:shared}),
+    ));
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const [toDelete]=await listPdfLinkAnnotations(bytes);
+    const changed=await deletePdfLinkAnnotation(bytes,toDelete);
+    const reopened=await PDFDocument.load(changed);
+    expect(reopened.catalog.lookup(PDFName.of('AcroForm'),PDFDict)
+      .lookup(PDFName.of('Fields'),PDFArray).size()).toBe(1);
+    expect(reopened.getPage(0).node.lookup(PDFName.of('Annots'),PDFArray).size()).toBe(0);
+    expect(await listPdfLinkAnnotations(changed)).toEqual([]);
+  });
+
   it('marks direct Link dictionaries as read-only identities',async()=>{
     const pdf=await PDFDocument.load(await sample());
     pdf.getPage(0).node.set(PDFName.of('Annots'),pdf.context.obj([
