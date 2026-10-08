@@ -28,11 +28,12 @@ describe('MALENJO AI model profiles',()=>{
     expect(AI_MODEL_PROFILES.every((profile)=>profile.expectedDigestPrefix.length>=12)).toBe(true);
   });
 
-  it('prefers a reviewed installed profile but accepts other locally installed models',()=>{
+  it('prefers the higher-quality reviewed MIT model when it is already installed',()=>{
+    const phi4=aiModelProfileById('phi4-mini-q4-mit')!;
     expect(preferredInstalledModel([
-      {name:'custom-local-model'},
       {name:DEFAULT_AI_MODEL_PROFILE.tag},
-    ],'ollama')).toBe(DEFAULT_AI_MODEL_PROFILE.tag);
+      {name:phi4.tag},
+    ],'ollama')).toBe(phi4.tag);
     expect(preferredInstalledModel([{name:'custom-local-model'}],'ollama')).toBe('custom-local-model');
   });
 });
