@@ -4,6 +4,7 @@ export type AiProvider = 'ollama' | 'llama-cpp';
 
 export interface AiModel {
   name: string;
+  digest: string | null;
   sizeBytes: number | null;
   parameterSize: string | null;
   quantization: string | null;
@@ -64,6 +65,7 @@ function parseOllamaModels(value: unknown): AiModel[] {
     const details = item.details as Record<string, unknown> | undefined;
     return {
       name: String(item.name ?? item.model ?? ''),
+      digest: typeof item.digest === 'string' ? item.digest : null,
       sizeBytes: typeof item.size === 'number' ? item.size : null,
       parameterSize: typeof details?.parameter_size === 'string' ? details.parameter_size : null,
       quantization: typeof details?.quantization_level === 'string' ? details.quantization_level : null,
@@ -76,6 +78,7 @@ function parseLlamaModels(value: unknown): AiModel[] {
   if (!Array.isArray(models)) return [];
   return models.map((item) => ({
     name: String(item.id ?? ''),
+    digest: null,
     sizeBytes: null,
     parameterSize: null,
     quantization: null,
