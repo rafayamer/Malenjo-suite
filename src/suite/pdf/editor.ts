@@ -234,9 +234,19 @@ export interface PdfCommentAnnotation {
   y:number;
 }
 
-function safeFieldName(value:string,prefix:string):string{
-  const normalized=value.trim().replace(/[^A-Za-z0-9_.-]+/g,'_').slice(0,80);
-  return normalized||`${prefix}_${Date.now().toString(36)}`;
+function validateNewFieldName(value:string):string{
+  if(!value.trim())throw new Error('Form field name cannot be empty.');
+  if(value.length>80)throw new Error('Form field name must be 80 characters or fewer.');
+  if(/[\u0000-\u001F\u007F]/.test(value)){
+    throw new Error('Form field name cannot contain control characters.');
+  }
+  return value;
+}
+
+function rejectXfaFormCreation(pdf:PDFDocument):void{
+  if(pdfHasXfa(pdf)){
+    throw new Error('XFA/hybrid PDF forms are not supported because creating AcroForm fields could discard or desynchronize XFA form data.');
+  }
 }
 
 export async function addPdfCommentAnnotation(
@@ -287,14 +297,39 @@ function applyFieldFlags(
   if(flags.readOnly)field.enableReadOnly();
 }
 
-function cleanFieldOptions(values:string[],minimum=1):string[]{
-  const options=Array.from(new Set(
-    values
-      .map((value)=>value.replace(/[\u0000-\u001F]/g,' ').trim().slice(0,120))
-      .filter(Boolean),
-  )).slice(0,50);
-  if(options.length<minimum)throw new Error(`Provide at least ${minimum} unique non-empty form option(s).`);
-  return options;
+function validateFieldOptions(values:string[],minimum=1):string[]{
+  if(values.length<minimum)throw new Error(`Provide at least ${minimum} form option(s).`);
+  if(values.length>50)throw new Error('Form fields support at most 50 options in this workspace.');
+  for(const value of values){
+    if(!value.trim())throw new Error('Form options cannot be empty or whitespace-only.');
+    if(value.length>120)throw new Error('Form options must be 120 characters or fewer.');
+    if(/[\u0000-\u001F\u007F]/.test(value)){
+      throw new Error('Form options cannot contain control characters.');
+    }
+  }
+  if(new Set(values).size!==values.length){
+    throw new Error('Form options must be unique; duplicate export values are ambiguous.');
+  }
+  return [...values];
+}
+
+function validateChoiceSelections(
+  selected:string[]|undefined,
+  options:string[],
+  multiselect:boolean,
+):string[]{
+  const values=selected??[];
+  if(!multiselect&&values.length>1){
+    throw new Error('A single-select choice field cannot start with multiple selected values.');
+  }
+  if(new Set(values).size!==values.length){
+    throw new Error('Selected choice values must be unique.');
+  }
+  const invalid=values.find((value)=>!options.includes(value));
+  if(invalid!==undefined){
+    throw new Error(`Selected choice value "${invalid}" must exist in the field options.`);
+  }
+  return [...values];
 }
 
 export interface PdfTextFieldSpec extends PdfFieldFlags {
@@ -309,6 +344,7 @@ export interface PdfTextFieldSpec extends PdfFieldFlags {
 
 export async function addPdfTextField(bytes:Uint8Array,spec:PdfTextFieldSpec):Promise<Uint8Array>{
   const pdf=await load(bytes);
+  rejectXfaFormCreation(pdf);
   const page=pdf.getPage(requirePage(spec.pageNumber,pdf.getPageCount()));
   const x=normalized(spec.x,'Field X');
   const y=normalized(spec.y,'Field Y');
@@ -318,10 +354,15 @@ export async function addPdfTextField(bytes:Uint8Array,spec:PdfTextFieldSpec):Pr
     throw new Error('Form field must have positive size and remain inside the page.');
   }
   const form=pdf.getForm();
-  const name=safeFieldName(spec.name,'text');
+  const name=validateNewFieldName(spec.name);
   if(form.getFieldMaybe(name))throw new Error(`A form field named "${name}" already exists.`);
   const field=form.createTextField(name);
-  if(spec.defaultValue)field.setText(spec.defaultValue.slice(0,2000));
+  if(spec.defaultValue!==undefined){
+    if(spec.defaultValue.length>2000){
+      throw new Error('Default text value must be 2000 characters or fewer.');
+    }
+    field.setText(spec.defaultValue);
+  }
   applyFieldFlags(field,spec);
   const {width,height}=page.getSize();
   field.addToPage(page,{
@@ -348,13 +389,14 @@ export interface PdfCheckBoxSpec extends PdfFieldFlags {
 
 export async function addPdfCheckBox(bytes:Uint8Array,spec:PdfCheckBoxSpec):Promise<Uint8Array>{
   const pdf=await load(bytes);
+  rejectXfaFormCreation(pdf);
   const page=pdf.getPage(requirePage(spec.pageNumber,pdf.getPageCount()));
   const x=normalized(spec.x,'Checkbox X');
   const y=normalized(spec.y,'Checkbox Y');
   const size=normalized(spec.size,'Checkbox size');
   if(size<=0||x+size>1||y+size>1)throw new Error('Checkbox must remain inside the page.');
   const form=pdf.getForm();
-  const name=safeFieldName(spec.name,'check');
+  const name=validateNewFieldName(spec.name);
   if(form.getFieldMaybe(name))throw new Error(`A form field named "${name}" already exists.`);
   const field=form.createCheckBox(name);
   const {width,height}=page.getSize();
@@ -386,14 +428,15 @@ export interface PdfRadioGroupSpec extends PdfFieldFlags {
 
 export async function addPdfRadioGroup(bytes:Uint8Array,spec:PdfRadioGroupSpec):Promise<Uint8Array>{
   const pdf=await load(bytes);
+  rejectXfaFormCreation(pdf);
   const page=pdf.getPage(requirePage(spec.pageNumber,pdf.getPageCount()));
   const x=normalized(spec.x,'Radio X');
   const y=normalized(spec.y,'Radio Y');
   const size=normalized(spec.size,'Radio size');
   const gap=normalized(spec.gap??0.075,'Radio gap');
-  const options=cleanFieldOptions(spec.options,2);
+  const options=validateFieldOptions(spec.options,2);
   const form=pdf.getForm();
-  const name=safeFieldName(spec.name,'radio');
+  const name=validateNewFieldName(spec.name);
   if(form.getFieldMaybe(name))throw new Error(`A form field named "${name}" already exists.`);
   const field=form.createRadioGroup(name);
   const {width,height}=page.getSize();
@@ -462,16 +505,17 @@ function validateChoiceBox(
 
 export async function addPdfDropdown(bytes:Uint8Array,spec:PdfChoiceFieldSpec):Promise<Uint8Array>{
   const pdf=await load(bytes);
+  rejectXfaFormCreation(pdf);
   const page=pdf.getPage(requirePage(spec.pageNumber,pdf.getPageCount()));
   const box=validateChoiceBox(page,spec);
-  const options=cleanFieldOptions(spec.options,1);
+  const options=validateFieldOptions(spec.options,1);
   const form=pdf.getForm();
-  const name=safeFieldName(spec.name,'dropdown');
+  const name=validateNewFieldName(spec.name);
   if(form.getFieldMaybe(name))throw new Error(`A form field named "${name}" already exists.`);
   const field=form.createDropdown(name);
   field.addOptions(options);
   if(spec.multiselect)field.enableMultiselect();
-  const selected=(spec.selected??[]).filter((value)=>options.includes(value));
+  const selected=validateChoiceSelections(spec.selected,options,Boolean(spec.multiselect));
   if(selected.length){
     field.select(spec.multiselect ? selected : selected[0]);
   }
@@ -491,16 +535,17 @@ export async function addPdfDropdown(bytes:Uint8Array,spec:PdfChoiceFieldSpec):P
 
 export async function addPdfOptionList(bytes:Uint8Array,spec:PdfChoiceFieldSpec):Promise<Uint8Array>{
   const pdf=await load(bytes);
+  rejectXfaFormCreation(pdf);
   const page=pdf.getPage(requirePage(spec.pageNumber,pdf.getPageCount()));
   const box=validateChoiceBox(page,spec);
-  const options=cleanFieldOptions(spec.options,1);
+  const options=validateFieldOptions(spec.options,1);
   const form=pdf.getForm();
-  const name=safeFieldName(spec.name,'list');
+  const name=validateNewFieldName(spec.name);
   if(form.getFieldMaybe(name))throw new Error(`A form field named "${name}" already exists.`);
   const field=form.createOptionList(name);
   field.addOptions(options);
   if(spec.multiselect)field.enableMultiselect();
-  const selected=(spec.selected??[]).filter((value)=>options.includes(value));
+  const selected=validateChoiceSelections(spec.selected,options,Boolean(spec.multiselect));
   if(selected.length)field.select(spec.multiselect ? selected : selected[0]);
   applyFieldFlags(field,spec);
   field.addToPage(page,{
