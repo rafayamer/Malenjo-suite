@@ -375,10 +375,8 @@ describe('native PDF link annotations',()=>{
       pdf.context.obj(Array.from({length:4000},()=>alien)));
     const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
     expect(await listPdfLinkAnnotations(bytes)).toEqual([]);
-    const added=await addPdfLinkAnnotation(bytes,bounds,{kind:'page',pageNumber:2});
-    expect((await listPdfLinkAnnotations(added))).toMatchObject([
-      {kind:'page',destination:'2',index:4000},
-    ]);
+    await expect(addPdfLinkAnnotation(bytes,bounds,{kind:'page',pageNumber:2}))
+      .rejects.toThrow(/4,000-annotation/i);
   });
 
   it('clones an imported link before editing when a non-page object also references it',async()=>{
