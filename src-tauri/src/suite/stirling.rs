@@ -83,13 +83,8 @@ pub struct StirlingResponse {
 fn java_candidates(app: &AppHandle) -> Vec<String> {
     let mut candidates = Vec::new();
 
-    if let Ok(value) = env::var("MALENJO_JAVA_BIN") {
-        let trimmed = value.trim();
-        if !trimmed.is_empty() {
-            candidates.push(trimmed.to_string());
-        }
-    }
-
+    // Production always prefers the exact runtime bundled in MALENJO,
+    // rather than silently selecting an unrelated system Java version.
     if let Ok(resource_dir) = app.path().resource_dir() {
         let bundled = if cfg!(windows) {
             resource_dir.join("runtime/java/bin/java.exe")
@@ -98,6 +93,15 @@ fn java_candidates(app: &AppHandle) -> Vec<String> {
         };
         if bundled.is_file() {
             candidates.push(bundled.to_string_lossy().to_string());
+        }
+    }
+
+    // Overrides remain useful for development and explicit diagnostics.
+    // They cannot shadow an installed, tested bundled release runtime.
+    if let Ok(value) = env::var("MALENJO_JAVA_BIN") {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            candidates.push(trimmed.to_string());
         }
     }
 
