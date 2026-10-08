@@ -237,7 +237,7 @@ export interface PdfCommentAnnotation {
 function validateNewFieldName(value:string):string{
   if(!value.trim())throw new Error('Form field name cannot be empty.');
   if(value.length>80)throw new Error('Form field name must be 80 characters or fewer.');
-  if(/[\u0000-\u001F\u007F]/.test(value)){
+  if(/[\u0000-\u001F\u007F-\u009F]/.test(value)){
     throw new Error('Form field name cannot contain control characters.');
   }
   return value;
@@ -303,7 +303,7 @@ function validateFieldOptions(values:string[],minimum=1):string[]{
   for(const value of values){
     if(!value.trim())throw new Error('Form options cannot be empty or whitespace-only.');
     if(value.length>120)throw new Error('Form options must be 120 characters or fewer.');
-    if(/[\u0000-\u001F\u007F]/.test(value)){
+    if(/[\u0000-\u001F\u007F-\u009F]/.test(value)){
       throw new Error('Form options cannot contain control characters.');
     }
   }
