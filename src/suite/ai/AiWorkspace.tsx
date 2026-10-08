@@ -160,10 +160,12 @@ export default function AiWorkspace({ onBackToFiles, openDocuments }: Props) {
           let source=openSourceCacheRef.current.get(key);
           if(!source){
             source=await extractOpenDocumentSource(document);
+            if(cancelled)return;
             openSourceCacheRef.current.set(key,source);
           }
           next.push(source);
         }catch(reason){
+          if(cancelled)return;
           failures.push(`${document.name}: ${reason instanceof Error?reason.message:String(reason)}`);
         }
       }
@@ -221,7 +223,7 @@ export default function AiWorkspace({ onBackToFiles, openDocuments }: Props) {
         id: id('msg'),
         role: 'assistant',
         content: citations.length
-          ? 'Local retrieval is working and matching source passages are shown below, but no local model runtime/model is connected. Start Ollama or llama.cpp separately, then refresh runtime status.'
+          ? 'Local retrieval is working and matching source passages are shown below, but no local model runtime/model is connected. Start Ollama separately, then refresh runtime status.'
           : 'No local model runtime/model is connected, and no matching local source passage was retrieved.',
         citations,
       }]);
@@ -253,7 +255,7 @@ export default function AiWorkspace({ onBackToFiles, openDocuments }: Props) {
       ));
     } catch (reason) {
       const text = reason instanceof Error ? reason.message : String(reason);
-      if (/cancelled/i.test(text)) {
+      if (activeJobRef.current !== job || (reason instanceof Error && reason.name === 'AbortError') || /cancelled|aborted/i.test(text)) {
         setMessages((current)=>current.filter((message)=>message.id!==assistantMessageId));
       } else {
         setError(text);
