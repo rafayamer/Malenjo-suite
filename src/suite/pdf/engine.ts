@@ -14,7 +14,13 @@ export interface PdfLoadResult {
 }
 
 export async function loadPdfBytes(data: ArrayBuffer | Uint8Array): Promise<PdfLoadResult> {
-  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+  // PDF.js may transfer the supplied typed-array buffer to its worker, which
+  // detaches that ArrayBuffer in the calling realm. MALENJO retains its own
+  // working copy for history/edit/export, so PDF.js must receive a dedicated
+  // clone that it is free to transfer.
+  const bytes = data instanceof Uint8Array
+    ? Uint8Array.from(data)
+    : new Uint8Array(data.slice(0));
 
   const loadingTask = getDocument({
     data: bytes,
