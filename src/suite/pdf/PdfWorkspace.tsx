@@ -1496,6 +1496,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                   selected={selectedPages.has(page)}
                   renderAllowed={thumbnailsRenderAllowed}
                   onSelect={selectThumbnail}
+                  dragScope={domIdPrefix}
+                  pageCount={pageCount}
+                  reorderEnabled={!!sourceBytes&&!mutating&&!loading&&operationPages.length===1}
+                  onReorder={(fromPage,toPage)=>{
+                    if(!sourceBytes||mutating||loading||operationPages.length!==1)return;
+                    void mutate('Moved page '+fromPage+' to position '+toPage+'.',bytes=>movePdfPage(bytes,fromPage,toPage),toPage);
+                  }}
                 />
               )}
             </div>

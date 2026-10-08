@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
+import { PDF_PAGE_DRAG_TYPE, createPdfPageDragPayload, readPdfPageDragPayload } from './pageDrag';
 
 interface Props {
   document: PDFDocumentProxy;
@@ -8,13 +9,18 @@ interface Props {
   selected: boolean;
   renderAllowed: boolean;
   onSelect(pageNumber: number, additive: boolean, range: boolean): void;
+  dragScope?:string;
+  reorderEnabled?:boolean;
+  pageCount?:number;
+  onReorder?(fromPage:number,toPage:number):void;
 }
 
-export default function PdfThumbnail({ document, pageNumber, active, selected, renderAllowed, onSelect }: Props) {
+export default function PdfThumbnail({ document, pageNumber, active, selected, renderAllowed, onSelect, dragScope='', reorderEnabled=false, pageCount=0, onReorder }: Props) {
   const wrapperRef = useRef<HTMLButtonElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [visible, setVisible] = useState(pageNumber <= 3);
   const [failed, setFailed] = useState(false);
+  const [dropTarget, setDropTarget] = useState(false);
 
   useEffect(() => {
     const node = wrapperRef.current;
@@ -82,7 +88,29 @@ export default function PdfThumbnail({ document, pageNumber, active, selected, r
 
   return <button
     ref={wrapperRef}
-    className={`pdf-thumb${active ? ' active' : ''}${selected ? ' selected' : ''}`}
+    className={`pdf-thumb${active ? ' active' : ''}${selected ? ' selected' : ''}${dropTarget ? ' drop-target' : ''}`}
+    draggable={reorderEnabled}
+    title={reorderEnabled?'Drag to reorder this PDF page. Use Move earlier/later for keyboard access.':undefined}
+    onDragStart={(event)=>{
+      if(!reorderEnabled||!dragScope){event.preventDefault();return;}
+      event.dataTransfer.effectAllowed='move';
+      event.dataTransfer.setData(PDF_PAGE_DRAG_TYPE,createPdfPageDragPayload(dragScope,pageNumber));
+    }}
+    onDragOver={(event)=>{
+      if(!reorderEnabled||!event.dataTransfer.types.includes(PDF_PAGE_DRAG_TYPE))return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect='move';
+      setDropTarget(true);
+    }}
+    onDragLeave={()=>setDropTarget(false)}
+    onDragEnd={()=>setDropTarget(false)}
+    onDrop={(event)=>{
+      setDropTarget(false);
+      if(!reorderEnabled||!dragScope||!onReorder)return;
+      event.preventDefault();
+      const source=readPdfPageDragPayload(event.dataTransfer.getData(PDF_PAGE_DRAG_TYPE),dragScope,pageCount);
+      if(source!==null&&source!==pageNumber)onReorder(source,pageNumber);
+    }}
     onClick={(event) => onSelect(pageNumber, event.ctrlKey || event.metaKey, event.shiftKey)}
     aria-label={`Select page ${pageNumber}`}
     aria-pressed={selected}
