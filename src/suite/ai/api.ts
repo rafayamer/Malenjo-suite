@@ -152,7 +152,7 @@ async function runBrowserAiChat(
           top_p: 0.9,
           repeat_penalty: 1.18,
           repeat_last_n: 64,
-          num_ctx: liteMode ? 2048 : 4096,
+          num_ctx: liteMode ? 4096 : 8192,
           num_predict: liteMode ? 128 : 768,
         },
       }
