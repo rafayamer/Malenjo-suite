@@ -38,4 +38,26 @@ describe('MALENJO PDF Stirling parity evidence inventory',()=>{
     expect(matrix.upstream.licensingAudited).toBe(false);
     expect(matrix.operations.every(op=>op.evidence.functionalStatus===null)).toBe(true);
   });
+
+  it('separates pinned API evidence from actual Windows functionality',()=>{
+    expect(matrix.upstream.pinnedEndpointList.commit).toBe('25220cbdbde2d526cebf173b94357884e180b8c1');
+    expect(matrix.upstream.pinnedEndpointList.endpointCount).toBe(62);
+    expect(matrix.auditSnapshot.routeMatches).toBe(54);
+    expect(matrix.auditSnapshot.notMatched).toBe(36);
+    expect(matrix.auditSnapshot.unmappedUpstreamFixtureRoutes).toHaveLength(8);
+    const routes=new Set<string>();
+    for(const row of matrix.operations){
+      expect(row.source.endpointTestPath).toBe('testing/endpoints.txt');
+      const endpoint=row.source.upstreamEndpoint;
+      if(endpoint){
+        expect(routes.has(endpoint)).toBe(false);
+        routes.add(endpoint);
+        expect(endpoint.startsWith('/api/v1/')).toBe(true);
+        expect(row.malenjo.providerCatalogMatchKey).toBe(endpoint);
+      }
+      expect(row.evidence.windowsOffline).toBe('unverified');
+      expect(row.evidence.functionalStatus).toBeNull();
+    }
+    expect(routes.size).toBe(54);
+  });
 });
