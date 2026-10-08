@@ -29,8 +29,19 @@ export async function loadPdfBytes(data: ArrayBuffer | Uint8Array): Promise<PdfL
     useSystemFonts: true,
   });
 
-  const document = await loadingTask.promise;
-  return { document, loadingTask };
+  try {
+    const document = await loadingTask.promise;
+    return { document, loadingTask };
+  } catch (reason) {
+    // A failed parse/worker startup must not leave a live PDF.js task behind.
+    // Preserve the original failure even if worker teardown also fails.
+    try {
+      await loadingTask.destroy();
+    } catch {
+      // The parse error is the actionable failure for the caller.
+    }
+    throw reason;
+  }
 }
 
 export async function disposePdf(result: PdfLoadResult | null): Promise<void> {
