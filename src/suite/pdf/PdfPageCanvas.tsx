@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
+import type { PdfOptionalContentConfig } from './optionalLayers';
 import { effectivePdfScale, type PdfFitMode } from './layout';
 
 interface Props {
   document: PDFDocumentProxy;
+  optionalContentConfig?:PdfOptionalContentConfig|null;
+  layerRevision?:number;
   pageNumber: number;
   fitMode: PdfFitMode;
   zoom: number;
@@ -20,6 +23,8 @@ interface Props {
 
 export default function PdfPageCanvas({
   document,
+  optionalContentConfig,
+  layerRevision=0,
   pageNumber,
   fitMode,
   zoom,
@@ -113,6 +118,7 @@ export default function PdfPageCanvas({
           canvas,
           canvasContext: context,
           viewport,
+          optionalContentConfigPromise:optionalContentConfig?Promise.resolve(optionalContentConfig):undefined,
           transform: dpr === 1 ? undefined : [dpr, 0, 0, dpr, 0, 0],
         });
 
@@ -129,7 +135,7 @@ export default function PdfPageCanvas({
       cancelled = true;
       renderTask?.cancel();
     };
-  }, [document, eager, forceRender, onRendered, pageNumber, renderAllowed, rotation, scale, visible]);
+  }, [document, eager, forceRender, onRendered, pageNumber, renderAllowed, rotation, scale, visible, optionalContentConfig, layerRevision]);
 
   return <div
     ref={shellRef}
