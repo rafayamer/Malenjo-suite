@@ -14,7 +14,12 @@ $Archive = Join-Path $WorkDir $Asset
 $Runtime = Join-Path $Root 'runtime/java'
 
 Remove-Item $WorkDir -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item $Runtime -Recurse -Force -ErrorAction SilentlyContinue
+# Preserve the tracked resource directory marker in developer checkouts.
+if (Test-Path $Runtime) {
+  Get-ChildItem $Runtime -Force |
+    Where-Object { $_.Name -ne 'README.md' } |
+    Remove-Item -Recurse -Force
+}
 New-Item -ItemType Directory -Force -Path $WorkDir, $ExtractDir, $Runtime | Out-Null
 
 Invoke-WebRequest -Uri $ReleaseUrl -OutFile $Archive -UseBasicParsing
