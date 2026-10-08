@@ -91,6 +91,9 @@ export async function extractOpenDocumentSource(document:LibraryDocument):Promis
   }
 
   const stableId=openDocumentSourceId(document.id);
+  if(document.sizeBytes<=0||document.sizeBytes>MAX_SOURCE_FILE_BYTES){
+    throw new Error(`${document.name}: source files must be between 1 byte and 100 MB.`);
+  }
   if(document.browserFile){
     const file=document.browserFile;
     if(file.size<=0||file.size>MAX_SOURCE_FILE_BYTES){
