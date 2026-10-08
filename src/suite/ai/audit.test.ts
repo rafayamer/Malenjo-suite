@@ -28,6 +28,19 @@ describe('AI privacy-safe audit records',()=>{
     expect(record.schemaVersion).toBe(1);
   });
 
+  it('bounds label sanitization before processing huge restored strings',()=>{
+    const huge='x'.repeat(2_000_000)+'SECRET_TAIL';
+    const record=createAiAuditRecord({
+      feature:'extract',provider:'none',promptPolicyId:huge,status:'error',
+      latencyMs:null,sourceCount:0,citationCount:0,inputChars:1,outputChars:0,
+      model:huge,errorCode:huge,
+    });
+    expect(record.model?.length).toBeLessThanOrEqual(160);
+    expect(record.promptPolicyId.length).toBeLessThanOrEqual(120);
+    expect(record.errorCode?.length).toBeLessThanOrEqual(80);
+    expect(JSON.stringify(record)).not.toContain('SECRET_TAIL');
+  });
+
   it('sanitizes labels and bounds warning volume',()=>{
     const record=createAiAuditRecord({
       feature:'extract',provider:'none',promptPolicyId:'extract-v1',status:'blocked',
@@ -57,6 +70,17 @@ describe('AI privacy-safe audit records',()=>{
     expect(serialized).not.toContain('SECRET SOURCE');
     expect(serialized).not.toContain('promptText');
     expect(serialized).not.toContain('sourceContent');
+  });
+
+  it('bounds restored warning arrays before snapshotting',()=>{
+    const record=createAiAuditRecord({
+      feature:'rewrite',provider:'none',promptPolicyId:'rewrite-v1',status:'success',
+      latencyMs:0,sourceCount:0,citationCount:0,inputChars:1,outputChars:1,
+    }) as ReturnType<typeof createAiAuditRecord>;
+    record.policyWarnings=Array.from({length:100_000},(_,index)=>`warning-${index}`);
+    const log=appendAiAuditRecord([],record);
+    expect(log[0]?.policyWarnings).toHaveLength(20);
+    expect(log[0]?.policyWarnings[19]).toBe('warning-19');
   });
 
   it('snapshots appended records so later mutations cannot rewrite history',()=>{
