@@ -10,7 +10,8 @@ async function fixture({field=false,populated=false,certified=false}:{
   const pdf=await PDFDocument.create();
   pdf.addPage([300,400]);
   let signatureRef:PDFRef|undefined;
-  if(field||certified){
+  // An empty signature field must not create an unrelated populated signature.
+  if((field&&populated)||certified){
     const dict=pdf.context.obj({
       Type:PDFName.of('Sig'),
       Filter:PDFName.of('Adobe.PPKLite'),
