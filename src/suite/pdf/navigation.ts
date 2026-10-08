@@ -130,14 +130,29 @@ export function sanitizePdfAttachmentName(value: unknown, fallback: string): str
   return (raw || fallback).slice(0, MAX_ATTACHMENT_NAME_CHARS);
 }
 
+function attachmentSize(value: unknown): number {
+  if (value instanceof Uint8Array || value instanceof ArrayBuffer) return value.byteLength;
+  return ArrayBuffer.isView(value) ? value.byteLength : 0;
+}
+
 function attachmentBytes(value: unknown): Uint8Array {
   if (value instanceof Uint8Array) return Uint8Array.from(value);
   if (value instanceof ArrayBuffer) return new Uint8Array(value.slice(0));
   if (ArrayBuffer.isView(value)) {
     const view = value as ArrayBufferView;
-    return new Uint8Array(view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength));
+    const result = new Uint8Array(view.byteLength);
+    result.set(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+    return result;
   }
   return new Uint8Array();
+}
+
+export function safePdfAttachmentExportName(filename:string):string {
+  const cleaned=sanitizePdfAttachmentName(filename,'attachment.bin')
+    .replace(/[<>:"|?*]/g,'_')
+    .replace(/[.\s]+$/g,'');
+  const safe=/\.(pdf|zip|png|jpe?g|webp|tiff?|bmp|txt|csv|json|xml|md|docx?|odt|rtf|xlsx?|ods|pptx?|odp|bin)$/i.test(cleaned);
+  return safe?cleaned:cleaned+'.bin';
 }
 
 export function normalizePdfAttachments(
@@ -151,25 +166,35 @@ export function normalizePdfAttachments(
 
   const rawEntries = Object.entries(input as Record<string, RawAttachment>);
   const truncated = rawEntries.length > maxEntries;
+  let totalCopied = 0;
+  const maxTotalCopied = 128 * 1024 * 1024;
   const entries = rawEntries.slice(0, maxEntries).map(([key, attachment], index) => {
-    const content = attachmentBytes(attachment?.content);
+    const sizeBytes = attachmentSize(attachment?.content);
     const name = sanitizePdfAttachmentName(
       attachment?.filename,
       `attachment-${index + 1}.bin`,
     );
-    const tooLarge = content.byteLength > maxDownloadBytes;
+    const tooLarge = sizeBytes > maxDownloadBytes;
+    const beyondAggregateLimit = totalCopied + sizeBytes > maxTotalCopied;
+    // Never copy a blocked item: PDFs can contain many huge embedded files.
+    const content = sizeBytes && !tooLarge && !beyondAggregateLimit
+      ? attachmentBytes(attachment?.content)
+      : new Uint8Array();
+    totalCopied += content.byteLength;
 
     return {
       id: `attachment-${index + 1}-${key.slice(0, 40)}`,
       name,
-      sizeBytes: content.byteLength,
+      sizeBytes,
       content,
-      downloadable: content.byteLength > 0 && !tooLarge,
-      reason: !content.byteLength
+      downloadable: content.byteLength > 0,
+      reason: !sizeBytes
         ? 'Attachment has no extractable byte content.'
         : tooLarge
           ? `Attachment exceeds the ${Math.round(maxDownloadBytes / 1024 / 1024)} MB extraction limit.`
-          : null,
+          : beyondAggregateLimit
+            ? 'Attachments exceed the combined 128 MB review memory budget.'
+            : null,
     };
   });
 
