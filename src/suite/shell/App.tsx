@@ -58,6 +58,10 @@ export default function App() {
     () => sessions.find((session) => session.id === activeSessionId) ?? null,
     [activeSessionId, sessions],
   );
+  const openDocumentsForAi = useMemo(
+    () => sessions.map((session)=>session.document),
+    [sessions],
+  );
 
   function selectModule(id: ModuleId) {
     setActive(id);
@@ -562,7 +566,7 @@ export default function App() {
             : active === 'ocr'
               ? <ScannerWorkspace mode="ocr" onBackToFiles={()=>selectModule('files')}/>
               : active === 'ai'
-                ? <AiWorkspace onBackToFiles={()=>selectModule('files')}/>
+                ? <AiWorkspace openDocuments={openDocumentsForAi} onBackToFiles={()=>selectModule('files')}/>
                 : active === 'security'
                   ? <SecurityWorkspace onBackToFiles={()=>selectModule('files')}/>
                   : active === 'metadata'
