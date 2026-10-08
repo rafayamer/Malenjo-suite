@@ -25,7 +25,7 @@ import type { RegisterDocumentCommands } from '../commands/types';
 import { isDesktopRuntime } from '../files/api';
 import { exportPdfBytes, exportPdfPlainText, exportPdfEmbeddedAttachment, readPdfDocumentBytes } from './api';
 import {
-  flattenPdfOutline, normalizePdfAttachments, resolvePdfOutlinePage,
+  flattenPdfOutline, normalizePdfAttachments, resolvePdfOutlinePage, readPdfAttachmentBytes,
   type PdfOutlineModel, type PdfOutlineEntry, type PdfAttachmentModel, type PdfAttachmentEntry,
 } from './navigation';
 import { extractPdfDocumentText } from './textExport';
@@ -193,7 +193,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [pdfOutline, setPdfOutline] = useState<PdfOutlineModel>({entries:[],truncated:false});
   const [pdfAttachments, setPdfAttachments] = useState<PdfAttachmentModel>({entries:[],truncated:false});
   const [navigatorLoading, setNavigatorLoading] = useState(false);
-  const [navigatorError, setNavigatorError] = useState('');
+  const [bookmarkError, setBookmarkError] = useState('');
+  const [attachmentError, setAttachmentError] = useState('');
+  const [extractingAttachment, setExtractingAttachment] = useState(false);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<DocumentInspectorTab>('properties');
   const [inspectorHidden, setInspectorHidden] = useState(false);
@@ -659,12 +661,16 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setPdfOutline({entries:[],truncated:false});
       setPdfAttachments({entries:[],truncated:false});
       setNavigatorLoading(false);
-      setNavigatorError('');
+      setBookmarkError('');
+      setAttachmentError('');
       return;
     }
     let cancelled=false;
     setNavigatorLoading(true);
-    setNavigatorError('');
+    setPdfOutline({entries:[],truncated:false});
+    setPdfAttachments({entries:[],truncated:false});
+    setBookmarkError('');
+    setAttachmentError('');
     void Promise.allSettled([pdf.document.getOutline(),pdf.document.getAttachments()])
       .then(([outline,attachments])=>{
         if(cancelled)return;
@@ -672,13 +678,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           setPdfOutline(flattenPdfOutline(outline.value));
         }else{
           setPdfOutline({entries:[],truncated:false});
-          setNavigatorError('Bookmark discovery failed for this PDF.');
+          setBookmarkError('Bookmark discovery failed for this PDF.');
         }
         if(attachments.status==='fulfilled'){
           setPdfAttachments(normalizePdfAttachments(attachments.value,200,32*1024*1024));
         }else{
           setPdfAttachments({entries:[],truncated:false});
-          setNavigatorError(current=>current||'Attachment discovery failed for this PDF.');
+          setAttachmentError('Attachment discovery failed for this PDF.');
         }
       })
       .finally(()=>{if(!cancelled)setNavigatorLoading(false);});
@@ -702,17 +708,26 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   }
 
   async function extractAttachment(entry:PdfAttachmentEntry){
-    if(!entry.downloadable){
-      setError(entry.reason||'This PDF attachment cannot be safely exported.');
+    if(!pdf||!entry.downloadable||extractingAttachment){
+      setError(entry.reason||'This PDF attachment cannot be safely exported right now.');
       return;
     }
+    const currentDocument=pdf.document;
+    setExtractingAttachment(true);
     onSavingChange?.(true);
     try{
-      const saved=await exportPdfEmbeddedAttachment(entry.name,entry.content);
+      // Request untrusted decompressed content only after a user click.
+      const result=await currentDocument.getAttachmentContent(entry.id);
+      if(activeLoadRef.current?.document!==currentDocument){
+        throw new Error('The active PDF changed; attachment export was cancelled.');
+      }
+      const bytes=readPdfAttachmentBytes(result,32*1024*1024);
+      const saved=await exportPdfEmbeddedAttachment(entry.name,bytes);
       if(saved)setActionNotice('Exported embedded attachment without opening or executing it.');
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
+      setExtractingAttachment(false);
       onSavingChange?.(false);
     }
   }
@@ -1605,11 +1620,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               <button disabled={mutating} onClick={()=>attachmentInputRef.current?.click()}><Paperclip size={13}/> Embed file attachment…</button>
               <small>Extracted files are untrusted. MALENJO never previews or executes them. Unsafe extensions are saved as .bin.</small>
               {navigatorLoading&&<span role="status">Discovering attachments…</span>}
-              {navigatorError&&<span role="alert">{navigatorError}</span>}
+              {attachmentError&&<span role="alert">{attachmentError}</span>}
               {!navigatorLoading&&!pdfAttachments.entries.length&&<span>No embedded attachments found.</span>}
               {pdfAttachments.entries.map(entry=><div className="pdf-left-info" key={entry.id}>
-                <strong>{entry.name}</strong><span> · {formatBytes(entry.sizeBytes)}</span>
-                <div><button disabled={!entry.downloadable||mutating} title={entry.reason||'Download without opening'} onClick={()=>void extractAttachment(entry)}>Extract file</button></div>
+                <strong>{entry.name}</strong><span> · {entry.sizeBytes===null?'Size unavailable':formatBytes(entry.sizeBytes)}</span>
+                <div><button disabled={!entry.downloadable||mutating||extractingAttachment} title={entry.reason||'Download without opening'} onClick={()=>void extractAttachment(entry)}>{extractingAttachment?'Extracting…':'Extract file'}</button></div>
                 {entry.reason&&<small>{entry.reason}</small>}
               </div>)}
               {pdfAttachments.truncated&&<small>Attachment inventory is limited to 200 entries.</small>}
@@ -1628,7 +1643,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           {leftPanel==='bookmarks'&&<div className="pdf-left-panel-body">
             <div className="pdf-edit-form">
               {navigatorLoading&&<span role="status">Reading document bookmarks…</span>}
-              {navigatorError&&<span role="alert">{navigatorError}</span>}
+              {bookmarkError&&<span role="alert">{bookmarkError}</span>}
               {!navigatorLoading&&!pdfOutline.entries.length&&<span>No PDF outline/bookmarks found.</span>}
               {pdfOutline.entries.map(entry=><button
                 key={entry.id}
