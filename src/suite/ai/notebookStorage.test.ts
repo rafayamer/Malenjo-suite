@@ -9,7 +9,7 @@ import {
 } from './notebookStorage';
 
 class MemoryStorage implements AiNotebookStorage{
-  private data=new Map<string,string>();
+  protected data=new Map<string,string>();
   getItem(key:string){return this.data.get(key)??null;}
   setItem(key:string,value:string){this.data.set(key,value);}
   removeItem(key:string){this.data.delete(key);}
@@ -27,6 +27,26 @@ describe('AI notebook local persistence',()=>{
     expect(listAiNotebooks(storage).map((item)=>item.title)).toEqual(['Second','First']);
     expect(deleteAiNotebook(storage,second.id)).toBe(true);
     expect(loadAiNotebook(storage,second.id)).toBeNull();
+  });
+
+  it('rejects oversized restored notebook JSON before parsing it',()=>{
+    const storage=new MemoryStorage();
+    const notebook=createAiNotebook('Stored',100);
+    storage.setItem('malenjo.ai.notebook.v1.'+notebook.id,'x'.repeat(2_000_001));
+    expect(()=>loadAiNotebook(storage,notebook.id)).toThrow(/exceeds/i);
+  });
+
+  it('rolls back the notebook value when index persistence fails',()=>{
+    class FailingIndexStorage extends MemoryStorage{
+      setItem(key:string,value:string){
+        if(key==='malenjo.ai.notebooks.index.v1')throw new Error('quota');
+        super.setItem(key,value);
+      }
+    }
+    const storage=new FailingIndexStorage();
+    const notebook=createAiNotebook('Rollback',100);
+    expect(()=>saveAiNotebook(storage,notebook)).toThrow(/quota/);
+    expect(loadAiNotebook(storage,notebook.id)).toBeNull();
   });
 
   it('refuses oversized notebook payloads',()=>{
