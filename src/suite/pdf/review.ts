@@ -39,7 +39,12 @@ export const PDF_REVIEW_PAGE_LIMIT = 2000;
 export const PDF_REVIEW_ANNOTATION_LIMIT = 4000;
 
 function decode(value: unknown): string {
-  return value instanceof PDFString || value instanceof PDFHexString ? value.decodeText() : '';
+  // Earlier MALENJO comments accidentally serialized text as PDF names.
+  // Read those legacy annotations while writing standard Unicode strings now.
+  if (value instanceof PDFString || value instanceof PDFHexString || value instanceof PDFName) {
+    return value.decodeText();
+  }
+  return '';
 }
 function name(value: unknown): string {
   return value instanceof PDFName ? value.asString().replace(/^\//, '') : '';
