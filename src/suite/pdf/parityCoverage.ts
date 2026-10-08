@@ -13,6 +13,8 @@ export interface PdfParityCoverageRow{
   id:string;
   group:string;
   expectedEndpoint:string|null;
+  frontendRoute:string|null;
+  frontendCoreToolId:string|null;
   sourcePinned:boolean;
   state:PdfParityRouteState;
   operation:PdfProviderOperation|null;
@@ -24,6 +26,8 @@ export interface PdfParityCoverageRow{
 export interface PdfParityCoverage{
   total:number;
   upstreamFixtureMatched:number;
+  frontendOnlyRouteMatches:number;
+  sourceClassificationPending:number;
   liveRoutes:number;
   providerEnabled:number;
   functionallyVerified:0;
@@ -48,12 +52,16 @@ export function computePdfParityCoverage(
     if(!byPath.has(canonical))byPath.set(canonical,operation);
   }
   let upstreamFixtureMatched=0;
+  let frontendOnlyRouteMatches=0;
+  let sourceClassificationPending=0;
   let liveRoutes=0;
   let providerEnabled=0;
   let locallySourceAuditedPartial=0;
   const rows:PdfParityCoverageRow[]=matrix.operations.map((entry)=>{
     const expectedEndpoint=entry.source.upstreamEndpoint;
     if(expectedEndpoint)upstreamFixtureMatched++;
+    else if(entry.source.pinnedFrontendCoreToolId)frontendOnlyRouteMatches++;
+    else sourceClassificationPending++;
     if(entry.evidence.functionalStatus==='partial')locallySourceAuditedPartial++;
     const operation=expectedEndpoint?byPath.get(expectedEndpoint)??null:null;
     if(operation)liveRoutes++;
@@ -69,13 +77,17 @@ export function computePdfParityCoverage(
             :'provider-disabled';
     return {
       order:entry.order,id:entry.upstreamToolId,group:entry.group,
-      expectedEndpoint,sourcePinned:Boolean(entry.source.endpointInPinnedFixture),
+      expectedEndpoint,
+      frontendRoute:entry.source.pinnedFrontendRoute,
+      frontendCoreToolId:entry.source.pinnedFrontendCoreToolId,
+      sourcePinned:Boolean(entry.source.endpointInPinnedFixture),
       state,operation,functionallyVerified:false,
       locallySourceAuditedPartial:entry.evidence.functionalStatus==='partial',
     };
   });
   return {
-    total:rows.length,upstreamFixtureMatched,liveRoutes,providerEnabled,
+    total:rows.length,upstreamFixtureMatched,
+    frontendOnlyRouteMatches,sourceClassificationPending,liveRoutes,providerEnabled,
     functionallyVerified:0,locallySourceAuditedPartial,rows,
   };
 }
