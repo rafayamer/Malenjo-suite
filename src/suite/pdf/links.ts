@@ -1,5 +1,5 @@
 import {
-  PDFArray,PDFDict,PDFDocument,PDFHexString,PDFName,PDFRef,PDFString,
+  PDFArray,PDFDict,PDFDocument,PDFName,PDFRef,PDFString,
 } from 'pdf-lib';
 
 export type PdfLinkTarget =
@@ -22,7 +22,6 @@ const SUBTYPE=PDFName.of('Subtype');
 const ACT=PDFName.of('A');
 const DEST=PDFName.of('Dest');
 const URI=PDFName.of('URI');
-const PARENT=PDFName.of('P');
 const MAX_PAGES=2000;
 const MAX_ANNOTATIONS=4000;
 const MAX_LINKS=1000;
@@ -87,7 +86,10 @@ function requireLinked(pdf:PDFDocument,target:PdfLinkRef):{annots:PDFArray;dict:
 function destination(pdf:PDFDocument,dict:PDFDict):{
   kind:PdfLinkAnnotation['kind'];destination:string
 }{
-  const action=dict.lookupMaybe(ACT,PDFDict);
+  let action:PDFDict|undefined;
+  try{action=dict.lookupMaybe(ACT,PDFDict);}catch{
+    return {kind:'unsupported',destination:'Unsupported PDF link action dictionary'};
+  }
   const type=action?.get(PDFName.of('S'))?.toString();
   if(type==='/URI'){
     const uri=action?.get(URI);
@@ -121,7 +123,7 @@ function assignTarget(pdf:PDFDocument,dict:PDFDict,target:PdfLinkTarget):void{
   }else{
     dict.set(ACT,pdf.context.obj({
       S:PDFName.of('URI'),
-      URI:PDFHexString.fromText(validHttps(target.url)),
+      URI:PDFString.of(validHttps(target.url)),
     }));
   }
 }
@@ -158,7 +160,7 @@ export async function addPdfLinkAnnotation(
   rectCheck(pdf,rect);
   targetCheck(pdf,target);
   const page=pdf.getPage(rect.pageNumber-1);
-  const [w,h]=[page.getSize().width,page.getSize().height];
+  const {width:w,height:h}=page.getSize();
   const annots=annotationList(pdf,rect.pageNumber)??pdf.context.obj([]);
   if(annots.size()>=MAX_ANNOTATIONS)throw new Error('Page exceeds link annotation safety limits.');
   const dict=pdf.context.obj({
