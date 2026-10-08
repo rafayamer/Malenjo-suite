@@ -618,6 +618,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setFormPropertyName(formFields[0].name);
     }
   },[formFields,formPropertyName]);
+  const formPropertyField=formFields.find((field)=>field.name===formPropertyName)??null;
 
   async function attachDocuments(event:React.ChangeEvent<HTMLInputElement>){
     const files=Array.from(event.target.files??[]);
@@ -1034,6 +1035,42 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           run:()=>flattenForm(),
         },
         {
+          id:'clear-form',
+          label:'Clear PDF form values',
+          keywords:'form acroform clear reset values',
+          detail:'Clear safely writable text, checkbox and choice values while preserving field structure',
+          enabled:!!sourceBytes&&!mutating&&fillableFormFields.length>0,
+          disabledReason:!sourceBytes?'No PDF is loaded.':!fillableFormFields.length?'No safely clearable AcroForm fields detected.':'Wait for the current PDF edit to finish.',
+          run:()=>clearFormValues(),
+        },
+        {
+          id:'export-form-data',
+          label:'Export PDF form data',
+          keywords:'form acroform export json data values',
+          detail:'Export MALENJO JSON form data; password values are redacted',
+          enabled:!!sourceBytes&&!mutating&&formFields.length>0,
+          disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields detected.':'Wait for the current PDF edit to finish.',
+          run:()=>exportFormData(),
+        },
+        {
+          id:'import-form-data',
+          label:'Import PDF form data',
+          keywords:'form acroform import json data values',
+          detail:'Apply a MALENJO PDF form-data JSON file to matching writable fields',
+          enabled:!!sourceBytes&&!mutating&&formFields.length>0,
+          disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields detected.':'Wait for the current PDF edit to finish.',
+          run:()=>formDataInputRef.current?.click(),
+        },
+        {
+          id:'form-properties',
+          label:'Edit PDF form field properties',
+          keywords:'form acroform properties required readonly exported',
+          detail:formPropertyField?`${formPropertyField.name} · ${formPropertyField.type}`:'Select a form field in the inspector',
+          enabled:!!formPropertyField&&!mutating,
+          disabledReason:!formPropertyField?'No AcroForm field is selected.':'Wait for the current PDF edit to finish.',
+          run:()=>configureProperties(),
+        },
+        {
           id:'header-footer',
           label:'Apply PDF header / footer',
           keywords:'header footer page number date stamp',
@@ -1170,7 +1207,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     return () => registerCommands(null);
   }, [
     session, registerCommands, sourceBytes, pdf, dirty, mutating, historyRevision, formFields.length,
-    headerFooterDraft, batesDraft, pageBoxDraft, formDraft, formFillDraft, formFillTouched, currentPage, pageCount, selectedPages,
+    headerFooterDraft, batesDraft, pageBoxDraft, formDraft, formFillDraft, formFillTouched, formPropertyName, currentPage, pageCount, selectedPages,
     inspectorHidden, textOverlay, shapeOverlay, commentDraft,
   ]);
 
@@ -1312,8 +1349,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     forms:[
       {id:'add-form-field',label:`Add ${formDraft.type} field`,enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addFormField},
       {id:'fill-form',label:'Apply field values',enabled:!!sourceBytes&&!mutating&&fillableFormFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!fillableFormFields.length?'No editable AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:fillForm},
+      {id:'clear-form',label:'Clear values',enabled:!!sourceBytes&&!mutating&&fillableFormFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!fillableFormFields.length?'No safely clearable AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:clearFormValues},
+      {id:'export-form-data',label:'Export data',enabled:!!sourceBytes&&!mutating&&formFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:exportFormData},
+      {id:'import-form-data',label:'Import data',enabled:!!sourceBytes&&!mutating&&formFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>formDataInputRef.current?.click()},
       {id:'flatten-form',label:'Flatten fields',enabled:!!sourceBytes&&!mutating&&formFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:flattenForm},
-      {id:'configure-forms',label:'Form settings',enabled:true,run:configureProperties},
+      {id:'form-properties',label:'Field properties',enabled:!!formPropertyField&&!mutating,disabledReason:!formPropertyField?'No AcroForm field is selected.':mutating?'Wait for the current PDF edit to finish.':undefined,run:configureProperties},
       providerAction,
     ],
     ai:[navigateAction('Open Malenjo AI','ai')],
@@ -1359,6 +1399,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       type="file"
       multiple
       onChange={(event)=>void attachDocuments(event)}
+    />
+    <input
+      ref={formDataInputRef}
+      className="visually-hidden"
+      type="file"
+      accept="application/json,.json"
+      onChange={(event)=>void importFormDataFile(event)}
     />
 
     <div className="pdf-task-toolbar">
