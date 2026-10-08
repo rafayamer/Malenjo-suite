@@ -74,7 +74,7 @@ function isLinkSubtype(pdf:PDFDocument,dict:PDFDict):boolean{
   if(!stored)return false;
   try{
     const resolved=pdf.context.lookup(stored);
-    return resolved instanceof PDFName&&resolved.toString()==='/Link';
+    return resolved===PDFName.of('Link');
   }catch{return false;}
 }
 
@@ -141,8 +141,15 @@ function destination(pdf:PDFDocument,dict:PDFDict,uriBudget?:{used:number}):{
   kind:PdfLinkAnnotation['kind'];destination:string
 }{
   let action:PDFDict|undefined;
-  try{action=dict.lookupMaybe(ACT,PDFDict);}catch{
-    return {kind:'unsupported',destination:'Unsupported PDF link action dictionary'};
+  // The presence of /A takes precedence over /Dest, even when /A is
+  // malformed, null, or points to an unresolved object.
+  if(dict.has(ACT)){
+    try{action=dict.lookup(ACT,PDFDict);}catch{
+      return {kind:'unsupported',destination:'Unsupported PDF link action dictionary'};
+    }
+    if(!action){
+      return {kind:'unsupported',destination:'Unsupported PDF link action dictionary'};
+    }
   }
   const storedType=action?.get(PDFName.of('S'));
   let type:'URI'|'GoTo'|undefined;
@@ -168,7 +175,15 @@ function destination(pdf:PDFDocument,dict:PDFDict,uriBudget?:{used:number}):{
     return {kind:'unsupported',destination:'Imported link has additional or chained actions'};
   }
   if(type==='URI'){
-    const uri=action?.get(URI);
+    // Imported URI values may be indirect. Resolve them before classification;
+    // an unresolved or non-string /URI must never activate a fallback /Dest.
+    let uri:unknown;
+    try{
+      const storedUri=action?.get(URI);
+      uri=storedUri?pdf.context.lookup(storedUri):undefined;
+    }catch{
+      return {kind:'unsupported',destination:'Invalid indirect PDF URL action'};
+    }
     if(uri instanceof PDFHexString||uri instanceof PDFString){
       // Both PDFString and PDFHexString expose their encoded source without
       // decoding. Check source and *cumulative* budgets before decodeText()
@@ -188,10 +203,11 @@ function destination(pdf:PDFDocument,dict:PDFDict,uriBudget?:{used:number}):{
         return {kind:'unsupported',destination:'Unsupported or unsafe external URL action'};
       }
     }
+    return {kind:'unsupported',destination:'Malformed PDF URL action'};
   }
-  // Unknown action subtypes have already been classified without
-  // rendering untrusted serialized names or strings.
-  const storedDest=dict.get(DEST)??action?.get(PDFName.of('D'));
+  // /A and /Dest cannot be combined as fallback routes: an explicit /A
+  // overrides /Dest, even when its target is unresolvable.
+  const storedDest=action?action.get(PDFName.of('D')):dict.get(DEST);
   let dest:PDFArray|undefined;
   try{
     const resolved=storedDest?pdf.context.lookup(storedDest):undefined;
@@ -313,7 +329,14 @@ export async function updatePdfLinkAnnotation(
   if(current.kind==='unsupported'){
     throw new Error('Unsupported imported link actions cannot be overwritten by this editor.');
   }
-  assignTarget(pdf,dict,target);
+  // An annotation dictionary may be referenced outside the owning page's
+  // /Annots array (AcroForm, outlines, other catalog objects). Mutating it
+  // in place changes those unrelated objects. Clone and replace only the
+  // selected page slot in an owned annotation array.
+  const detached=dict.clone(pdf.context);
+  assignTarget(pdf,detached,target);
+  const owned=ownedAnnotationList(pdf,link.pageNumber);
+  owned.set(link.index,pdf.context.register(detached));
   return save(pdf);
 }
 
