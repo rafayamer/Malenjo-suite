@@ -75,6 +75,19 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
+      - name: Build pinned Temurin runtime for fully offline PDF processing
+        shell: pwsh
+        run: |
+          ./scripts/build-temurin-runtime-windows.ps1
+          $manifest = Get-Content 'runtime/java/malenjo-runtime-manifest.json' -Raw | ConvertFrom-Json
+          if ($manifest.version -ne '25.0.4.1+1' -or
+              $manifest.archiveSha256 -ne '00c847d804f4a78e9f04f2683faf14fed898535b177b7fc704486cb0284e9283') {
+            throw 'The Java runtime does not match the reviewed pinned Windows release.'
+          }
+          if (!(Test-Path 'runtime/java/legal/java.base/LICENSE') -or
+              !(Test-Path 'runtime/java/bin/java.exe')) {
+            throw 'The bundled runtime or its required GPL/ClassPath license text is missing.'
+          }
       - name: Build approved qpdf Windows provider pack
         shell: pwsh
         run: |
@@ -288,7 +301,9 @@ jobs:
       - name: Smoke-test local Windows PDF provider
         shell: pwsh
         run: |
-          $java = (Get-Command java).Source
+          # Exercise the exact Java executable packaged into MALENJO, not
+          # the CI host's preinstalled Temurin. This is the offline delivery gate.
+          $java = (Resolve-Path "runtime/java/bin/java.exe").Path
           $curl = (Get-Command curl.exe).Source
           $jar = Resolve-Path "provider-packs/stirling-core/stirling-pdf.jar"
           $qpdf = Get-ChildItem "provider-packs/qpdf/runtime" -Recurse -File -Filter "qpdf.exe" | Select-Object -First 1
