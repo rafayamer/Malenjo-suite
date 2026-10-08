@@ -23,9 +23,10 @@ import {
 import type { DocumentSession } from '../files/session';
 import type { RegisterDocumentCommands } from '../commands/types';
 import { isDesktopRuntime } from '../files/api';
-import { exportPdfBytes, readPdfDocumentBytes } from './api';
+import { exportPdfBytes, exportPdfDataFile, readPdfDocumentBytes } from './api';
 import {
   addPdfBatesNumbers,
+  addPdfButton,
   addPdfCheckBox,
   addPdfCommentAnnotation,
   addPdfDropdown,
@@ -37,9 +38,11 @@ import {
   addPdfTextOverlay,
   appendPdf,
   attachFileToPdf,
+  clearPdfFormFields,
   deletePdfPage,
   deletePdfPages,
   duplicatePdfPage,
+  exportPdfFormData,
   extractPdfPages,
   insertBlankPdfPage,
   insertPdfAfter,
@@ -50,7 +53,9 @@ import {
   splitPdfAtPage,
   fillPdfFormFields,
   flattenPdfForm,
+  importPdfFormData,
   inspectPdfFormFields,
+  updatePdfFormFieldProperties,
   type PdfFormFieldInfo,
   type PdfFormFieldUpdate,
 } from './editor';
@@ -147,6 +152,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const appendInputRef = useRef<HTMLInputElement>(null);
   const insertInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const formDataInputRef = useRef<HTMLInputElement>(null);
   const selectionAnchorRef = useRef<number | null>(null);
   const activeLoadRef = useRef<PdfLoadResult | null>(null);
   const requestIdRef = useRef(0);
@@ -191,9 +197,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [shapeOverlay, setShapeOverlay] = useState({ x:0.12, y:0.68, width:0.35, height:0.08, mode:'highlight' as 'highlight'|'outline' });
   const [commentDraft, setCommentDraft] = useState({ text:'', author:'MALENJO User', x:0.86, y:0.86 });
   const [formDraft, setFormDraft] = useState({
-    type:'text' as 'text'|'checkbox'|'radio'|'dropdown'|'list',
+    type:'text' as 'text'|'checkbox'|'radio'|'dropdown'|'list'|'button',
     name:'',
     defaultValue:'',
+    buttonLabel:'Button',
     optionsText:'Approve\nReject',
     selectedText:'',
     required:false,
@@ -210,6 +217,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [formFillDraft, setFormFillDraft] = useState<Record<string,string|string[]|boolean|undefined>>({});
   const [formFillTouched, setFormFillTouched] = useState<Set<string>>(()=>new Set());
   const [formInspectedSource, setFormInspectedSource] = useState<Uint8Array|null>(null);
+  const [formPropertyName, setFormPropertyName] = useState('');
   const [headerFooterDraft, setHeaderFooterDraft] = useState({
     scope:'selected' as 'selected'|'all',
     header:'',
@@ -601,6 +609,16 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     &&['text','checkbox','radio','dropdown','list'].includes(field.type),
   );
 
+  useEffect(()=>{
+    if(!formFields.length){
+      if(formPropertyName)setFormPropertyName('');
+      return;
+    }
+    if(!formFields.some((field)=>field.name===formPropertyName)){
+      setFormPropertyName(formFields[0].name);
+    }
+  },[formFields,formPropertyName]);
+
   async function attachDocuments(event:React.ChangeEvent<HTMLInputElement>){
     const files=Array.from(event.target.files??[]);
     event.target.value='';
@@ -681,6 +699,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         }),
         currentPage,
       );
+    }else if(formDraft.type==='button'){
+      await mutate(
+        `Added push-button field "${name}".`,
+        (bytes)=>addPdfButton(bytes,{
+          pageNumber:currentPage,name,label:formDraft.buttonLabel,
+          x:formDraft.x,y:formDraft.y,width:formDraft.width,height:formDraft.height,...flags,
+        }),
+        currentPage,
+      );
     }else{
       await mutate(
         `Added text field "${name}".`,
@@ -692,6 +719,59 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       );
     }
     setFormDraft((current)=>({...current,name:'',defaultValue:'',selectedText:''}));
+  }
+
+  async function clearFormValues(){
+    if(!formFields.length)return;
+    await mutate(
+      'Cleared safely editable PDF form values.',
+      (bytes)=>clearPdfFormFields(bytes),
+      currentPage,
+    );
+  }
+
+  async function exportFormData(){
+    if(!sourceBytes||!formFields.length)return;
+    try{
+      const payload=await exportPdfFormData(sourceBytes);
+      const json=JSON.stringify(payload,null,2)+'\n';
+      const base=sourceName.replace(/\.pdf$/i,'')||'MALENJO-document';
+      const saved=await exportPdfDataFile(`${base}-form-data.json`,new TextEncoder().encode(json));
+      if(saved)setActionNotice(`Exported ${payload.fields.length} PDF form-data field(s) as JSON.`);
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }
+  }
+
+  async function importFormDataFile(event:React.ChangeEvent<HTMLInputElement>){
+    const file=event.target.files?.[0];
+    event.target.value='';
+    if(!file||!sourceBytes)return;
+    if(file.size>4*1024*1024){
+      setError('PDF form-data JSON exceeds the 4 MB safety limit.');
+      return;
+    }
+    try{
+      const payload=JSON.parse(await file.text()) as unknown;
+      await mutate(
+        `Imported PDF form data from ${file.name}.`,
+        (bytes)=>importPdfFormData(bytes,payload),
+        currentPage,
+      );
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }
+  }
+
+  async function setFormFieldProperty(
+    name:string,
+    patch:{required?:boolean;readOnly?:boolean;exported?:boolean},
+  ){
+    await mutate(
+      `Updated PDF form field properties for "${name}".`,
+      (bytes)=>updatePdfFormFieldProperties(bytes,[{name,...patch}]),
+      currentPage,
+    );
   }
 
   function setFormFillValue(name:string,value:string|string[]|boolean|undefined){
