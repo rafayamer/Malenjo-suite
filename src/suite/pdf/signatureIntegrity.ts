@@ -34,24 +34,49 @@ const MAX_PARENT_DEPTH=32;
  * conservative check to files with multiple revision terminators.
  */
 export function hasPriorPdfSignatureEvidence(bytes:Uint8Array):boolean{
-  const hasToken=(offset:number,token:string):boolean=>{
-    if(bytes[offset]!==47||offset+token.length>=bytes.length)return false;
-    for(let i=0;i<token.length;i++){
-      if(bytes[offset+i]!==token.charCodeAt(i))return false;
+  const isNameDelimiter=(byte:number|undefined):boolean=>
+    byte===undefined||byte<=32||
+    byte===40||byte===41||byte===60||byte===62||
+    byte===91||byte===93||byte===47||byte===37;
+  const hexDigit=(byte:number|undefined):number=>{
+    if(byte===undefined)return -1;
+    if(byte>=48&&byte<=57)return byte-48;
+    if(byte>=65&&byte<=70)return byte-55;
+    if(byte>=97&&byte<=102)return byte-87;
+    return -1;
+  };
+  // PDF names can legally encode any character as # followed by two
+  // hexadecimal digits. Compare decoded bytes in-place without stringifying
+  // attacker-controlled names or allocating a decoded buffer.
+  const nameEnd=(offset:number,token:string):number=>{
+    if(bytes[offset]!==47)return -1;
+    let i=offset+1;
+    for(let n=1;n<token.length;n++){
+      let decoded=bytes[i];
+      if(decoded===35){
+        const hi=hexDigit(bytes[i+1]);
+        const lo=hexDigit(bytes[i+2]);
+        if(hi<0||lo<0)return -1;
+        decoded=(hi<<4)|lo;
+        i+=3;
+      }else i++;
+      if(decoded!==token.charCodeAt(n))return -1;
     }
-    const next=bytes[offset+token.length];
-    return next===undefined||next<=32||[40,41,60,62,91,93,47,37].includes(next);
+    return isNameDelimiter(bytes[i])?i:-1;
   };
   const hasNameValue=(at:number,token:string,start:number[]):boolean=>{
-    if(!hasToken(at,token))return false;
-    let i=at+token.length;
-    while(i<bytes.length&&bytes[i]<=32&&i<at+token.length+64)i++;
+    const end=nameEnd(at,token);
+    if(end<0)return false;
+    let i=end;
+    while(i<bytes.length&&bytes[i]<=32&&i<end+64)i++;
     return start.includes(bytes[i]);
   };
   let eofCount=0;
   let byteRange=false;
   let contents=false;
   let comment=false;
+  let literalDepth=0;
+  let escapedLiteral=false;
   for(let i=0;i<bytes.length;i++){
     const char=bytes[i];
     // A real EOF marker is normally on its own line, and is also a PDF comment.
@@ -67,10 +92,16 @@ export function hasPriorPdfSignatureEvidence(bytes:Uint8Array):boolean{
       if(char===10||char===13)comment=false;
       continue;
     }
-    // Do not attempt to parse binary streams as literal/hex strings here:
-    // content stream bytes can contain arbitrary parentheses. The raw marker
-    // search must never miss a later incremental signature due to a binary
-    // byte resembling a string delimiter. Comment lines are ignored.
+    if(literalDepth){
+      // '%' is data inside PDF literal strings, even on the same line as
+      // later signature keys. PDF strings may nest and escape parentheses.
+      if(escapedLiteral){escapedLiteral=false;continue;}
+      if(char===92){escapedLiteral=true;continue;}
+      if(char===40)literalDepth++;
+      if(char===41)literalDepth--;
+      continue;
+    }
+    if(char===40){literalDepth=1;continue;}
     if(char===37){comment=true;continue;}
     if(char===47){
       if(!byteRange&&hasNameValue(i,'/ByteRange',[91]))byteRange=true;
