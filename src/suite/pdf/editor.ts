@@ -999,6 +999,9 @@ export async function exportPdfFormData(bytes:Uint8Array):Promise<PdfFormDataExp
   for(const field of fields){
     if(!field.exported)continue;
     if(field.type==='text'){
+      if(!field.password&&field.value.length>10000){
+        throw new Error(`PDF form field "${field.name}" exceeds the 10,000-character form-data export limit.`);
+      }
       exported.push(field.password
         ?{name:field.name,type:'text',redacted:true}
         :{name:field.name,type:'text',value:field.value});
