@@ -516,6 +516,45 @@ export async function addPdfOptionList(bytes:Uint8Array,spec:PdfChoiceFieldSpec)
   return Uint8Array.from(await pdf.save({useObjectStreams:false}));
 }
 
+export interface PdfButtonSpec extends PdfFieldFlags {
+  pageNumber:number;
+  name:string;
+  label:string;
+  x:number;
+  y:number;
+  width:number;
+  height:number;
+}
+
+export async function addPdfButton(bytes:Uint8Array,spec:PdfButtonSpec):Promise<Uint8Array>{
+  const pdf=await load(bytes);
+  const page=pdf.getPage(requirePage(spec.pageNumber,pdf.getPageCount()));
+  const x=normalized(spec.x,'Button X');
+  const y=normalized(spec.y,'Button Y');
+  const widthFraction=normalized(spec.width,'Button width');
+  const heightFraction=normalized(spec.height,'Button height');
+  if(widthFraction<=0||heightFraction<=0||x+widthFraction>1||y+heightFraction>1){
+    throw new Error('Button field must have positive size and remain inside the page.');
+  }
+  const form=pdf.getForm();
+  const name=safeFieldName(spec.name,'button');
+  if(form.getFieldMaybe(name))throw new Error(`A form field named "${name}" already exists.`);
+  const field=form.createButton(name);
+  applyFieldFlags(field,spec);
+  const {width,height}=page.getSize();
+  field.addToPage((spec.label||'Button').replace(/[\u0000-\u001F]/g,' ').trim().slice(0,120)||'Button',page,{
+    x:x*width,
+    y:y*height,
+    width:widthFraction*width,
+    height:heightFraction*height,
+    borderWidth:1,
+    borderColor:rgb(0.08,0.32,0.56),
+    backgroundColor:rgb(0.88,0.94,1),
+    textColor:rgb(0.05,0.08,0.12),
+  });
+  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+}
+
 export async function flattenPdfForm(bytes:Uint8Array):Promise<Uint8Array>{
   const pdf=await load(bytes);
   if(pdfHasXfa(pdf)){
@@ -545,6 +584,7 @@ export interface PdfFormFieldInfo {
   type:string;
   required:boolean;
   readOnly:boolean;
+  exported:boolean;
   options:string[];
   choiceOptions:PdfFormChoiceOption[];
   selected:string[];
@@ -644,6 +684,7 @@ export async function inspectPdfFormFields(bytes:Uint8Array):Promise<PdfFormFiel
       type,
       required:field.isRequired(),
       readOnly:field.isReadOnly(),
+      exported:field.isExported(),
       options,
       choiceOptions,
       selected,
@@ -886,6 +927,141 @@ export async function fillPdfFormFields(
     }
   }
   return saveFilledPdfForm(pdf,form,readerDeferredFields);
+}
+
+export interface PdfFormFieldPropertyUpdate {
+  name:string;
+  required?:boolean;
+  readOnly?:boolean;
+  exported?:boolean;
+}
+
+export async function updatePdfFormFieldProperties(
+  bytes:Uint8Array,
+  updates:PdfFormFieldPropertyUpdate[],
+):Promise<Uint8Array>{
+  if(!updates.length)throw new Error('Choose at least one PDF form field property to update.');
+  const pdf=await load(bytes);
+  if(pdfHasXfa(pdf)){
+    throw new Error('XFA/hybrid PDF forms are not supported because editing them would discard XFA form data.');
+  }
+  const form=pdf.getForm();
+  for(const update of updates){
+    const field=form.getFieldMaybe(update.name);
+    if(!field)throw new Error(`PDF form field "${update.name}" was not found.`);
+    if(update.required!==undefined){
+      if(update.required)field.enableRequired();else field.disableRequired();
+    }
+    if(update.readOnly!==undefined){
+      if(update.readOnly)field.enableReadOnly();else field.disableReadOnly();
+    }
+    if(update.exported!==undefined){
+      if(update.exported)field.enableExporting();else field.disableExporting();
+    }
+  }
+  return Uint8Array.from(await pdf.save({useObjectStreams:false,updateFieldAppearances:false}));
+}
+
+export async function clearPdfFormFields(bytes:Uint8Array):Promise<Uint8Array>{
+  const fields=await inspectPdfFormFields(bytes);
+  const updates:PdfFormFieldUpdate[]=[];
+  for(const field of fields){
+    if(field.readOnly||field.richText||field.duplicateChoiceExports)continue;
+    if(field.type==='text')updates.push({name:field.name,value:''});
+    else if(field.type==='checkbox')updates.push({name:field.name,checked:false});
+    else if(field.type==='radio'&&field.offToggleable)updates.push({name:field.name,selected:[]});
+    else if((field.type==='dropdown'||field.type==='list')&&!(field.type==='dropdown'&&field.editable&&field.multiselect)){
+      updates.push({name:field.name,selected:[]});
+    }
+  }
+  if(!updates.length)throw new Error('No safely clearable AcroForm values are present.');
+  return fillPdfFormFields(bytes,updates);
+}
+
+export interface PdfFormDataEntry {
+  name:string;
+  type:'text'|'checkbox'|'radio'|'dropdown'|'list';
+  value?:string;
+  checked?:boolean;
+  selected?:string[];
+  redacted?:boolean;
+}
+
+export interface PdfFormDataExport {
+  format:'malenjo-pdf-form-data';
+  version:1;
+  fields:PdfFormDataEntry[];
+}
+
+export async function exportPdfFormData(bytes:Uint8Array):Promise<PdfFormDataExport>{
+  const fields=await inspectPdfFormFields(bytes);
+  const exported:PdfFormDataEntry[]=[];
+  for(const field of fields){
+    if(!field.exported)continue;
+    if(field.type==='text'){
+      exported.push(field.password
+        ?{name:field.name,type:'text',redacted:true}
+        :{name:field.name,type:'text',value:field.value});
+    }else if(field.type==='checkbox'){
+      exported.push({name:field.name,type:'checkbox',checked:Boolean(field.checked)});
+    }else if(field.type==='radio'||field.type==='dropdown'||field.type==='list'){
+      exported.push({
+        name:field.name,
+        type:field.type,
+        selected:[...field.selected],
+      });
+    }
+  }
+  return {format:'malenjo-pdf-form-data',version:1,fields:exported};
+}
+
+function requirePdfFormData(data:unknown):PdfFormDataExport{
+  if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('Form-data JSON must be an object.');
+  const record=data as Record<string,unknown>;
+  if(record.format!=='malenjo-pdf-form-data'||record.version!==1||!Array.isArray(record.fields)){
+    throw new Error('Unsupported MALENJO PDF form-data format.');
+  }
+  if(record.fields.length>1000)throw new Error('Form-data JSON contains too many fields.');
+  const fields:PdfFormDataEntry[]=record.fields.map((item,index)=>{
+    if(!item||typeof item!=='object'||Array.isArray(item))throw new Error(`Form-data field ${index+1} is invalid.`);
+    const entry=item as Record<string,unknown>;
+    if(typeof entry.name!=='string'||entry.name.length===0||entry.name.length>512)throw new Error(`Form-data field ${index+1} has an invalid name.`);
+    if(!['text','checkbox','radio','dropdown','list'].includes(String(entry.type)))throw new Error(`Form-data field "${entry.name}" has an unsupported type.`);
+    const type=entry.type as PdfFormDataEntry['type'];
+    if(type==='text'){
+      if(entry.redacted===true)return {name:entry.name,type,redacted:true};
+      if(typeof entry.value!=='string'||entry.value.length>10000)throw new Error(`Text value for "${entry.name}" is invalid.`);
+      return {name:entry.name,type,value:entry.value};
+    }
+    if(type==='checkbox'){
+      if(typeof entry.checked!=='boolean')throw new Error(`Checkbox value for "${entry.name}" is invalid.`);
+      return {name:entry.name,type,checked:entry.checked};
+    }
+    if(!Array.isArray(entry.selected)||entry.selected.length>100||entry.selected.some((value)=>typeof value!=='string'||value.length>4096)){
+      throw new Error(`Choice value for "${entry.name}" is invalid.`);
+    }
+    return {name:entry.name,type,selected:[...(entry.selected as string[])]};
+  });
+  return {format:'malenjo-pdf-form-data',version:1,fields};
+}
+
+export async function importPdfFormData(bytes:Uint8Array,data:unknown):Promise<Uint8Array>{
+  const payload=requirePdfFormData(data);
+  const current=await inspectPdfFormFields(bytes);
+  const byName=new Map(current.map((field)=>[field.name,field]));
+  const updates:PdfFormFieldUpdate[]=[];
+  for(const entry of payload.fields){
+    if(entry.redacted)continue;
+    const field=byName.get(entry.name);
+    if(!field)throw new Error(`PDF form field "${entry.name}" was not found.`);
+    if(field.type!==entry.type)throw new Error(`PDF form field "${entry.name}" type does not match imported data.`);
+    if(field.readOnly)throw new Error(`PDF form field "${entry.name}" is read-only.`);
+    if(entry.type==='text')updates.push({name:entry.name,value:entry.value??''});
+    else if(entry.type==='checkbox')updates.push({name:entry.name,checked:Boolean(entry.checked)});
+    else updates.push({name:entry.name,selected:[...(entry.selected??[])]});
+  }
+  if(!updates.length)throw new Error('Imported form data contains no writable values.');
+  return fillPdfFormFields(bytes,updates);
 }
 
 export interface PdfAttachmentSpec {
