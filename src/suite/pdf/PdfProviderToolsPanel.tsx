@@ -155,8 +155,11 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       setError(reason instanceof Error?reason.message:String(reason));
       setNotice('');
     }finally{
-      await disposePdf(loaded);
-      setBusy(false);
+      try{
+        await disposePdf(loaded);
+      }finally{
+        setBusy(false);
+      }
     }
   }
 
