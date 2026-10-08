@@ -48,17 +48,23 @@
         "endpointInPinnedFixture": true
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/pdf/editor.ts",
+          "src/suite/pdf/PdfWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": "/api/v1/general/merge-pdfs",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "appendPdf"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/editor.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -66,7 +72,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Existing MALENJO implementation and unit test found; this covers only part of the upstream operation semantics. Runtime Windows provider, full handoff edge cases, and export/reopen acceptance are not verified."
       ]
     },
     {
@@ -85,17 +92,23 @@
         "endpointInPinnedFixture": true
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/pdf/editor.ts",
+          "src/suite/pdf/PdfWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": "/api/v1/general/split-pages",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "splitPdfAtPage"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/editor.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -103,7 +116,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Existing MALENJO implementation and unit test found; this covers only part of the upstream operation semantics. Runtime Windows provider, full handoff edge cases, and export/reopen acceptance are not verified."
       ]
     },
     {
@@ -122,17 +136,23 @@
         "endpointInPinnedFixture": false
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/pdf/editor.ts",
+          "src/suite/pdf/PdfWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "extractPdfPages"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/editor.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -141,7 +161,8 @@
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Existing MALENJO implementation and unit test found; this covers only part of the upstream operation semantics. Runtime Windows provider, full handoff edge cases, and export/reopen acceptance are not verified."
       ]
     },
     {
@@ -160,17 +181,23 @@
         "endpointInPinnedFixture": true
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/pdf/editor.ts",
+          "src/suite/pdf/PdfWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": "/api/v1/general/remove-pages",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "deletePdfPages"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/editor.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -178,7 +205,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Existing MALENJO implementation and unit test found; this covers only part of the upstream operation semantics. Runtime Windows provider, full handoff edge cases, and export/reopen acceptance are not verified."
       ]
     },
     {
@@ -197,17 +225,23 @@
         "endpointInPinnedFixture": true
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/pdf/editor.ts",
+          "src/suite/pdf/PdfWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": "/api/v1/general/rearrange-pages",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "movePdfPage"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/editor.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -215,7 +249,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Existing MALENJO implementation and unit test found; this covers only part of the upstream operation semantics. Runtime Windows provider, full handoff edge cases, and export/reopen acceptance are not verified."
       ]
     },
     {
@@ -234,17 +269,23 @@
         "endpointInPinnedFixture": true
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/pdf/editor.ts",
+          "src/suite/pdf/PdfWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": "/api/v1/general/rotate-pdf",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "rotatePdfPagesPermanent"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/editor.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -252,7 +293,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Existing MALENJO implementation and unit test found; this covers only part of the upstream operation semantics. Runtime Windows provider, full handoff edge cases, and export/reopen acceptance are not verified."
       ]
     },
     {
@@ -345,17 +387,23 @@
         "endpointInPinnedFixture": true
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/pdf/editor.ts",
+          "src/suite/pdf/PdfWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": "/api/v1/misc/add-page-numbers",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "addPdfBatesNumbers"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/editor.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -363,7 +411,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Existing MALENJO implementation and unit test found; this covers only part of the upstream operation semantics. Runtime Windows provider, full handoff edge cases, and export/reopen acceptance are not verified."
       ]
     },
     {
@@ -679,17 +728,23 @@
         "endpointInPinnedFixture": true
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/pdf/editor.ts",
+          "src/suite/pdf/PdfWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": "/api/v1/misc/add-attachments",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "attachFileToPdf"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/editor.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -697,7 +752,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Existing MALENJO implementation and unit test found; this covers only part of the upstream operation semantics. Runtime Windows provider, full handoff edge cases, and export/reopen acceptance are not verified."
       ]
     },
     {
@@ -753,17 +809,23 @@
         "endpointInPinnedFixture": true
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/pdf/imageConvert.ts",
+          "src/suite/pdf/PdfWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": "/api/v1/convert/img/pdf",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "createPdfFromImages"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/imageConvert.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -771,7 +833,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Existing MALENJO implementation and unit test found; this covers only part of the upstream operation semantics. Runtime Windows provider, full handoff edge cases, and export/reopen acceptance are not verified."
       ]
     },
     {
@@ -1837,17 +1900,23 @@
         "endpointInPinnedFixture": true
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/pdf/editor.ts",
+          "src/suite/pdf/PdfWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": "/api/v1/misc/flatten",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "flattenPdfForm"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/editor.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -1855,7 +1924,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Existing MALENJO implementation and unit test found; this covers only part of the upstream operation semantics. Runtime Windows provider, full handoff edge cases, and export/reopen acceptance are not verified."
       ]
     },
     {
@@ -2809,17 +2879,23 @@
         "endpointInPinnedFixture": false
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/pdf/editor.ts",
+          "src/suite/pdf/PdfWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "listPdfFormFields"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/editor.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -2828,7 +2904,8 @@
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Existing MALENJO implementation and unit test found; this covers only part of the upstream operation semantics. Runtime Windows provider, full handoff edge cases, and export/reopen acceptance are not verified."
       ]
     },
     {
@@ -2847,17 +2924,23 @@
         "endpointInPinnedFixture": false
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/pdf/editor.ts",
+          "src/suite/pdf/PdfWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "fillPdfFormFields"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/editor.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -2866,7 +2949,8 @@
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Existing MALENJO implementation and unit test found; this covers only part of the upstream operation semantics. Runtime Windows provider, full handoff edge cases, and export/reopen acceptance are not verified."
       ]
     },
     {
@@ -3149,17 +3233,23 @@
         "endpointInPinnedFixture": false
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/pdf/engine.ts",
+          "src/suite/pdf/PdfWorkspace.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "loadPdfBytes"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/engine.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -3168,7 +3258,8 @@
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Existing MALENJO implementation and unit test found; this covers only part of the upstream operation semantics. Runtime Windows provider, full handoff edge cases, and export/reopen acceptance are not verified."
       ]
     },
     {
@@ -3414,6 +3505,8 @@
       "/api/v1/misc/decompress-pdf",
       "/api/v1/convert/ebook/pdf"
     ],
-    "windowsOperationResults": "unverified"
+    "windowsOperationResults": "unverified",
+    "localSourcePartialCount": 13,
+    "unverifiedSourceCount": 77
   }
 }
