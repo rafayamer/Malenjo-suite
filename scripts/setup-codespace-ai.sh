@@ -86,7 +86,18 @@ if ! command -v ollama >/dev/null 2>&1; then
   curl -fsSL https://ollama.com/install.sh | sh
 fi
 
-echo "Ollama: $(ollama --version 2>&1 | head -n 1)"
+OLLAMA_VERSION="$(ollama --version 2>&1 | head -n 1)"
+echo "Ollama: $OLLAMA_VERSION"
+if ! python3 - "$OLLAMA_VERSION" <<'PY'
+import re,sys
+match=re.search(r'\b(\d+)\.(\d+)\.(\d+)\b',sys.argv[1])
+if not match or tuple(map(int,match.groups())) < (0,5,13):
+    print("MALENJO Phi-4 requires Ollama >= 0.5.13. Upgrade Ollama and retry.",file=sys.stderr)
+    sys.exit(1)
+PY
+then
+  exit 2
+fi
 
 if curl -fsS --max-time 2 http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
   echo "Ollama server is already reachable on 127.0.0.1:11434."
@@ -185,12 +196,7 @@ fi
 echo "Local model smoke test passed."
 
 echo
-echo "Removing retired MALENJO development models if they are present..."
-for retired in "phi3:3.8b-mini-4k-instruct-q2_K" "qwen3:0.6b"; do
-  if ollama list | awk 'NR>1 {print $1}' | grep -Fxq "$retired"; then
-    ollama rm "$retired"
-  fi
-done
+echo "Existing Ollama models are preserved; MALENJO does not delete shared runtime models."
 
 echo
 echo "Start MALENJO:"
