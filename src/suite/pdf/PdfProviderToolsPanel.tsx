@@ -16,6 +16,8 @@ import { fieldAcceptsActivePdf } from './providerFileInputs';
 import { computePdfParityCoverage } from './parityCoverage';
 import { inspectPdfDocumentInfo } from './pdfInfo';
 import { classifyPdfProviderResult } from './providerResultGuard';
+import { ensurePdfProviderRunning } from './providerLifecycle';
+import { isDesktopRuntime } from '../files/api';
 import { loadPdfBytes,disposePdf } from './engine';
 import { extractPdfDocumentText } from './textExport';
 
@@ -83,7 +85,26 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }catch(reason){setError(reason instanceof Error?reason.message:String(reason));}
   };
 
-  useEffect(()=>{void refresh(true);},[]);
+  useEffect(()=>{
+    let cancelled=false;
+    void (async()=>{
+      if(!isDesktopRuntime()){
+        await refresh(true);
+        return;
+      }
+      try{
+        // When another tab has already begun startup, share that request.
+        // Provider tools load only once the owned local engine is healthy.
+        await ensurePdfProviderRunning(provider);
+        if(!cancelled)await refresh(true);
+      }catch(reason){
+        if(cancelled)return;
+        await refresh(false);
+        if(!cancelled)setError(reason instanceof Error?reason.message:String(reason));
+      }
+    })();
+    return()=>{cancelled=true;};
+  },[provider]);
 
   const filtered=useMemo(()=>{
     const terms=search.trim().toLowerCase().split(/\s+/).filter(Boolean);
