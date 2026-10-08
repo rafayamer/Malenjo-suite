@@ -24,6 +24,8 @@ export interface AiChatResult {
   latencyMs: number;
 }
 
+export type AiTokenCallback = (content: string) => void;
+
 const browserJobs = new Map<string, AbortController>();
 
 function browserPrefix(provider: AiProvider): string {
@@ -108,6 +110,7 @@ async function runBrowserAiChat(
   model: string,
   prompt: string,
   liteMode: boolean,
+  onToken?: AiTokenCallback,
 ): Promise<AiChatResult> {
   const prefix = browserPrefix(provider);
   const controller = new AbortController();
@@ -117,15 +120,16 @@ async function runBrowserAiChat(
   const payload = provider === 'ollama'
     ? {
         model,
-        stream: false,
-        keep_alive: liteMode ? '0s' : '5m',
+        stream: true,
+        keep_alive: liteMode ? '2m' : '5m',
         messages: [
           { role:'system', content:systemPrompt() },
           { role:'user', content:prompt },
         ],
         options: {
           temperature: 0.2,
-          num_ctx: liteMode ? 2048 : 4096,
+          num_ctx: liteMode ? 1536 : 4096,
+          num_predict: liteMode ? 192 : 768,
         },
       }
     : {
@@ -149,11 +153,46 @@ async function runBrowserAiChat(
         signal:controller.signal,
       },
     );
-    if (!response.ok) throw new Error(`Codespaces AI bridge returned HTTP ${response.status}.`);
-    const value = await response.json() as Record<string, unknown>;
-    const content = provider === 'ollama'
-      ? String((value.message as Record<string, unknown> | undefined)?.content ?? '')
-      : String((((value.choices as Array<Record<string, unknown>> | undefined)?.[0]?.message as Record<string, unknown> | undefined)?.content) ?? '');
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(`Codespaces AI bridge returned HTTP ${response.status}${detail ? `: ${detail.slice(0, 500)}` : '.'}`);
+    }
+
+    let content = '';
+    if (provider === 'ollama') {
+      if (!response.body) throw new Error('Codespaces AI stream has no response body.');
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let pending = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        pending += decoder.decode(value, { stream:true });
+        const lines = pending.split('\n');
+        pending = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const chunk = JSON.parse(line) as Record<string, unknown>;
+          const token = String((chunk.message as Record<string, unknown> | undefined)?.content ?? '');
+          if (token) {
+            content += token;
+            onToken?.(content);
+          }
+        }
+      }
+      if (pending.trim()) {
+        const chunk = JSON.parse(pending) as Record<string, unknown>;
+        const token = String((chunk.message as Record<string, unknown> | undefined)?.content ?? '');
+        if (token) {
+          content += token;
+          onToken?.(content);
+        }
+      }
+    } else {
+      const value = await response.json() as Record<string, unknown>;
+      content = String((((value.choices as Array<Record<string, unknown>> | undefined)?.[0]?.message as Record<string, unknown> | undefined)?.content) ?? '');
+      if (content) onToken?.(content);
+    }
 
     if (!content.trim()) throw new Error('Local model returned an empty response.');
     return {
@@ -173,9 +212,12 @@ export async function runLocalAiChat(
   model: string,
   prompt: string,
   liteMode: boolean,
+  onToken?: AiTokenCallback,
 ): Promise<AiChatResult> {
-  if (!isTauri()) return runBrowserAiChat(jobId, provider, model, prompt, liteMode);
-  return invoke<AiChatResult>('local_ai_chat', { jobId, provider, model, prompt, liteMode });
+  if (!isTauri()) return runBrowserAiChat(jobId, provider, model, prompt, liteMode, onToken);
+  const result = await invoke<AiChatResult>('local_ai_chat', { jobId, provider, model, prompt, liteMode });
+  onToken?.(result.content);
+  return result;
 }
 
 export async function cancelLocalAi(jobId: string): Promise<boolean> {
