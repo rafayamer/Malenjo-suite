@@ -302,7 +302,7 @@ describe('signed PDF mutation safety',()=>{
     expect(hasPriorPdfSignatureEvidence(unsigned)).toBe(false);
 
     const older=new TextEncoder().encode(
-      '\n% an earlier /ByteRange [0 100 200 300] /Contents <CAFE> signature revision\n'+
+      '\n12 0 obj\n<< /Type /Sig /ByteRange [0 100 200 300] /Contents <CAFE> >>\nendobj\n'+
       'startxref\n0\n%%EOF\n',
     );
     const withOldRevision=new Uint8Array(unsigned.length+older.length);
@@ -320,5 +320,9 @@ describe('signed PDF mutation safety',()=>{
       '%PDF-1.7 /ByteRangeCounter /ContentsNote %%EOF %%EOF',
     );
     expect(hasPriorPdfSignatureEvidence(text)).toBe(false);
+    const comments=new TextEncoder().encode(
+      '%PDF-1.7\\n%%EOF\\n% /ByteRange [0 1 2 3] /Contents <CAFE>\\n%%EOF\\n',
+    );
+    expect(hasPriorPdfSignatureEvidence(comments)).toBe(false);
   });
 });
