@@ -240,7 +240,7 @@ export default function AiWorkspace({ onBackToFiles, openDocuments }: Props) {
       citations,
     }]);
     try {
-      const prompt = buildGroundedPrompt(value, citations, conversation);
+      const prompt = buildGroundedPrompt(value, citations, conversation, {liteMode});
       const result = await runLocalAiChat(job, provider, model, prompt, liteMode, (content) => {
         setMessages((current) => current.map((message) =>
           message.id === assistantMessageId ? { ...message, content } : message,
@@ -418,7 +418,7 @@ export default function AiWorkspace({ onBackToFiles, openDocuments }: Props) {
           <span>Corpus cap <b>{(limits.maxChars / 1000).toFixed(0)}k chars</b></span>
           <span>Chunk cap <b>{limits.maxChunks}</b></span>
           <span>Retrieved passages <b>{limits.topK}</b></span>
-          <span>Model context <b>{liteMode ? '1,536' : '4,096'} tokens</b></span>
+          <span>Model context <b>{liteMode ? '4,096' : '8,192'} tokens</b></span>
           <span>Answer cap <b>{liteMode ? '128' : '768'} tokens</b></span>
           <p>{liteMode ? 'Codespaces streams tokens as they arrive and keeps Ollama warm for two minutes to avoid a full model reload on every question.' : 'Ollama may keep the selected model warm for up to five minutes.'}</p>
         </section>
