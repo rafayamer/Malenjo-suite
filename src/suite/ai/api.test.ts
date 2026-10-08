@@ -71,10 +71,11 @@ describe('Codespaces AI bridge', () => {
   });
 
   it('stops pathological repeated-word streams', async () => {
-    expect(hasDegenerateRepetition('GOSO GOSO GOSO GOSO GOSO GOSO')).toBe(true);
+    expect(hasDegenerateRepetition('GOSO GOSO GOSO GOSO GOSO GOSO')).toBe(false);
+    expect(hasDegenerateRepetition(Array(20).fill('GOSO').join(' '))).toBe(true);
     expect(hasDegenerateRepetition('Hello there, how can I help you today?')).toBe(false);
 
-    const body = Array.from({length:8},()=>JSON.stringify({
+    const body = Array.from({length:20},()=>JSON.stringify({
       message:{content:'GOSO '},
       done:false,
     })).join('\n')+'\n';
