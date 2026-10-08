@@ -48,8 +48,13 @@ export interface AiNotebook{
   conversationSummary:string;
 }
 
+const NOTEBOOK_ID=/^[A-Za-z0-9_-]{1,180}$/;
+const SUPPORTED_NOTEBOOK_KINDS=new Set<LibraryDocumentKind>(['pdf','docx','xlsx','pptx']);
+
 function cleanText(value:string,max:number):string{
+  const scanLimit=Math.max(max+32,max*4);
   return value
+    .slice(0,scanLimit)
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g,' ')
     .trim()
     .slice(0,max);
@@ -84,7 +89,7 @@ export function validateAiNotebook(value:unknown):AiNotebook{
   if(!value||typeof value!=='object')throw new Error('Notebook data must be an object.');
   const input=value as Partial<AiNotebook>;
   if(input.schemaVersion!==AI_NOTEBOOK_SCHEMA_VERSION)throw new Error('Unsupported notebook schema version.');
-  if(typeof input.id!=='string'||!input.id)throw new Error('Notebook ID is required.');
+  if(typeof input.id!=='string'||!NOTEBOOK_ID.test(input.id))throw new Error('Notebook ID is invalid.');
   if(typeof input.title!=='string'||!cleanText(input.title,AI_NOTEBOOK_LIMITS.maxTitleChars))throw new Error('Notebook title is required.');
   if(!Number.isFinite(input.createdAt)||!Number.isFinite(input.updatedAt))throw new Error('Notebook timestamps are invalid.');
   if(!Array.isArray(input.sources)||input.sources.length>AI_NOTEBOOK_LIMITS.maxSources)throw new Error('Notebook source list is invalid.');
@@ -98,8 +103,8 @@ export function validateAiNotebook(value:unknown):AiNotebook{
   const sources=input.sources.map((source)=>{
     if(!source||typeof source!=='object')throw new Error('Notebook source entry is invalid.');
     const item=source as AiNotebookSourceRef;
-    if(!item.documentId||sourceIds.has(item.documentId))throw new Error('Notebook source IDs must be unique.');
-    if(!item.name||!Number.isFinite(item.addedAt)||typeof item.enabled!=='boolean')throw new Error('Notebook source entry is incomplete.');
+    if(!NOTEBOOK_ID.test(item.documentId)||sourceIds.has(item.documentId))throw new Error('Notebook source IDs must be unique and valid.');
+    if(!item.name||!SUPPORTED_NOTEBOOK_KINDS.has(item.kind)||!Number.isFinite(item.addedAt)||item.addedAt<0||typeof item.enabled!=='boolean')throw new Error('Notebook source entry is incomplete.');
     sourceIds.add(item.documentId);
     return {
       documentId:item.documentId,
@@ -114,7 +119,7 @@ export function validateAiNotebook(value:unknown):AiNotebook{
   const notes=input.notes.map((note)=>{
     if(!note||typeof note!=='object')throw new Error('Notebook note entry is invalid.');
     const item=note as AiNotebookNote;
-    if(!item.id||noteIds.has(item.id))throw new Error('Notebook note IDs must be unique.');
+    if(!NOTEBOOK_ID.test(item.id)||noteIds.has(item.id))throw new Error('Notebook note IDs must be unique and valid.');
     if(!Number.isFinite(item.createdAt)||!Number.isFinite(item.updatedAt))throw new Error('Notebook note timestamps are invalid.');
     noteIds.add(item.id);
     return {
@@ -127,17 +132,25 @@ export function validateAiNotebook(value:unknown):AiNotebook{
     };
   });
 
+  const studyTopics=new Set<string>();
   const study=input.study.map((entry)=>{
     if(!entry||typeof entry!=='object')throw new Error('Notebook study entry is invalid.');
     const item=entry as AiNotebookStudyProgress;
     const topic=cleanText(item.topic,240);
     if(!topic)throw new Error('Notebook study topic is required.');
+    const topicKey=topic.toLocaleLowerCase();
+    if(studyTopics.has(topicKey))throw new Error('Notebook study topics must be unique.');
+    studyTopics.add(topicKey);
+    const attempts=boundedInt(item.attempts,0,1_000_000);
+    const correct=boundedInt(item.correct,0,attempts);
     return {
       topic,
       mastery:Math.max(0,Math.min(1,Number(item.mastery)||0)),
-      attempts:boundedInt(item.attempts,0,1_000_000),
-      correct:boundedInt(item.correct,0,1_000_000),
-      lastReviewedAt:item.lastReviewedAt===null?null:(Number.isFinite(item.lastReviewedAt)?item.lastReviewedAt:null),
+      attempts,
+      correct,
+      lastReviewedAt:item.lastReviewedAt===null
+        ? null
+        : (Number.isFinite(item.lastReviewedAt)&&item.lastReviewedAt>=0?item.lastReviewedAt:null),
     };
   });
 
@@ -165,12 +178,11 @@ export function syncAiNotebookOpenDocuments(
   documents:LibraryDocument[],
   now=Date.now(),
 ):AiNotebook{
-  const supported=new Set<LibraryDocumentKind>(['pdf','docx','xlsx','pptx']);
   const byId=new Map(notebook.sources.map((source)=>[source.documentId,source]));
   const next=[...notebook.sources];
 
   for(const document of documents){
-    if(!supported.has(document.kind)||byId.has(document.id))continue;
+    if(!SUPPORTED_NOTEBOOK_KINDS.has(document.kind)||!NOTEBOOK_ID.test(document.id)||byId.has(document.id))continue;
     if(next.length>=AI_NOTEBOOK_LIMITS.maxSources)break;
     const source:AiNotebookSourceRef={
       documentId:document.id,
