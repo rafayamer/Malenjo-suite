@@ -23,7 +23,11 @@ import {
 import type { DocumentSession } from '../files/session';
 import type { RegisterDocumentCommands } from '../commands/types';
 import { isDesktopRuntime } from '../files/api';
-import { exportPdfBytes, exportPdfPlainText, readPdfDocumentBytes } from './api';
+import { exportPdfBytes, exportPdfPlainText, exportPdfEmbeddedAttachment, readPdfDocumentBytes } from './api';
+import {
+  flattenPdfOutline, normalizePdfAttachments, resolvePdfOutlinePage, readPdfAttachmentBytes,
+  type PdfOutlineModel, type PdfOutlineEntry, type PdfAttachmentModel, type PdfAttachmentEntry,
+} from './navigation';
 import { extractPdfDocumentText } from './textExport';
 import {
   addPdfBatesNumbers,
@@ -195,6 +199,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<Array<{page:number;excerpt:string}>>([]);
   const [leftPanel, setLeftPanel] = useState<PdfLeftPanelId>(DEFAULT_PDF_LEFT_PANEL);
+  const [pdfOutline, setPdfOutline] = useState<PdfOutlineModel>({entries:[],truncated:false});
+  const [pdfAttachments, setPdfAttachments] = useState<PdfAttachmentModel>({entries:[],truncated:false});
+  const [navigatorLoading, setNavigatorLoading] = useState(false);
+  const [bookmarkError, setBookmarkError] = useState('');
+  const [attachmentError, setAttachmentError] = useState('');
+  const [extractingAttachment, setExtractingAttachment] = useState(false);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<DocumentInspectorTab>('properties');
   const [inspectorHidden, setInspectorHidden] = useState(false);
@@ -685,6 +695,82 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       .finally(()=>{if(!cancelled)setReviewLoading(false);});
     return ()=>{cancelled=true;};
   },[sourceBytes]);
+
+  useEffect(()=>{
+    if(!pdf){
+      setPdfOutline({entries:[],truncated:false});
+      setPdfAttachments({entries:[],truncated:false});
+      setNavigatorLoading(false);
+      setBookmarkError('');
+      setAttachmentError('');
+      return;
+    }
+    let cancelled=false;
+    setNavigatorLoading(true);
+    setPdfOutline({entries:[],truncated:false});
+    setPdfAttachments({entries:[],truncated:false});
+    setBookmarkError('');
+    setAttachmentError('');
+    void Promise.allSettled([pdf.document.getOutline(),pdf.document.getAttachments()])
+      .then(([outline,attachments])=>{
+        if(cancelled)return;
+        if(outline.status==='fulfilled'){
+          setPdfOutline(flattenPdfOutline(outline.value));
+        }else{
+          setPdfOutline({entries:[],truncated:false});
+          setBookmarkError('Bookmark discovery failed for this PDF.');
+        }
+        if(attachments.status==='fulfilled'){
+          setPdfAttachments(normalizePdfAttachments(attachments.value,200,32*1024*1024));
+        }else{
+          setPdfAttachments({entries:[],truncated:false});
+          setAttachmentError('Attachment discovery failed for this PDF.');
+        }
+      })
+      .finally(()=>{if(!cancelled)setNavigatorLoading(false);});
+    return ()=>{cancelled=true;};
+  },[pdf]);
+
+  async function openBookmark(entry:PdfOutlineEntry){
+    if(!pdf)return;
+    if(entry.dest){
+      try{
+        const page=await resolvePdfOutlinePage(pdf.document,entry.dest);
+        if(page){goToPage(page);setActionNotice('Navigated to bookmark '+entry.title+'.');return;}
+      }catch(reason){
+        setError(reason instanceof Error?reason.message:String(reason));
+        return;
+      }
+    }
+    setActionNotice(entry.url
+      ? 'This PDF bookmark points to an external URL. MALENJO never opens document-supplied links automatically.'
+      : 'This bookmark has no resolvable local page destination.');
+  }
+
+  async function extractAttachment(entry:PdfAttachmentEntry){
+    if(!pdf||!entry.downloadable||extractingAttachment){
+      setError(entry.reason||'This PDF attachment cannot be safely exported right now.');
+      return;
+    }
+    const currentDocument=pdf.document;
+    setExtractingAttachment(true);
+    onSavingChange?.(true);
+    try{
+      // Request untrusted decompressed content only after a user click.
+      const result=await currentDocument.getAttachmentContent(entry.id);
+      if(activeLoadRef.current?.document!==currentDocument){
+        throw new Error('The active PDF changed; attachment export was cancelled.');
+      }
+      const bytes=readPdfAttachmentBytes(result,32*1024*1024);
+      const saved=await exportPdfEmbeddedAttachment(entry.name,bytes);
+      if(saved)setActionNotice('Exported embedded attachment without opening or executing it.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }finally{
+      setExtractingAttachment(false);
+      onSavingChange?.(false);
+    }
+  }
 
   async function addComment(){
     const added=await mutate(
@@ -1714,7 +1800,16 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           {leftPanel==='attachments'&&<div className="pdf-left-panel-body">
             <div className="pdf-edit-form">
               <button disabled={mutating} onClick={()=>attachmentInputRef.current?.click()}><Paperclip size={13}/> Embed file attachment…</button>
-              <small>Embedding is operational. Existing-attachment inventory/extraction is a separate PDF feature requirement and is not presented as complete here.</small>
+              <small>Extracted files are untrusted. MALENJO never previews or executes them. Unsafe extensions are saved as .bin.</small>
+              {navigatorLoading&&<span role="status">Discovering attachments…</span>}
+              {attachmentError&&<span role="alert">{attachmentError}</span>}
+              {!navigatorLoading&&!pdfAttachments.entries.length&&<span>No embedded attachments found.</span>}
+              {pdfAttachments.entries.map(entry=><div className="pdf-left-info" key={entry.id}>
+                <strong>{entry.name}</strong><span> · {entry.sizeBytes===null?'Size unavailable':formatBytes(entry.sizeBytes)}</span>
+                <div><button disabled={!entry.downloadable||mutating||extractingAttachment} title={entry.reason||'Download without opening'} onClick={()=>void extractAttachment(entry)}>{extractingAttachment?'Extracting…':'Extract file'}</button></div>
+                {entry.reason&&<small>{entry.reason}</small>}
+              </div>)}
+              {pdfAttachments.truncated&&<small>Attachment inventory is limited to 200 entries.</small>}
             </div>
           </div>}
 
@@ -1727,12 +1822,23 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             <div className="pdf-left-info">Cryptographic validation and signed-copy workflows remain in MALENJO Sign. This panel only reports signature fields already present in the PDF.</div>
           </div>}
 
-          {(leftPanel==='bookmarks'||leftPanel==='layers')&&<div className="pdf-left-panel-body">
-            <div className="pdf-left-info">
-              {leftPanel==='bookmarks'
-                ? 'Bookmark discovery/authoring is not yet wired on current main. The canonical navigation slot is present without fake controls; bookmark functionality remains a separately traceable PDF requirement.'
-                : 'Optional-content/layer discovery is not yet wired on current main. The canonical navigation slot is present without pretending layer controls are operational.'}
+          {leftPanel==='bookmarks'&&<div className="pdf-left-panel-body">
+            <div className="pdf-edit-form">
+              {navigatorLoading&&<span role="status">Reading document bookmarks…</span>}
+              {bookmarkError&&<span role="alert">{bookmarkError}</span>}
+              {!navigatorLoading&&!pdfOutline.entries.length&&<span>No PDF outline/bookmarks found.</span>}
+              {pdfOutline.entries.map(entry=><button
+                key={entry.id}
+                style={{paddingLeft:8+entry.depth*12,textAlign:'left'}}
+                title={entry.url?'External document link — not opened automatically':entry.title}
+                onClick={()=>void openBookmark(entry)}
+              >{entry.title}{entry.url?' (external)':''}</button>)}
+              {pdfOutline.truncated&&<small>Bookmark display capped at 1,000 entries.</small>}
+              <small>Existing bookmarks are navigable. Authoring, editing and deleting bookmark trees remain to be implemented.</small>
             </div>
+          </div>}
+          {leftPanel==='layers'&&<div className="pdf-left-panel-body">
+            <div className="pdf-left-info">Optional-content/layer discovery and visibility controls are not yet implemented.</div>
           </div>}
         </section>}
       </aside>
