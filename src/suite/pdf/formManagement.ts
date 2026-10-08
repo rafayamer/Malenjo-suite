@@ -73,13 +73,15 @@ export async function deletePdfExistingFormField(
     if(!annots)continue;
     for(let index=annots.size()-1;index>=0;index--){
       const entry=annots.get(index);
-      if(!(entry instanceof PDFRef))continue;
+      // Imported PDFs can keep a widget dictionary directly in /Annots.
+      // Resolve both indirect refs and direct dictionaries, then compare the
+      // exact /Parent field identity (or the merged widget/field ref).
       let dict:PDFDict;
       try{dict=pdf.context.lookup(entry,PDFDict);}catch{continue;}
       const subtype=dict.get(subtypeKey);
       if(!(subtype instanceof PDFName)||subtype.toString()!=='/Widget')continue;
       const parent=dict.get(parentKey);
-      const belongsToField=entry.toString()===targetRef ||
+      const belongsToField=(entry instanceof PDFRef && entry.toString()===targetRef) ||
         (parent instanceof PDFRef && parent.toString()===targetRef);
       if(belongsToField)annots.remove(index);
     }
