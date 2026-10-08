@@ -29,10 +29,19 @@ import {
   type Citation,
   type SourceDocument,
 } from './rag';
-import { extractSourceDocument } from './sources';
+import { extractOpenDocumentSource, extractSourceDocument, isOpenDocumentAiSource } from './sources';
+import type { LibraryDocument } from '../files/types';
+import {
+  DEFAULT_AI_MODEL_PROFILE,
+  aiModelProfileByTag,
+  approvedInstalledModels,
+  formatModelDownloadSize,
+  preferredInstalledModel,
+} from './modelProfiles';
 
 interface Props {
   onBackToFiles(): void;
+  openDocuments: LibraryDocument[];
 }
 
 interface ChatMessage {
@@ -53,12 +62,18 @@ function formatBytes(value: number | null): string {
   return `${(value / 1024 ** 3).toFixed(1)} GB`;
 }
 
-export default function AiWorkspace({ onBackToFiles }: Props) {
+export default function AiWorkspace({ onBackToFiles, openDocuments }: Props) {
   const sourceInputRef = useRef<HTMLInputElement>(null);
   const activeJobRef = useRef<string | null>(null);
-  const [sources, setSources] = useState<SourceDocument[]>([]);
+  const [manualSources, setManualSources] = useState<SourceDocument[]>([]);
+  const [openSources, setOpenSources] = useState<SourceDocument[]>([]);
+  const [openSourceError, setOpenSourceError] = useState('');
+  const [openSourceLoading, setOpenSourceLoading] = useState(false);
+  const openSourceCacheRef = useRef(new Map<string,SourceDocument>());
+  const sources = useMemo(()=>[...manualSources,...openSources],[manualSources,openSources]);
+  const openSourceIds = useMemo(()=>new Set(openSources.map((source)=>source.id)),[openSources]);
   const [liteMode, setLiteMode] = useState(true);
-  const [provider, setProvider] = useState<AiProvider>('ollama');
+  const provider: AiProvider = 'ollama';
   const [statuses, setStatuses] = useState<Partial<Record<AiProvider, AiProviderStatus>>>({});
   const [model, setModel] = useState('');
   const [question, setQuestion] = useState('');
@@ -77,7 +92,7 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
   const limits = liteMode ? RAG_LIMITS.lite : RAG_LIMITS.normal;
   const desktopRuntime = isTauri();
   const setupCommand = desktopRuntime
-    ? (provider === 'ollama' ? 'ollama pull <reviewed-model>' : 'llama-server -m model.gguf --port 8080')
+    ? `ollama pull ${DEFAULT_AI_MODEL_PROFILE.tag}`
     : !currentStatus?.available
       ? 'npm run ai:codespace:setup'
       : !currentStatus.models.length
@@ -85,28 +100,28 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
         : 'npm run ai:codespace:check';
 
   async function refreshProviders() {
-    setNotice('Checking local model runtimes…');
-    const [ollama, llama] = await Promise.all([
-      getLocalAiStatus('ollama').catch((reason) => ({
-        provider: 'ollama' as const,
-        available: false,
-        baseUrl: 'http://127.0.0.1:11434',
-        models: [],
-        message: String(reason),
-      })),
-      getLocalAiStatus('llama-cpp').catch((reason) => ({
-        provider: 'llama-cpp' as const,
-        available: false,
-        baseUrl: 'http://127.0.0.1:8080',
-        models: [],
-        message: String(reason),
-      })),
-    ]);
-    setStatuses({ ollama, 'llama-cpp': llama });
+    setNotice('Checking local model runtime…');
+    const ollama = await getLocalAiStatus('ollama').catch((reason) => ({
+      provider: 'ollama' as const,
+      available: false,
+      baseUrl: 'http://127.0.0.1:11434',
+      models: [],
+      message: String(reason),
+    }));
+    const reviewedModels=approvedInstalledModels(ollama.models);
+    const reviewedStatus:AiProviderStatus={
+      ...ollama,
+      models:reviewedModels,
+      message:ollama.available
+        ? reviewedModels.length
+          ? 'Codespaces bridge reached the reviewed MALENJO Phi-4 model.'
+          : 'Ollama is reachable, but the reviewed MALENJO Phi-4 model is not installed.'
+        : ollama.message,
+    };
+    setStatuses({ ollama:reviewedStatus });
     setNotice('');
 
-    const preferred = provider === 'ollama' ? ollama : llama;
-    if (!model && preferred.models[0]) setModel(preferred.models[0].name);
+    if (!model && reviewedModels[0]) setModel(preferredInstalledModel(reviewedModels,'ollama'));
   }
 
   useEffect(() => {
@@ -122,9 +137,49 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
     const status = statuses[provider];
     if (!status) return;
     if (!status.models.some((item) => item.name === model)) {
-      setModel(status.models[0]?.name ?? '');
+      setModel(preferredInstalledModel(status.models,provider));
     }
   }, [model, provider, statuses]);
+
+  useEffect(()=>{
+    let cancelled=false;
+    const indexable=openDocuments.filter(isOpenDocumentAiSource);
+    const liveKeys=new Set(indexable.map((document)=>`${document.id}:${document.modifiedMs}:${document.sizeBytes}`));
+
+    for(const key of Array.from(openSourceCacheRef.current.keys())){
+      if(!liveKeys.has(key))openSourceCacheRef.current.delete(key);
+    }
+
+    async function syncOpenSources(){
+      if(!cancelled)setOpenSourceLoading(indexable.length>0);
+      const next:SourceDocument[]=[];
+      const failures:string[]=[];
+      for(const document of indexable){
+        const key=`${document.id}:${document.modifiedMs}:${document.sizeBytes}`;
+        try{
+          let source=openSourceCacheRef.current.get(key);
+          if(!source){
+            source=await extractOpenDocumentSource(document);
+            if(cancelled)return;
+            openSourceCacheRef.current.set(key,source);
+          }
+          next.push(source);
+        }catch(reason){
+          if(cancelled)return;
+          failures.push(`${document.name}: ${reason instanceof Error?reason.message:String(reason)}`);
+        }
+      }
+      if(cancelled)return;
+      setOpenSources(next);
+      setOpenSourceError(failures.length
+        ? `${failures.length} open document(s) could not be linked to AI knowledge. ${failures[0]}`
+        : '');
+      setOpenSourceLoading(false);
+    }
+
+    void syncOpenSources();
+    return ()=>{cancelled=true;};
+  },[openDocuments]);
 
   async function addSources(files: FileList | null) {
     if (!files?.length) return;
@@ -139,17 +194,21 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
         setError(reason instanceof Error ? reason.message : String(reason));
       }
     }
-    if (additions.length) setSources((current) => [...current, ...additions]);
+    if (additions.length) setManualSources((current) => [...current, ...additions]);
     setNotice(additions.length ? `Indexed ${additions.length} local source file(s).` : '');
   }
 
   function removeSource(sourceId: string) {
-    setSources((current) => current.filter((source) => source.id !== sourceId));
+    setManualSources((current) => current.filter((source) => source.id !== sourceId));
   }
 
   async function ask() {
     const value = question.trim();
     if (!value || busy) return;
+    if(openSourceLoading){
+      setError('Open documents are still being indexed. Ask again when the linked-source count finishes updating.');
+      return;
+    }
 
     setError('');
     setNotice('');
@@ -164,7 +223,7 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
         id: id('msg'),
         role: 'assistant',
         content: citations.length
-          ? 'Local retrieval is working and matching source passages are shown below, but no local model runtime/model is connected. Start Ollama or llama.cpp separately, then refresh runtime status.'
+          ? 'Local retrieval is working and matching source passages are shown below, but no local model runtime/model is connected. Start Ollama separately, then refresh runtime status.'
           : 'No local model runtime/model is connected, and no matching local source passage was retrieved.',
         citations,
       }]);
@@ -172,22 +231,40 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
     }
 
     const job = id('ai');
+    const assistantMessageId = id('msg');
     setActiveJob(job);
     activeJobRef.current = job;
     setBusy(true);
+    setMessages((current) => [...current, {
+      id: assistantMessageId,
+      role: 'assistant',
+      content: '',
+      citations,
+    }]);
     try {
-      const prompt = buildGroundedPrompt(value, citations, conversation);
-      const result = await runLocalAiChat(job, provider, model, prompt, liteMode);
-      setMessages((current) => [...current, {
-        id: id('msg'),
-        role: 'assistant',
-        content: result.content,
-        citations,
-        latencyMs: result.latencyMs,
-      }]);
+      const prompt = buildGroundedPrompt(value, citations, conversation, {liteMode});
+      const result = await runLocalAiChat(job, provider, model, prompt, liteMode, (content) => {
+        setMessages((current) => current.map((message) =>
+          message.id === assistantMessageId ? { ...message, content } : message,
+        ));
+      });
+      setMessages((current) => current.map((message) =>
+        message.id === assistantMessageId
+          ? { ...message, content: result.content, latencyMs: result.latencyMs }
+          : message,
+      ));
     } catch (reason) {
       const text = reason instanceof Error ? reason.message : String(reason);
-      if (!/cancelled/i.test(text)) setError(text);
+      if (activeJobRef.current !== job || (reason instanceof Error && reason.name === 'AbortError') || /cancelled|aborted/i.test(text)) {
+        setMessages((current)=>current.filter((message)=>message.id!==assistantMessageId));
+      } else {
+        setError(text);
+        setMessages((current)=>current.map((message)=>
+          message.id===assistantMessageId
+            ? { ...message, content:`Generation stopped: ${text}` }
+            : message,
+        ));
+      }
     } finally {
       setBusy(false);
       setActiveJob(null);
@@ -230,7 +307,7 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
       </div>
     </div>
 
-    {(notice || error) && <div className={error ? 'ai-message error' : 'ai-message'}>{error || notice}</div>}
+    {(notice || error || openSourceError || openSourceLoading) && <div className={(error || openSourceError) ? 'ai-message error' : 'ai-message'}>{error || openSourceError || (openSourceLoading ? `Indexing ${openDocuments.filter(isOpenDocumentAiSource).length} open document(s) for AI…` : notice)}</div>}
 
     <div className="ai-layout">
       <aside className="ai-sources">
@@ -239,20 +316,26 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
           <span><b>{sources.length}</b> files</span>
           <span><b>{index.chunks.length}</b> chunks</span>
           <span><b>{index.indexedChars.toLocaleString()}</b> chars indexed</span>
+          {openSourceLoading && <strong>Indexing open tabs…</strong>}
           {index.truncated && <strong>Index truncated by {liteMode ? 'Lite' : 'memory'} limits</strong>}
         </div>
 
         <div className="source-list">
-          {sources.map((source) => <div key={source.id}>
-            <span><b>{source.name}</b><small>{source.text.length.toLocaleString()} chars</small></span>
-            <button title="Remove source" onClick={() => removeSource(source.id)}><X size={14}/></button>
-          </div>)}
-          {!sources.length && <p>Add PDF, Office, text, Markdown, CSV or JSON files. Source content remains in this browser/desktop session.</p>}
+          {sources.map((source) => {
+            const linked=openSourceIds.has(source.id);
+            return <div key={source.id}>
+              <span><b>{source.name}</b><small>{linked?'Open tab · ':''}{source.text.length.toLocaleString()} chars</small></span>
+              {linked
+                ? <small title="This source follows an open MALENJO document tab.">Linked</small>
+                : <button title="Remove source" onClick={() => removeSource(source.id)}><X size={14}/></button>}
+            </div>;
+          })}
+          {!sources.length && <p>Open PDF/Office documents in MALENJO or add local sources here. Open supported tabs are linked automatically.</p>}
         </div>
 
         <div className="ai-security-card">
           <ShieldCheck size={16}/>
-          <div><b>Untrusted-document boundary</b><span>Retrieved source text is quoted as data. Embedded prompts and role-change instructions are not trusted.</span></div>
+          <div><b>Untrusted-document boundary</b><span>Open tabs are indexed automatically from their opened/saved bytes. Unsaved editor changes are not yet included. Retrieved source text is quoted as data; embedded prompts are not trusted.</span></div>
         </div>
       </aside>
 
@@ -279,7 +362,7 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
             </div> : null}
             {message.latencyMs !== undefined && <small className="ai-latency">{message.latencyMs} ms local inference</small>}
           </article>)}
-          {busy && <div className="ai-thinking"><LoaderCircle className="spin" size={17}/> Running local model…</div>}
+          {busy && <div className="ai-thinking"><LoaderCircle className="spin" size={17}/> {messages.some((message)=>message.role==='assistant'&&message.content) ? 'Generating locally…' : 'Loading local model…'}</div>}
         </div>
 
         <div className="retrieval-preview">
@@ -302,27 +385,20 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
           />
           {busy
             ? <button className="danger" onClick={() => void cancel()}><Square size={16}/> Cancel</button>
-            : <button disabled={!question.trim()} onClick={() => void ask()}><Send size={16}/> Send</button>}
+            : <button disabled={!question.trim()||openSourceLoading} onClick={() => void ask()}><Send size={16}/> Send</button>}
         </div>
       </main>
 
       <aside className="ai-runtime">
         <div className="ai-pane-title">Local runtime</div>
-        <label>Provider
-          <select value={provider} onChange={(event) => setProvider(event.target.value as AiProvider)}>
-            <option value="ollama">Ollama</option>
-            <option value="llama-cpp">llama.cpp server</option>
-          </select>
-        </label>
-
         <div className={currentStatus?.available ? 'runtime-card online' : 'runtime-card'}>
           <Cpu size={18}/>
-          <div><b>{provider === 'ollama' ? 'Ollama' : 'llama.cpp'}</b><span>{currentStatus?.message ?? 'Status not checked.'}</span><code>{currentStatus?.baseUrl ?? 'loopback only'}</code></div>
+          <div><b>Ollama · MALENJO Phi-4</b><span>{currentStatus?.message ?? 'Status not checked.'}</span><code>{currentStatus?.baseUrl ?? 'loopback only'}</code></div>
         </div>
 
         <label>Model
-          <select value={model} disabled={!currentStatus?.models.length} onChange={(event) => setModel(event.target.value)}>
-            {!currentStatus?.models.length && <option value="">No local model reported</option>}
+          <select value={model} disabled>
+            {!currentStatus?.models.length && <option value="">Reviewed Phi-4 not installed</option>}
             {currentStatus?.models.map((item) => <option key={item.name} value={item.name}>{item.name}</option>)}
           </select>
         </label>
@@ -330,10 +406,13 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
         {currentStatus?.models.find((item) => item.name === model) && <div className="model-meta">
           {(() => {
             const item = currentStatus.models.find((entry) => entry.name === model)!;
+            const profile=aiModelProfileByTag(item.name);
             return <>
               <span>Size <b>{formatBytes(item.sizeBytes)}</b></span>
               <span>Parameters <b>{item.parameterSize ?? 'not reported'}</b></span>
               <span>Quantization <b>{item.quantization ?? 'not reported'}</b></span>
+              <span>Profile <b>{profile?.resourceClass ?? 'custom local'}</b></span>
+              <span>License <b>{profile?.license ?? 'not registry-reviewed'}</b></span>
             </>;
           })()}
         </div>}
@@ -343,8 +422,9 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
           <span>Corpus cap <b>{(limits.maxChars / 1000).toFixed(0)}k chars</b></span>
           <span>Chunk cap <b>{limits.maxChunks}</b></span>
           <span>Retrieved passages <b>{limits.topK}</b></span>
-          <span>Model context <b>{liteMode ? '2,048' : '4,096'} tokens</b></span>
-          <p>{liteMode ? 'The model is requested with keep_alive=0 on Ollama to release memory after each answer.' : 'Ollama may keep the selected model warm for up to five minutes.'}</p>
+          <span>Model context <b>{liteMode ? '4,096' : '8,192'} tokens</b></span>
+          <span>Answer cap <b>{liteMode ? '128' : '768'} tokens</b></span>
+          <p>{liteMode ? 'Codespaces streams tokens as they arrive and keeps Ollama warm for two minutes to avoid a full model reload on every question.' : 'Ollama may keep the selected model warm for up to five minutes.'}</p>
         </section>
 
         <section className="model-install-note">
@@ -357,6 +437,10 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
                 ? 'The runtime is reachable, but it reports no installed model. Use the reviewed development-model bootstrap, then refresh status.'
                 : 'No local model runtime is reachable inside this Codespace. Start the explicit loopback runtime bootstrap first.'}</p>
           <code>{setupCommand}</code>
+          {!desktopRuntime&&<p>
+            Reviewed default: <b>{DEFAULT_AI_MODEL_PROFILE.displayName}</b> · {DEFAULT_AI_MODEL_PROFILE.license} · {formatModelDownloadSize(DEFAULT_AI_MODEL_PROFILE.approximateDownloadBytes)}.
+            MALENJO exposes this single reviewed model at runtime. Future model upgrades replace this profile after review rather than adding parallel model choices.
+          </p>}
         </section>
       </aside>
     </div>

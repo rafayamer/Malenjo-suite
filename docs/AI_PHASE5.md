@@ -24,11 +24,12 @@ No arbitrary endpoint can be supplied by the frontend.
 
 Model discovery and model installation are separate:
 
-- MALENJO can list models already reported by a local runtime.
+- MALENJO exposes exactly one reviewed runtime model: Phi-4 Mini Q4_K_M.
+- Model upgrades replace the reviewed profile after provenance/license/evaluation review; they are not added as parallel user choices.
 - MALENJO chat does not execute `ollama pull`.
 - MALENJO chat does not download GGUF files.
 - MALENJO does not start a model server on application startup.
-- The UI shows external installation/launch commands as information only.
+- The UI shows the explicit external installation/launch command as information only.
 
 ## Local source indexing
 
@@ -53,9 +54,11 @@ The index is lexical and local. It uses bounded character windows with overlap a
 - 240 chunks;
 - about 700 characters per chunk;
 - top 3 retrieved passages;
-- 2,048-token requested Ollama context;
-- 512-token llama.cpp completion cap;
-- Ollama `keep_alive=0s` to encourage release of model memory after each request.
+- 4,096-token requested Ollama context in Codespaces;
+- 128-token Lite answer cap;
+- streamed Ollama output;
+- two-minute Lite keep-alive to avoid reloading the model for every question;
+- repetition-loop circuit breaker.
 
 ## Prompt-injection boundary
 

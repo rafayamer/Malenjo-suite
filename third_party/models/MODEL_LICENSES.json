@@ -1,19 +1,26 @@
 {
-  "schemaVersion": 1,
-  "reviewedAt": "2026-10-05",
-  "purpose": "Explicitly reviewed local development models for MALENJO student/classroom testing. Inclusion here does not bundle model weights.",
+  "schemaVersion": 2,
+  "reviewedAt": "2026-10-08",
+  "purpose": "Single reviewed local MALENJO model profile. Inclusion here does not bundle model weights.",
+  "defaultProfileId": "phi4-mini-q4-mit",
   "models": [
     {
+      "id": "phi4-mini-q4-mit",
       "provider": "ollama",
-      "tag": "qwen3:0.6b",
-      "displayName": "Qwen3 0.6B",
-      "approximateDownloadBytes": 523000000,
-      "expectedDigestPrefix": "7df6b6e09427",
-      "license": "Apache-2.0",
-      "upstreamModel": "Qwen/Qwen3-0.6B",
-      "upstreamUrl": "https://huggingface.co/Qwen/Qwen3-0.6B",
-      "providerUrl": "https://ollama.com/library/qwen3:0.6b",
-      "notes": "Development-only default chosen for small Codespaces footprint. Model weights are not committed to this repository."
+      "tag": "phi4-mini:3.8b-q4_K_M",
+      "displayName": "Phi-4 Mini 3.8B Q4_K_M",
+      "resourceClass": "standard",
+      "approximateDownloadBytes": 2500000000,
+      "expectedDigestPrefix": "78fad5d182a7",
+      "license": "MIT",
+      "upstreamModel": "microsoft/Phi-4-mini-instruct",
+      "upstreamRevision": "cfbefac",
+      "upstreamUrl": "https://huggingface.co/microsoft/Phi-4-mini-instruct",
+      "providerUrl": "https://ollama.com/library/phi4-mini:3.8b-q4_K_M",
+      "reviewState": "reviewed",
+      "installable": true,
+      "fineTunable": true,
+      "notes": "Sole MALENJO local model profile. MIT-licensed upstream weights; runtime weights remain external and are never committed to this repository. Fine-tuning produces separate MALENJO adapter/checkpoint artifacts with their own provenance."
     }
   ]
 }

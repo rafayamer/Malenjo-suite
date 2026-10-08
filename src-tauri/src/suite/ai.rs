@@ -18,6 +18,7 @@ const MAX_PROMPT_CHARS: usize = 128_000;
 #[serde(rename_all = "camelCase")]
 pub struct AiModel {
     pub name: String,
+    pub digest: Option<String>,
     pub size_bytes: Option<u64>,
     pub parameter_size: Option<String>,
     pub quantization: Option<String>,
@@ -111,6 +112,7 @@ fn parse_ollama_models(value: &Value) -> Vec<AiModel> {
                 .to_string();
             Some(AiModel {
                 name,
+                digest: model.get("digest").and_then(Value::as_str).map(str::to_string),
                 size_bytes: model.get("size").and_then(Value::as_u64),
                 parameter_size: model
                     .pointer("/details/parameter_size")
@@ -135,6 +137,7 @@ fn parse_llama_models(value: &Value) -> Vec<AiModel> {
             let name = model.get("id").and_then(Value::as_str)?.to_string();
             Some(AiModel {
                 name,
+                digest: None,
                 size_bytes: None,
                 parameter_size: None,
                 quantization: None,
@@ -242,14 +245,19 @@ pub async fn local_ai_chat(
         Provider::Ollama => json!({
             "model": model,
             "stream": false,
-            "keep_alive": if lite_mode { "0s" } else { "5m" },
+            "keep_alive": if lite_mode { "2m" } else { "5m" },
             "messages": [
                 {"role": "system", "content": system_prompt()},
                 {"role": "user", "content": prompt}
             ],
             "options": {
-                "temperature": 0.2,
-                "num_ctx": if lite_mode { 2048 } else { 4096 }
+                "temperature": 0.35,
+                "top_k": 40,
+                "top_p": 0.9,
+                "repeat_penalty": 1.18,
+                "repeat_last_n": 64,
+                "num_ctx": if lite_mode { 4096 } else { 8192 },
+                "num_predict": if lite_mode { 128 } else { 768 }
             }
         }),
         Provider::LlamaCpp => json!({
@@ -294,6 +302,12 @@ pub async fn local_ai_chat(
     };
 
     cancellations().lock().ok().map(|mut jobs| jobs.remove(&job_id));
+
+    if let Some(error) = value.get("error").and_then(Value::as_str) {
+        if !error.trim().is_empty() {
+            return Err(format!("Local model runtime error: {}", error.trim()));
+        }
+    }
 
     let content = match provider {
         Provider::Ollama => value

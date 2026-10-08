@@ -4,6 +4,7 @@ export type AiProvider = 'ollama' | 'llama-cpp';
 
 export interface AiModel {
   name: string;
+  digest: string | null;
   sizeBytes: number | null;
   parameterSize: string | null;
   quantization: string | null;
@@ -24,7 +25,27 @@ export interface AiChatResult {
   latencyMs: number;
 }
 
+export type AiTokenCallback = (content: string) => void;
+
 const browserJobs = new Map<string, AbortController>();
+
+export function hasDegenerateRepetition(content:string):boolean {
+  const tokens=content.trim().split(/\s+/).filter(Boolean).slice(-64);
+  for(let width=1;width<=4;width+=1){
+    const minimumRepeats=16;
+    // Short intentional repeated answers must not trip the loop guard.
+    if(tokens.length<width*minimumRepeats)continue;
+    const pattern=tokens.slice(-width);
+    let repeats=0;
+    for(let end=tokens.length;end>=width;end-=width){
+      const candidate=tokens.slice(end-width,end);
+      if(candidate.some((token,index)=>token!==pattern[index]))break;
+      repeats+=1;
+    }
+    if(repeats>=minimumRepeats)return true;
+  }
+  return false;
+}
 
 function browserPrefix(provider: AiProvider): string {
   return provider === 'ollama' ? '/__malenjo_ai/ollama' : '/__malenjo_ai/llama';
@@ -45,6 +66,7 @@ function parseOllamaModels(value: unknown): AiModel[] {
     const details = item.details as Record<string, unknown> | undefined;
     return {
       name: String(item.name ?? item.model ?? ''),
+      digest: typeof item.digest === 'string' ? item.digest : null,
       sizeBytes: typeof item.size === 'number' ? item.size : null,
       parameterSize: typeof details?.parameter_size === 'string' ? details.parameter_size : null,
       quantization: typeof details?.quantization_level === 'string' ? details.quantization_level : null,
@@ -57,6 +79,7 @@ function parseLlamaModels(value: unknown): AiModel[] {
   if (!Array.isArray(models)) return [];
   return models.map((item) => ({
     name: String(item.id ?? ''),
+    digest: null,
     sizeBytes: null,
     parameterSize: null,
     quantization: null,
@@ -108,6 +131,7 @@ async function runBrowserAiChat(
   model: string,
   prompt: string,
   liteMode: boolean,
+  onToken?: AiTokenCallback,
 ): Promise<AiChatResult> {
   const prefix = browserPrefix(provider);
   const controller = new AbortController();
@@ -117,15 +141,20 @@ async function runBrowserAiChat(
   const payload = provider === 'ollama'
     ? {
         model,
-        stream: false,
-        keep_alive: liteMode ? '0s' : '5m',
+        stream: true,
+        keep_alive: liteMode ? '2m' : '5m',
         messages: [
           { role:'system', content:systemPrompt() },
           { role:'user', content:prompt },
         ],
         options: {
-          temperature: 0.2,
-          num_ctx: liteMode ? 2048 : 4096,
+          temperature: 0.35,
+          top_k: 40,
+          top_p: 0.9,
+          repeat_penalty: 1.18,
+          repeat_last_n: 64,
+          num_ctx: liteMode ? 4096 : 8192,
+          num_predict: liteMode ? 128 : 768,
         },
       }
     : {
@@ -149,11 +178,62 @@ async function runBrowserAiChat(
         signal:controller.signal,
       },
     );
-    if (!response.ok) throw new Error(`Codespaces AI bridge returned HTTP ${response.status}.`);
-    const value = await response.json() as Record<string, unknown>;
-    const content = provider === 'ollama'
-      ? String((value.message as Record<string, unknown> | undefined)?.content ?? '')
-      : String((((value.choices as Array<Record<string, unknown>> | undefined)?.[0]?.message as Record<string, unknown> | undefined)?.content) ?? '');
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(`Codespaces AI bridge returned HTTP ${response.status}${detail ? `: ${detail.slice(0, 500)}` : '.'}`);
+    }
+
+    let content = '';
+    if (provider === 'ollama') {
+      if (!response.body) throw new Error('Codespaces AI stream has no response body.');
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let pending = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        pending += decoder.decode(value, { stream:true });
+        const lines = pending.split('\n');
+        pending = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const chunk = JSON.parse(line) as Record<string, unknown>;
+          if(chunk.error){
+            await reader.cancel();
+            const detail=typeof chunk.error==='string' ? chunk.error : JSON.stringify(chunk.error);
+            throw new Error(`Local model runtime error: ${detail.slice(0,500)}`);
+          }
+          const token = String((chunk.message as Record<string, unknown> | undefined)?.content ?? '');
+          if (token) {
+            content += token;
+            if(hasDegenerateRepetition(content)){
+              await reader.cancel();
+              throw new Error('Local model entered a repetition loop. Generation was stopped; select a higher-quality model and retry.');
+            }
+            onToken?.(content);
+          }
+        }
+      }
+      if (pending.trim()) {
+        const chunk = JSON.parse(pending) as Record<string, unknown>;
+        if(chunk.error){
+          const detail=typeof chunk.error==='string' ? chunk.error : JSON.stringify(chunk.error);
+          throw new Error(`Local model runtime error: ${detail.slice(0,500)}`);
+        }
+        const token = String((chunk.message as Record<string, unknown> | undefined)?.content ?? '');
+        if (token) {
+          content += token;
+          if(hasDegenerateRepetition(content)){
+            throw new Error('Local model entered a repetition loop. Generation was stopped; select a higher-quality model and retry.');
+          }
+          onToken?.(content);
+        }
+      }
+    } else {
+      const value = await response.json() as Record<string, unknown>;
+      content = String((((value.choices as Array<Record<string, unknown>> | undefined)?.[0]?.message as Record<string, unknown> | undefined)?.content) ?? '');
+      if (content) onToken?.(content);
+    }
 
     if (!content.trim()) throw new Error('Local model returned an empty response.');
     return {
@@ -173,9 +253,15 @@ export async function runLocalAiChat(
   model: string,
   prompt: string,
   liteMode: boolean,
+  onToken?: AiTokenCallback,
 ): Promise<AiChatResult> {
-  if (!isTauri()) return runBrowserAiChat(jobId, provider, model, prompt, liteMode);
-  return invoke<AiChatResult>('local_ai_chat', { jobId, provider, model, prompt, liteMode });
+  if (!isTauri()) return runBrowserAiChat(jobId, provider, model, prompt, liteMode, onToken);
+  const result = await invoke<AiChatResult>('local_ai_chat', { jobId, provider, model, prompt, liteMode });
+  if (hasDegenerateRepetition(result.content)) {
+    throw new Error('Local model entered a repetition loop. Generation was stopped.');
+  }
+  onToken?.(result.content);
+  return result;
 }
 
 export async function cancelLocalAi(jobId: string): Promise<boolean> {
