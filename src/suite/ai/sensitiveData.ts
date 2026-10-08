@@ -13,27 +13,68 @@ export interface AiSensitiveAssessment{
   reason:string;
 }
 
-function patterns():Array<{kind:SensitiveKind;regex:RegExp}>{
+interface SensitivePattern{
+  kind:SensitiveKind;
+  regex:RegExp;
+  accept?:(value:string,start:number,text:string)=>boolean;
+}
+
+function digitCount(value:string):number{
+  return (value.match(/\d/g)??[]).length;
+}
+
+function isPhoneCandidate(value:string,start:number,text:string):boolean{
+  const before=start>0?text[start-1]:'';
+  const after=text[start+value.length]??'';
+  if(/\d/.test(before)||/\d/.test(after))return false;
+
+  const trimmed=value.trim();
+  const digits=digitCount(trimmed);
+  if(digits<8||digits>15)return false;
+
+  // Avoid treating common date/reference layouts as phone numbers.
+  if(/^\d{4}-\d{2}-\d{2}$/.test(trimmed))return false;
+  if(/^\d{4}-\d{4}$/.test(trimmed))return false;
+
+  return true;
+}
+
+function patterns():SensitivePattern[]{
   return [
     {kind:'email',regex:/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi},
     {kind:'national-id-like',regex:/\b\d{5}-\d{7}-\d\b/g},
     {kind:'payment-card-like',regex:/\b(?:\d[ -]*?){13,19}\b/g},
-    {kind:'access-token-like',regex:/\b(?:sk|api|token|bearer)[-_ ]?[A-Za-z0-9._-]{12,}\b/gi},
-    {kind:'phone-like',regex:/(?<!\d)\+?\d[\d ()-]{7,}\d(?!\d)/g},
+    // RFC 6750 bearer credentials can use ALPHA / DIGIT / "-" / "." / "_" /
+    // "~" / "+" / "/" and optional "=" padding. Keep the whole credential
+    // inside the finding so redaction cannot leave a valid suffix behind.
+    {kind:'access-token-like',regex:/\bBearer\s+[A-Za-z0-9._~+\/-]{12,}={0,2}(?![A-Za-z0-9._~+\/=\-])/gi},
+    {kind:'access-token-like',regex:/\b(?:sk|api|token)[-_ ]?[A-Za-z0-9._~+\/-]{12,}={0,2}(?![A-Za-z0-9._~+\/=\-])/gi},
+    // Deliberately avoid lookbehind because the production browser target
+    // includes Safari 13. Digit boundaries are checked in isPhoneCandidate().
+    {kind:'phone-like',regex:/\+?\d[\d ()-]{6,}\d/g,accept:isPhoneCandidate},
   ];
 }
 
 export function findSensitiveData(text:string):SensitiveFinding[]{
   const findings:SensitiveFinding[]=[];
-  for(const {kind,regex} of patterns()){
+  for(const {kind,regex,accept} of patterns()){
+    // Regex instances are created per call, so matchAll state is not shared.
     for(const match of text.matchAll(regex)){
       const start=match.index??0;
-      findings.push({kind,start,end:start+match[0].length});
+      const value=match[0];
+      if(accept&&!accept(value,start,text))continue;
+      findings.push({kind,start,end:start+value.length});
     }
   }
-  return findings
-    .sort((a,b)=>a.start-b.start||b.end-a.end)
-    .filter((item,index,all)=>index===0||item.start>=all[index-1]!.end);
+
+  const sorted=findings.sort((a,b)=>a.start-b.start||b.end-a.end);
+  const retained:SensitiveFinding[]=[];
+  for(const finding of sorted){
+    const previous=retained.at(-1);
+    if(previous&&finding.start<previous.end)continue;
+    retained.push(finding);
+  }
+  return retained;
 }
 
 export function assessAiSensitiveData(text:string,transport:AiTransport):AiSensitiveAssessment{
