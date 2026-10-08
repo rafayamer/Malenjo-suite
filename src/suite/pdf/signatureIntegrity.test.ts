@@ -325,4 +325,42 @@ describe('signed PDF mutation safety',()=>{
     );
     expect(hasPriorPdfSignatureEvidence(comments)).toBe(false);
   });
+
+  it('detects historical signature entries with escaped PDF names',async()=>{
+    const pdf=await PDFDocument.create();
+    pdf.addPage([300,400]);
+    const base=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const revision=new TextEncoder().encode(
+      '\n17 0 obj\n<< /Type /Sig /Byte#52ange [0 100 200 300] /Cont#65nts <CAFE> >>\nendobj\n'+
+      'startxref\n0\n%%EOF\n',
+    );
+    const joined=new Uint8Array(base.byteLength+revision.byteLength);
+    joined.set(base);joined.set(revision,base.byteLength);
+    expect(hasPriorPdfSignatureEvidence(joined)).toBe(true);
+  });
+
+  it('recognizes historical signatures after a literal string containing percent',async()=>{
+    const pdf=await PDFDocument.create();
+    pdf.addPage([300,400]);
+    const base=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const revision=new TextEncoder().encode(
+      '\n18 0 obj\n<< /Type /Sig /Reason (Approved 100%) '+
+      '/ByteRange [0 100 200 300] /Contents <AABB> >>\nendobj\n'+
+      'startxref\n0\n%%EOF\n',
+    );
+    const joined=new Uint8Array(base.byteLength+revision.byteLength);
+    joined.set(base);joined.set(revision,base.byteLength);
+    expect(hasPriorPdfSignatureEvidence(joined)).toBe(true);
+  });
+
+  it('ignores comments and incomplete escaped names in unsigned revisions',()=>{
+    const data=new TextEncoder().encode(
+      '%PDF-1.7\n%%EOF\n% /Byte#52ange [0 1 2 3] /Cont#65nts <CAFE>\n%%EOF\n',
+    );
+    expect(hasPriorPdfSignatureEvidence(data)).toBe(false);
+    const wrong=new TextEncoder().encode(
+      '%PDF-1.7\n%%EOF\n/Byte#52angeExtra [0 1 2 3] /Contents <CAFE>\n%%EOF\n',
+    );
+    expect(hasPriorPdfSignatureEvidence(wrong)).toBe(false);
+  });
 });
