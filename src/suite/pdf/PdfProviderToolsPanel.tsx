@@ -299,7 +299,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     </details>}
     <details className="stirling-component-details" aria-label="Stirling PDF parity inventory">
       <summary>
-        Stirling 90-tool parity register: {parity.upstreamFixtureMatched} tested API matches, {parity.frontendOnlyRouteMatches} frontend-only matches, {parity.sourceClassificationPending} source items awaiting classification;
+        Stirling 90-tool parity register: {parity.upstreamFixtureMatched} tested API matches, {parity.pinnedControllerOnlyRouteMatches} additional Java controller matches, {parity.frontendOnlyRouteMatches} frontend-only matches, {parity.sourceClassificationPending} source items awaiting classification;
         {catalogLoaded?` ${parity.liveRoutes} live routes / ${parity.providerEnabled} provider-enabled (unverified)`:' load local provider to check runtime'}
       </summary>
       <p className="stirling-provider-message">
@@ -313,7 +313,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
           <tbody>
             {parity.rows.map((row)=><tr key={row.id}>
               <th scope="row">{row.order}. {row.id}</th>
-              <td>{row.expectedEndpoint??(row.frontendRoute?`${row.frontendRoute} (frontend only)`:'No pinned route identified')}</td>
+              <td>{row.expectedEndpoint?`${row.expectedEndpoint}${row.controllerOnly?' (controller only)':''}`:(row.frontendRoute?`${row.frontendRoute} (frontend only)`:'No pinned route identified')}</td>
               <td>{row.locallySourceAuditedPartial?'Local foundation partial; ':''}{row.state==='provider-reports-available'?'Reported enabled; unverified'
                 :row.state==='provider-disabled'?'Provider disabled'
                 :row.state==='not-in-live-openapi'?'Missing from loaded OpenAPI'
