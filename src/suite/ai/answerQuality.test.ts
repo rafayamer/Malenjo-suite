@@ -22,6 +22,22 @@ describe('AI answer quality verifier',()=>{
     expect(report.invalidCitationIds).toEqual([]);
   });
 
+  it('accepts citations before or immediately after sentence punctuation',()=>{
+    const before=verifyAiAnswerQuality(
+      'The manual states annual testing [S1].',
+      citations,
+      {sourcesWereAvailable:true},
+    );
+    const after=verifyAiAnswerQuality(
+      'The manual states annual testing. [S1]',
+      citations,
+      {sourcesWereAvailable:true},
+    );
+    expect(before.passed).toBe(true);
+    expect(after.passed).toBe(true);
+    expect(after.citationCoverage).toBe(1);
+  });
+
   it('rejects invented citation IDs',()=>{
     const report=verifyAiAnswerQuality(
       'The manual states that testing is monthly. [S9]',
