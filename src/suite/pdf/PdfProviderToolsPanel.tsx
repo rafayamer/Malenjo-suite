@@ -228,8 +228,8 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         // A password-protected result cannot be loaded back into the active
         // editing view without credentials. Preserve the source and export
         // the new protected PDF as a separate local file instead.
-        if(/\\/add-password(?:\\/|$)/i.test(selected.path)){
-          const saved=await provider.saveResponse(response,sourceName.replace(/\\.pdf$/i,'')+'-protected');
+        if(selected.path.toLowerCase().endsWith('/add-password')){
+          const saved=await provider.saveResponse(response,localExportStem(sourceName)+'-protected');
           setNotice(saved?'Protected PDF copy saved; original remains unchanged.':'Protected PDF export cancelled; original unchanged.');
         }else{
           const applied=await onApplyPdf(`Local PDF core: ${selected.summary}`,Uint8Array.from(response.bytes));
@@ -237,7 +237,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
           setNotice(`${selected.summary} completed and was applied to the current MALENJO working copy.`);
         }
       }else{
-        const saved=await provider.saveResponse(response,sourceName.replace(/\\.pdf$/i,'')||'malenjo-output');
+        const saved=await provider.saveResponse(response,localExportStem(sourceName));
         setNotice(saved?`${selected.summary} completed. Output saved.`:`${selected.summary} completed; output save was cancelled.`);
       }
     }catch(reason){setError(reason instanceof Error?reason.message:String(reason));}
