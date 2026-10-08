@@ -63,14 +63,18 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     try{
       const [next,nextComponents]=await Promise.all([provider.status(),provider.componentStatus()]);
       setStatus(next);setComponents(nextComponents);
-      if(loadCatalog&&next.running){
+      if(next.running&&loadCatalog){
         const catalog=await provider.listOperations();
         setOperations(catalog);setCatalogLoaded(true);
+      }else if(!next.running){
+        // A sidecar may stop outside this panel. Never display stale
+        // catalog entries as live provider availability or runnable tools.
+        setOperations([]);setCatalogLoaded(false);setSelectedId('');
       }
     }catch(reason){setError(reason instanceof Error?reason.message:String(reason));}
   };
 
-  useEffect(()=>{void refresh(false);},[]);
+  useEffect(()=>{void refresh(true);},[]);
 
   const filtered=useMemo(()=>{
     const terms=search.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -257,7 +261,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
                 :'Needs upstream source investigation'}</td>
               <td><button type="button"
                 disabled={!row.operation?.capability.available}
-                onClick={()=>{if(row.operation){setAllCategories(true);setSelectedId(row.operation.id);}}}>
+                onClick={()=>{if(row.operation){setAllCategories(true);setSearch('');setSelectedId(row.operation.id);}}}>
                 Open
               </button></td>
             </tr>)}
