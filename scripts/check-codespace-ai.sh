@@ -79,7 +79,7 @@ if [[ "$MODEL_STATE" != "found" ]]; then
   exit 3
 fi
 
-if [[ -n "$MODEL_DIGEST" && "$MODEL_DIGEST" != "$EXPECTED_DIGEST_PREFIX"* ]]; then
+if [[ -z "$MODEL_DIGEST" || "$MODEL_DIGEST" != "$EXPECTED_DIGEST_PREFIX"* ]]; then
   echo "Reviewed model tag is installed but its digest does not match the reviewed identity."
   echo "Expected prefix: $EXPECTED_DIGEST_PREFIX"
   echo "Reported digest: $MODEL_DIGEST"
