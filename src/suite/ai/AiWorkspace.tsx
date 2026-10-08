@@ -202,7 +202,14 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
       ));
     } catch (reason) {
       const text = reason instanceof Error ? reason.message : String(reason);
-      if (!/cancelled/i.test(text)) setError(text);
+      if (!/cancelled/i.test(text)) {
+        setError(text);
+        setMessages((current)=>current.map((message)=>
+          message.id===assistantMessageId
+            ? { ...message, content:`Generation stopped: ${text}` }
+            : message,
+        ));
+      }
     } finally {
       setBusy(false);
       setActiveJob(null);
@@ -362,7 +369,7 @@ export default function AiWorkspace({ onBackToFiles }: Props) {
           <span>Chunk cap <b>{limits.maxChunks}</b></span>
           <span>Retrieved passages <b>{limits.topK}</b></span>
           <span>Model context <b>{liteMode ? '1,536' : '4,096'} tokens</b></span>
-          <span>Answer cap <b>{liteMode ? '192' : '768'} tokens</b></span>
+          <span>Answer cap <b>{liteMode ? '128' : '768'} tokens</b></span>
           <p>{liteMode ? 'Codespaces streams tokens as they arrive and keeps Ollama warm for two minutes to avoid a full model reload on every question.' : 'Ollama may keep the selected model warm for up to five minutes.'}</p>
         </section>
 
