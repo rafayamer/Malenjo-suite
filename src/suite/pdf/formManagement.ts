@@ -1,4 +1,4 @@
-import {PDFDict,PDFDocument,PDFName,PDFSignature} from 'pdf-lib';
+import {PDFArray,PDFDict,PDFDocument,PDFName,PDFRef,PDFSignature} from 'pdf-lib';
 
 export interface PdfFormFieldPropertyUpdate {
   name:string;
@@ -61,6 +61,29 @@ export async function deletePdfExistingFormField(
   const field=form.getFieldMaybe(name);
   if(!field)throw new Error('PDF form field "'+name+'" no longer exists.');
   if(field instanceof PDFSignature)throw new Error('Signature fields cannot be removed by form management.');
+  // pdf-lib removes the AcroForm field but some imported documents retain its
+  // widget references in page /Annots. Capture exact refs BEFORE removal so
+  // no neighbor's widgets or unrelated review annotations are affected.
+  const targetRef=field.ref.toString();
+  const annotsKey=PDFName.of('Annots');
+  const subtypeKey=PDFName.of('Subtype');
+  const parentKey=PDFName.of('Parent');
+  for(const page of pdf.getPages()){
+    const annots=page.node.lookupMaybe(annotsKey,PDFArray);
+    if(!annots)continue;
+    for(let index=annots.size()-1;index>=0;index--){
+      const entry=annots.get(index);
+      if(!(entry instanceof PDFRef))continue;
+      let dict:PDFDict;
+      try{dict=pdf.context.lookup(entry,PDFDict);}catch{continue;}
+      const subtype=dict.get(subtypeKey);
+      if(!(subtype instanceof PDFName)||subtype.toString()!=='/Widget')continue;
+      const parent=dict.get(parentKey);
+      const belongsToField=entry.toString()===targetRef ||
+        (parent instanceof PDFRef && parent.toString()===targetRef);
+      if(belongsToField)annots.remove(index);
+    }
+  }
   form.removeField(field);
   return Uint8Array.from(await pdf.save({useObjectStreams:false,updateFieldAppearances:false}));
 }
