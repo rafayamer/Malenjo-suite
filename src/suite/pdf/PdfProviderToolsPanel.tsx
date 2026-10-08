@@ -15,6 +15,7 @@ import type {
 import { fieldAcceptsActivePdf } from './providerFileInputs';
 import { computePdfParityCoverage } from './parityCoverage';
 import { inspectPdfDocumentInfo } from './pdfInfo';
+import { classifyPdfProviderResult } from './providerResultGuard';
 import { loadPdfBytes,disposePdf } from './engine';
 import { extractPdfDocumentText } from './textExport';
 
@@ -213,32 +214,22 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         if(value.trim()||field.kind==='boolean')fields.push({name:field.name,value});
       }
       const response=await provider.run(selected,fields,files);
-      // Never save an unsuccessful HTTP response as a PDF, and never replace
-      // the working copy with an empty or over-limit provider payload.
-      if(response.status<200||response.status>=300){
-        throw new Error(`Local PDF provider failed (${response.status}); the current document was not changed.`);
-      }
-      if(!response.bytes.length||response.bytes.length>512*1024*1024){
-        throw new Error('Local PDF output is empty or exceeds the 512 MB safety limit; no changes were made.');
-      }
-      if((response.contentType??'').toLowerCase().includes('application/pdf')&&!provider.responseIsPdf(response)){
-        throw new Error('Local provider labelled invalid bytes as a PDF. No changes were made.');
-      }
-      if(provider.responseIsPdf(response)){
-        // A password-protected result cannot be loaded back into the active
-        // editing view without credentials. Preserve the source and export
-        // the new protected PDF as a separate local file instead.
-        if(selected.path.toLowerCase().endsWith('/add-password')){
-          const saved=await provider.saveResponse(response,localExportStem(sourceName)+'-protected');
-          setNotice(saved?'Protected PDF copy saved; original remains unchanged.':'Protected PDF export cancelled; original unchanged.');
-        }else{
-          const applied=await onApplyPdf(`Local PDF core: ${selected.summary}`,Uint8Array.from(response.bytes));
-          if(!applied)throw new Error('Local provider produced a PDF that could not be applied. The original working document was preserved.');
-          setNotice(`${selected.summary} completed and was applied to the current MALENJO working copy.`);
+      const action=classifyPdfProviderResult(response,selected.path,provider.responseIsPdf);
+      if(action==='apply-pdf'){
+        const applied=await onApplyPdf(`Local PDF core: ${selected.summary}`,Uint8Array.from(response.bytes));
+        if(!applied){
+          throw new Error('The generated PDF could not be applied. The original working document was preserved.');
         }
+        setNotice(`${selected.summary} completed and was applied to the current MALENJO working copy.`);
       }else{
-        const saved=await provider.saveResponse(response,localExportStem(sourceName));
-        setNotice(saved?`${selected.summary} completed. Output saved.`:`${selected.summary} completed; output save was cancelled.`);
+        const stem=localExportStem(sourceName);
+        const saved=await provider.saveResponse(
+          response,
+          action==='save-pdf-copy'?stem+'-protected':stem,
+        );
+        setNotice(action==='save-pdf-copy'
+          ?saved?'Protected PDF copy saved; original remains unchanged.':'Protected PDF export cancelled; original unchanged.'
+          :saved?`${selected.summary} completed. Output saved.`:`${selected.summary} completed; output save was cancelled.`);
       }
     }catch(reason){setError(reason instanceof Error?reason.message:String(reason));}
     finally{setBusy(false);}
