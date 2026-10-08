@@ -21,8 +21,9 @@ describe('runtime evidence for all 90 Stirling parity items',()=>{
     expect(coverage.total).toBe(90);
     expect(coverage.rows).toHaveLength(90);
     expect(coverage.upstreamFixtureMatched).toBe(54);
+    expect(coverage.pinnedControllerOnlyRouteMatches).toBe(8);
     expect(coverage.frontendOnlyRouteMatches).toBe(22);
-    expect(coverage.sourceClassificationPending).toBe(14);
+    expect(coverage.sourceClassificationPending).toBe(6);
     expect(coverage.liveRoutes).toBe(0);
     expect(coverage.providerEnabled).toBe(0);
     expect(coverage.functionallyVerified).toBe(0);
@@ -53,10 +54,11 @@ describe('runtime evidence for all 90 Stirling parity items',()=>{
 
   it('never conflates a missing upstream fixture entry with disabled Windows support',()=>{
     const coverage=computePdfParityCoverage([],true);
-    expect(coverage.rows.filter(item=>item.state==='not-in-pinned-endpoint-fixture')).toHaveLength(36);
+    expect(coverage.rows.filter(item=>item.state==='not-in-pinned-endpoint-fixture')).toHaveLength(28);
+    expect(coverage.rows.filter(item=>item.controllerOnly)).toHaveLength(8);
     expect(coverage.rows.filter(item=>item.frontendRoute&&!item.expectedEndpoint)).toHaveLength(22);
-    expect(coverage.rows.filter(item=>!item.frontendRoute&&!item.expectedEndpoint)).toHaveLength(14);
-    expect(coverage.rows.filter(item=>item.state==='not-in-live-openapi')).toHaveLength(54);
+    expect(coverage.rows.filter(item=>!item.frontendRoute&&!item.expectedEndpoint)).toHaveLength(6);
+    expect(coverage.rows.filter(item=>item.state==='not-in-live-openapi')).toHaveLength(62);
     expect(coverage.rows.every(item=>!item.functionallyVerified)).toBe(true);
   });
 });
