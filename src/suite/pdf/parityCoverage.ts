@@ -18,6 +18,7 @@ export interface PdfParityCoverageRow{
   operation:PdfProviderOperation|null;
   // A responsive API provider is not enough to claim functional parity.
   functionallyVerified:false;
+  locallySourceAuditedPartial:boolean;
 }
 
 export interface PdfParityCoverage{
@@ -26,6 +27,7 @@ export interface PdfParityCoverage{
   liveRoutes:number;
   providerEnabled:number;
   functionallyVerified:0;
+  locallySourceAuditedPartial:number;
   rows:PdfParityCoverageRow[];
 }
 
@@ -48,9 +50,11 @@ export function computePdfParityCoverage(
   let upstreamFixtureMatched=0;
   let liveRoutes=0;
   let providerEnabled=0;
+  let locallySourceAuditedPartial=0;
   const rows:PdfParityCoverageRow[]=matrix.operations.map((entry)=>{
     const expectedEndpoint=entry.source.upstreamEndpoint;
     if(expectedEndpoint)upstreamFixtureMatched++;
+    if(entry.evidence.functionalStatus==='partial')locallySourceAuditedPartial++;
     const operation=expectedEndpoint?byPath.get(expectedEndpoint)??null:null;
     if(operation)liveRoutes++;
     if(operation?.capability.available)providerEnabled++;
@@ -67,10 +71,11 @@ export function computePdfParityCoverage(
       order:entry.order,id:entry.upstreamToolId,group:entry.group,
       expectedEndpoint,sourcePinned:Boolean(entry.source.endpointInPinnedFixture),
       state,operation,functionallyVerified:false,
+      locallySourceAuditedPartial:entry.evidence.functionalStatus==='partial',
     };
   });
   return {
     total:rows.length,upstreamFixtureMatched,liveRoutes,providerEnabled,
-    functionallyVerified:0,rows,
+    functionallyVerified:0,locallySourceAuditedPartial,rows,
   };
 }
