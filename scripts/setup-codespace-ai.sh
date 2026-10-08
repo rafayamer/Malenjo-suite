@@ -6,7 +6,6 @@ STATE_DIR="${MALENJO_AI_STATE_DIR:-$HOME/.malenjo-ai}"
 LOG_FILE="$STATE_DIR/ollama.log"
 PID_FILE="$STATE_DIR/ollama.pid"
 MANIFEST="${MALENJO_AI_MODEL_MANIFEST:-third_party/models/MODEL_LICENSES.json}"
-PROFILE_ID="${MALENJO_AI_MODEL_PROFILE:-}"
 
 if [[ "$(uname -s)" != "Linux" ]]; then
   echo "This helper is intended for Linux GitHub Codespaces."
@@ -18,16 +17,18 @@ if [[ ! -f "$MANIFEST" ]]; then
   exit 2
 fi
 
-PROFILE_TSV="$(python3 - "$MANIFEST" "$PROFILE_ID" <<'PY'
+PROFILE_TSV="$(python3 - "$MANIFEST" <<'PY'
 import json,sys
-path,requested=sys.argv[1],sys.argv[2]
+path=sys.argv[1]
 with open(path,'r',encoding='utf-8') as f:
     data=json.load(f)
-profile_id=requested or data.get('defaultProfileId','')
-profiles={p.get('id'):p for p in data.get('models') or []}
-p=profiles.get(profile_id)
-if not p:
-    raise SystemExit(f"Unknown MALENJO AI model profile: {profile_id}")
+models=data.get('models') or []
+if len(models) != 1:
+    raise SystemExit("MALENJO AI manifest must contain exactly one reviewed model")
+profile_id=data.get('defaultProfileId','')
+p=models[0]
+if p.get('id') != profile_id:
+    raise SystemExit("The sole MALENJO AI model must be the default profile")
 fields=[
     p.get('id',''),p.get('provider',''),p.get('tag',''),p.get('displayName',''),
     str(p.get('approximateDownloadBytes','')),p.get('expectedDigestPrefix',''),
@@ -114,10 +115,8 @@ fi
 if [[ "$MODE" == "runtime" ]]; then
   echo
   echo "Runtime is ready. No model was downloaded."
-  echo "To install the reviewed default model explicitly:"
+  echo "To install the sole reviewed MALENJO model:"
   echo "  npm run ai:codespace:setup:model"
-  echo "To select another reviewed profile:"
-  echo "  MALENJO_AI_MODEL_PROFILE=<profile-id> npm run ai:codespace:setup:model"
   exit 0
 fi
 
@@ -174,8 +173,6 @@ if [[ ! "$HTTP_CODE" =~ ^2 ]]; then
   tail -n 120 "$LOG_FILE" || true
   echo
   echo "The model download itself succeeded; this failure occurred while Ollama tried to load/run it."
-  echo "To try the reviewed newer MIT fallback profile:"
-  echo "  MALENJO_AI_MODEL_PROFILE=phi4-mini-q4-mit npm run ai:codespace:setup:model"
   exit 6
 fi
 
@@ -186,6 +183,15 @@ if ! grep -q "MALENJO_AI_READY" <<<"$SMOKE"; then
 fi
 
 echo "Local model smoke test passed."
+
+echo
+echo "Removing retired MALENJO development models if they are present..."
+for retired in "phi3:3.8b-mini-4k-instruct-q2_K" "qwen3:0.6b"; do
+  if ollama list | awk 'NR>1 {print $1}' | grep -Fxq "$retired"; then
+    ollama rm "$retired"
+  fi
+done
+
 echo
 echo "Start MALENJO:"
 echo "  npm run dev:codespace"
