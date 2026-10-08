@@ -15,7 +15,7 @@ afterEach(() => {
 describe('Codespaces AI bridge', () => {
   it('discovers Ollama models through the constrained same-origin endpoint', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      models:[{ name:'local-model', size:123, details:{ parameter_size:'1B', quantization_level:'Q4' } }],
+      models:[{ name:'local-model', digest:'sha256:abc123', size:123, details:{ parameter_size:'1B', quantization_level:'Q4' } }],
     }), { status:200, headers:{'Content-Type':'application/json'} }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -23,6 +23,7 @@ describe('Codespaces AI bridge', () => {
     expect(fetchMock).toHaveBeenCalledWith('/__malenjo_ai/ollama/api/tags', undefined);
     expect(status.available).toBe(true);
     expect(status.models[0]?.name).toBe('local-model');
+    expect(status.models[0]?.digest).toBe('sha256:abc123');
   });
 
   it('streams browser Ollama chat through the constrained endpoint', async () => {
@@ -47,10 +48,26 @@ describe('Codespaces AI bridge', () => {
     const request = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.body));
     expect(request.stream).toBe(true);
     expect(request.keep_alive).toBe('2m');
+    expect(request.options.num_ctx).toBe(2048);
     expect(request.options.num_predict).toBe(128);
     expect(request.options.repeat_penalty).toBe(1.18);
     expect(streamed.at(-1)).toBe('Grounded answer [S1]');
     expect(result.content).toBe('Grounded answer [S1]');
+  });
+
+  it('surfaces Ollama errors embedded in an HTTP 200 stream', async () => {
+    const body=[
+      JSON.stringify({message:{content:'partial '},done:false}),
+      JSON.stringify({error:'runner crashed'}),
+      '',
+    ].join('\n');
+    vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(body,{
+      status:200,
+      headers:{'Content-Type':'application/x-ndjson'},
+    })));
+    await expect(runLocalAiChat(
+      'job-error','ollama','local-model','QUESTION',true,
+    )).rejects.toThrow(/runner crashed/i);
   });
 
   it('stops pathological repeated-word streams', async () => {
