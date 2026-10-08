@@ -12,27 +12,54 @@ export interface PdfOptionalLayer {
 export const MAX_PDF_OPTIONAL_LAYERS = 500;
 
 /**
- * Inventory optional-content groups from PDF.js 6's Map-based display config.
+ * Inventory optional-content groups from the PDF.js 6.4 display order and group API.
  * A flat, bounded list is intentional: the PDF's nested display /Order and
  * usage intent requirements are not rewritten or simplified on export.
  */
 export function listPdfOptionalLayers(config: PdfOptionalContentConfig): PdfOptionalLayer[] {
-  const groups = config.getGroups();
-  if (!groups) return [];
-  const entries = groups instanceof Map
-    ? [...groups.entries()]
-    : Object.entries(groups as Record<string, unknown>);
-  if (entries.length > MAX_PDF_OPTIONAL_LAYERS) {
-    throw new Error('The PDF has over 500 layers. No incomplete list or visibility controls were returned.');
-  }
-  return entries.map(([id, raw]) => {
-    if (typeof id !== 'string' || !id) {
-      throw new Error('Invalid PDF optional-content group identity.');
+  // PDF.js 6.4 removed getGroups(): use the supported getOrder/getGroup pair.
+  // /Order can nest groups under heading objects; walk the tree conservatively.
+  const order:unknown=config.getOrder();
+  if(order===null)return [];
+  if(!Array.isArray(order))throw new Error('Invalid PDF optional-content order.');
+  const ids:string[]=[];
+  const seen=new Set<string>();
+  const visited=new Set<object>();
+  let nodes=0;
+  function visit(item:unknown,depth:number):void{
+    if(++nodes>2000||depth>24){
+      throw new Error('PDF layer tree is too deeply nested or large to display safely.');
     }
-    const group = raw as {name?: unknown} | null;
-    const name = typeof group?.name === 'string' && group.name.trim()
-      ? group.name.slice(0, 250) : 'Unnamed layer';
-    return {id, name, visible: Boolean(config.isVisible({type:'OCG',id}))};
+    if(typeof item==='string'){
+      if(!seen.has(item)){
+        seen.add(item);
+        if(ids.length>=MAX_PDF_OPTIONAL_LAYERS) {
+          throw new Error('The PDF has over 500 layers. No incomplete list or visibility controls were returned.');
+        }
+        ids.push(item);
+      }
+      return;
+    }
+    if(typeof item==='object'&&item!==null){
+      if(visited.has(item))throw new Error('PDF layer order contains a cyclic object.');
+      visited.add(item);
+      if(Array.isArray(item)){
+        for(const child of item)visit(child,depth+1);
+      }else if('order' in item){
+        const children=(item as {order:unknown}).order;
+        if(!Array.isArray(children))throw new Error('Invalid nested PDF layer order.');
+        for(const child of children)visit(child,depth+1);
+      }
+      visited.delete(item);
+    }
+  }
+  for(const entry of order)visit(entry,0);
+  return ids.map(id=>{
+    const group=config.getGroup(id) as {name?:unknown}|null;
+    if(!group)throw new Error('PDF layer order contains a missing group.');
+    const name=typeof group.name==='string'&&group.name.trim()
+      ? group.name.slice(0,250):'Unnamed layer';
+    return {id,name,visible:Boolean(config.isVisible({type:'OCG',id}))};
   });
 }
 
