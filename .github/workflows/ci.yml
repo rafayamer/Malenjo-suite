@@ -371,6 +371,31 @@ jobs:
             & $qpdf.FullName --check $fixture
             if ($LASTEXITCODE -ne 0) { throw "Generated PDF smoke fixture failed qpdf validation." }
 
+            # Positive end-to-end test of pinned Stirling's actual controller:
+            # send a real PDF, validate the rewritten bytes, and inspect the
+            # persisted metadata through a second independent parser (qpdf).
+            $metadataOut = Join-Path (Resolve-Path ".build/provider-smoke") "updated-metadata.pdf"
+            & $curl --fail --silent --show-error -o $metadataOut `
+              -F "fileInput=@$fixture;type=application/pdf" `
+              -F "title=MALENJO Offline Metadata Smoke" `
+              -F "author=MALENJO Runtime" `
+              -F "subject=Local PDF engine verification" `
+              -F "keywords=offline, metadata" `
+              "$providerBase/api/v1/misc/update-metadata"
+            if ($LASTEXITCODE -ne 0) { throw "Stirling update-metadata endpoint failed to process a real PDF." }
+            & $qpdf.FullName --check $metadataOut
+            if ($LASTEXITCODE -ne 0) { throw "Stirling updated-metadata output cannot be reopened by qpdf." }
+            $pages = (& $qpdf.FullName --show-npages $metadataOut | Out-String).Trim()
+            if ($LASTEXITCODE -ne 0 -or $pages -ne '1') {
+              throw "Stirling update-metadata changed or damaged the original page count."
+            }
+            $metaJson = (& $qpdf.FullName --json --json-key=objects $metadataOut | Out-String)
+            if ($LASTEXITCODE -ne 0 -or
+                $metaJson -notmatch 'MALENJO Offline Metadata Smoke' -or
+                $metaJson -notmatch 'MALENJO Runtime') {
+              throw "Stirling update-metadata output does not persist the expected document metadata."
+            }
+
             Add-Type -AssemblyName System.IO.Compression.FileSystem
             function Assert-ZipEntry([string]$Path, [string]$Entry) {
               $zip = [System.IO.Compression.ZipFile]::OpenRead($Path)
