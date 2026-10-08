@@ -262,7 +262,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         return false;
       }
 
-      await disposePdf(activeLoadRef.current);
+      const previousLoad = activeLoadRef.current;
       activeLoadRef.current = result;
       setPdf(result);
       setSourceBytes(owned);
@@ -283,6 +283,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         setDirty(false);
         historyRef.current=createPdfHistory(owned,1);
         setHistoryRevision((value)=>value+1);
+      }
+      // The new PDF is now active. A previous worker's teardown failure must
+      // not roll back a successful installation or leave a destroyed PDF active.
+      try {
+        await disposePdf(previousLoad);
+      } catch {
+        // Best-effort old-worker cleanup; retain the successfully loaded PDF.
       }
       return true;
     } catch (reason) {
