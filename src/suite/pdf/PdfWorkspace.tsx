@@ -23,9 +23,10 @@ import {
 import type { DocumentSession } from '../files/session';
 import type { RegisterDocumentCommands } from '../commands/types';
 import { isDesktopRuntime } from '../files/api';
-import { exportPdfBytes, readPdfDocumentBytes } from './api';
+import { exportPdfBytes, exportPdfDataFile, readPdfDocumentBytes } from './api';
 import {
   addPdfBatesNumbers,
+  addPdfButton,
   addPdfCheckBox,
   addPdfCommentAnnotation,
   addPdfDropdown,
@@ -37,9 +38,11 @@ import {
   addPdfTextOverlay,
   appendPdf,
   attachFileToPdf,
+  clearPdfFormFields,
   deletePdfPage,
   deletePdfPages,
   duplicatePdfPage,
+  exportPdfFormData,
   extractPdfPages,
   insertBlankPdfPage,
   insertPdfAfter,
@@ -50,7 +53,9 @@ import {
   splitPdfAtPage,
   fillPdfFormFields,
   flattenPdfForm,
+  importPdfFormData,
   inspectPdfFormFields,
+  updatePdfFormFieldProperties,
   type PdfFormFieldInfo,
   type PdfFormFieldUpdate,
 } from './editor';
@@ -147,6 +152,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const appendInputRef = useRef<HTMLInputElement>(null);
   const insertInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const formDataInputRef = useRef<HTMLInputElement>(null);
   const selectionAnchorRef = useRef<number | null>(null);
   const activeLoadRef = useRef<PdfLoadResult | null>(null);
   const requestIdRef = useRef(0);
@@ -191,9 +197,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [shapeOverlay, setShapeOverlay] = useState({ x:0.12, y:0.68, width:0.35, height:0.08, mode:'highlight' as 'highlight'|'outline' });
   const [commentDraft, setCommentDraft] = useState({ text:'', author:'MALENJO User', x:0.86, y:0.86 });
   const [formDraft, setFormDraft] = useState({
-    type:'text' as 'text'|'checkbox'|'radio'|'dropdown'|'list',
+    type:'text' as 'text'|'checkbox'|'radio'|'dropdown'|'list'|'button',
     name:'',
     defaultValue:'',
+    buttonLabel:'Button',
     optionsText:'Approve\nReject',
     selectedText:'',
     required:false,
@@ -210,6 +217,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [formFillDraft, setFormFillDraft] = useState<Record<string,string|string[]|boolean|undefined>>({});
   const [formFillTouched, setFormFillTouched] = useState<Set<string>>(()=>new Set());
   const [formInspectedSource, setFormInspectedSource] = useState<Uint8Array|null>(null);
+  const [formPropertyName, setFormPropertyName] = useState('');
   const [headerFooterDraft, setHeaderFooterDraft] = useState({
     scope:'selected' as 'selected'|'all',
     header:'',
@@ -600,6 +608,20 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     &&!(field.type==='dropdown'&&field.editable&&field.multiselect)
     &&['text','checkbox','radio','dropdown','list'].includes(field.type),
   );
+  const clearableFormFields=fillableFormFields.filter((field)=>
+    !(field.type==='radio'&&!field.offToggleable),
+  );
+
+  useEffect(()=>{
+    if(!formFields.length){
+      if(formPropertyName)setFormPropertyName('');
+      return;
+    }
+    if(!formFields.some((field)=>field.name===formPropertyName)){
+      setFormPropertyName(formFields[0].name);
+    }
+  },[formFields,formPropertyName]);
+  const formPropertyField=formFields.find((field)=>field.name===formPropertyName)??null;
 
   async function attachDocuments(event:React.ChangeEvent<HTMLInputElement>){
     const files=Array.from(event.target.files??[]);
@@ -681,6 +703,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         }),
         currentPage,
       );
+    }else if(formDraft.type==='button'){
+      await mutate(
+        `Added push-button field "${name}".`,
+        (bytes)=>addPdfButton(bytes,{
+          pageNumber:currentPage,name,label:formDraft.buttonLabel,
+          x:formDraft.x,y:formDraft.y,width:formDraft.width,height:formDraft.height,...flags,
+        }),
+        currentPage,
+      );
     }else{
       await mutate(
         `Added text field "${name}".`,
@@ -692,6 +723,59 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       );
     }
     setFormDraft((current)=>({...current,name:'',defaultValue:'',selectedText:''}));
+  }
+
+  async function clearFormValues(){
+    if(!formFields.length)return;
+    await mutate(
+      'Cleared safely editable PDF form values.',
+      (bytes)=>clearPdfFormFields(bytes),
+      currentPage,
+    );
+  }
+
+  async function exportFormData(){
+    if(!sourceBytes||!formFields.length)return;
+    try{
+      const payload=await exportPdfFormData(sourceBytes);
+      const json=JSON.stringify(payload,null,2)+'\n';
+      const base=sourceName.replace(/\.pdf$/i,'')||'MALENJO-document';
+      const saved=await exportPdfDataFile(`${base}-form-data.json`,new TextEncoder().encode(json));
+      if(saved)setActionNotice(`Exported ${payload.fields.length} PDF form-data field(s) as JSON.`);
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }
+  }
+
+  async function importFormDataFile(event:React.ChangeEvent<HTMLInputElement>){
+    const file=event.target.files?.[0];
+    event.target.value='';
+    if(!file||!sourceBytes)return;
+    if(file.size>4*1024*1024){
+      setError('PDF form-data JSON exceeds the 4 MB safety limit.');
+      return;
+    }
+    try{
+      const payload=JSON.parse(await file.text()) as unknown;
+      await mutate(
+        `Imported PDF form data from ${file.name}.`,
+        (bytes)=>importPdfFormData(bytes,payload),
+        currentPage,
+      );
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }
+  }
+
+  async function setFormFieldProperty(
+    name:string,
+    patch:{required?:boolean;readOnly?:boolean;exported?:boolean},
+  ){
+    await mutate(
+      `Updated PDF form field properties for "${name}".`,
+      (bytes)=>updatePdfFormFieldProperties(bytes,[{name,...patch}]),
+      currentPage,
+    );
   }
 
   function setFormFillValue(name:string,value:string|string[]|boolean|undefined){
@@ -954,6 +1038,42 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           run:()=>flattenForm(),
         },
         {
+          id:'clear-form',
+          label:'Clear PDF form values',
+          keywords:'form acroform clear reset values',
+          detail:'Clear safely writable text, checkbox and choice values while preserving field structure',
+          enabled:!!sourceBytes&&!mutating&&fillableFormFields.length>0,
+          disabledReason:!sourceBytes?'No PDF is loaded.':!fillableFormFields.length?'No safely clearable AcroForm fields detected.':'Wait for the current PDF edit to finish.',
+          run:()=>clearFormValues(),
+        },
+        {
+          id:'export-form-data',
+          label:'Export PDF form data',
+          keywords:'form acroform export json data values',
+          detail:'Export MALENJO JSON form data; password values are redacted',
+          enabled:!!sourceBytes&&!mutating&&formFields.length>0,
+          disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields detected.':'Wait for the current PDF edit to finish.',
+          run:()=>exportFormData(),
+        },
+        {
+          id:'import-form-data',
+          label:'Import PDF form data',
+          keywords:'form acroform import json data values',
+          detail:'Apply a MALENJO PDF form-data JSON file to matching writable fields',
+          enabled:!!sourceBytes&&!mutating&&formFields.length>0,
+          disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields detected.':'Wait for the current PDF edit to finish.',
+          run:()=>formDataInputRef.current?.click(),
+        },
+        {
+          id:'form-properties',
+          label:'Edit PDF form field properties',
+          keywords:'form acroform properties required readonly exported',
+          detail:formPropertyField?`${formPropertyField.name} · ${formPropertyField.type}`:'Select a form field in the inspector',
+          enabled:!!formPropertyField&&!mutating,
+          disabledReason:!formPropertyField?'No AcroForm field is selected.':'Wait for the current PDF edit to finish.',
+          run:()=>configureProperties(),
+        },
+        {
           id:'header-footer',
           label:'Apply PDF header / footer',
           keywords:'header footer page number date stamp',
@@ -1090,7 +1210,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     return () => registerCommands(null);
   }, [
     session, registerCommands, sourceBytes, pdf, dirty, mutating, historyRevision, formFields.length,
-    headerFooterDraft, batesDraft, pageBoxDraft, formDraft, formFillDraft, formFillTouched, currentPage, pageCount, selectedPages,
+    headerFooterDraft, batesDraft, pageBoxDraft, formDraft, formFillDraft, formFillTouched, formPropertyName, currentPage, pageCount, selectedPages,
     inspectorHidden, textOverlay, shapeOverlay, commentDraft,
   ]);
 
@@ -1232,8 +1352,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     forms:[
       {id:'add-form-field',label:`Add ${formDraft.type} field`,enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addFormField},
       {id:'fill-form',label:'Apply field values',enabled:!!sourceBytes&&!mutating&&fillableFormFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!fillableFormFields.length?'No editable AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:fillForm},
+      {id:'clear-form',label:'Clear values',enabled:!!sourceBytes&&!mutating&&clearableFormFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!clearableFormFields.length?'No safely clearable AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:clearFormValues},
+      {id:'export-form-data',label:'Export data',enabled:!!sourceBytes&&!mutating&&formFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:exportFormData},
+      {id:'import-form-data',label:'Import data',enabled:!!sourceBytes&&!mutating&&formFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>formDataInputRef.current?.click()},
       {id:'flatten-form',label:'Flatten fields',enabled:!!sourceBytes&&!mutating&&formFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:flattenForm},
-      {id:'configure-forms',label:'Form settings',enabled:true,run:configureProperties},
+      {id:'form-properties',label:'Field properties',enabled:!!formPropertyField&&!mutating,disabledReason:!formPropertyField?'No AcroForm field is selected.':mutating?'Wait for the current PDF edit to finish.':undefined,run:configureProperties},
       providerAction,
     ],
     ai:[navigateAction('Open Malenjo AI','ai')],
@@ -1279,6 +1402,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       type="file"
       multiple
       onChange={(event)=>void attachDocuments(event)}
+    />
+    <input
+      ref={formDataInputRef}
+      className="visually-hidden"
+      type="file"
+      accept="application/json,.json"
+      onChange={(event)=>void importFormDataFile(event)}
     />
 
     <div className="pdf-task-toolbar">
@@ -1563,11 +1693,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               <option value="radio">Radio group</option>
               <option value="dropdown">Dropdown</option>
               <option value="list">Option list</option>
+              <option value="button">Push button</option>
             </select>
           </label>
           <label>Name<input value={formDraft.name} onChange={(event)=>setFormDraft({...formDraft,name:event.target.value})} placeholder="field_name"/></label>
 
           {formDraft.type==='text'&&<label>Default value<input value={formDraft.defaultValue} onChange={(event)=>setFormDraft({...formDraft,defaultValue:event.target.value})}/></label>}
+          {formDraft.type==='button'&&<label>Button label<input value={formDraft.buttonLabel} onChange={(event)=>setFormDraft({...formDraft,buttonLabel:event.target.value})} placeholder="Button"/></label>}
 
           {['radio','dropdown','list'].includes(formDraft.type)&&<>
             <label>Options<textarea value={formDraft.optionsText} onChange={(event)=>setFormDraft({...formDraft,optionsText:event.target.value})} placeholder={'One option per line\nOption A\nOption B'}/></label>
@@ -1593,6 +1725,41 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           </div>
 
           <button disabled={mutating} onClick={()=>void addFormField()}>Add {formDraft.type} field</button>
+
+          {formFields.length>0&&<>
+            <label>Existing field properties
+              <select value={formPropertyName} onChange={(event)=>setFormPropertyName(event.target.value)}>
+                {formFields.map((field)=><option key={field.name} value={field.name}>{field.name} · {field.type}</option>)}
+              </select>
+            </label>
+            {formPropertyField&&<div className="pdf-field-flags">
+              <label><input
+                type="checkbox"
+                checked={formPropertyField.required}
+                disabled={mutating}
+                onChange={(event)=>void setFormFieldProperty(formPropertyField.name,{required:event.target.checked})}
+              /> Required</label>
+              <label><input
+                type="checkbox"
+                checked={formPropertyField.readOnly}
+                disabled={mutating}
+                onChange={(event)=>void setFormFieldProperty(formPropertyField.name,{readOnly:event.target.checked})}
+              /> Read-only</label>
+              <label><input
+                type="checkbox"
+                checked={formPropertyField.exported}
+                disabled={mutating}
+                onChange={(event)=>void setFormFieldProperty(formPropertyField.name,{exported:event.target.checked})}
+              /> Export with form data</label>
+            </div>}
+          </>}
+
+          <div className="pdf-form-actions">
+            <button disabled={mutating||!clearableFormFields.length} onClick={()=>void clearFormValues()}>Clear values</button>
+            <button disabled={mutating||!formFields.length} onClick={()=>void exportFormData()}>Export JSON data</button>
+            <button disabled={mutating||!formFields.length} onClick={()=>formDataInputRef.current?.click()}>Import JSON data</button>
+          </div>
+          <small>Clear values preserves field structure and skips unsafe/read-only fields. Password values are redacted from JSON export. True reset-to-/DV defaults and JavaScript validation/calculation rules remain separate compatibility work.</small>
 
           <div className="pdf-feature-list pdf-form-inventory">
             <b>{formFields.length} AcroForm field{formFields.length===1?'':'s'}</b>

@@ -314,3 +314,17 @@ No module is complete merely because its navigation entry exists. Completion req
 | Command discoverability | PDF command bus / Forms toolbar | `fill-form` command + Forms task action | typecheck/build CI | Implemented |
 | Full Forms completion | PDF module | signature authoring, buttons, property editing, tab order, validation/calculation, reset/clear, data import/export, XFA/accessibility/interoperability remain | #39 / #141 | Partial |
 
+## PDF completeness pass 7 — Forms authoring and data
+
+| Requirement | Component | Implementation | Test/evidence | Status |
+|---|---|---|---|---|
+| Create text/checkbox/radio/dropdown/list fields | PDF Forms | Existing MALENJO-owned field creation helpers and workspace authoring controls | `editor.test.ts` AcroForm creation coverage | Implemented |
+| Create push-button fields | PDF Forms | `addPdfButton` + Forms authoring UI | focused push-button creation test | Implemented |
+| Create signature fields | Signing / PDF Forms | No supported pdf-lib constructor; deferred to Signing tranche | #39 | Open |
+| Field properties | PDF Forms | required/read-only/exported toggles via public field APIs | focused property mutation test | Partial |
+| Clear form values | PDF Forms | `clearPdfFormFields` through safe filling semantics | focused clear-values test | Implemented |
+| True reset to PDF defaults | PDF Forms | `/DV` reset semantics not yet implemented | #39 | Open |
+| Export/import form data | PDF Forms | versioned MALENJO JSON, password redaction, strict validation | JSON round-trip test | Implemented |
+| Validation/calculation rules | PDF Forms | intentionally not exposed yet; JavaScript/action policy remains security-sensitive | #39 | Open |
+| Tab order | PDF Forms | custom field traversal order not yet implemented | #39 | Open |
+
