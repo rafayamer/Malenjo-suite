@@ -90,4 +90,20 @@ describe('provider file input compatibility',()=>{
     expect(isPdfProviderInput(html)).toBe(false);
     await expect(requireUnsignedPdfProviderInputs([plain,html])).resolves.toBeUndefined();
   });
+
+  it('recognizes disguised PDFs behind a long whitespace prefix',()=>{
+    const leading=Array.from({length:600},()=>32);
+    const header=Array.from(new TextEncoder().encode('%PDF-1.7\n'));
+    const disguised:PdfProviderInputFile={
+      field:'fileInput',filename:'merged.bin',contentType:'application/octet-stream',
+      bytes:[...leading,...header,0,0],
+    };
+    expect(isPdfProviderInput(disguised)).toBe(true);
+    const bom={...disguised,bytes:[239,187,191,...leading,...header]};
+    expect(isPdfProviderInput(bom)).toBe(true);
+    // A bare occurrence in prose is not a valid header prefix.
+    expect(isPdfProviderInput({
+      ...disguised,bytes:Array.from(new TextEncoder().encode('Report: %PDF-1.7')),
+    })).toBe(false);
+  });
 });
