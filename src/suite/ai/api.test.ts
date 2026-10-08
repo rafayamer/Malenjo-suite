@@ -25,15 +25,30 @@ describe('Codespaces AI bridge', () => {
     expect(status.models[0]?.name).toBe('local-model');
   });
 
-  it('sends browser chat only through the constrained Ollama chat endpoint', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      message:{ content:'Grounded answer [S1]' },
-    }), { status:200, headers:{'Content-Type':'application/json'} }));
+  it('streams browser Ollama chat through the constrained endpoint', async () => {
+    const body = [
+      JSON.stringify({ message:{ content:'Grounded ' }, done:false }),
+      JSON.stringify({ message:{ content:'answer [S1]' }, done:true }),
+      '',
+    ].join('\n');
+    const fetchMock = vi.fn().mockResolvedValue(new Response(body, {
+      status:200,
+      headers:{'Content-Type':'application/x-ndjson'},
+    }));
     vi.stubGlobal('fetch', fetchMock);
+    const streamed:string[]=[];
 
-    const result = await runLocalAiChat('job-1','ollama','local-model','QUESTION',true);
+    const result = await runLocalAiChat(
+      'job-1','ollama','local-model','QUESTION',true,
+      (content)=>streamed.push(content),
+    );
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe('/__malenjo_ai/ollama/api/chat');
-    expect(result.content).toContain('[S1]');
+    const request = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.body));
+    expect(request.stream).toBe(true);
+    expect(request.keep_alive).toBe('2m');
+    expect(request.options.num_predict).toBe(192);
+    expect(streamed.at(-1)).toBe('Grounded answer [S1]');
+    expect(result.content).toBe('Grounded answer [S1]');
   });
 });
