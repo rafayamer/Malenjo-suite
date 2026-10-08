@@ -104,6 +104,24 @@ describe('native PDF link annotations',()=>{
     expect(pdf.getPageCount()).toBe(2);
   });
 
+  it('rejects new links that exceed document-wide capacity without partial edits',async()=>{
+    const pdf=await PDFDocument.load(await sample());
+    const refs=[];
+    for(let i=0;i<1000;i++){
+      const dict=pdf.context.obj({
+        Type:PDFName.of('Annot'),Subtype:PDFName.of('Link'),Rect:[10,10,20,20],
+        Dest:pdf.context.obj([pdf.getPage(1).ref,PDFName.of('Fit')]),
+      });
+      refs.push(pdf.context.register(dict));
+    }
+    pdf.getPage(0).node.set(PDFName.of('Annots'),pdf.context.obj(refs));
+    const source=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    expect((await listPdfLinkAnnotations(source))).toHaveLength(1000);
+    await expect(addPdfLinkAnnotation(source,bounds,{kind:'page',pageNumber:2}))
+      .rejects.toThrow(/1,000-link/i);
+    expect((await listPdfLinkAnnotations(source))).toHaveLength(1000);
+  });
+
   it('marks direct Link dictionaries as read-only identities',async()=>{
     const pdf=await PDFDocument.load(await sample());
     pdf.getPage(0).node.set(PDFName.of('Annots'),pdf.context.obj([
