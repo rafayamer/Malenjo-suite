@@ -2,7 +2,7 @@
 
 The machine-readable source of truth is [pdf-stirling-parity-matrix.json](./pdf-stirling-parity-matrix.json). Its 90 operation identifiers were transcribed in order from the October 8, 2026 MALENJO development handoff (§5A–5G), **not** independently re-audited against a newer upstream release. The upstream comparison baseline is `Stirling-Tools/Stirling-PDF@25220cbdbde2d526cebf173b94357884e180b8c1`.
 
-**No operation is credited as complete.** Twenty operations with real MALENJO source symbols, workspace paths and unit-test evidence are classified **`partial`**, and the other 70 remain **`null` (not yet source-audited)**. This is not a claim of Windows/provider end-to-end verification. For every tool, verify the real MALENJO code, UI command, actual local Windows execution, source license and notices, positive/negative fixtures and golden tests, memory/size limits, and export/save/reopen outcomes; then set a supported status: `implemented`, `partial`, `unavailable`, or `excluded-by-license`. Exclusions need user approval.
+**No operation is credited as complete.** Twenty-one operations with real MALENJO source symbols, workspace paths and unit-test evidence are classified **`partial`**, and the other 69 remain **`null` (not yet source-audited)**. This is not a claim of Windows/provider end-to-end verification. For every tool, verify the real MALENJO code, UI command, actual local Windows execution, source license and notices, positive/negative fixtures and golden tests, memory/size limits, and export/save/reopen outcomes; then set a supported status: `implemented`, `partial`, `unavailable`, or `excluded-by-license`. Exclusions need user approval.
 
 ## Source-backed endpoint audit — pinned commit
 
