@@ -111,7 +111,7 @@ describe('MALENJO PDF Stirling parity evidence inventory',()=>{
       if(item.source.upstreamEndpoint)categories.fixture++;
       else if(item.source.pinnedControllerEndpoint){
         categories.controller++;
-        expect(item.source.pinnedControllerPath).toMatch(/app\\/core\\/src\\/main\\/java/);
+        expect(item.source.pinnedControllerPath).toContain('app/core/src/main/java/');
         expect(item.source.pinnedControllerBlobSha).toMatch(/^[a-f0-9]{40}$/);
       }else if(item.source.pinnedFrontendCoreToolId)categories.frontend++;
       else if(item.source.pinnedConfigurationOnly){
