@@ -13,10 +13,12 @@ export interface AiModelProfile{
   expectedDigestPrefix:string;
   license:string;
   upstreamModel:string;
+  upstreamRevision:string;
   upstreamUrl:string;
   providerUrl:string;
   reviewState:AiModelReviewState;
   installable:boolean;
+  fineTunable:boolean;
   notes:string;
 }
 
@@ -32,52 +34,43 @@ const manifest=manifestJson as AiModelManifest;
 
 function validateManifest(value:AiModelManifest):AiModelManifest{
   if(value.schemaVersion!==2)throw new Error('Unsupported MALENJO AI model manifest schema.');
-  const ids=new Set<string>();
-  const tags=new Set<string>();
-  for(const profile of value.models){
-    if(!profile.id||ids.has(profile.id))throw new Error('AI model profile IDs must be unique and non-empty.');
-    if(!profile.tag||tags.has(profile.tag))throw new Error('AI model tags must be unique and non-empty.');
-    if(profile.approximateDownloadBytes<=0)throw new Error(`AI model profile ${profile.id} has an invalid size.`);
-    if(!/^[0-9a-f]{12,64}$/i.test(profile.expectedDigestPrefix))throw new Error(`AI model profile ${profile.id} has an invalid digest prefix.`);
-    if(profile.installable&&profile.reviewState!=='reviewed')throw new Error(`AI model profile ${profile.id} cannot be installable before review.`);
-    ids.add(profile.id);
-    tags.add(profile.tag);
-  }
-  if(!ids.has(value.defaultProfileId))throw new Error('Default AI model profile is missing.');
+  if(value.models.length!==1)throw new Error('MALENJO supports exactly one reviewed local model profile.');
+  const profile=value.models[0]!;
+  if(!profile.id||profile.id!==value.defaultProfileId)throw new Error('The sole AI model must be the default profile.');
+  if(profile.provider!=='ollama')throw new Error('The reviewed MALENJO model must use the Ollama local provider.');
+  if(profile.license!=='MIT')throw new Error('The reviewed MALENJO model must be MIT-licensed.');
+  if(profile.reviewState!=='reviewed'||!profile.installable)throw new Error('The reviewed MALENJO model must be installable.');
+  if(!profile.fineTunable)throw new Error('The reviewed MALENJO model must permit the fine-tuning workflow.');
+  if(profile.approximateDownloadBytes<=0)throw new Error('The reviewed MALENJO model has an invalid size.');
+  if(!/^[0-9a-f]{12,64}$/i.test(profile.expectedDigestPrefix))throw new Error('The reviewed MALENJO model has an invalid digest prefix.');
+  if(!profile.upstreamRevision)throw new Error('The reviewed MALENJO model requires an upstream revision.');
   return value;
 }
 
 export const AI_MODEL_MANIFEST=validateManifest(manifest);
 export const AI_MODEL_PROFILES=AI_MODEL_MANIFEST.models;
-export const DEFAULT_AI_MODEL_PROFILE=AI_MODEL_PROFILES.find((profile)=>profile.id===AI_MODEL_MANIFEST.defaultProfileId)!;
+export const DEFAULT_AI_MODEL_PROFILE=AI_MODEL_PROFILES[0]!;
 
 export function aiModelProfileById(id:string):AiModelProfile|undefined{
-  return AI_MODEL_PROFILES.find((profile)=>profile.id===id);
+  return id===DEFAULT_AI_MODEL_PROFILE.id?DEFAULT_AI_MODEL_PROFILE:undefined;
 }
 
 export function aiModelProfileByTag(tag:string):AiModelProfile|undefined{
-  return AI_MODEL_PROFILES.find((profile)=>profile.tag===tag);
+  return tag===DEFAULT_AI_MODEL_PROFILE.tag?DEFAULT_AI_MODEL_PROFILE:undefined;
+}
+
+export function approvedInstalledModels<T extends {name:string}>(models:T[]):T[]{
+  return models.filter((model)=>model.name===DEFAULT_AI_MODEL_PROFILE.tag);
 }
 
 export function preferredInstalledModel(
   models:Array<{name:string}>,
   provider:'ollama'|'llama-cpp',
 ):string{
-  const installed=new Set(models.map((model)=>model.name));
-  const qualityRank:Record<AiModelResourceClass,number>={ultralite:0,lite:1,standard:2};
-  const preferred=AI_MODEL_PROFILES
-    .filter((profile)=>
-      profile.provider===provider&&
-      profile.installable&&
-      profile.reviewState==='reviewed'&&
-      installed.has(profile.tag),
-    )
-    .sort((left,right)=>{
-      const mitDelta=Number(right.license==='MIT')-Number(left.license==='MIT');
-      if(mitDelta)return mitDelta;
-      return qualityRank[right.resourceClass]-qualityRank[left.resourceClass];
-    })[0];
-  return preferred?.tag??models[0]?.name??'';
+  if(provider!==DEFAULT_AI_MODEL_PROFILE.provider)return '';
+  return models.some((model)=>model.name===DEFAULT_AI_MODEL_PROFILE.tag)
+    ? DEFAULT_AI_MODEL_PROFILE.tag
+    : '';
 }
 
 export function formatModelDownloadSize(bytes:number):string{
