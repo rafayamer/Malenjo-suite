@@ -14,10 +14,11 @@ export interface PdfOutlineModel {
 }
 
 export interface PdfAttachmentEntry {
+  /** Original PDF.js attachment ID; must be passed unchanged to getAttachmentContent. */
   id: string;
   name: string;
-  sizeBytes: number;
-  content: Uint8Array;
+  /** Declared metadata size, not an independently verified decompressed size. */
+  sizeBytes: number | null;
   downloadable: boolean;
   reason: string | null;
 }
@@ -37,7 +38,7 @@ interface RawOutlineNode {
 
 interface RawAttachment {
   filename?: unknown;
-  content?: unknown;
+  size?: unknown;
 }
 
 const MAX_TITLE_CHARS = 240;
@@ -130,23 +131,6 @@ export function sanitizePdfAttachmentName(value: unknown, fallback: string): str
   return (raw || fallback).slice(0, MAX_ATTACHMENT_NAME_CHARS);
 }
 
-function attachmentSize(value: unknown): number {
-  if (value instanceof Uint8Array || value instanceof ArrayBuffer) return value.byteLength;
-  return ArrayBuffer.isView(value) ? value.byteLength : 0;
-}
-
-function attachmentBytes(value: unknown): Uint8Array {
-  if (value instanceof Uint8Array) return Uint8Array.from(value);
-  if (value instanceof ArrayBuffer) return new Uint8Array(value.slice(0));
-  if (ArrayBuffer.isView(value)) {
-    const view = value as ArrayBufferView;
-    const result = new Uint8Array(view.byteLength);
-    result.set(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
-    return result;
-  }
-  return new Uint8Array();
-}
-
 export function safePdfAttachmentExportName(filename:string):string {
   const cleaned=sanitizePdfAttachmentName(filename,'attachment.bin')
     .replace(/[<>:"|?*]/g,'_')
@@ -158,45 +142,50 @@ export function safePdfAttachmentExportName(filename:string):string {
 export function normalizePdfAttachments(
   input: unknown,
   maxEntries = 200,
-  maxDownloadBytes = 100 * 1024 * 1024,
+  maxDownloadBytes = 32 * 1024 * 1024,
 ): PdfAttachmentModel {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) {
-    return { entries: [], truncated: false };
+  // PDF.js 6.4.299 returns Map<string, CatalogAttachment> (metadata only).
+  // Never read or clone the attachment's content while building the list.
+  if (!(input instanceof Map)) return { entries: [], truncated: false };
+  const entries:PdfAttachmentEntry[]=[];
+  const truncated=input.size>maxEntries;
+  for(const [id, metadata] of input.entries()){
+    if(entries.length>=maxEntries)break;
+    if(typeof id!=='string'||!id||typeof metadata!=='object'||!metadata)continue;
+    const item=metadata as RawAttachment;
+    const size=typeof item.size==='number'&&Number.isSafeInteger(item.size)&&item.size>=0
+      ? item.size : null;
+    const exceedsLimit=size!==null&&size>maxDownloadBytes;
+    const unknownSize=size===null;
+    entries.push({
+      id,
+      name:sanitizePdfAttachmentName(item.filename,'attachment-'+(entries.length+1)+'.bin'),
+      sizeBytes:size,
+      // Unknown sizes are not extracted: the PDF.js worker currently cannot
+      // enforce a hard decompression quota before materializing a stream.
+      downloadable:!unknownSize&&!exceedsLimit,
+      reason:unknownSize
+        ? 'Attachment size is unavailable; extraction is disabled for safety.'
+        : exceedsLimit
+          ? 'Attachment exceeds the '+Math.round(maxDownloadBytes/1024/1024)+' MB extraction limit.'
+          : null,
+    });
   }
-
-  const rawEntries = Object.entries(input as Record<string, RawAttachment>);
-  const truncated = rawEntries.length > maxEntries;
-  let totalCopied = 0;
-  const maxTotalCopied = 128 * 1024 * 1024;
-  const entries = rawEntries.slice(0, maxEntries).map(([key, attachment], index) => {
-    const sizeBytes = attachmentSize(attachment?.content);
-    const name = sanitizePdfAttachmentName(
-      attachment?.filename,
-      `attachment-${index + 1}.bin`,
-    );
-    const tooLarge = sizeBytes > maxDownloadBytes;
-    const beyondAggregateLimit = totalCopied + sizeBytes > maxTotalCopied;
-    // Never copy a blocked item: PDFs can contain many huge embedded files.
-    const content = sizeBytes && !tooLarge && !beyondAggregateLimit
-      ? attachmentBytes(attachment?.content)
-      : new Uint8Array();
-    totalCopied += content.byteLength;
-
-    return {
-      id: `attachment-${index + 1}-${key.slice(0, 40)}`,
-      name,
-      sizeBytes,
-      content,
-      downloadable: content.byteLength > 0,
-      reason: !sizeBytes
-        ? 'Attachment has no extractable byte content.'
-        : tooLarge
-          ? `Attachment exceeds the ${Math.round(maxDownloadBytes / 1024 / 1024)} MB extraction limit.`
-          : beyondAggregateLimit
-            ? 'Attachments exceed the combined 128 MB review memory budget.'
-            : null,
-    };
-  });
-
   return { entries, truncated };
+}
+
+/** Validate the separately requested bytes, then clone only bounded output. */
+export function readPdfAttachmentBytes(value:unknown,maxDownloadBytes=32*1024*1024):Uint8Array{
+  const candidate=(typeof value==='object'&&value!==null&&'content' in value)
+    ? (value as {content:unknown}).content : value;
+  let bytes:Uint8Array;
+  if(candidate instanceof Uint8Array)bytes=candidate;
+  else if(candidate instanceof ArrayBuffer)bytes=new Uint8Array(candidate);
+  else if(ArrayBuffer.isView(candidate)){
+    const view=candidate as ArrayBufferView;
+    bytes=new Uint8Array(view.buffer,view.byteOffset,view.byteLength);
+  }else throw new Error('This attachment has no supported binary content.');
+  if(!bytes.byteLength)throw new Error('Attachment content is empty.');
+  if(bytes.byteLength>maxDownloadBytes)throw new Error('Attachment content exceeds the 32 MB safety limit.');
+  return Uint8Array.from(bytes);
 }
