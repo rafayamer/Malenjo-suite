@@ -12,7 +12,7 @@ import type {
   PdfProviderToolCategory,
   PdfToolProvider,
 } from './backend';
-import { fieldAcceptsActivePdf, requireUnsignedPdfProviderInputs } from './providerFileInputs';
+import { fieldAcceptsActivePdf,providerOperationMayRewritePdfInputs,requireUnsignedPdfProviderInputs } from './providerFileInputs';
 
 interface Props{
   provider:PdfToolProvider;
@@ -154,7 +154,9 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       // Never send a signed/certified secondary PDF to a provider that may
       // rewrite or merge it. Checking only sourceBytes after provider.run is
       // too late: its signature metadata may already have been discarded.
-      await requireUnsignedPdfProviderInputs(files);
+      if(providerOperationMayRewritePdfInputs(selected)){
+        await requireUnsignedPdfProviderInputs(files);
+      }
       const response=await provider.run(selected,fields,files);
       if(provider.responseIsPdf(response)){
         await onApplyPdf(`Local PDF core: ${selected.summary}`,Uint8Array.from(response.bytes));
