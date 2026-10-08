@@ -2,6 +2,7 @@ export type DocumentCommandId =
   | 'save'
   | 'save-as'
   | 'export'
+  | 'export-text'
   | 'undo'
   | 'redo'
   | 'print'

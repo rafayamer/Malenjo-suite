@@ -23,7 +23,8 @@ import {
 import type { DocumentSession } from '../files/session';
 import type { RegisterDocumentCommands } from '../commands/types';
 import { isDesktopRuntime } from '../files/api';
-import { exportPdfBytes, readPdfDocumentBytes } from './api';
+import { exportPdfBytes, exportPdfPlainText, readPdfDocumentBytes } from './api';
+import { extractPdfDocumentText } from './textExport';
 import {
   addPdfBatesNumbers,
   addPdfCheckBox,
@@ -154,6 +155,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const firstPageReportedRef = useRef(false);
   const previewIdRef = useRef(`pdf-preview-${Math.random().toString(36).slice(2)}`);
   const historyRef = useRef<PdfHistory | null>(null);
+  const textExportAbortRef = useRef<AbortController | null>(null);
 
   const [pdf, setPdf] = useState<PdfLoadResult | null>(null);
   const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
@@ -170,6 +172,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [fullscreen, setFullscreen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mutating, setMutating] = useState(false);
+  const [exportingText, setExportingText] = useState(false);
+  const [textExportProgress, setTextExportProgress] = useState(0);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState('');
   const [actionNotice, setActionNotice] = useState('');
@@ -337,6 +341,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
   useEffect(() => () => {
     requestIdRef.current += 1;
+    textExportAbortRef.current?.abort();
     void disposePdf(activeLoadRef.current);
   }, []);
 
@@ -837,6 +842,41 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }
   }
 
+  async function exportText(){
+    if(!pdf||exportingText||mutating)return;
+    const controller=new AbortController();
+    textExportAbortRef.current=controller;
+    setExportingText(true);
+    setTextExportProgress(0);
+    setError('');
+    setActionNotice('Extracting the existing PDF text layer…');
+    onSavingChange?.(true);
+    try{
+      const content=await extractPdfDocumentText(pdf.document,{
+        signal:controller.signal,
+        onProgress:(completed,total)=>{
+          if(completed===total||completed%10===0){
+            setTextExportProgress(Math.round(100*completed/total));
+          }
+        },
+      });
+      if(controller.signal.aborted)return;
+      const base=sourceName.replace(/\.pdf$/i,'').replace(/[/\\\u0000-\u001F]/g,'_').slice(0,120)||'MALENJO-document';
+      const saved=await exportPdfPlainText(base+'-text.txt',content);
+      if(saved)setActionNotice('Exported text from '+pdf.document.numPages+' PDF page(s).');
+    }catch(reason){
+      if(reason instanceof Error&&reason.name==='AbortError'){
+        setActionNotice('PDF text export cancelled. No partial file was saved.');
+      }else{
+        setError(reason instanceof Error?reason.message:String(reason));
+      }
+    }finally{
+      if(textExportAbortRef.current===controller)textExportAbortRef.current=null;
+      setExportingText(false);
+      onSavingChange?.(false);
+    }
+  }
+
   async function exportCurrent(){
     if(!sourceBytes){
       setActionNotice('Open a PDF first.');
@@ -911,6 +951,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           enabled:!!sourceBytes && !mutating,
           disabledReason:!sourceBytes ? 'No PDF is loaded.' : mutating ? 'Wait for the current PDF edit to finish.' : undefined,
           run:()=>exportCurrent(),
+        },
+        {
+          id:'export-text',
+          label:'Export selectable PDF text',
+          keywords:'convert pdf to text extract txt searchable text',
+          detail:'Save existing selectable text with page markers; scanned documents require OCR',
+          enabled:!!pdf&&!mutating&&!exportingText,
+          disabledReason:!pdf?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':exportingText?'A text export is in progress.':undefined,
+          run:()=>exportText(),
         },
         {
           id:'undo',
@@ -1106,7 +1155,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     });
     return () => registerCommands(null);
   }, [
-    session, registerCommands, sourceBytes, pdf, dirty, mutating, historyRevision, formFields.length,
+    session, registerCommands, sourceBytes, pdf, dirty, mutating, exportingText, historyRevision, formFields.length,
     headerFooterDraft, batesDraft, pageBoxDraft, formDraft, formFillDraft, formFillTouched, currentPage, pageCount, selectedPages,
     inspectorHidden, textOverlay, shapeOverlay, commentDraft,
   ]);
@@ -1218,7 +1267,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'configure-edit',label:'Edit settings',enabled:true,run:configureProperties},
       providerAction,
     ],
-    convert:[providerAction],
+    convert:[
+      {id:'export-text',label:exportingText?'Extracting text '+textExportProgress+'%':'PDF to text (.txt)',enabled:!!pdf&&!mutating&&!exportingText,disabledReason:!pdf?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':exportingText?'PDF text export is running.':undefined,run:exportText},
+      ...(exportingText?[{id:'cancel-text',label:'Cancel text export',enabled:true,run:()=>textExportAbortRef.current?.abort()}]:[]),
+      providerAction,
+    ],
     organize:[
       {id:'turn-pages',label:'Rotate selected',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Permanently rotated ${operationPages.length} selected page(s) by 90°.`,bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),operationPages[0])},
       {id:'remove-pages',label:`Delete ${operationPages.length} page${operationPages.length===1?'':'s'}`,enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length>=pageCount?'A PDF must retain at least one page.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Deleted ${operationPages.length} selected page(s).`,bytes=>operationPages.length===1?deletePdfPage(bytes,operationPages[0]):deletePdfPages(bytes,operationPages),Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length)))},
