@@ -71,7 +71,7 @@ Finally start MALENJO:
 npm run dev:codespace
 ```
 
-The model helper is opt-in because model weights have separate licensing and disk/resource costs. MALENJO exposes one reviewed local model: MIT-licensed Phi-4 Mini Q4_K_M. The bootstrap removes MALENJO's retired Phi-3/Qwen development models after Phi-4 passes its smoke test, but it does not delete unrelated Ollama models installed for other software. No model is automatically downloaded during repository setup.
+The model helper is opt-in because model weights have separate licensing and disk/resource costs. MALENJO exposes one reviewed local model: MIT-licensed Phi-4 Mini Q4_K_M. The bootstrap preserves all existing Ollama models, including retired Phi-3/Qwen tags; any model cleanup is a separate, explicit user action. No model is automatically downloaded during repository setup.
 
 Then open **Malenjo AI → Runtime status**. The UI should report the model(s) returned by the runtime and can send local RAG prompts through the Codespace bridge.
 
