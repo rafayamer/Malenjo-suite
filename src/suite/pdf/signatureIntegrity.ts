@@ -51,14 +51,44 @@ export function hasPriorPdfSignatureEvidence(bytes:Uint8Array):boolean{
   let eofCount=0;
   let byteRange=false;
   let contents=false;
+  let comment=false;
+  let hexString=false;
+  let literalDepth=0;
+  let escaped=false;
   for(let i=0;i<bytes.length;i++){
-    if(bytes[i]===37&&i+4<bytes.length&&
+    const char=bytes[i];
+    // A real EOF marker is normally on its own line, and is also a PDF comment.
+    if(char===37&&(i===0||bytes[i-1]===10||bytes[i-1]===13)&&
        bytes[i+1]===37&&bytes[i+2]===69&&
        bytes[i+3]===79&&bytes[i+4]===70){
       eofCount++;
     }
-    if(!byteRange&&hasNameValue(i,'/ByteRange',[91]))byteRange=true;
-    if(!contents&&hasNameValue(i,'/Contents',[60,40]))contents=true;
+    if(comment){
+      if(char===10||char===13)comment=false;
+      continue;
+    }
+    if(literalDepth){
+      if(escaped){escaped=false;continue;}
+      if(char===92){escaped=true;continue;}
+      if(char===40)literalDepth++;
+      else if(char===41)literalDepth--;
+      continue;
+    }
+    if(hexString){
+      if(char===62)hexString=false;
+      continue;
+    }
+    if(char===37){comment=true;continue;}
+    if(char===40){literalDepth=1;continue;}
+    if(char===60){
+      if(bytes[i+1]===60){i++;continue;} // dictionary opener
+      hexString=true;continue;
+    }
+    if(char===62&&bytes[i+1]===62){i++;continue;} // dictionary closer
+    if(char===47){
+      if(!byteRange&&hasNameValue(i,'/ByteRange',[91]))byteRange=true;
+      if(!contents&&hasNameValue(i,'/Contents',[60,40]))contents=true;
+    }
     if(eofCount>=2&&byteRange&&contents)return true;
   }
   return false;
