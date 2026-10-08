@@ -53,7 +53,7 @@ Runtime only — installs Ollama if required and starts it on loopback without d
 npm run ai:codespace:setup
 ```
 
-Reviewed default development model — explicitly downloads the registry-selected MIT-licensed Lite profile (`phi3:3.8b-mini-4k-instruct-q2_K` at this review), checks its expected Ollama digest prefix from `third_party/models/MODEL_LICENSES.json`, and runs a local smoke test:
+Sole reviewed development model — explicitly downloads the MIT-licensed `phi4-mini:3.8b-q4_K_M` profile, checks its expected Ollama digest prefix from `third_party/models/MODEL_LICENSES.json`, and runs a local smoke test:
 
 ```bash
 npm run ai:codespace:setup:model
@@ -71,7 +71,7 @@ Finally start MALENJO:
 npm run dev:codespace
 ```
 
-The model helper is opt-in because model weights have separate licensing and disk/resource costs. The current reviewed default is the MIT-licensed Phi-3 Mini Q2_K Lite profile. The previous Qwen3 0.6B profile remains available as a smaller Apache-2.0 fallback. Select a reviewed alternative with `MALENJO_AI_MODEL_PROFILE=<profile-id> npm run ai:codespace:setup:model`. No model is automatically downloaded during repository setup.
+The model helper is opt-in because model weights have separate licensing and disk/resource costs. MALENJO exposes one reviewed local model: MIT-licensed Phi-4 Mini Q4_K_M. The bootstrap removes MALENJO's retired Phi-3/Qwen development models after Phi-4 passes its smoke test, but it does not delete unrelated Ollama models installed for other software. No model is automatically downloaded during repository setup.
 
 Then open **Malenjo AI → Runtime status**. The UI should report the model(s) returned by the runtime and can send local RAG prompts through the Codespace bridge.
 
