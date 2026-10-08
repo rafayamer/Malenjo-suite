@@ -33,6 +33,10 @@ import {
   type PdfOutlineModel, type PdfOutlineEntry, type PdfAttachmentModel, type PdfAttachmentEntry,
 } from './navigation';
 import { extractPdfDocumentText } from './textExport';
+import {
+  addPdfLinkAnnotation,deletePdfLinkAnnotation,listPdfLinkAnnotations,
+  updatePdfLinkAnnotation,type PdfLinkAnnotation,type PdfLinkTarget,
+} from './links';
 import {deletePdfExistingFormField,updatePdfExistingFieldProperties} from './formManagement';
 import {
   listPdfOptionalLayers, restorePdfOptionalLayerVisibility,
@@ -242,6 +246,21 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [bookmarkTitle, setBookmarkTitle] = useState('');
   const [bookmarkEdit, setBookmarkEdit] = useState<{ref:string;title:string}|null>(null);
   const [bookmarkEditError, setBookmarkEditError] = useState('');
+  const [pdfLinks, setPdfLinks] = useState<PdfLinkAnnotation[]>([]);
+  const [linksLoading, setLinksLoading] = useState(false);
+  const [linksError, setLinksError] = useState('');
+  const [linkDraft, setLinkDraft] = useState({
+    targetKind:'page' as PdfLinkTarget['kind'],
+    targetPage:1,
+    url:'',
+    x:0.12,y:0.3,width:0.35,height:0.05,
+  });
+  const [linkEdit, setLinkEdit] = useState<{
+    item:PdfLinkAnnotation;
+    targetKind:PdfLinkTarget['kind'];
+    targetPage:number;
+    url:string;
+  }|null>(null);
   const [pdfAttachments, setPdfAttachments] = useState<PdfAttachmentModel>({entries:[],truncated:false});
   const [navigatorLoading, setNavigatorLoading] = useState(false);
   const [bookmarkError, setBookmarkError] = useState('');
@@ -890,6 +909,68 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       currentPage,
     );
     if(removed)setBookmarkEdit(null);
+  }
+
+  useEffect(()=>{
+    setPdfLinks([]);
+    setLinkEdit(null);
+    setLinksError('');
+    if(!sourceBytes){setLinksLoading(false);return;}
+    let cancelled=false;
+    setLinksLoading(true);
+    void listPdfLinkAnnotations(sourceBytes)
+      .then(items=>{if(!cancelled)setPdfLinks(items);})
+      .catch(reason=>{
+        if(!cancelled)setLinksError(reason instanceof Error?reason.message:String(reason));
+      })
+      .finally(()=>{if(!cancelled)setLinksLoading(false);});
+    return()=>{cancelled=true;};
+  },[sourceBytes]);
+
+  function linkTarget(kind:PdfLinkTarget['kind'],page:number,url:string):PdfLinkTarget{
+    return kind==='page'?{kind,pageNumber:page}:{kind,url};
+  }
+
+  async function addCurrentPageLink(){
+    const {targetKind,targetPage,url,x,y,width,height}=linkDraft;
+    await mutate(
+      'Created native PDF link on page '+currentPage+'.',
+      bytes=>addPdfLinkAnnotation(
+        bytes,{pageNumber:currentPage,x,y,width,height},
+        linkTarget(targetKind,targetPage,url),
+      ),currentPage,
+    );
+  }
+
+  function editPdfLink(item:PdfLinkAnnotation){
+    if(item.kind==='unsupported'||!item.ref)return;
+    setLinkEdit({
+      item,
+      targetKind:item.kind,
+      targetPage:item.kind==='page'?Number(item.destination):1,
+      url:item.kind==='https'?item.destination:'',
+    });
+  }
+
+  async function applyPdfLinkEdit(){
+    if(!linkEdit)return;
+    const {item,targetKind,targetPage,url}=linkEdit;
+    const applied=await mutate(
+      'Updated native PDF link on page '+item.pageNumber+'.',
+      bytes=>updatePdfLinkAnnotation(bytes,item,linkTarget(targetKind,targetPage,url)),
+      item.pageNumber,
+    );
+    if(applied)setLinkEdit(null);
+  }
+
+  async function removePdfLink(item:PdfLinkAnnotation){
+    if(!item.ref)return;
+    if(!window.confirm('Delete the selected PDF link on page '+item.pageNumber+'? This can be undone.'))return;
+    const deleted=await mutate(
+      'Deleted native PDF link from page '+item.pageNumber+'.',
+      bytes=>deletePdfLinkAnnotation(bytes,item),item.pageNumber,
+    );
+    if(deleted)setLinkEdit(null);
   }
 
   async function openBookmark(entry:PdfOutlineEntry){
@@ -1727,6 +1808,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           run:()=>addCurrentPageBookmark(),
         },
         {
+          id:'pdf-link-add',
+          label:'Create configured PDF page or HTTPS link',
+          keywords:'pdf hyperlink https link annotation destination pages',
+          detail:'Add a PDF-native Link annotation at the configured rectangle on the current page',
+          enabled:!!sourceBytes&&!mutating,
+          disabledReason:!sourceBytes?'Open a PDF first.':'Wait for the PDF edit to finish.',
+          run:()=>addCurrentPageLink(),
+        },
+        {
           id:'pdf-comments-open',
           label:'Open PDF Comments panel',
           keywords:'pdf comment annotations notes',
@@ -1757,7 +1847,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   }, [
     session, registerCommands, sourceBytes, pdf, dirty, mutating, loading, comparingPdf, exportingPageImages, exportingText, creatingImagePdf, historyRevision, formFields.length,
     headerFooterDraft, batesDraft, pageBoxDraft, pageLabelDraft, formDraft, formFillDraft, formFillTouched, currentPage, pageCount, selectedPages,
-    inspectorHidden, textOverlay, shapeOverlay, commentDraft, bookmarkTitle,
+    inspectorHidden, textOverlay, shapeOverlay, commentDraft, bookmarkTitle, linkDraft,
   ]);
 
   useEffect(() => {
@@ -2279,6 +2369,48 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                   </div>}
                 </div>)}
                 <small>Only top-level leaf bookmarks can be renamed or deleted safely. Existing nested outline trees are preserved.</small>
+              </div>
+              <div className="pdf-edit-form">
+                <b>PDF page links</b>
+                <small>Create a PDF-native clickable region on the current page. HTTPS URLs are never opened automatically by MALENJO.</small>
+                <label>Destination<select value={linkDraft.targetKind} onChange={event=>setLinkDraft({...linkDraft,targetKind:event.target.value as PdfLinkTarget['kind']})}>
+                  <option value="page">Internal page</option>
+                  <option value="https">HTTPS website</option>
+                </select></label>
+                {linkDraft.targetKind==='page'
+                  ? <label>Destination page<input type="number" min="1" max={pageCount} step="1" value={linkDraft.targetPage} onChange={event=>setLinkDraft({...linkDraft,targetPage:Number(event.target.value)})}/></label>
+                  : <label>HTTPS URL<input type="url" maxLength={2000} placeholder="https://example.com" value={linkDraft.url} onChange={event=>setLinkDraft({...linkDraft,url:event.target.value})}/></label>}
+                <div className="pdf-coordinate-grid">
+                  {(['x','y','width','height'] as const).map(key=><label key={key}>{key}<input type="number" min="0" max="1" step="0.01" value={linkDraft[key]} onChange={event=>setLinkDraft({...linkDraft,[key]:Number(event.target.value)})}/></label>)}
+                </div>
+                <button disabled={!sourceBytes||mutating||linksLoading} onClick={()=>void addCurrentPageLink()}>Create link on page {currentPage}</button>
+                <b>Existing page links ({pdfLinks.length})</b>
+                {linksLoading&&<small role="status">Reading PDF links…</small>}
+                {linksError&&<small role="alert">{linksError}</small>}
+                {!linksLoading&&!linksError&&!pdfLinks.length&&<small>No link annotations in this PDF.</small>}
+                {pdfLinks.slice(0,80).map(item=><div className="pdf-left-info" key={item.pageNumber+'-'+item.index+'-'+item.ref}>
+                  <strong>Page {item.pageNumber} · {item.kind==='page'?'Go to page':item.kind==='https'?'HTTPS':'Unsupported action'}</strong>
+                  <small>{item.destination}</small>
+                  <div>
+                    <button onClick={()=>goToPage(item.pageNumber)}>Show source page</button>
+                    {item.kind==='page'&&<button onClick={()=>goToPage(Number(item.destination))}>Go to destination</button>}
+                    <button disabled={!item.ref||item.kind==='unsupported'||mutating} onClick={()=>editPdfLink(item)}>Edit destination</button>
+                    <button disabled={!item.ref||mutating} onClick={()=>void removePdfLink(item)}>Delete link</button>
+                  </div>
+                  {linkEdit?.item.ref===item.ref&&linkEdit?.item.pageNumber===item.pageNumber&&linkEdit.item.index===item.index&&<div>
+                    <label>Destination<select value={linkEdit.targetKind} onChange={event=>setLinkEdit({...linkEdit,targetKind:event.target.value as PdfLinkTarget['kind']})}>
+                      <option value="page">Internal page</option>
+                      <option value="https">HTTPS website</option>
+                    </select></label>
+                    {linkEdit.targetKind==='page'
+                      ? <label>Page<input type="number" min="1" max={pageCount} step="1" value={linkEdit.targetPage} onChange={event=>setLinkEdit({...linkEdit,targetPage:Number(event.target.value)})}/></label>
+                      : <label>HTTPS URL<input type="url" maxLength={2000} value={linkEdit.url} onChange={event=>setLinkEdit({...linkEdit,url:event.target.value})}/></label>}
+                    <button disabled={mutating} onClick={()=>void applyPdfLinkEdit()}>Save link</button>
+                    <button onClick={()=>setLinkEdit(null)}>Cancel</button>
+                  </div>}
+                </div>)}
+                {pdfLinks.length>80&&<small>Showing 80 of {pdfLinks.length} links. Remaining links are preserved.</small>}
+                <small>Imported JavaScript, file, and unsupported PDF actions cannot be edited or opened here. New and edited destinations allow only internal pages or HTTPS.</small>
               </div>
             </div>
           </div>}
