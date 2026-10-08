@@ -6,6 +6,7 @@ import {
   resolvePdfOutlinePage,
   sanitizePdfAttachmentName,
   safePdfAttachmentExportName,
+  readPdfAttachmentBytes,
 } from './navigation';
 
 describe('PDF outline navigation', () => {
@@ -54,28 +55,39 @@ describe('PDF outline navigation', () => {
 });
 
 describe('PDF embedded attachments', () => {
-  it('sanitizes filenames and copies attachment bytes', () => {
-    const source = new Uint8Array([1,2,3]);
-    const model = normalizePdfAttachments({
-      dangerous:{ filename:'../secret\\payload.exe', content:source },
-    },200,1024);
-
+  it('reads metadata Map without fetching or copying attachment contents',()=>{
+    const model=normalizePdfAttachments(new Map([
+      ['internal-file-id',{filename:'../secret\\payload.exe',size:3}],
+    ]),200,1024);
     expect(model.entries).toHaveLength(1);
-    expect(model.entries[0].name).toBe('_secret_payload.exe');
-    expect([...model.entries[0].content]).toEqual([1,2,3]);
-    source[0]=9;
-    expect(model.entries[0].content[0]).toBe(1);
+    expect(model.entries[0]).toMatchObject({
+      id:'internal-file-id',
+      name:'_secret_payload.exe',
+      sizeBytes:3,
+      downloadable:true,
+    });
+    expect('content' in model.entries[0]).toBe(false);
   });
 
-  it('blocks empty and over-limit extraction', () => {
-    const model = normalizePdfAttachments({
-      empty:{ filename:'empty.bin', content:new Uint8Array() },
-      huge:{ filename:'huge.bin', content:new Uint8Array(5) },
-    },200,4);
-
+  it('blocks unknown sizes and files exceeding the advertised limit',()=>{
+    const model=normalizePdfAttachments(new Map([
+      ['empty',{filename:'empty.bin'}],
+      ['huge',{filename:'huge.bin',size:5}],
+    ]),200,4);
     expect(model.entries[0].downloadable).toBe(false);
+    expect(model.entries[0].reason).toMatch(/size is unavailable/i);
     expect(model.entries[1].downloadable).toBe(false);
     expect(model.entries[1].reason).toMatch(/limit/i);
+  });
+
+  it('copies attachment bytes only after a separate explicit content fetch',()=>{
+    const source=new Uint8Array([1,2,3]);
+    const extracted=readPdfAttachmentBytes({content:source},4);
+    expect([...extracted]).toEqual([1,2,3]);
+    source[0]=9;
+    expect(extracted[0]).toBe(1);
+    expect(()=>readPdfAttachmentBytes({content:new Uint8Array(5)},4))
+      .toThrow(/limit/i);
   });
 
   it('removes path traversal and control characters from exported names', () => {
@@ -89,11 +101,11 @@ describe('PDF embedded attachments', () => {
     expect(safePdfAttachmentExportName('page.html')).toBe('page.html.bin');
   });
 
-  it('refuses to copy oversized embedded data into review memory',()=>{
-    const large=new Uint8Array(7);
-    const model=normalizePdfAttachments({large:{filename:'archive.zip',content:large}},200,4);
-    expect(model.entries[0].sizeBytes).toBe(7);
-    expect(model.entries[0].content.byteLength).toBe(0);
-    expect(model.entries[0].downloadable).toBe(false);
+  it('limits the number of attachment metadata rows',()=>{
+    const input=new Map(Array.from({length:210},(_,i)=>['file-'+i,{filename:'file-'+i+'.txt',size:2}] as const));
+    const result=normalizePdfAttachments(input);
+    expect(result.entries).toHaveLength(200);
+    expect(result.truncated).toBe(true);
   });
+});
 });
