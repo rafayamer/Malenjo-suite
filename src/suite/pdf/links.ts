@@ -153,12 +153,37 @@ export async function listPdfLinkAnnotations(bytes:Uint8Array):Promise<PdfLinkAn
   return found;
 }
 
+function ensureNewLinkCapacity(pdf:PDFDocument):void{
+  if(pdf.getPageCount()>MAX_PAGES){
+    throw new Error('PDF link editor supports at most 2,000 pages.');
+  }
+  let entries=0;
+  let links=0;
+  for(let pageNumber=1;pageNumber<=pdf.getPageCount();pageNumber++){
+    const annots=annotationList(pdf,pageNumber);
+    if(!annots)continue;
+    entries+=annots.size();
+    if(entries>=MAX_ANNOTATIONS){
+      throw new Error('PDF already reaches the 4,000-annotation inventory limit.');
+    }
+    for(let index=0;index<annots.size();index++){
+      let dict:PDFDict;
+      try{dict=pdf.context.lookup(annots.get(index),PDFDict);}catch{continue;}
+      if(dict.get(SUBTYPE)?.toString()==='/Link')links++;
+      if(links>=MAX_LINKS){
+        throw new Error('PDF already reaches the 1,000-link safety limit.');
+      }
+    }
+  }
+}
+
 export async function addPdfLinkAnnotation(
   bytes:Uint8Array,rect:PdfLinkRectangle,target:PdfLinkTarget,
 ):Promise<Uint8Array>{
   const pdf=await load(bytes);
   rectCheck(pdf,rect);
   targetCheck(pdf,target);
+  ensureNewLinkCapacity(pdf);
   const page=pdf.getPage(rect.pageNumber-1);
   const {width:w,height:h}=page.getSize();
   const annots=annotationList(pdf,rect.pageNumber)??pdf.context.obj([]);
