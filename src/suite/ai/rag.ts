@@ -193,6 +193,8 @@ export function truncateUtf8(value:string,maxBytes:number):string{
     if(utf8Length(clean.slice(0,mid))<=maxBytes)low=mid;
     else high=mid-1;
   }
+  // Never return a lone UTF-16 high surrogate at the truncation boundary.
+  if(low>0 && low<clean.length && /[\uD800-\uDBFF]/.test(clean[low-1]) && /[\uDC00-\uDFFF]/.test(clean[low]))low--;
   return clean.slice(0,low);
 }
 
