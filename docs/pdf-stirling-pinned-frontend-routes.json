@@ -110,9 +110,6 @@
     "/split-pdf-by-chapters": "split"
   },
   "coreToolIds": [
-    "regular",
-    "super",
-    "link",
     "certSign",
     "sign",
     "addText",
