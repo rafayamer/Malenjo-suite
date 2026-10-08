@@ -68,6 +68,7 @@ export default function AiWorkspace({ onBackToFiles, openDocuments }: Props) {
   const [manualSources, setManualSources] = useState<SourceDocument[]>([]);
   const [openSources, setOpenSources] = useState<SourceDocument[]>([]);
   const [openSourceError, setOpenSourceError] = useState('');
+  const [openSourceLoading, setOpenSourceLoading] = useState(false);
   const openSourceCacheRef = useRef(new Map<string,SourceDocument>());
   const sources = useMemo(()=>[...openSources,...manualSources],[openSources,manualSources]);
   const openSourceIds = useMemo(()=>new Set(openSources.map((source)=>source.id)),[openSources]);
@@ -150,6 +151,7 @@ export default function AiWorkspace({ onBackToFiles, openDocuments }: Props) {
     }
 
     async function syncOpenSources(){
+      if(!cancelled)setOpenSourceLoading(indexable.length>0);
       const next:SourceDocument[]=[];
       const failures:string[]=[];
       for(const document of indexable){
@@ -170,6 +172,7 @@ export default function AiWorkspace({ onBackToFiles, openDocuments }: Props) {
       setOpenSourceError(failures.length
         ? `${failures.length} open document(s) could not be linked to AI knowledge. ${failures[0]}`
         : '');
+      setOpenSourceLoading(false);
     }
 
     void syncOpenSources();
@@ -200,6 +203,10 @@ export default function AiWorkspace({ onBackToFiles, openDocuments }: Props) {
   async function ask() {
     const value = question.trim();
     if (!value || busy) return;
+    if(openSourceLoading){
+      setError('Open documents are still being indexed. Ask again when the linked-source count finishes updating.');
+      return;
+    }
 
     setError('');
     setNotice('');
@@ -296,7 +303,7 @@ export default function AiWorkspace({ onBackToFiles, openDocuments }: Props) {
       </div>
     </div>
 
-    {(notice || error || openSourceError) && <div className={(error || openSourceError) ? 'ai-message error' : 'ai-message'}>{error || openSourceError || notice}</div>}
+    {(notice || error || openSourceError || openSourceLoading) && <div className={(error || openSourceError) ? 'ai-message error' : 'ai-message'}>{error || openSourceError || (openSourceLoading ? `Indexing ${openDocuments.filter(isOpenDocumentAiSource).length} open document(s) for AI…` : notice)}</div>}
 
     <div className="ai-layout">
       <aside className="ai-sources">
@@ -305,6 +312,7 @@ export default function AiWorkspace({ onBackToFiles, openDocuments }: Props) {
           <span><b>{sources.length}</b> files</span>
           <span><b>{index.chunks.length}</b> chunks</span>
           <span><b>{index.indexedChars.toLocaleString()}</b> chars indexed</span>
+          {openSourceLoading && <strong>Indexing open tabs…</strong>}
           {index.truncated && <strong>Index truncated by {liteMode ? 'Lite' : 'memory'} limits</strong>}
         </div>
 
@@ -373,7 +381,7 @@ export default function AiWorkspace({ onBackToFiles, openDocuments }: Props) {
           />
           {busy
             ? <button className="danger" onClick={() => void cancel()}><Square size={16}/> Cancel</button>
-            : <button disabled={!question.trim()} onClick={() => void ask()}><Send size={16}/> Send</button>}
+            : <button disabled={!question.trim()||openSourceLoading} onClick={() => void ask()}><Send size={16}/> Send</button>}
         </div>
       </main>
 
