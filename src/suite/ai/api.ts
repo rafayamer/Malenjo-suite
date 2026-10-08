@@ -152,7 +152,7 @@ async function runBrowserAiChat(
           top_p: 0.9,
           repeat_penalty: 1.18,
           repeat_last_n: 64,
-          num_ctx: liteMode ? 1536 : 4096,
+          num_ctx: liteMode ? 2048 : 4096,
           num_predict: liteMode ? 128 : 768,
         },
       }
@@ -197,6 +197,10 @@ async function runBrowserAiChat(
         for (const line of lines) {
           if (!line.trim()) continue;
           const chunk = JSON.parse(line) as Record<string, unknown>;
+          if(typeof chunk.error==='string'&&chunk.error.trim()){
+            await reader.cancel();
+            throw new Error(`Local model runtime error: ${chunk.error.trim()}`);
+          }
           const token = String((chunk.message as Record<string, unknown> | undefined)?.content ?? '');
           if (token) {
             content += token;
@@ -210,6 +214,9 @@ async function runBrowserAiChat(
       }
       if (pending.trim()) {
         const chunk = JSON.parse(pending) as Record<string, unknown>;
+        if(typeof chunk.error==='string'&&chunk.error.trim()){
+          throw new Error(`Local model runtime error: ${chunk.error.trim()}`);
+        }
         const token = String((chunk.message as Record<string, unknown> | undefined)?.content ?? '');
         if (token) {
           content += token;
