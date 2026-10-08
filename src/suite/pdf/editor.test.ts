@@ -785,6 +785,8 @@ describe('PDF mutation core',()=>{
     const bytes=await sample(1);
     await expect(addPdfCommentAnnotation(bytes,{pageNumber:1,text:'',x:0.2,y:0.2})).rejects.toThrow(/empty/i);
     await expect(addPdfTextField(bytes,{pageNumber:1,name:'x',x:0.9,y:0.1,width:0.2,height:0.1})).rejects.toThrow(/inside the page/i);
+    await expect(addPdfTextField(bytes,{pageNumber:1,name:'bad\u0085name',x:0.1,y:0.1,width:0.2,height:0.1})).rejects.toThrow(/control characters/i);
+    await expect(addPdfDropdown(bytes,{pageNumber:1,name:'choice',options:['ok','bad\u009Foption'],x:0.1,y:0.1,width:0.2,height:0.1})).rejects.toThrow(/control characters/i);
     await expect(attachFileToPdf(bytes,{name:'empty.bin',bytes:new Uint8Array()})).rejects.toThrow(/empty/i);
   });
 
