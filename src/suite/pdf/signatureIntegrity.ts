@@ -25,12 +25,53 @@ const PARENT=PDFName.of('Parent');
 const MAX_PARENT_DEPTH=32;
 
 /**
+ * Structural PDF libraries normally expose only the latest xref definition.
+ * Preserve older signed revisions as well: a prior incremental update may
+ * contain /ByteRange and /Contents even after those objects were superseded.
+ *
+ * Inspect raw ASCII PDF name tokens without decoding or allocating strings
+ * proportional to the document. Requiring a second EOF marker limits this
+ * conservative check to files with multiple revision terminators.
+ */
+export function hasPriorPdfSignatureEvidence(bytes:Uint8Array):boolean{
+  const hasToken=(offset:number,token:string):boolean=>{
+    if(bytes[offset]!==47||offset+token.length>=bytes.length)return false;
+    for(let i=0;i<token.length;i++){
+      if(bytes[offset+i]!==token.charCodeAt(i))return false;
+    }
+    const next=bytes[offset+token.length];
+    return next===undefined||next<=32||[40,41,60,62,91,93,47,37].includes(next);
+  };
+  const hasNameValue=(at:number,token:string,start:number[]):boolean=>{
+    if(!hasToken(at,token))return false;
+    let i=at+token.length;
+    while(i<bytes.length&&bytes[i]<=32&&i<at+token.length+64)i++;
+    return start.includes(bytes[i]);
+  };
+  let eofCount=0;
+  let byteRange=false;
+  let contents=false;
+  for(let i=0;i<bytes.length;i++){
+    if(bytes[i]===37&&i+4<bytes.length&&
+       bytes[i+1]===37&&bytes[i+2]===69&&
+       bytes[i+3]===79&&bytes[i+4]===70){
+      eofCount++;
+    }
+    if(!byteRange&&hasNameValue(i,'/ByteRange',[91]))byteRange=true;
+    if(!contents&&hasNameValue(i,'/Contents',[60,40]))contents=true;
+    if(eofCount>=2&&byteRange&&contents)return true;
+  }
+  return false;
+}
+
+/**
  * Conservative local structural inspection, not a cryptographic signature
  * validation. A populated /Sig field or document /Perms signature policy
  * blocks pdf-lib reserialization, which would invalidate signed revisions.
  */
 export async function inspectPdfSigningIntegrity(bytes:Uint8Array):Promise<PdfSigningIntegrity>{
   if(!bytes.byteLength)throw new Error('PDF is empty.');
+  const priorRevisionSigned=hasPriorPdfSignatureEvidence(bytes);
   const pdf=await PDFDocument.load(bytes,{ignoreEncryption:false,updateMetadata:false});
   const perms=pdf.catalog.lookupMaybe(PERMS,PDFDict);
   const certifiedDocument=Boolean(
@@ -128,7 +169,14 @@ export async function inspectPdfSigningIntegrity(bytes:Uint8Array):Promise<PdfSi
   }
   let detachedSignatureEvidence=false;
   for(const [,object] of objects){
-    if(object instanceof PDFDict&&signatureEvidence(object)){
+    if(!(object instanceof PDFDict))continue;
+    const rawType=object.get(FT);
+    const sigField=Boolean(rawType&&pdf.context.lookup(rawType)===SIG);
+    const rawValue=object.get(VALUE);
+    const resolvedValue=rawValue?pdf.context.lookup(rawValue):undefined;
+    if(signatureEvidence(object)||
+       (sigField&&nonNull(rawValue))||
+       (resolvedValue instanceof PDFDict&&signatureEvidence(resolvedValue))){
       detachedSignatureEvidence=true;
       break;
     }
@@ -198,7 +246,7 @@ export async function inspectPdfSigningIntegrity(bytes:Uint8Array):Promise<PdfSi
     signatureFieldCount,
     populatedSignatureCount,
     certifiedDocument,
-    mayRewrite:!certifiedDocument&&!populatedSignatureCount&&!detachedSignatureEvidence,
+    mayRewrite:!certifiedDocument&&!populatedSignatureCount&&!detachedSignatureEvidence&&!priorRevisionSigned,
   };
 }
 
