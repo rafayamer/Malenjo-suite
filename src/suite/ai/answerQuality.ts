@@ -15,8 +15,15 @@ export interface AiAnswerQualityReport{
 const CITATION=/\[S(\d+)\]/g;
 
 function sentences(value:string):string[]{
-  return value
-    .split(/(?<=[.!?])\s+|\n+/)
+  // Users/models commonly emit "claim. [S1]". Move a citation-only trailer
+  // before the sentence punctuation so it remains attached to that claim.
+  // Avoid regex lookbehind so this stays compatible with the Safari 13 build target.
+  const normalized=value.replace(
+    /([.!?])\s+((?:\[S\d+\]\s*)+)(?=\s|$)/g,
+    (_match,punctuation,citations)=>` ${String(citations).trim()}${punctuation} `,
+  );
+  return normalized
+    .split(/[.!?](?:\s+|$)|\n+/)
     .map((sentence)=>sentence.trim())
     .filter(Boolean);
 }
