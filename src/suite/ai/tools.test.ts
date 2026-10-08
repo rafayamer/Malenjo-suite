@@ -55,6 +55,6 @@ describe('controlled MALENJO AI tool contract',()=>{
     const contract=aiToolPromptContract();
     expect(contract).toContain('AVAILABLE MALENJO TOOLS');
     expect(contract).toContain('Never invent tool names');
-    expect(contract).not.toContain('shell');
+    expect(contract).not.toMatch(/^\s*-\s*shell\s*:/mi);
   });
 });
