@@ -24,15 +24,17 @@ describe('MALENJO single-model policy',()=>{
     expect(approvedInstalledModels([
       {name:'phi3:3.8b-mini-4k-instruct-q2_K'},
       {name:'qwen3:0.6b'},
-      {name:DEFAULT_AI_MODEL_PROFILE.tag},
+      {name:DEFAULT_AI_MODEL_PROFILE.tag,digest:'sha256:'+DEFAULT_AI_MODEL_PROFILE.expectedDigestPrefix+'abcdef'},
       {name:'unrelated-user-model'},
-    ])).toEqual([{name:DEFAULT_AI_MODEL_PROFILE.tag}]);
+    ])).toEqual([{name:DEFAULT_AI_MODEL_PROFILE.tag,digest:'sha256:'+DEFAULT_AI_MODEL_PROFILE.expectedDigestPrefix+'abcdef'}]);
   });
 
   it('selects only the approved Phi-4 runtime tag',()=>{
-    expect(preferredInstalledModel([{name:DEFAULT_AI_MODEL_PROFILE.tag}],'ollama')).toBe(DEFAULT_AI_MODEL_PROFILE.tag);
-    expect(preferredInstalledModel([{name:'phi3:3.8b-mini-4k-instruct-q2_K'}],'ollama')).toBe('');
-    expect(preferredInstalledModel([{name:DEFAULT_AI_MODEL_PROFILE.tag}],'llama-cpp')).toBe('');
+    const approved={name:DEFAULT_AI_MODEL_PROFILE.tag,digest:'sha256:'+DEFAULT_AI_MODEL_PROFILE.expectedDigestPrefix+'abcdef'};
+    expect(preferredInstalledModel([approved],'ollama')).toBe(DEFAULT_AI_MODEL_PROFILE.tag);
+    expect(preferredInstalledModel([{name:DEFAULT_AI_MODEL_PROFILE.tag,digest:'sha256:deadbeef'}],'ollama')).toBe('');
+    expect(preferredInstalledModel([{name:'phi3:3.8b-mini-4k-instruct-q2_K',digest:null}],'ollama')).toBe('');
+    expect(preferredInstalledModel([approved],'llama-cpp')).toBe('');
     expect(aiModelProfileById('qwen3-0.6b-ultralite')).toBeUndefined();
     expect(aiModelProfileByTag('qwen3:0.6b')).toBeUndefined();
   });
