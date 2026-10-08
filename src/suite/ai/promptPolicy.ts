@@ -100,6 +100,11 @@ function bounded(value:string,max:number):string{
   return value.replace(/\u0000/g,'').slice(0,max);
 }
 
+function canonicalSourceId(value:string,index:number):string{
+  const candidate=bounded(value,80);
+  return /^[A-Za-z0-9_-]{1,80}$/.test(candidate)?candidate:`S${index+1}`;
+}
+
 export function buildVersionedAiPrompt(
   feature:AiFeature,
   question:string,
@@ -109,13 +114,15 @@ export function buildVersionedAiPrompt(
   const policy=aiPromptPolicy(feature);
   const acceptedSources=sources.slice(0,policy.maxSources);
   const sourceBlock=acceptedSources.length
-    ? acceptedSources.map((source)=>[
-        `[${bounded(source.id,80)}] name=${JSON.stringify(bounded(source.name,240))}`,
+    ? acceptedSources.map((source,index)=>[
+        `[${canonicalSourceId(source.id,index)}] name=${JSON.stringify(bounded(source.name,240))}`,
         `SOURCE_DATA=${JSON.stringify(bounded(source.text,policy.maxSourceChars))}`,
       ].join('\n')).join('\n\n')
     : '(No local source passages supplied.)';
-  const historyBlock=history
-    .slice(-policy.maxHistoryMessages)
+  const acceptedHistory=policy.maxHistoryMessages>0
+    ? history.slice(-policy.maxHistoryMessages)
+    : [];
+  const historyBlock=acceptedHistory
     .map((message)=>`${message.role.toUpperCase()}: ${bounded(message.content,policy.maxHistoryMessageChars)}`)
     .join('\n');
 
