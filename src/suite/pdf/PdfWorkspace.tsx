@@ -633,16 +633,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   }
 
   async function addFormField(){
-    const name=formDraft.name.trim()||`field_${Date.now().toString(36)}`;
+    const name=formDraft.name;
     const flags={required:formDraft.required,readOnly:formDraft.readOnly};
-    const options=formDraft.optionsText
-      .split(/[\n,]+/)
-      .map((value)=>value.trim())
-      .filter(Boolean);
-    const selected=formDraft.selectedText
-      .split(/[\n,]+/)
-      .map((value)=>value.trim())
-      .filter(Boolean);
+    const options=formDraft.optionsText===''?[]:formDraft.optionsText.split(/\r?\n/);
+    const selected=formDraft.selectedText===''?[]:formDraft.selectedText.split(/\r?\n/);
 
     if(formDraft.type==='checkbox'){
       await mutate(
