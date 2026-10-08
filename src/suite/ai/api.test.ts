@@ -5,7 +5,7 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-import { getLocalAiStatus, runLocalAiChat } from './api';
+import { getLocalAiStatus, hasDegenerateRepetition, runLocalAiChat } from './api';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -47,8 +47,27 @@ describe('Codespaces AI bridge', () => {
     const request = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.body));
     expect(request.stream).toBe(true);
     expect(request.keep_alive).toBe('2m');
-    expect(request.options.num_predict).toBe(192);
+    expect(request.options.num_predict).toBe(128);
+    expect(request.options.repeat_penalty).toBe(1.18);
     expect(streamed.at(-1)).toBe('Grounded answer [S1]');
     expect(result.content).toBe('Grounded answer [S1]');
+  });
+
+  it('stops pathological repeated-word streams', async () => {
+    expect(hasDegenerateRepetition('GOSO GOSO GOSO GOSO GOSO GOSO')).toBe(true);
+    expect(hasDegenerateRepetition('Hello there, how can I help you today?')).toBe(false);
+
+    const body = Array.from({length:8},()=>JSON.stringify({
+      message:{content:'GOSO '},
+      done:false,
+    })).join('\n')+'\n';
+    vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(body,{
+      status:200,
+      headers:{'Content-Type':'application/x-ndjson'},
+    })));
+
+    await expect(runLocalAiChat(
+      'job-loop','ollama','local-model','Say hello',true,
+    )).rejects.toThrow(/repetition loop/i);
   });
 });
