@@ -12,6 +12,20 @@
       "path": "testing/endpoints.txt",
       "blobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
       "endpointCount": 62
+    },
+    "pinnedFrontendURLMap": {
+      "repository": "Stirling-Tools/Stirling-PDF",
+      "commit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+      "path": "frontend/editor/src/core/utils/urlMapping.ts",
+      "blobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+      "urlCount": 105
+    },
+    "pinnedFrontendCoreToolList": {
+      "repository": "Stirling-Tools/Stirling-PDF",
+      "commit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+      "path": "frontend/editor/src/core/types/toolId.ts",
+      "blobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88",
+      "coreToolCount": 64
     }
   },
   "legend": {
@@ -45,7 +59,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/general/merge-pdfs",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/merge-pdfs",
+        "pinnedFrontendCoreToolId": "merge",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -89,7 +109,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/general/split-pages",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": null,
+        "pinnedFrontendCoreToolId": null,
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -133,7 +159,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/extract-pages",
+        "pinnedFrontendCoreToolId": "extractPages",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -178,7 +210,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/general/remove-pages",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/remove-pages",
+        "pinnedFrontendCoreToolId": "removePages",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -222,7 +260,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/general/rearrange-pages",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": null,
+        "pinnedFrontendCoreToolId": null,
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -266,7 +310,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/general/rotate-pdf",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/rotate-pdf",
+        "pinnedFrontendCoreToolId": "rotate",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -310,7 +360,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/general/crop",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/crop",
+        "pinnedFrontendCoreToolId": "crop",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -347,7 +403,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/general/scale-pages",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/scale-pages",
+        "pinnedFrontendCoreToolId": "scalePages",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -384,7 +446,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/misc/add-page-numbers",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/add-page-numbers",
+        "pinnedFrontendCoreToolId": "addPageNumbers",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -428,7 +496,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/general/pdf-to-single-page",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/pdf-to-single-page",
+        "pinnedFrontendCoreToolId": "pdfToSinglePage",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -465,7 +539,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/general/multi-page-layout",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/multi-page-layout",
+        "pinnedFrontendCoreToolId": "pageLayout",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -502,7 +582,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/booklet-imposition",
+        "pinnedFrontendCoreToolId": "bookletImposition",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -540,7 +626,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/general/overlay-pdfs",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/overlay-pdf",
+        "pinnedFrontendCoreToolId": "overlayPdfs",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -577,7 +669,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/general/split-pdf-by-sections",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/split-pdf-by-sections",
+        "pinnedFrontendCoreToolId": "split",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -614,7 +712,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/general/split-pdf-by-chapters",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/split-pdf-by-chapters",
+        "pinnedFrontendCoreToolId": "split",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -651,7 +755,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/misc/auto-split-pdf",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/auto-split-pdf",
+        "pinnedFrontendCoreToolId": "split",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -688,7 +798,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/general/split-by-size-or-count",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/split-by-size-or-count",
+        "pinnedFrontendCoreToolId": "split",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -725,7 +841,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/misc/add-attachments",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/add-attachments",
+        "pinnedFrontendCoreToolId": "addAttachments",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -769,7 +891,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/convert/pdf/img",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/pdf-to-img",
+        "pinnedFrontendCoreToolId": "convert",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -806,7 +934,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/convert/img/pdf",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/img-to-pdf",
+        "pinnedFrontendCoreToolId": "convert",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -850,7 +984,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/convert/file/pdf",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/file-to-pdf",
+        "pinnedFrontendCoreToolId": "convert",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -887,7 +1027,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/convert/pdf/word",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/pdf-to-word",
+        "pinnedFrontendCoreToolId": "convert",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -924,7 +1070,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/convert/pdf/presentation",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/pdf-to-presentation",
+        "pinnedFrontendCoreToolId": "convert",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -961,7 +1113,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/convert/pdf/text",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/pdf-to-text",
+        "pinnedFrontendCoreToolId": "convert",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -1006,7 +1164,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/convert/pdf/html",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/pdf-to-html",
+        "pinnedFrontendCoreToolId": "convert",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1043,7 +1207,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/convert/pdf/xml",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/pdf-to-xml",
+        "pinnedFrontendCoreToolId": "convert",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1080,7 +1250,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/convert/pdf/markdown",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/pdf-to-markdown",
+        "pinnedFrontendCoreToolId": "convert",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1117,7 +1293,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/convert/pdf/csv",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/pdf-to-csv",
+        "pinnedFrontendCoreToolId": "convert",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1154,7 +1336,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": null,
+        "pinnedFrontendCoreToolId": null,
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1192,7 +1380,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": null,
+        "pinnedFrontendCoreToolId": null,
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1230,7 +1424,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": null,
+        "pinnedFrontendCoreToolId": null,
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1268,7 +1468,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": null,
+        "pinnedFrontendCoreToolId": null,
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1306,7 +1512,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/pdf-to-cbz",
+        "pinnedFrontendCoreToolId": "convert",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1344,7 +1556,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/pdf-to-cbr",
+        "pinnedFrontendCoreToolId": "convert",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1382,7 +1600,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/convert/pdf/pdfa",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/pdf-to-pdfa",
+        "pinnedFrontendCoreToolId": "convert",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1419,7 +1643,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/convert/html/pdf",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/html-to-pdf",
+        "pinnedFrontendCoreToolId": "convert",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1456,7 +1686,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/convert/url/pdf",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": null,
+        "pinnedFrontendCoreToolId": null,
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1493,7 +1729,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/convert/markdown/pdf",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/markdown-to-pdf",
+        "pinnedFrontendCoreToolId": "convert",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1530,7 +1772,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/eml-to-pdf",
+        "pinnedFrontendCoreToolId": "convert",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1568,7 +1816,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/cbz-to-pdf",
+        "pinnedFrontendCoreToolId": "convert",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1606,7 +1860,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": null,
+        "pinnedFrontendCoreToolId": null,
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1644,7 +1904,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": null,
+        "pinnedFrontendCoreToolId": null,
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1682,7 +1948,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/security/add-password",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/add-password",
+        "pinnedFrontendCoreToolId": "addPassword",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1719,7 +1991,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/security/remove-password",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/remove-password",
+        "pinnedFrontendCoreToolId": "removePassword",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1756,7 +2034,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/change-permissions",
+        "pinnedFrontendCoreToolId": "changePermissions",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1794,7 +2078,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/security/add-watermark",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/add-watermark",
+        "pinnedFrontendCoreToolId": "watermark",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -1839,7 +2129,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/misc/add-stamp",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/add-stamp",
+        "pinnedFrontendCoreToolId": "addStamp",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1876,7 +2172,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/security/sanitize-pdf",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/sanitize-pdf",
+        "pinnedFrontendCoreToolId": "sanitize",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1913,7 +2215,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/misc/flatten",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/flatten",
+        "pinnedFrontendCoreToolId": "flatten",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -1957,7 +2265,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/unlock-pdf-forms",
+        "pinnedFrontendCoreToolId": "unlockPDFForms",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -1995,7 +2309,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/security/cert-sign",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/cert-sign",
+        "pinnedFrontendCoreToolId": "certSign",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2032,7 +2352,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/sign",
+        "pinnedFrontendCoreToolId": "sign",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2070,7 +2396,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": null,
+        "pinnedFrontendCoreToolId": null,
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2108,7 +2440,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/security/remove-cert-sign",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/remove-cert-sign",
+        "pinnedFrontendCoreToolId": "removeCertSign",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2145,7 +2483,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/security/validate-signature",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/validate-signature",
+        "pinnedFrontendCoreToolId": "validateSignature",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -2190,7 +2534,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": null,
+        "pinnedFrontendCoreToolId": null,
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2228,7 +2578,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/security/redact",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/redact",
+        "pinnedFrontendCoreToolId": "redact",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -2273,7 +2629,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/security/auto-redact",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/auto-redact",
+        "pinnedFrontendCoreToolId": "redact",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2310,7 +2672,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/misc/extract-images",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/extract-images",
+        "pinnedFrontendCoreToolId": "extractImages",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2347,7 +2715,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/misc/extract-image-scans",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/extract-image-scans",
+        "pinnedFrontendCoreToolId": "scannerImageSplit",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2384,7 +2758,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/general/remove-image-pdf",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/remove-image-pdf",
+        "pinnedFrontendCoreToolId": "removeImage",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2421,7 +2801,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/remove-annotations",
+        "pinnedFrontendCoreToolId": "removeAnnotations",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -2467,7 +2853,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/misc/remove-blanks",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/remove-blanks",
+        "pinnedFrontendCoreToolId": "removeBlanks",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2504,7 +2896,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/misc/ocr-pdf",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/ocr-pdf",
+        "pinnedFrontendCoreToolId": "ocr",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2541,7 +2939,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/pdf-text-editor",
+        "pinnedFrontendCoreToolId": "pdfTextEditor",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -2587,7 +2991,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/edit-table-of-contents",
+        "pinnedFrontendCoreToolId": "editTableOfContents",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2625,7 +3035,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/misc/update-metadata",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/change-metadata",
+        "pinnedFrontendCoreToolId": "changeMetadata",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2662,7 +3078,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/security/get-info-on-pdf",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/get-info-on-pdf",
+        "pinnedFrontendCoreToolId": "getPdfInfo",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -2706,7 +3128,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/compare",
+        "pinnedFrontendCoreToolId": "compare",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -2752,7 +3180,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/adjust-contrast",
+        "pinnedFrontendCoreToolId": "adjustContrast",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2790,7 +3224,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/misc/replace-invert-pdf",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": null,
+        "pinnedFrontendCoreToolId": null,
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2827,7 +3267,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": null,
+        "pinnedFrontendCoreToolId": null,
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2865,7 +3311,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/misc/repair",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/repair",
+        "pinnedFrontendCoreToolId": "repair",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2902,7 +3354,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/misc/add-image",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/add-image",
+        "pinnedFrontendCoreToolId": "addImage",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -2939,7 +3397,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": null,
+        "pinnedFrontendCoreToolId": null,
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -2984,7 +3448,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": null,
+        "pinnedFrontendCoreToolId": null,
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -3029,7 +3499,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": null,
+        "pinnedFrontendCoreToolId": null,
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -3067,7 +3543,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": null,
+        "pinnedFrontendCoreToolId": null,
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -3105,7 +3587,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/multi-tool",
+        "pinnedFrontendCoreToolId": "multiTool",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -3143,7 +3631,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/misc/compress-pdf",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/compress-pdf",
+        "pinnedFrontendCoreToolId": "compress",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -3180,7 +3674,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/automate",
+        "pinnedFrontendCoreToolId": "automate",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -3218,7 +3718,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/pipeline",
+        "pinnedFrontendCoreToolId": "automate",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -3256,7 +3762,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/misc/auto-rename",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/auto-rename",
+        "pinnedFrontendCoreToolId": "autoRename",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -3293,7 +3805,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/view-pdf",
+        "pinnedFrontendCoreToolId": "read",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [
@@ -3338,7 +3856,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": "/api/v1/misc/show-javascript",
-        "endpointInPinnedFixture": true
+        "endpointInPinnedFixture": true,
+        "pinnedFrontendRoute": "/show-javascript",
+        "pinnedFrontendCoreToolId": "showJS",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -3375,7 +3899,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/dev-api",
+        "pinnedFrontendCoreToolId": "devApi",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -3413,7 +3943,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/dev-folder-scanning",
+        "pinnedFrontendCoreToolId": "devFolderScanning",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -3451,7 +3987,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/dev-sso-guide",
+        "pinnedFrontendCoreToolId": "devSsoGuide",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -3489,7 +4031,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": "/dev-airgapped",
+        "pinnedFrontendCoreToolId": "devAirgapped",
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -3527,7 +4075,13 @@
         "endpointTestPath": "testing/endpoints.txt",
         "endpointTestBlobSha": "1df2e53e690bcd4ca763f88d4d7fb5257c2d0a64",
         "upstreamEndpoint": null,
-        "endpointInPinnedFixture": false
+        "endpointInPinnedFixture": false,
+        "pinnedFrontendRoute": null,
+        "pinnedFrontendCoreToolId": null,
+        "frontendURLMapPath": "frontend/editor/src/core/utils/urlMapping.ts",
+        "frontendURLMapBlobSha": "67328c8ab22e775d544c8910387a37aec962628d",
+        "frontendCoreToolListPath": "frontend/editor/src/core/types/toolId.ts",
+        "frontendCoreToolListBlobSha": "de647e2b6e91c6bb9fb66735fd5db748adf75a88"
       },
       "malenjo": {
         "implementationPaths": [],
@@ -3570,6 +4124,8 @@
     ],
     "windowsOperationResults": "unverified",
     "localSourcePartialCount": 21,
-    "unverifiedSourceCount": 69
+    "unverifiedSourceCount": 69,
+    "frontendRouteMatchesOutsideTestedAPI": 22,
+    "pendingFurtherUpstreamSourceClassification": 14
   }
 }
