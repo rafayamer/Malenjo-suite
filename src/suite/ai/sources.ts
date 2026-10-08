@@ -1,11 +1,18 @@
 import { disposePdf, loadPdfBytes } from '../pdf/engine';
+import { readPdfDocumentBytes } from '../pdf/api';
 import { parseOffice } from '../office/ooxml';
+import { readOfficeDocument } from '../office/api';
+import type { LibraryDocument } from '../files/types';
 import type { SourceDocument } from './rag';
 
 const MAX_SOURCE_FILE_BYTES = 100 * 1024 * 1024;
 
 function sourceId(name: string): string {
   return `source-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function openDocumentSourceId(documentId:string):string {
+  return `open-document-${documentId}`;
 }
 
 async function pdfText(bytes: Uint8Array): Promise<string> {
@@ -37,24 +44,70 @@ function officeText(bytes: Uint8Array): string {
   return model.slides.map((slide, index) => `Slide ${index + 1}: ${slide.texts.join('\n')}`).join('\n\n');
 }
 
+async function extractNamedBytes(
+  name:string,
+  bytes:Uint8Array,
+  stableId?:string,
+):Promise<SourceDocument> {
+  if (bytes.byteLength <= 0 || bytes.byteLength > MAX_SOURCE_FILE_BYTES) {
+    throw new Error(`${name}: source files must be between 1 byte and 100 MB.`);
+  }
+
+  const extension = name.split('.').pop()?.toLowerCase() ?? '';
+  let text = '';
+
+  if (extension === 'pdf') {
+    text = await pdfText(bytes);
+  } else if (['docx','xlsx','pptx'].includes(extension)) {
+    text = officeText(bytes);
+  } else if (['txt','md','csv','json','log','xml','html'].includes(extension)) {
+    text = new TextDecoder().decode(bytes);
+  } else {
+    throw new Error(`${name}: unsupported RAG source type.`);
+  }
+
+  if (!text.trim()) throw new Error(`${name}: no indexable text was found.`);
+  return { id:stableId??sourceId(name), name, text };
+}
+
 export async function extractSourceDocument(file: File): Promise<SourceDocument> {
   if (file.size <= 0 || file.size > MAX_SOURCE_FILE_BYTES) {
     throw new Error(`${file.name}: source files must be between 1 byte and 100 MB.`);
   }
+  return extractNamedBytes(file.name,new Uint8Array(await file.arrayBuffer()));
+}
 
-  const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
-  let text = '';
+export function isOpenDocumentAiSource(document:LibraryDocument):boolean {
+  if(document.browserFile){
+    const extension=document.name.split('.').pop()?.toLowerCase()??'';
+    return ['pdf','docx','xlsx','pptx','txt','md','csv','json','log','xml','html'].includes(extension);
+  }
+  return document.available&&['pdf','docx','xlsx','pptx'].includes(document.kind);
+}
 
-  if (['txt','md','csv','json','log','xml','html'].includes(extension)) {
-    text = await file.text();
-  } else if (extension === 'pdf') {
-    text = await pdfText(new Uint8Array(await file.arrayBuffer()));
-  } else if (['docx','xlsx','pptx'].includes(extension)) {
-    text = officeText(new Uint8Array(await file.arrayBuffer()));
-  } else {
-    throw new Error(`${file.name}: unsupported RAG source type.`);
+export async function extractOpenDocumentSource(document:LibraryDocument):Promise<SourceDocument> {
+  if(!isOpenDocumentAiSource(document)){
+    throw new Error(`${document.name}: this open document type is not currently indexable by Malenjo AI.`);
   }
 
-  if (!text.trim()) throw new Error(`${file.name}: no indexable text was found.`);
-  return { id: sourceId(file.name), name: file.name, text };
+  const stableId=openDocumentSourceId(document.id);
+  if(document.browserFile){
+    const file=document.browserFile;
+    if(file.size<=0||file.size>MAX_SOURCE_FILE_BYTES){
+      throw new Error(`${file.name}: source files must be between 1 byte and 100 MB.`);
+    }
+    return extractNamedBytes(file.name,new Uint8Array(await file.arrayBuffer()),stableId);
+  }
+
+  if(document.kind==='pdf'){
+    const bytes=await readPdfDocumentBytes(document.id);
+    return extractNamedBytes(document.name,new Uint8Array(bytes),stableId);
+  }
+
+  if(['docx','xlsx','pptx'].includes(document.kind)){
+    const bytes=await readOfficeDocument(document.id);
+    return extractNamedBytes(document.name,new Uint8Array(bytes),stableId);
+  }
+
+  throw new Error(`${document.name}: no safe local read boundary is available for AI indexing.`);
 }
