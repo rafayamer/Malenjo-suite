@@ -2,13 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { AI_PROMPT_POLICIES, aiPromptPolicy, buildVersionedAiPrompt } from './promptPolicy';
 
 describe('AI prompt/version policy',()=>{
-  it('keeps one versioned policy per feature without exposing mutable shared state',()=>{
+  it('keeps exported and returned policies immutable across requests',()=>{
     expect(new Set(AI_PROMPT_POLICIES.map((item)=>item.id)).size).toBe(AI_PROMPT_POLICIES.length);
     const first=aiPromptPolicy('document-chat');
     first.maxSources=0;
+    expect(()=>Reflect.set(AI_PROMPT_POLICIES[0] as object,'maxSources',0)).toThrow();
     const second=aiPromptPolicy('document-chat');
     expect(second.id).toBe('document-chat-v1');
     expect(second.maxSources).toBeGreaterThan(0);
+    expect(AI_PROMPT_POLICIES[0]?.maxSources).toBeGreaterThan(0);
   });
 
   it('keeps hostile source instructions quoted as untrusted data',()=>{
@@ -67,6 +69,20 @@ describe('AI prompt/version policy',()=>{
     expect(prompt).not.toContain('RECENT_CONVERSATION');
     expect(prompt).not.toContain('history should not appear');
     expect(prompt).not.toMatch(/^USER:/m);
+  });
+
+  it('bounds sources after JSON escaping expands control characters',()=>{
+    const prompt=buildVersionedAiPrompt(
+      'summarize',
+      'Summarize.',
+      Array.from({length:8},(_,index)=>({
+        id:`S${index+1}`,
+        name:'\u0001'.repeat(240),
+        text:'\u0001'.repeat(2400),
+      })),
+    );
+    expect(prompt.length).toBeLessThan(30_000);
+    expect((prompt.match(/SOURCE_DATA=/g)??[]).length).toBe(8);
   });
 
   it('enforces source, history and question bounds',()=>{
