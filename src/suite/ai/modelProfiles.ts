@@ -63,11 +63,20 @@ export function preferredInstalledModel(
   models:Array<{name:string}>,
   provider:'ollama'|'llama-cpp',
 ):string{
-  const preferred=AI_MODEL_PROFILES.find((profile)=>
-    profile.provider===provider&&
-    profile.installable&&
-    models.some((model)=>model.name===profile.tag),
-  );
+  const installed=new Set(models.map((model)=>model.name));
+  const qualityRank:Record<AiModelResourceClass,number>={ultralite:0,lite:1,standard:2};
+  const preferred=AI_MODEL_PROFILES
+    .filter((profile)=>
+      profile.provider===provider&&
+      profile.installable&&
+      profile.reviewState==='reviewed'&&
+      installed.has(profile.tag),
+    )
+    .sort((left,right)=>{
+      const mitDelta=Number(right.license==='MIT')-Number(left.license==='MIT');
+      if(mitDelta)return mitDelta;
+      return qualityRank[right.resourceClass]-qualityRank[left.resourceClass];
+    })[0];
   return preferred?.tag??models[0]?.name??'';
 }
 
