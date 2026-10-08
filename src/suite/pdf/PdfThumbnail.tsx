@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
+import type { PdfOptionalContentConfig } from './optionalLayers';
 import { PDF_PAGE_DRAG_TYPE, createPdfPageDragPayload, readPdfPageDragPayload } from './pageDrag';
 
 interface Props {
   document: PDFDocumentProxy;
+  optionalContentConfig?:PdfOptionalContentConfig|null;
+  layerRevision?:number;
   pageNumber: number;
   logicalLabel?: string;
   active: boolean;
@@ -16,7 +19,7 @@ interface Props {
   onReorder?(fromPage:number,toPage:number):void;
 }
 
-export default function PdfThumbnail({ document, pageNumber, logicalLabel, active, selected, renderAllowed, onSelect, dragScope='', reorderEnabled=false, pageCount=0, onReorder }: Props) {
+export default function PdfThumbnail({ document, optionalContentConfig, layerRevision=0, pageNumber, logicalLabel, active, selected, renderAllowed, onSelect, dragScope='', reorderEnabled=false, pageCount=0, onReorder }: Props) {
   const wrapperRef = useRef<HTMLButtonElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [visible, setVisible] = useState(pageNumber <= 3);
@@ -71,6 +74,7 @@ export default function PdfThumbnail({ document, pageNumber, logicalLabel, activ
           canvas,
           canvasContext: context,
           viewport,
+          optionalContentConfigPromise:optionalContentConfig?Promise.resolve(optionalContentConfig):undefined,
           transform: dpr === 1 ? undefined : [dpr, 0, 0, dpr, 0, 0],
         });
         await renderTask.promise;
@@ -85,7 +89,7 @@ export default function PdfThumbnail({ document, pageNumber, logicalLabel, activ
       cancelled = true;
       renderTask?.cancel();
     };
-  }, [document, pageNumber, renderAllowed, visible]);
+  }, [document, pageNumber, renderAllowed, visible, optionalContentConfig, layerRevision]);
 
   return <button
     ref={wrapperRef}
