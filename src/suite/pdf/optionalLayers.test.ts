@@ -9,19 +9,26 @@ function fake(groups: Record<string, {name:string;visible:boolean}>):PdfOptional
   const values=new Map(Object.entries(groups).map(([id,value])=>[id,{name:value.name}]));
   const visibility=new Map(Object.entries(groups).map(([id,value])=>[id,value.visible]));
   return {
-    getGroups:()=>values,
+    getOrder:()=>[...values.keys()],
+    getGroup:(id:string)=>values.get(id)??null,
     isVisible:({id}:{id:string})=>visibility.get(id),
     setVisibility:vi.fn((id:string,visible:boolean)=>{visibility.set(id,visible);}),
   } as unknown as PdfOptionalContentConfig;
 }
 
 describe('PDF optional-content view controls',()=>{
-  it('discovers PDF.js Map-based optional layer groups',()=>{
+  it('discovers PDF.js 6.4 optional layer order and groups',()=>{
     const config=fake({first:{name:'Plan',visible:true},second:{name:'Notes',visible:false}});
     expect(listPdfOptionalLayers(config)).toEqual([
       {id:'first',name:'Plan',visible:true},
       {id:'second',name:'Notes',visible:false},
     ]);
+  });
+
+  it('flattens nested named order groups without inventing layers',()=>{
+    const config=fake({a:{name:'Layer A',visible:true},b:{name:'Layer B',visible:false}});
+    config.getOrder=()=>[{name:'Folder',order:['b','a']}];
+    expect(listPdfOptionalLayers(config).map(item=>item.id)).toEqual(['b','a']);
   });
 
   it('changes view configuration and restores initial layer states',()=>{
