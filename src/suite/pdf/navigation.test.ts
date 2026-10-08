@@ -5,6 +5,7 @@ import {
   normalizePdfAttachments,
   resolvePdfOutlinePage,
   sanitizePdfAttachmentName,
+  safePdfAttachmentExportName,
 } from './navigation';
 
 describe('PDF outline navigation', () => {
@@ -79,5 +80,20 @@ describe('PDF embedded attachments', () => {
 
   it('removes path traversal and control characters from exported names', () => {
     expect(sanitizePdfAttachmentName('../../bad\u0000/name.txt','fallback.bin')).toBe('_bad_name.txt');
+  });
+
+  it('blocks untrusted executable file extensions while preserving safe names',()=>{
+    expect(safePdfAttachmentExportName('installer.exe')).toBe('installer.exe.bin');
+    expect(safePdfAttachmentExportName('report.pdf')).toBe('report.pdf');
+    expect(safePdfAttachmentExportName('document.docx')).toBe('document.docx');
+    expect(safePdfAttachmentExportName('page.html')).toBe('page.html.bin');
+  });
+
+  it('refuses to copy oversized embedded data into review memory',()=>{
+    const large=new Uint8Array(7);
+    const model=normalizePdfAttachments({large:{filename:'archive.zip',content:large}},200,4);
+    expect(model.entries[0].sizeBytes).toBe(7);
+    expect(model.entries[0].content.byteLength).toBe(0);
+    expect(model.entries[0].downloadable).toBe(false);
   });
 });
