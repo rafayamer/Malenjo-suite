@@ -53,7 +53,7 @@ Runtime only — installs Ollama if required and starts it on loopback without d
 npm run ai:codespace:setup
 ```
 
-Reviewed development model — explicitly downloads `qwen3:0.6b`, checks the expected Ollama digest prefix recorded in `third_party/models/MODEL_LICENSES.json`, and runs a local smoke test:
+Reviewed default development model — explicitly downloads the registry-selected MIT-licensed Lite profile (`phi3:3.8b-mini-4k-instruct-q2_K` at this review), checks its expected Ollama digest prefix from `third_party/models/MODEL_LICENSES.json`, and runs a local smoke test:
 
 ```bash
 npm run ai:codespace:setup:model
@@ -71,7 +71,7 @@ Finally start MALENJO:
 npm run dev:codespace
 ```
 
-The model helper is opt-in because model weights have separate licensing and disk/resource costs. The current reviewed development profile uses Qwen3 0.6B for a small Codespaces footprint; it is not automatically downloaded during repository setup.
+The model helper is opt-in because model weights have separate licensing and disk/resource costs. The current reviewed default is the MIT-licensed Phi-3 Mini Q2_K Lite profile. The previous Qwen3 0.6B profile remains available as a smaller Apache-2.0 fallback. Select a reviewed alternative with `MALENJO_AI_MODEL_PROFILE=<profile-id> npm run ai:codespace:setup:model`. No model is automatically downloaded during repository setup.
 
 Then open **Malenjo AI → Runtime status**. The UI should report the model(s) returned by the runtime and can send local RAG prompts through the Codespace bridge.
 
