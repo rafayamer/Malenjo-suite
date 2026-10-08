@@ -2665,17 +2665,23 @@
         "endpointInPinnedFixture": true
       },
       "malenjo": {
-        "implementationPaths": [],
+        "implementationPaths": [
+          "src/suite/pdf/pdfInfo.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
         "frontendCommand": null,
         "provider": null,
         "dependency": null,
         "providerCatalogMatchKey": "/api/v1/security/get-info-on-pdf",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "inspectPdfDocumentInfo"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfInfo.test.ts"
+        ],
         "negativeTestIds": [],
         "fixtures": [],
         "runtimeResultVerified": false,
@@ -2683,7 +2689,8 @@
         "limits": null
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "New local read-only metadata/page-geometry inspector is callable from provider panel without starting sidecar. Full upstream GetPdfInfo parity and Windows export/reopen verification not yet established."
       ]
     },
     {
@@ -3562,7 +3569,7 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 20,
-    "unverifiedSourceCount": 70
+    "localSourcePartialCount": 21,
+    "unverifiedSourceCount": 69
   }
 }
