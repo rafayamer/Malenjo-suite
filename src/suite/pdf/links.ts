@@ -1,5 +1,5 @@
 import {
-  PDFArray,PDFDict,PDFDocument,PDFName,PDFRef,PDFString,
+  PDFArray,PDFDict,PDFDocument,PDFHexString,PDFName,PDFRef,PDFString,
 } from 'pdf-lib';
 
 export type PdfLinkTarget =
