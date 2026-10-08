@@ -1,0 +1,2819 @@
+{
+  "schemaVersion": 1,
+  "generatedFrom": "MALENJO_PDF_FULL_TRANSFER_2026-10-08.md §5A–5G; verify against pinned upstream before relying on catalog as current",
+  "upstream": {
+    "repository": "Stirling-Tools/Stirling-PDF",
+    "baselineCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+    "rootLicenseCaution": "MIT only where root LICENSE applies; engine and specified proprietary/desktop subtrees are separately restricted",
+    "licensingAudited": false
+  },
+  "legend": {
+    "functionalStatus": [
+      "implemented",
+      "partial",
+      "unavailable",
+      "excluded-by-license"
+    ],
+    "nullStatus": "Not audited; do not count as implemented, partial, available, or excluded until evidence is recorded",
+    "windowsOffline": [
+      "verified",
+      "unsupported",
+      "unavailable",
+      "unverified"
+    ]
+  },
+  "releaseGate": "PDF stays partial until all applicable operation outcomes, Windows offline provider runs, permissions, signature safety, tests and final manual acceptance have evidence.",
+  "catalogCount": 90,
+  "operations": [
+    {
+      "order": 1,
+      "upstreamToolId": "merge-pdfs",
+      "group": "page",
+      "handoffRequirement": "merge files in chosen order; bookmark/page-label/attachment preservation; duplicate and damaged input behavior.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 2,
+      "upstreamToolId": "split-pages",
+      "group": "page",
+      "handoffRequirement": "split by individual pages, chosen ranges and gap/selection; multiple outputs ZIP.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 3,
+      "upstreamToolId": "extract-pages",
+      "group": "page",
+      "handoffRequirement": "chosen pages/ranges into new PDFs.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 4,
+      "upstreamToolId": "remove-pages",
+      "group": "page",
+      "handoffRequirement": "delete selected pages with confirm/Undo.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 5,
+      "upstreamToolId": "rearrange-pages",
+      "group": "page",
+      "handoffRequirement": "drag reorder, reverse, custom order, repeat/duplicate, alternate sequence.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 6,
+      "upstreamToolId": "rotate-pdf",
+      "group": "page",
+      "handoffRequirement": "rotate individual and all pages, portrait/landscape and auto-rotate where supported.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 7,
+      "upstreamToolId": "crop",
+      "group": "page",
+      "handoffRequirement": "visible crop boxes, paper geometry, percentages, margins, safe MediaBox/CropBox handling.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 8,
+      "upstreamToolId": "scale-pages",
+      "group": "page",
+      "handoffRequirement": "scale to A4/Letter/custom sizes, fit, margins, content bounding box.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 9,
+      "upstreamToolId": "add-page-numbers",
+      "group": "page",
+      "handoffRequirement": "multiple numbering schemes, per-section numbers, positions and font style.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 10,
+      "upstreamToolId": "pdf-to-single-page",
+      "group": "page",
+      "handoffRequirement": "join pages into one tall/wide page with bounds.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 11,
+      "upstreamToolId": "multi-page-layout",
+      "group": "page",
+      "handoffRequirement": "N-up / 2, 4, 6, 9, 16-page printing layouts, spacing.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 12,
+      "upstreamToolId": "booklet-imposition",
+      "group": "page",
+      "handoffRequirement": "signatures, 2-up/booklet imposition, duplex binding options.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 13,
+      "upstreamToolId": "overlay-pdf",
+      "group": "page",
+      "handoffRequirement": "overlay/underlay selected PDF pages, alignment, repeat mode, opacity where supported.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 14,
+      "upstreamToolId": "split-pdf-by-sections",
+      "group": "page",
+      "handoffRequirement": "split by equal/unequal section groups.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 15,
+      "upstreamToolId": "split-pdf-by-chapters",
+      "group": "page",
+      "handoffRequirement": "split using top-level/nested bookmarks or reliable headings.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 16,
+      "upstreamToolId": "auto-split-pdf",
+      "group": "page",
+      "handoffRequirement": "barcode/separator/blank detection, controlled split.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 17,
+      "upstreamToolId": "split-by-size-or-count",
+      "group": "page",
+      "handoffRequirement": "split by byte budget or page count, safe errors when impossible.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 18,
+      "upstreamToolId": "add-attachments",
+      "group": "page",
+      "handoffRequirement": "embed file attachments with names, MIME metadata, safe extraction/removal.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 19,
+      "upstreamToolId": "pdf-to-img",
+      "group": "conversion",
+      "handoffRequirement": "PNG/JPEG/TIFF/WebP/GIF (formats according to actual enabled encoder), DPI, quality, per-page ZIP, transparency.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 20,
+      "upstreamToolId": "img-to-pdf",
+      "group": "conversion",
+      "handoffRequirement": "images to PDF with page size, EXIF orientation, ordering, margins, color.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 21,
+      "upstreamToolId": "file-to-pdf",
+      "group": "conversion",
+      "handoffRequirement": "DOCX, ODT, XLSX, ODS, PPTX, ODP, RTF, text etc. through lawful local LibreOffice/other engines.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 22,
+      "upstreamToolId": "pdf-to-word",
+      "group": "conversion",
+      "handoffRequirement": "DOCX/ODT reconstruction with fidelity warnings.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 23,
+      "upstreamToolId": "pdf-to-presentation",
+      "group": "conversion",
+      "handoffRequirement": "PPTX/ODP page content extraction/reconstruction.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 24,
+      "upstreamToolId": "pdf-to-text",
+      "group": "conversion",
+      "handoffRequirement": "selectable text, per-page extraction, OCR suggestion if image-only.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 25,
+      "upstreamToolId": "pdf-to-html",
+      "group": "conversion",
+      "handoffRequirement": "semantic or positioned HTML, resource export.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 26,
+      "upstreamToolId": "pdf-to-xml",
+      "group": "conversion",
+      "handoffRequirement": "text/content structured XML as provider supports.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 27,
+      "upstreamToolId": "pdf-to-markdown",
+      "group": "conversion",
+      "handoffRequirement": "headings/tables/images and readable content.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 28,
+      "upstreamToolId": "pdf-to-csv",
+      "group": "conversion",
+      "handoffRequirement": "table-oriented extraction, selection/table boundaries.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 29,
+      "upstreamToolId": "pdf-to-epub",
+      "group": "conversion",
+      "handoffRequirement": "EPUB e-book conversion (Calibre or alternative).",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 30,
+      "upstreamToolId": "pdf-to-vector",
+      "group": "conversion",
+      "handoffRequirement": "SVG / EPS / other supported vector format, object/quality warnings.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 31,
+      "upstreamToolId": "pdf-to-json",
+      "group": "conversion",
+      "handoffRequirement": "structured extraction of text/pages/metadata/bookmarks.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 32,
+      "upstreamToolId": "pdf-to-rtf",
+      "group": "conversion",
+      "handoffRequirement": "rich-text conversion.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 33,
+      "upstreamToolId": "pdf-to-cbz",
+      "group": "conversion",
+      "handoffRequirement": "comic archive export of rendered pages.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 34,
+      "upstreamToolId": "pdf-to-cbr",
+      "group": "conversion",
+      "handoffRequirement": "CBR requires lawful RAR-compatible tooling; fallback CBZ if unavailable, but don't mislabel.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 35,
+      "upstreamToolId": "pdf-to-pdfa",
+      "group": "conversion",
+      "handoffRequirement": "archive standard PDF/A with validator and font embedding/color profiles.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 36,
+      "upstreamToolId": "html-to-pdf",
+      "group": "conversion",
+      "handoffRequirement": "fully local HTML rendering, font/images, forbid SSRF/external fetch by default.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 37,
+      "upstreamToolId": "url-to-pdf",
+      "group": "conversion",
+      "handoffRequirement": "opt-in controlled URL capture (network needed *only for user-chosen URL*), SSRF/private-IP protection and isolation.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 38,
+      "upstreamToolId": "markdown-to-pdf",
+      "group": "conversion",
+      "handoffRequirement": "local MD conversion with syntax/fonts/images.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 39,
+      "upstreamToolId": "eml-to-pdf",
+      "group": "conversion",
+      "handoffRequirement": "email/MIME/attachment handling; privacy rules.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 40,
+      "upstreamToolId": "cbz-to-pdf",
+      "group": "conversion",
+      "handoffRequirement": "comic images to PDF.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 41,
+      "upstreamToolId": "json-to-pdf",
+      "group": "conversion",
+      "handoffRequirement": "structured template/report builder as upstream supports.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 42,
+      "upstreamToolId": "vector-to-pdf",
+      "group": "conversion",
+      "handoffRequirement": "SVG/other vector import, safe parsing, no external resolution.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 43,
+      "upstreamToolId": "add-password",
+      "group": "security",
+      "handoffRequirement": "real interoperable **standard PDF** encryption, user/owner passwords, supported AES variants, tested in independent readers. Do NOT confuse MALENJO AES-GCM secure envelope with standards-compatible PDF encryption.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 44,
+      "upstreamToolId": "remove-password",
+      "group": "security",
+      "handoffRequirement": "valid password unlock, preserve content/permissions.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 45,
+      "upstreamToolId": "change-permissions",
+      "group": "security",
+      "handoffRequirement": "print/copy/edit/annotate/form rights and owner permission behavior; respect viewer differences.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 46,
+      "upstreamToolId": "add-watermark",
+      "group": "security",
+      "handoffRequirement": "text/image watermark, transparency, rotation, per-page/range, behind/front.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 47,
+      "upstreamToolId": "add-stamp",
+      "group": "security",
+      "handoffRequirement": "draft/approved/custom date stamps and genuine annotation or flattened appearance.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 48,
+      "upstreamToolId": "sanitize-pdf",
+      "group": "security",
+      "handoffRequirement": "strip dangerous JavaScript/actions/launches/embedded files/forms/hidden layers/metadata as selected, with audit list.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 49,
+      "upstreamToolId": "flatten",
+      "group": "security",
+      "handoffRequirement": "forms and annotation appearances to static page content, not superficial disabling.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 50,
+      "upstreamToolId": "unlock-pdf-forms",
+      "group": "security",
+      "handoffRequirement": "remove read-only field flags where authorized without bypassing password security.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 51,
+      "upstreamToolId": "cert-sign",
+      "group": "security",
+      "handoffRequirement": "PKCS#12/PFX/PEM crypto signatures, visible appearance, timestamps, multi-signing and safe incremental save.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 52,
+      "upstreamToolId": "sign",
+      "group": "security",
+      "handoffRequirement": "mouse/pen/typed/uploaded visible signatures; distinguish graphical marks from cryptographically signed PDFs.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 53,
+      "upstreamToolId": "timestamp-pdf",
+      "group": "security",
+      "handoffRequirement": "trusted TSA optional network route, user opt-in; offline certificate alternatives where feasible.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 54,
+      "upstreamToolId": "remove-cert-sign",
+      "group": "security",
+      "handoffRequirement": "lawful cleanup with unavoidable invalidation warning; don't imply signature remains valid.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 55,
+      "upstreamToolId": "validate-signature",
+      "group": "security",
+      "handoffRequirement": "verify ByteRange/digest, trust chain, certificate expiry, revocation (offline caveat), modification status; route to MALENJO Sign/pyHanko.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 56,
+      "upstreamToolId": "verify-pdf",
+      "group": "security",
+      "handoffRequirement": "structural/security/preflight validation with clear categories.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 57,
+      "upstreamToolId": "redact",
+      "group": "security",
+      "handoffRequirement": "draw regions and **permanently remove underlying content** including text images/vector and hidden material. Do not pass off black rectangles as redaction.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 58,
+      "upstreamToolId": "auto-redact",
+      "group": "security",
+      "handoffRequirement": "selectable text/regex/PII patterns, preview all matches, approve/apply, sanitize, audit report.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 59,
+      "upstreamToolId": "extract-images",
+      "group": "scan-extraction",
+      "handoffRequirement": "original embedded images/resolutions/colorspaces and ordered archive.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 60,
+      "upstreamToolId": "extract-image-scans",
+      "group": "scan-extraction",
+      "handoffRequirement": "segment/extract individual scans/receipts/photos with image processing.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 61,
+      "upstreamToolId": "remove-image-pdf",
+      "group": "scan-extraction",
+      "handoffRequirement": "targeted/batch remove image resources (understand shared resources and clipping).",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 62,
+      "upstreamToolId": "remove-annotations",
+      "group": "scan-extraction",
+      "handoffRequirement": "selected/all comments and markup; preserve widgets/signature fields by default.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 63,
+      "upstreamToolId": "remove-blanks",
+      "group": "scan-extraction",
+      "handoffRequirement": "threshold/detection with a preview so scanned near-blank pages are not lost.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 64,
+      "upstreamToolId": "ocr-pdf",
+      "group": "scan-extraction",
+      "handoffRequirement": "Tesseract/OCRmyPDF and language packs; selectable text layer/visible text; page selection, rotation, deskew, despeckle, thresholds, confidence and review.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 65,
+      "upstreamToolId": "text-editor-pdf",
+      "group": "editing-analysis",
+      "handoffRequirement": "actual existing-text editing where implementable, fonts, runs, search replace and layout preservation. **Stirling itself labels its text editor ALPHA**, so MALENJO goal of robust existing-object edit is a **beyond-Stirling** stretch; don't confuse overlay text insertion with existing content editing.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 66,
+      "upstreamToolId": "edit-table-of-contents",
+      "group": "editing-analysis",
+      "handoffRequirement": "view/add/remove/rename/reorder nested outlines and named destinations, proper target references.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 67,
+      "upstreamToolId": "update-metadata",
+      "group": "editing-analysis",
+      "handoffRequirement": "inspect/change/remove Author/Creator/Title/Keywords/custom/XMP, privacy strip, coordinate with Metadata Studio.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 68,
+      "upstreamToolId": "get-info-on-pdf",
+      "group": "editing-analysis",
+      "handoffRequirement": "page sizes, fonts, security/encryption state, attachments, image quality, producer, PDF version, conformance.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 69,
+      "upstreamToolId": "compare",
+      "group": "editing-analysis",
+      "handoffRequirement": "word-level differences with **side-by-side/stacked** view, synchronized scrolling, change navigation; MALENJO extra: page alignment and visual/pixel overlay.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 70,
+      "upstreamToolId": "adjust-contrast",
+      "group": "editing-analysis",
+      "handoffRequirement": "scanned image enhancement with presets and preview.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 71,
+      "upstreamToolId": "replace-invert-pdf",
+      "group": "editing-analysis",
+      "handoffRequirement": "replace/invert colors in content/images (preserve accessibility and color profiles).",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 72,
+      "upstreamToolId": "scanner-effect",
+      "group": "editing-analysis",
+      "handoffRequirement": "simulated scanning, skew/noise/monochrome presets.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 73,
+      "upstreamToolId": "repair",
+      "group": "editing-analysis",
+      "handoffRequirement": "malformed xref/streams, sane fallback and detailed recovery warnings.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 74,
+      "upstreamToolId": "add-image",
+      "group": "editing-analysis",
+      "handoffRequirement": "place an image on PDF and move/resize/rotate.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 75,
+      "upstreamToolId": "fields",
+      "group": "forms",
+      "handoffRequirement": "discover/list PDF field names, widgets, values, options and appearance.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 76,
+      "upstreamToolId": "fill",
+      "group": "forms",
+      "handoffRequirement": "fill text boxes, checkbox/radio/dropdown/list, radio groups, tab order, imports and save.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 77,
+      "upstreamToolId": "modify-fields",
+      "group": "forms",
+      "handoffRequirement": "update existing field values, flags, geometry, appearance, fonts, options, default values, tooltips and form behavior; do not execute untrusted validation JS.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 78,
+      "upstreamToolId": "delete-fields",
+      "group": "forms",
+      "handoffRequirement": "remove selected field + exactly its own widgets; preserve sibling comments/forms.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 79,
+      "upstreamToolId": "multi-tool",
+      "group": "automation-view-developer",
+      "handoffRequirement": "single-file session with multiple operations: rotate/reorder/remove/crop/split/sign/add text without re-upload.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 80,
+      "upstreamToolId": "compress-pdf",
+      "group": "automation-view-developer",
+      "handoffRequirement": "lossless and lossy presets; image downsample, object streams, linearization; size/quality measurement.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 81,
+      "upstreamToolId": "automate",
+      "group": "automation-view-developer",
+      "handoffRequirement": "visual chain builder, save/import/edit reusable workflows; preflight compatible operations.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 82,
+      "upstreamToolId": "pipeline",
+      "group": "automation-view-developer",
+      "handoffRequirement": "backend chained operations executed locally with progress/rollback/cancel, JSON configs, batch folder processing; private API optional.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 83,
+      "upstreamToolId": "auto-rename",
+      "group": "automation-view-developer",
+      "handoffRequirement": "extract text/metadata/regex/date-based names, preview collisions and safe batch renaming.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 84,
+      "upstreamToolId": "view-pdf",
+      "group": "automation-view-developer",
+      "handoffRequirement": "reader with thumbnails/bookmarks/search/forms/annotations/rotation/print, keyboard and accessibility.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 85,
+      "upstreamToolId": "show-javascript",
+      "group": "automation-view-developer",
+      "handoffRequirement": "inspect embedded PDF JavaScript **as inert text**; never execute it.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 86,
+      "upstreamToolId": "dev-api-docs",
+      "group": "automation-view-developer",
+      "handoffRequirement": "local operation contract diagnostics/spec; not necessary to copy Stirling's public API exactly.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 87,
+      "upstreamToolId": "dev-folder-scanning-docs",
+      "group": "automation-view-developer",
+      "handoffRequirement": "describe configured watched-folder job support; optional GUI.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 88,
+      "upstreamToolId": "dev-sso-guide-docs",
+      "group": "automation-view-developer",
+      "handoffRequirement": "a server/enterprise developer-doc endpoint; for strictly personal offline Windows use, **may be explicitly approved not applicable** if user agrees. Don't present as core PDF operation.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 89,
+      "upstreamToolId": "dev-airgapped-docs",
+      "group": "automation-view-developer",
+      "handoffRequirement": "local/offline/air-gap operation guidance.",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    },
+    {
+      "order": 90,
+      "upstreamToolId": "handleData",
+      "group": "automation-view-developer",
+      "handoffRequirement": "internal transport/API pipeline handler (not a user-visible feature).",
+      "source": {
+        "upstreamPinnedCommit": "25220cbdbde2d526cebf173b94357884e180b8c1",
+        "path": null,
+        "license": null,
+        "attributionVerified": false
+      },
+      "malenjo": {
+        "implementationPaths": [],
+        "frontendCommand": null,
+        "provider": null,
+        "dependency": null
+      },
+      "evidence": {
+        "functionalStatus": null,
+        "windowsOffline": "unverified",
+        "positiveTestIds": [],
+        "negativeTestIds": [],
+        "fixtures": [],
+        "runtimeResultVerified": false,
+        "exportReopenVerified": false,
+        "limits": null
+      },
+      "remaining": [
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+      ]
+    }
+  ]
+}
