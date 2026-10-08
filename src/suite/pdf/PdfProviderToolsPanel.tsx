@@ -14,6 +14,7 @@ import type {
 } from './backend';
 import { fieldAcceptsActivePdf } from './providerFileInputs';
 import { computePdfParityCoverage } from './parityCoverage';
+import { inspectPdfDocumentInfo } from './pdfInfo';
 
 interface Props{
   provider:PdfToolProvider;
@@ -108,6 +109,25 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }
     setValues(nextValues);setExtraFiles({});setUseActive(nextUseActive);setNotice('');setError('');
   },[selected?.id]);
+
+  async function saveLocalPdfInfo(){
+    if(!sourceBytes||busy)return;
+    setBusy(true);setError('');setNotice('');
+    try{
+      const info=await inspectPdfDocumentInfo(sourceBytes);
+      const output=new TextEncoder().encode(JSON.stringify(info,null,2)+'\\n');
+      const base=(sourceName.replace(/\\.pdf$/i,'')||'document')+'-info';
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/json',
+        bytes:Array.from(output),
+      },base);
+      setNotice(saved?`Saved local PDF information: ${saved}`:'PDF information save cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }finally{
+      setBusy(false);
+    }
+  }
 
   async function startProvider(){
     setBusy(true);setError('');
@@ -226,6 +246,9 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       <button disabled={busy||Boolean(status?.running)} onClick={()=>void startProvider()}><Play size={14}/>Start local provider</button>
       <button disabled={busy||!status?.running} onClick={()=>void stopProvider()}><Square size={14}/>Stop</button>
       <button disabled={busy} onClick={()=>void refresh(Boolean(status?.running))}><RefreshCw size={14}/>Refresh</button>
+      <button disabled={busy||!sourceBytes} onClick={()=>void saveLocalPdfInfo()}>
+        <FileOutput size={14}/>Export PDF information (offline)
+      </button>
     </div>
     <p className="stirling-provider-message">{status?.message??'Checking local provider…'}</p>
     {!!components.length&&<details className="stirling-component-details">
