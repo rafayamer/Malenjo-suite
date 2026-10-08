@@ -70,7 +70,7 @@ export default function AiWorkspace({ onBackToFiles, openDocuments }: Props) {
   const [openSourceError, setOpenSourceError] = useState('');
   const [openSourceLoading, setOpenSourceLoading] = useState(false);
   const openSourceCacheRef = useRef(new Map<string,SourceDocument>());
-  const sources = useMemo(()=>[...openSources,...manualSources],[openSources,manualSources]);
+  const sources = useMemo(()=>[...manualSources,...openSources],[manualSources,openSources]);
   const openSourceIds = useMemo(()=>new Set(openSources.map((source)=>source.id)),[openSources]);
   const [liteMode, setLiteMode] = useState(true);
   const provider: AiProvider = 'ollama';
