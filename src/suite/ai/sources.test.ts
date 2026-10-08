@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LibraryDocument } from '../files/types';
-import { extractOpenDocumentSource, isOpenDocumentAiSource } from './sources';
+import { extractOpenDocumentSource, isAiSourceSizeAllowed, isOpenDocumentAiSource } from './sources';
 
 function browserDocument(name:string,text:string):LibraryDocument{
   const bytes=new TextEncoder().encode(text);
@@ -56,6 +56,12 @@ describe('open documents as AI sources',()=>{
       locationLabel:'Desktop library',
     };
     await expect(extractOpenDocumentSource(oversized)).rejects.toThrow(/between 1 byte and 100 MB/);
+  });
+
+  it('enforces the AI source byte cap before extraction',()=>{
+    expect(isAiSourceSizeAllowed(100*1024*1024)).toBe(true);
+    expect(isAiSourceSizeAllowed(100*1024*1024+1)).toBe(false);
+    expect(isAiSourceSizeAllowed(0)).toBe(false);
   });
 
   it('does not claim unsupported native document kinds are indexable',()=>{
