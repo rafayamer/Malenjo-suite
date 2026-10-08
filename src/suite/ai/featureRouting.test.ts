@@ -1,26 +1,47 @@
 import { describe, expect, it } from 'vitest';
-import { minimumContextForAiFeature, selectAiModelForFeature } from './featureRouting';
+import {
+  aiFeatureExecutionProfile,
+  assertAiFeatureReady,
+  minimumContextForAiFeature,
+} from './featureRouting';
 
-describe('AI per-feature model routing',()=>{
-  const candidates=[
-    {id:'apache-small',provider:'ollama' as const,license:'Apache-2.0',resourceClass:'ultralite' as const,maxContextTokens:4096,reviewState:'reviewed' as const,installable:true},
-    {id:'mit-lite',provider:'ollama' as const,license:'MIT',resourceClass:'lite' as const,maxContextTokens:4096,reviewState:'reviewed' as const,installable:true},
-    {id:'unreviewed',provider:'ollama' as const,license:'MIT',resourceClass:'ultralite' as const,maxContextTokens:8192,reviewState:'candidate' as const,installable:false},
-  ];
-
-  it('prefers reviewed MIT candidates under the default policy',()=>{
-    expect(selectAiModelForFeature('document-chat',candidates)?.id).toBe('mit-lite');
+describe('single-model AI feature execution profiles',()=>{
+  it('routes every feature through policy settings rather than model selection',()=>{
+    const chat=aiFeatureExecutionProfile('document-chat');
+    const tutor=aiFeatureExecutionProfile('tutor');
+    expect(chat.feature).toBe('document-chat');
+    expect(tutor.requiresSources).toBe(true);
+    expect(tutor.maxOutputTokens).toBeGreaterThan(chat.maxOutputTokens);
   });
 
-  it('can favor the smallest reviewed profile when MIT preference is disabled',()=>{
-    expect(selectAiModelForFeature('document-chat',candidates,{preferMit:false,preferLite:true})?.id).toBe('apache-small');
+  it('uses conservative Lite execution budgets without changing model identity',()=>{
+    const normal=aiFeatureExecutionProfile('reader');
+    const lite=aiFeatureExecutionProfile('reader',{liteMode:true});
+    expect(lite.preferredContextTokens).toBeLessThanOrEqual(normal.preferredContextTokens);
+    expect(lite.maxOutputTokens).toBeLessThan(normal.maxOutputTokens);
+    expect(lite.minimumContextTokens).toBe(normal.minimumContextTokens);
   });
 
-  it('never routes to unreviewed or context-incompatible candidates',()=>{
-    expect(minimumContextForAiFeature('summarize')).toBe(4096);
-    expect(selectAiModelForFeature('summarize',[
-      {...candidates[2],reviewState:'candidate' as const,installable:false},
-      {...candidates[0],maxContextTokens:2048},
-    ])).toBeNull();
+  it('requires sources for grounded document workflows',()=>{
+    expect(()=>assertAiFeatureReady('summarize',{
+      sourceCount:0,toolPlanningEnabled:false,
+    })).toThrow(/indexed source/);
+    expect(()=>assertAiFeatureReady('summarize',{
+      sourceCount:1,toolPlanningEnabled:false,
+    })).not.toThrow();
+  });
+
+  it('keeps tool planning behind an application-controlled gate',()=>{
+    expect(()=>assertAiFeatureReady('tool-plan',{
+      sourceCount:0,toolPlanningEnabled:false,
+    })).toThrow(/disabled/);
+    expect(()=>assertAiFeatureReady('tool-plan',{
+      sourceCount:0,toolPlanningEnabled:true,
+    })).not.toThrow();
+  });
+
+  it('publishes stable minimum context requirements',()=>{
+    expect(minimumContextForAiFeature('classify')).toBe(1536);
+    expect(minimumContextForAiFeature('reader')).toBe(2048);
   });
 });
