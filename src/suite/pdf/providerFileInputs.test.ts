@@ -2,7 +2,7 @@ import { describe,expect,it } from 'vitest';
 import { PDFDocument,PDFHexString,PDFName } from 'pdf-lib';
 import type { PdfProviderInputFile,PdfProviderOperationField } from './backend';
 import {
-  fieldAcceptsActivePdf,isPdfProviderInput,requireUnsignedPdfProviderInputs,
+  fieldAcceptsActivePdf,isPdfProviderInput,providerOperationMayRewritePdfInputs,requireUnsignedPdfProviderInputs,
 } from './providerFileInputs';
 
 function file(accept?:string):PdfProviderOperationField{
@@ -65,5 +65,29 @@ describe('provider file input compatibility',()=>{
       field:'files',filename:'bad.pdf',bytes:[0,1,2],
     };
     await expect(requireUnsignedPdfProviderInputs([invalid])).rejects.toThrow();
+  });
+
+  it('passes signed PDFs to the explicitly read-only ValidateSignature tool',()=>{
+    expect(providerOperationMayRewritePdfInputs({id:'ValidateSignature',category:'sign'})).toBe(false);
+    expect(providerOperationMayRewritePdfInputs({id:'validateSignature',category:'sign'})).toBe(false);
+    expect(providerOperationMayRewritePdfInputs({id:'Merge',category:'organize'})).toBe(true);
+    expect(providerOperationMayRewritePdfInputs({id:'Sign',category:'sign'})).toBe(true);
+    expect(providerOperationMayRewritePdfInputs({id:'ValidateSignature',category:'organize'})).toBe(true);
+    expect(providerOperationMayRewritePdfInputs({id:'ValidateSignatureButRewrite',category:'sign'})).toBe(true);
+  });
+
+  it('does not treat PDF marker text in an HTML or TXT file as a PDF',async()=>{
+    const encoder=new TextEncoder();
+    const plain:PdfProviderInputFile={
+      field:'fileInput',filename:'notes.txt',contentType:'text/plain',
+      bytes:Array.from(encoder.encode('Header: example\\nThe text says %PDF-1.7 inside it.')),
+    };
+    const html:PdfProviderInputFile={
+      field:'fileInput',filename:'sample.html',contentType:'text/html',
+      bytes:Array.from(encoder.encode('<p>Reference: %PDF-1.7</p>')),
+    };
+    expect(isPdfProviderInput(plain)).toBe(false);
+    expect(isPdfProviderInput(html)).toBe(false);
+    await expect(requireUnsignedPdfProviderInputs([plain,html])).resolves.toBeUndefined();
   });
 });
