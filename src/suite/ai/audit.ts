@@ -41,6 +41,17 @@ function boundedInt(value:number,max:number):number{
   return Math.max(0,Math.min(Math.floor(value),max));
 }
 
+function boundedWarnings(values:string[]|undefined):string[]{
+  const warnings:string[]=[];
+  const input=values??[];
+  const scanLimit=Math.min(input.length,100);
+  for(let index=0;index<scanLimit&&warnings.length<20;index+=1){
+    const clean=cleanLabel(input[index],160);
+    if(clean)warnings.push(clean);
+  }
+  return warnings;
+}
+
 export function createAiAuditRecord(input:AiAuditInput):AiAuditRecord{
   return {
     schemaVersion:1,
@@ -56,18 +67,39 @@ export function createAiAuditRecord(input:AiAuditInput):AiAuditRecord{
     citationCount:boundedInt(input.citationCount,10_000),
     inputChars:boundedInt(input.inputChars,100_000_000),
     outputChars:boundedInt(input.outputChars,100_000_000),
-    policyWarnings:(input.policyWarnings??[])
-      .map((item)=>cleanLabel(item,160))
-      .filter((item):item is string=>!!item)
-      .slice(0,20),
+    policyWarnings:boundedWarnings(input.policyWarnings),
     errorCode:cleanLabel(input.errorCode,80),
   };
 }
 
+function snapshotAiAuditRecord(record:AiAuditRecord):AiAuditRecord{
+  return createAiAuditRecord({
+    timestampMs:record.timestampMs,
+    feature:record.feature,
+    provider:record.provider,
+    model:record.model,
+    modelProfileId:record.modelProfileId,
+    promptPolicyId:record.promptPolicyId,
+    status:record.status,
+    latencyMs:record.latencyMs,
+    sourceCount:record.sourceCount,
+    citationCount:record.citationCount,
+    inputChars:record.inputChars,
+    outputChars:record.outputChars,
+    policyWarnings:[...record.policyWarnings],
+    errorCode:record.errorCode,
+  });
+}
+
 export function appendAiAuditRecord(records:AiAuditRecord[],record:AiAuditRecord):AiAuditRecord[]{
-  return [...records,record].slice(-MAX_LOG_RECORDS);
+  const retained=records.slice(-(MAX_LOG_RECORDS-1)).map(snapshotAiAuditRecord);
+  return [...retained,snapshotAiAuditRecord(record)];
 }
 
 export function serializeAiAuditLog(records:AiAuditRecord[]):string{
-  return records.slice(-MAX_LOG_RECORDS).map((record)=>JSON.stringify(record)).join('\n');
+  return records
+    .slice(-MAX_LOG_RECORDS)
+    .map(snapshotAiAuditRecord)
+    .map((record)=>JSON.stringify(record))
+    .join('\n');
 }
