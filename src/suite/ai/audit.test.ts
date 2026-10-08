@@ -36,6 +36,40 @@ describe('AI privacy-safe audit records',()=>{
     });
     expect(record.model).toBe('bad model');
     expect(record.policyWarnings).toHaveLength(20);
+    const huge=createAiAuditRecord({
+      feature:'extract',provider:'none',promptPolicyId:'extract-v1',status:'blocked',
+      latencyMs:null,sourceCount:0,citationCount:0,inputChars:1,outputChars:0,
+      policyWarnings:Array.from({length:100_000},(_,i)=>i<100?`warning-${i}`:'late-warning'),
+    });
+    expect(huge.policyWarnings).toHaveLength(20);
+    expect(huge.policyWarnings).not.toContain('late-warning');
+  });
+
+  it('whitelists schema fields during serialization',()=>{
+    const record=createAiAuditRecord({
+      feature:'document-chat',provider:'ollama',promptPolicyId:'document-chat-v1',status:'success',
+      latencyMs:10,sourceCount:1,citationCount:1,inputChars:10,outputChars:10,
+    }) as ReturnType<typeof createAiAuditRecord>&{promptText?:string;sourceContent?:string};
+    record.promptText='SECRET PROMPT';
+    record.sourceContent='SECRET SOURCE';
+    const serialized=serializeAiAuditLog([record]);
+    expect(serialized).not.toContain('SECRET PROMPT');
+    expect(serialized).not.toContain('SECRET SOURCE');
+    expect(serialized).not.toContain('promptText');
+    expect(serialized).not.toContain('sourceContent');
+  });
+
+  it('snapshots appended records so later mutations cannot rewrite history',()=>{
+    const record=createAiAuditRecord({
+      feature:'rewrite',provider:'none',promptPolicyId:'rewrite-v1',status:'success',
+      latencyMs:0,sourceCount:0,citationCount:0,inputChars:1,outputChars:1,
+      policyWarnings:['original'],
+    });
+    const log=appendAiAuditRecord([],record);
+    record.status='error';
+    record.policyWarnings.push('mutated');
+    expect(log[0]?.status).toBe('success');
+    expect(log[0]?.policyWarnings).toEqual(['original']);
   });
 
   it('keeps only the most recent bounded audit records',()=>{
