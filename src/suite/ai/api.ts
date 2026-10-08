@@ -28,6 +28,23 @@ export type AiTokenCallback = (content: string) => void;
 
 const browserJobs = new Map<string, AbortController>();
 
+export function hasDegenerateRepetition(content:string):boolean {
+  const tokens=content.trim().split(/\s+/).filter(Boolean).slice(-64);
+  for(let width=1;width<=4;width+=1){
+    const minimumRepeats=6;
+    if(tokens.length<width*minimumRepeats)continue;
+    const pattern=tokens.slice(-width);
+    let repeats=0;
+    for(let end=tokens.length;end>=width;end-=width){
+      const candidate=tokens.slice(end-width,end);
+      if(candidate.some((token,index)=>token!==pattern[index]))break;
+      repeats+=1;
+    }
+    if(repeats>=minimumRepeats)return true;
+  }
+  return false;
+}
+
 function browserPrefix(provider: AiProvider): string {
   return provider === 'ollama' ? '/__malenjo_ai/ollama' : '/__malenjo_ai/llama';
 }
@@ -127,9 +144,13 @@ async function runBrowserAiChat(
           { role:'user', content:prompt },
         ],
         options: {
-          temperature: 0.2,
+          temperature: 0.35,
+          top_k: 40,
+          top_p: 0.9,
+          repeat_penalty: 1.18,
+          repeat_last_n: 64,
           num_ctx: liteMode ? 1536 : 4096,
-          num_predict: liteMode ? 192 : 768,
+          num_predict: liteMode ? 128 : 768,
         },
       }
     : {
@@ -176,6 +197,10 @@ async function runBrowserAiChat(
           const token = String((chunk.message as Record<string, unknown> | undefined)?.content ?? '');
           if (token) {
             content += token;
+            if(hasDegenerateRepetition(content)){
+              await reader.cancel();
+              throw new Error('Local model entered a repetition loop. Generation was stopped; select a higher-quality model and retry.');
+            }
             onToken?.(content);
           }
         }
@@ -185,6 +210,9 @@ async function runBrowserAiChat(
         const token = String((chunk.message as Record<string, unknown> | undefined)?.content ?? '');
         if (token) {
           content += token;
+          if(hasDegenerateRepetition(content)){
+            throw new Error('Local model entered a repetition loop. Generation was stopped; select a higher-quality model and retry.');
+          }
           onToken?.(content);
         }
       }
