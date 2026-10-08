@@ -107,6 +107,7 @@ import PdfPageCanvas from './PdfPageCanvas';
 import PdfThumbnail from './PdfThumbnail';
 import PdfProviderToolsPanel from './PdfProviderToolsPanel';
 import { defaultPdfToolProvider } from './defaultProvider';
+import { ensurePdfProviderRunning } from './providerLifecycle';
 import type { PdfProviderToolCategory } from './backend';
 import { pdfViewPages, type PdfViewMode } from './viewMode';
 import { useScrollFps } from './useScrollFps';
@@ -440,6 +441,19 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
     return () => { cancelled = true; };
   }, [installPdf, session?.id]);
+
+  // Render the PDF immediately; warm up the reviewed offline processor
+  // independently so no user-facing Start Provider step is required.
+  // In browser/Codespaces preview the native sidecar is unavailable and is
+  // deliberately never started.
+  const hasLoadedPdf=Boolean(sourceBytes);
+  useEffect(()=>{
+    if(!active||!hasLoadedPdf||!isDesktopRuntime())return;
+    void ensurePdfProviderRunning(defaultPdfToolProvider).catch(()=>{
+      // Keep the document reader usable. Provider panel shows actionable
+      // diagnostics if the optional processing engine cannot start.
+    });
+  },[active,hasLoadedPdf]);
 
   useEffect(() => () => {
     requestIdRef.current += 1;
