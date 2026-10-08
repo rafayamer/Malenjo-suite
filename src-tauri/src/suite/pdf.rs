@@ -1,4 +1,4 @@
-use std::{fs, io::Read, path::{Path, PathBuf}};
+use std::{fs, io::{Read, Write}, path::{Path, PathBuf}, sync::atomic::{AtomicU64, Ordering}};
 use tauri::{ipc::Response, AppHandle};
 
 use super::library::resolve_library_document_path;
@@ -71,6 +71,58 @@ pub fn read_pdf_document(app: AppHandle, document_id: String) -> Result<Response
     Ok(Response::new(bytes))
 }
 
+static PDF_SAVE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+/// Stage the full export and retain a recoverable copy of any existing file
+/// until the new output has been installed. Never delete the prior destination
+/// before a successful final rename. Files are staged alongside the destination
+/// to avoid cross-filesystem rename failures.
+fn write_export_with_recovery(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let sequence = PDF_SAVE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let tag = format!("{}-{}", std::process::id(), sequence);
+    let temp = path.with_extension(format!("malenjo-stage-{tag}.tmp"));
+    let backup = path.with_extension(format!("malenjo-backup-{tag}.tmp"));
+
+    let staged = (|| -> std::io::Result<()> {
+        let mut file = fs::OpenOptions::new().write(true).create_new(true).open(&temp)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        Ok(())
+    })();
+    if let Err(error) = staged {
+        let _ = fs::remove_file(&temp);
+        return Err(format!("Unable to safely stage PDF export: {error}"));
+    }
+
+    let had_original = path.exists();
+    if had_original {
+        if let Err(error) = fs::rename(path, &backup) {
+            let _ = fs::remove_file(&temp);
+            return Err(format!("Unable to retain prior PDF export: {error}"));
+        }
+    }
+
+    if let Err(error) = fs::rename(&temp, path) {
+        let _ = fs::remove_file(&temp);
+        if had_original {
+            if let Err(restore_error) = fs::rename(&backup, path) {
+                return Err(format!(
+                    "Unable to finalize PDF export ({error}) or restore original ({restore_error}). Original remains at {}.",
+                    backup.display()
+                ));
+            }
+        }
+        return Err(format!("Unable to finalize PDF export; original was preserved: {error}"));
+    }
+
+    if had_original {
+        // Export is complete: do not report failure solely because cleanup
+        // of a recoverable backup was blocked by antivirus/file locks.
+        let _ = fs::remove_file(&backup);
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn write_pdf_copy(destination: String, bytes: Vec<u8>) -> Result<bool, String> {
     if bytes.len() < 5 || &bytes[..5] != b"%PDF-" {
@@ -81,16 +133,7 @@ pub fn write_pdf_copy(destination: String, bytes: Vec<u8>) -> Result<bool, Strin
     }
 
     let path = validate_destination(&destination)?;
-    let temp = path.with_extension("malenjo-pdf.tmp");
-    fs::write(&temp, &bytes)
-        .map_err(|error| format!("Unable to write PDF export: {error}"))?;
-
-    if path.exists() {
-        fs::remove_file(&path)
-            .map_err(|error| format!("Unable to replace PDF export: {error}"))?;
-    }
-    fs::rename(&temp, &path)
-        .map_err(|error| format!("Unable to finalize PDF export: {error}"))?;
+    write_export_with_recovery(&path, &bytes)?;
 
     Ok(true)
 }
@@ -128,23 +171,14 @@ pub fn write_pdf_tool_output(destination: String, bytes: Vec<u8>) -> Result<bool
     }
 
     let path = validate_tool_output_destination(&destination)?;
-    let temp = path.with_extension("malenjo-tool-output.tmp");
-    fs::write(&temp, &bytes)
-        .map_err(|error| format!("Unable to write PDF tool output: {error}"))?;
-
-    if path.exists() {
-        fs::remove_file(&path)
-            .map_err(|error| format!("Unable to replace PDF tool output: {error}"))?;
-    }
-    fs::rename(&temp, &path)
-        .map_err(|error| format!("Unable to finalize PDF tool output: {error}"))?;
+    write_export_with_recovery(&path, &bytes)?;
 
     Ok(true)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_destination, validate_pdf_file, validate_tool_output_destination, MAX_PDF_BYTES, MAX_PDF_TOOL_OUTPUT_BYTES};
+    use super::{validate_destination, validate_pdf_file, validate_tool_output_destination, write_export_with_recovery, MAX_PDF_BYTES, MAX_PDF_TOOL_OUTPUT_BYTES};
     use std::{fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
 
     fn temp_path(name: &str) -> PathBuf {
@@ -179,6 +213,25 @@ mod tests {
     #[test]
     fn destination_requires_existing_parent() {
         assert!(validate_destination("").is_err());
+    }
+
+    #[test]
+    fn native_export_safely_replaces_existing_file() {
+        let path = temp_path("recovery.pdf");
+        fs::write(&path, b"old bytes").expect("write prior user document");
+        write_export_with_recovery(&path, b"%PDF-1.7\nnew\n%%EOF\n")
+            .expect("replace output");
+        assert_eq!(fs::read(&path).expect("read new output"), b"%PDF-1.7\nnew\n%%EOF\n");
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn native_export_rejects_directory_destination_without_removing_it() {
+        let path = temp_path("protected.pdf");
+        fs::create_dir(&path).expect("create protected destination");
+        assert!(write_export_with_recovery(&path, b"new").is_err());
+        assert!(path.is_dir());
+        let _ = fs::remove_dir(path);
     }
 
     #[test]
