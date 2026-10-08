@@ -26,6 +26,9 @@ import { isDesktopRuntime } from '../files/api';
 import { exportPdfBytes, exportPdfPlainText, exportPdfEmbeddedAttachment, exportPdfPageImagesZip, readPdfDocumentBytes } from './api';
 import { exportPdfPagesAsPngZip } from './pageImageExport';
 import {
+  comparePdfSelectableText, formatPdfTextComparison, type PdfTextComparison,
+} from './textCompare';
+import {
   flattenPdfOutline, normalizePdfAttachments, resolvePdfOutlinePage, readPdfAttachmentBytes,
   type PdfOutlineModel, type PdfOutlineEntry, type PdfAttachmentModel, type PdfAttachmentEntry,
 } from './navigation';
@@ -156,6 +159,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imagesInputRef = useRef<HTMLInputElement>(null);
+  const comparisonInputRef = useRef<HTMLInputElement>(null);
   const appendInputRef = useRef<HTMLInputElement>(null);
   const insertInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -167,6 +171,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const previewIdRef = useRef(`pdf-preview-${Math.random().toString(36).slice(2)}`);
   const historyRef = useRef<PdfHistory | null>(null);
   const textExportAbortRef = useRef<AbortController | null>(null);
+  const comparisonAbortRef = useRef<AbortController | null>(null);
   const pageImageAbortRef = useRef<AbortController | null>(null);
   const imagesAbortRef = useRef<AbortController | null>(null);
 
@@ -186,6 +191,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [loading, setLoading] = useState(false);
   const [mutating, setMutating] = useState(false);
   const [exportingText, setExportingText] = useState(false);
+  const [comparingPdf, setComparingPdf] = useState(false);
+  const [comparisonProgress, setComparisonProgress] = useState(0);
+  const [comparisonResult, setComparisonResult] = useState<{
+    data:PdfTextComparison; baselineName:string; comparisonName:string;
+  }|null>(null);
   const [exportingPageImages, setExportingPageImages] = useState(false);
   const [pageImageProgress, setPageImageProgress] = useState(0);
   const [creatingImagePdf, setCreatingImagePdf] = useState(false);
@@ -300,6 +310,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       const previousLoad = activeLoadRef.current;
       activeLoadRef.current = result;
       setPdf(result);
+      comparisonAbortRef.current?.abort();
+      setComparisonResult(null);
       setSourceBytes(owned);
       setBrowserFile(file);
       setSourceName(name);
@@ -373,6 +385,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   useEffect(() => () => {
     requestIdRef.current += 1;
     textExportAbortRef.current?.abort();
+    comparisonAbortRef.current?.abort();
     pageImageAbortRef.current?.abort();
     imagesAbortRef.current?.abort();
     void disposePdf(activeLoadRef.current);
@@ -1129,6 +1142,75 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }
   }
 
+  async function compareWithPdf(event:React.ChangeEvent<HTMLInputElement>){
+    const selected=event.target.files?.[0];
+    event.target.value='';
+    if(!selected||!pdf||comparingPdf||mutating||loading)return;
+    if(!selected.size||selected.size>48*1024*1024){
+      setError('Comparison PDF must be nonempty and no larger than 48 MB.');
+      return;
+    }
+    const original=pdf.document;
+    const baselineName=sourceName;
+    const controller=new AbortController();
+    comparisonAbortRef.current=controller;
+    setComparingPdf(true);
+    setComparisonProgress(0);
+    setComparisonResult(null);
+    setError('');
+    setActionNotice('Comparing the selectable text in both PDFs…');
+    onSavingChange?.(true);
+    let second:PdfLoadResult|null=null;
+    try{
+      const incoming=await selected.arrayBuffer();
+      if(controller.signal.aborted)return;
+      second=await loadPdfBytes(incoming);
+      if(controller.signal.aborted)return;
+      const data=await comparePdfSelectableText(original,second.document,{
+        signal:controller.signal,
+        onProgress:(done,total)=>setComparisonProgress(Math.round(100*done/total)),
+      });
+      if(controller.signal.aborted||activeLoadRef.current?.document!==original)return;
+      setComparisonResult({data,baselineName,comparisonName:selected.name});
+      setActionNotice('Compared both PDFs by page-aligned selectable text. Visual differences were not assessed.');
+      setTaskCategory('convert');
+    }catch(reason){
+      if(reason instanceof Error&&reason.name==='AbortError'){
+        setActionNotice('PDF comparison cancelled; no partial result was saved.');
+      }else{
+        setError(reason instanceof Error?reason.message:String(reason));
+      }
+    }finally{
+      if(second){
+        try{await disposePdf(second);}catch{
+          // Release best effort. Never hide the original comparison error.
+        }
+      }
+      if(comparisonAbortRef.current===controller)comparisonAbortRef.current=null;
+      setComparingPdf(false);
+      onSavingChange?.(false);
+    }
+  }
+
+  async function exportComparisonReport(){
+    if(!comparisonResult)return;
+    onSavingChange?.(true);
+    try{
+      const report=formatPdfTextComparison(
+        comparisonResult.data,comparisonResult.baselineName,comparisonResult.comparisonName,
+      );
+      const base=comparisonResult.baselineName
+        .replace(/\.pdf$/i,'').replace(/[/\\\u0000-\u001F]/g,'_').slice(0,100)||'MALENJO-document';
+      if(await exportPdfPlainText(base+'-comparison.txt',report)){
+        setActionNotice('Exported a selectable-text comparison report.');
+      }
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }finally{
+      onSavingChange?.(false);
+    }
+  }
+
   async function exportCurrent(){
     if(!sourceBytes){
       setActionNotice('Open a PDF first.');
@@ -1230,6 +1312,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           enabled:!!pdf&&!mutating&&!loading&&!exportingPageImages,
           disabledReason:!pdf?'No PDF is loaded.':exportingPageImages?'Image export in progress.':'Wait for current PDF operation.',
           run:()=>exportPageImages(),
+        },
+        {
+          id:'compare-pdf-text',
+          label:'Compare PDF selectable text',
+          keywords:'pdf compare document difference revision text page report',
+          detail:'Choose a second PDF; compare page-aligned selectable text without claiming visual differences',
+          enabled:!!pdf&&!loading&&!mutating&&!comparingPdf,
+          disabledReason:!pdf?'Open a PDF first.':comparingPdf?'Comparison is running.':'Wait for the current PDF operation.',
+          run:()=>comparisonInputRef.current?.click(),
         },
         {
           id:'undo',
@@ -1425,7 +1516,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     });
     return () => registerCommands(null);
   }, [
-    session, registerCommands, sourceBytes, pdf, dirty, mutating, loading, exportingPageImages, exportingText, creatingImagePdf, historyRevision, formFields.length,
+    session, registerCommands, sourceBytes, pdf, dirty, mutating, loading, comparingPdf, exportingPageImages, exportingText, creatingImagePdf, historyRevision, formFields.length,
     headerFooterDraft, batesDraft, pageBoxDraft, formDraft, formFillDraft, formFillTouched, currentPage, pageCount, selectedPages,
     inspectorHidden, textOverlay, shapeOverlay, commentDraft,
   ]);
@@ -1542,6 +1633,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'export-page-images',label:exportingPageImages?'PNG '+pageImageProgress+'%':'PDF pages to PNG ZIP',enabled:!!pdf&&!mutating&&!loading&&!exportingPageImages,disabledReason:!pdf?'No PDF is loaded.':exportingPageImages?'An image export is in progress.':'Wait for the current PDF operation to finish.',run:exportPageImages},
       ...(exportingPageImages?[{id:'cancel-page-images',label:'Cancel PNG export',enabled:true,run:()=>pageImageAbortRef.current?.abort()}]:[]),
       {id:'images-to-pdf',label:creatingImagePdf?'Images '+imagePdfProgress+'%':'Images to PDF…',enabled:!creatingImagePdf&&!mutating,disabledReason:creatingImagePdf?'Image conversion is running.':mutating?'Wait for the current PDF mutation to finish.':undefined,run:()=>imagesInputRef.current?.click()},
+      {id:'compare-pdf',label:comparingPdf?'Compare '+comparisonProgress+'%':'Compare PDF text…',enabled:!!pdf&&!loading&&!mutating&&!comparingPdf,disabledReason:!pdf?'Open a PDF first.':comparingPdf?'Comparison is in progress.':'Wait for the current PDF operation.',run:()=>comparisonInputRef.current?.click()},
+      ...(comparingPdf?[{id:'cancel-compare',label:'Cancel comparison',enabled:true,run:()=>comparisonAbortRef.current?.abort()}]:[]),
       ...(exportingText?[{id:'cancel-text',label:'Cancel text export',enabled:true,run:()=>textExportAbortRef.current?.abort()}]:[]),
       ...(creatingImagePdf?[{id:'cancel-images',label:'Cancel image conversion',enabled:true,run:()=>imagesAbortRef.current?.abort()}]:[]),
       providerAction,
@@ -1601,6 +1694,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       type="file"
       accept="application/pdf,.pdf"
       onChange={(event) => void chooseBrowserPdf(event)}
+    />
+    <input
+      ref={comparisonInputRef}
+      className="visually-hidden"
+      type="file"
+      accept="application/pdf,.pdf"
+      onChange={(event)=>void compareWithPdf(event)}
     />
     <input
       ref={imagesInputRef}
@@ -1714,6 +1814,29 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         </div>
       </div>
     </div>
+
+
+    {taskCategory==='convert'&&comparisonResult&&<section className="pdf-compare-panel" aria-label="PDF selectable-text comparison report">
+      <header>
+        <strong>PDF comparison — selectable text only</strong>
+        <button onClick={()=>void exportComparisonReport()}>Export .txt report</button>
+        <button onClick={()=>setComparisonResult(null)} aria-label="Dismiss comparison results">Close</button>
+      </header>
+      <p>{comparisonResult.baselineName} vs {comparisonResult.comparisonName}</p>
+      <p>{comparisonResult.data.sameText} matching-text, {comparisonResult.data.changedText} changed-text, {comparisonResult.data.addedPages} added, {comparisonResult.data.removedPages} removed, {comparisonResult.data.unverifiable} unverifiable pages.</p>
+      <small role="note">This compares only selectable text in the same page positions. Matching text does not prove the images, layout, formatting, signatures, or PDF bytes match.</small>
+      <details>
+        <summary>Inspect {comparisonResult.data.pages.length} page results</summary>
+        <div className="pdf-compare-pages">
+          {comparisonResult.data.pages.map(item=><article key={item.page}>
+            <button disabled={item.page>pageCount} onClick={()=>goToPage(item.page)}>Page {item.page}</button>
+            <strong>{item.result.replace(/-/g,' ')}</strong>
+            {item.before&&<div><b>Original excerpt:</b> {item.before}</div>}
+            {item.after&&<div><b>Comparison excerpt:</b> {item.after}</div>}
+          </article>)}
+        </div>
+      </details>
+    </section>}
 
     {providerPanelOpen&&providerCategory&&<PdfProviderToolsPanel
       provider={defaultPdfToolProvider}
