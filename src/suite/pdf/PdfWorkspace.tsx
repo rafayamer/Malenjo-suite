@@ -419,8 +419,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     label:string,
     operation:(bytes:Uint8Array)=>Promise<Uint8Array>,
     preferredPage=currentPage,
-  ){
-    if(!sourceBytes||mutating)return;
+  ):Promise<boolean>{
+    if(!sourceBytes||mutating)return false;
     setMutating(true);
     setError('');
     try{
@@ -437,8 +437,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setDirty(true);
       onDirtyChange?.(true);
       setActionNotice(label);
+      return true;
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
+      return false;
     }finally{
       setMutating(false);
     }
@@ -637,9 +639,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     const flags={required:formDraft.required,readOnly:formDraft.readOnly};
     const options=formDraft.optionsText===''?[]:formDraft.optionsText.split(/\r?\n/);
     const selected=formDraft.selectedText===''?[]:formDraft.selectedText.split(/\r?\n/);
+    let created=false;
 
     if(formDraft.type==='checkbox'){
-      await mutate(
+      created=await mutate(
         `Added checkbox field "${name}".`,
         (bytes)=>addPdfCheckBox(bytes,{
           pageNumber:currentPage,name,x:formDraft.x,y:formDraft.y,size:formDraft.size,...flags,
@@ -647,7 +650,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         currentPage,
       );
     }else if(formDraft.type==='radio'){
-      await mutate(
+      created=await mutate(
         `Added radio group "${name}".`,
         (bytes)=>addPdfRadioGroup(bytes,{
           pageNumber:currentPage,name,options,selected:selected[0],
@@ -656,7 +659,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         currentPage,
       );
     }else if(formDraft.type==='dropdown'){
-      await mutate(
+      created=await mutate(
         `Added dropdown field "${name}".`,
         (bytes)=>addPdfDropdown(bytes,{
           pageNumber:currentPage,name,options,selected,
@@ -666,7 +669,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         currentPage,
       );
     }else if(formDraft.type==='list'){
-      await mutate(
+      created=await mutate(
         `Added option-list field "${name}".`,
         (bytes)=>addPdfOptionList(bytes,{
           pageNumber:currentPage,name,options,selected,
@@ -676,7 +679,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         currentPage,
       );
     }else{
-      await mutate(
+      created=await mutate(
         `Added text field "${name}".`,
         (bytes)=>addPdfTextField(bytes,{
           pageNumber:currentPage,name,defaultValue:formDraft.defaultValue,
@@ -685,7 +688,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         currentPage,
       );
     }
-    setFormDraft((current)=>({...current,name:'',defaultValue:'',selectedText:''}));
+    if(created)setFormDraft((current)=>({...current,name:'',defaultValue:'',selectedText:''}));
   }
 
   function setFormFillValue(name:string,value:string|string[]|boolean|undefined){
@@ -924,9 +927,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           id:'add-form-field',
           label:'Add configured PDF form field',
           keywords:'form acroform field text checkbox radio dropdown list required readonly',
-          detail:`${formDraft.type} · ${formDraft.name.trim()||'auto field name'}`,
-          enabled:!!sourceBytes && !mutating,
-          disabledReason:!sourceBytes ? 'No PDF is loaded.' : 'Wait for the current PDF edit to finish.',
+          detail:`${formDraft.type} · ${formDraft.name.trim()||'field name required'}`,
+          enabled:!!sourceBytes && !mutating && !!formDraft.name.trim(),
+          disabledReason:!sourceBytes
+            ? 'No PDF is loaded.'
+            : !formDraft.name.trim()
+              ? 'Enter a form field name first.'
+              : 'Wait for the current PDF edit to finish.',
           run:()=>addFormField(),
         },
         {
@@ -1565,7 +1572,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
           {['radio','dropdown','list'].includes(formDraft.type)&&<>
             <label>Options<textarea value={formDraft.optionsText} onChange={(event)=>setFormDraft({...formDraft,optionsText:event.target.value})} placeholder={'One option per line\nOption A\nOption B'}/></label>
-            <label>{formDraft.type==='radio'?'Selected option':'Selected value(s)'}<input value={formDraft.selectedText} onChange={(event)=>setFormDraft({...formDraft,selectedText:event.target.value})} placeholder={formDraft.multiselect?'Comma-separated selections':'Optional default selection'}/></label>
+            <label>{formDraft.type==='radio'?'Selected option':'Selected value(s)'}<textarea value={formDraft.selectedText} onChange={(event)=>setFormDraft({...formDraft,selectedText:event.target.value})} placeholder={formDraft.multiselect?'One selection per line':'Optional default selection'}/></label>
           </>}
 
           <div className="pdf-field-flags">
