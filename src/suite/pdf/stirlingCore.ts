@@ -387,7 +387,11 @@ export async function runPdfProviderOperation(
 function extensionForContentType(contentType:string|undefined|null):string|undefined{
   const value=(contentType??'').toLowerCase();
   if(value.includes('application/pdf'))return 'pdf';
+  if(value.includes('application/epub+zip'))return 'epub';
+  if(value.includes('application/vnd.comicbook+zip')||value.includes('application/x-cbz'))return 'cbz';
+  if(value.includes('application/vnd.comicbook-rar')||value.includes('application/x-cbr'))return 'cbr';
   if(value.includes('application/zip'))return 'zip';
+  if(value.includes('image/svg+xml'))return 'svg';
   if(value.includes('image/png'))return 'png';
   if(value.includes('image/jpeg'))return 'jpg';
   if(value.includes('image/webp'))return 'webp';
@@ -424,9 +428,17 @@ function extensionFromMagic(bytes:number[]):string|undefined{
   return undefined;
 }
 
-function outputFilename(response:PdfProviderResponse,fallbackBaseName:string):string{
+const PDF_TOOL_SAFE_OUTPUT_SUFFIXES=new Set([
+  'pdf','zip','png','jpg','jpeg','webp','tif','tiff','bmp',
+  'txt','csv','json','xml','html','md',
+  'doc','docx','odt','rtf','xls','xlsx','ods','ppt','pptx','odp',
+  'epub','cbz','cbr','svg','bin',
+]);
+
+export function proposedPdfToolFilename(response:PdfProviderResponse,fallbackBaseName:string):string{
   const disposition=filenameFromDisposition(response.contentDisposition);
-  if(disposition)return disposition;
+  const dispositionExtension=disposition?.split('.').at(-1)?.toLowerCase();
+  if(disposition&&dispositionExtension&&PDF_TOOL_SAFE_OUTPUT_SUFFIXES.has(dispositionExtension))return disposition;
   const extension=extensionForContentType(response.contentType)??extensionFromMagic(response.bytes)??'bin';
   return `${fallbackBaseName}.${extension}`;
 }
@@ -459,7 +471,7 @@ export async function savePdfProviderResponse(
   response:PdfProviderResponse,
   fallbackBaseName='malenjo-pdf-tool-output',
 ):Promise<string|null>{
-  const proposed=outputFilename(response,fallbackBaseName);
+  const proposed=proposedPdfToolFilename(response,fallbackBaseName);
   const bytes=Uint8Array.from(response.bytes);
 
   if(!isTauri()){
