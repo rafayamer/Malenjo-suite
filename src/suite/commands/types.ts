@@ -32,6 +32,7 @@ export type DocumentCommandId =
   | 'pdf-pages-turn'
   | 'pdf-pages-extract'
   | 'pdf-document-split'
+  | 'pdf-bookmark-create'
   | 'pdf-comments-open'
   | 'pdf-comment-create'
   | 'pdf-signatures-open';
