@@ -56,6 +56,31 @@ describe('AI notebook core',()=>{
     expect(notebook.notes[0]?.sourceDocumentIds).toEqual(['b']);
   });
 
+  it('rejects malformed restored IDs, unsupported kinds, and duplicate study topics',()=>{
+    const notebook=createAiNotebook('Study',100);
+    expect(()=>validateAiNotebook({...notebook,id:'bad id'})).toThrow(/ID is invalid/i);
+    expect(()=>validateAiNotebook({
+      ...notebook,
+      sources:[{documentId:'doc-1',name:'image.png',kind:'image',addedAt:1,enabled:true}],
+    })).toThrow(/source entry/i);
+    expect(()=>validateAiNotebook({
+      ...notebook,
+      study:[
+        {topic:'Protection',mastery:0.5,attempts:1,correct:1,lastReviewedAt:null},
+        {topic:'protection',mastery:0.5,attempts:1,correct:1,lastReviewedAt:null},
+      ],
+    })).toThrow(/topics must be unique/i);
+  });
+
+  it('clamps restored correct answers to attempts',()=>{
+    const notebook=createAiNotebook('Study',100);
+    const restored=validateAiNotebook({
+      ...notebook,
+      study:[{topic:'Protection',mastery:2,attempts:2,correct:99,lastReviewedAt:-5}],
+    });
+    expect(restored.study[0]).toMatchObject({mastery:1,attempts:2,correct:2,lastReviewedAt:null});
+  });
+
   it('tracks study performance without unbounded mastery values',()=>{
     let notebook=createAiNotebook('Study',100);
     notebook=recordAiNotebookStudyResult(notebook,'Protection',true,200);
