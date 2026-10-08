@@ -61,6 +61,24 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 2
 fi
 
+if ! command -v zstd >/dev/null 2>&1; then
+  echo "zstd is required by the current Ollama Linux installer."
+  if command -v apt-get >/dev/null 2>&1; then
+    echo "Installing zstd with apt..."
+    sudo apt-get update
+    sudo apt-get install -y --no-install-recommends zstd
+  else
+    echo "Automatic zstd installation is only implemented for Debian/Ubuntu Codespaces."
+    echo "Install zstd with your system package manager, then rerun this command."
+    exit 2
+  fi
+fi
+
+if ! command -v zstd >/dev/null 2>&1; then
+  echo "zstd installation did not succeed."
+  exit 2
+fi
+
 if ! command -v ollama >/dev/null 2>&1; then
   echo "Ollama is not installed."
   echo "Installing from the current official Linux installer: https://ollama.com/install.sh"
