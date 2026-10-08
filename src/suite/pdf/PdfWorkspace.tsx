@@ -590,7 +590,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         let result=bytes;
         for(const file of ordered){
           if(file.size>512*1024*1024)throw new Error(`${file.name} exceeds the 512 MB safety limit.`);
-          result=await insertPdfAfter(result,new Uint8Array(await file.arrayBuffer()),currentPage);
+          const imported=new Uint8Array(await file.arrayBuffer());
+          await requirePdfUnsignedForMutation(imported);
+          result=await insertPdfAfter(result,imported,currentPage);
         }
         return result;
       },
@@ -609,7 +611,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       let result=Uint8Array.from(sourceBytes);
       for(const file of files){
         if(file.size>512*1024*1024)throw new Error(`${file.name} exceeds the 512 MB safety limit.`);
-        const merged=await appendPdf(result,new Uint8Array(await file.arrayBuffer()));
+        const imported=new Uint8Array(await file.arrayBuffer());
+        await requirePdfUnsignedForMutation(imported);
+        const merged=await appendPdf(result,imported);
         const owned=new Uint8Array(merged.byteLength);
         owned.set(merged);
         result=owned;
@@ -2198,7 +2202,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       sourceBytes={sourceBytes}
       sourceName={sourceName}
       category={providerCategory}
-      onApplyPdf={(label,bytes)=>mutateAction(label,async()=>bytes,currentPage)}
+      onApplyPdf={async(label,bytes)=>{
+        if(!sourceBytes)throw new Error('Open a PDF before applying provider output.');
+        // Surface signature refusals to the provider panel, rather than
+        // allowing the panel to announce a successful application.
+        await requirePdfUnsignedForMutation(sourceBytes);
+        const applied=await mutate(label,async()=>bytes,currentPage);
+        if(!applied)throw new Error('The local PDF output could not be applied to the working copy. Check the PDF workspace error.');
+      }}
     />}
 
     {(notice || actionNotice) && <div className="pdf-notice">{notice || actionNotice}</div>}
