@@ -23,4 +23,29 @@ describe('AI sensitive-data policy',()=>{
     expect(redacted).toContain('[REDACTED:access-token-like]');
     expect(redacted).toContain('[REDACTED:email]');
   });
+
+  it('retains a later independent secret after discarding an overlapping match',()=>{
+    const text='sk-abcdefghijkl12345678 4111111111111111';
+    const findings=findSensitiveData(text);
+    expect(findings.map((item)=>item.kind)).toEqual(['access-token-like','payment-card-like']);
+    const redacted=redactSensitiveData(text);
+    expect(redacted).not.toContain('4111111111111111');
+    expect(redacted).toContain('[REDACTED:payment-card-like]');
+  });
+
+  it('does not classify ordinary dates or four-four references as phones',()=>{
+    expect(findSensitiveData('Meeting date 2026-10-08.').some((item)=>item.kind==='phone-like')).toBe(false);
+    expect(findSensitiveData('Reference 1234-5678.').some((item)=>item.kind==='phone-like')).toBe(false);
+    expect(findSensitiveData('Call +92 300 1234567.').some((item)=>item.kind==='phone-like')).toBe(true);
+  });
+
+  it('covers the complete bearer-token alphabet and redacts the whole credential',()=>{
+    const text='Authorization: Bearer abcde/fghijklmnopqrstuvwxyz==';
+    const assessment=assessAiSensitiveData(text,'remote');
+    expect(assessment.action).toBe('block');
+    expect(assessment.findings.some((item)=>item.kind==='access-token-like')).toBe(true);
+    const redacted=redactSensitiveData(text);
+    expect(redacted).not.toContain('abcde/fghijklmnopqrstuvwxyz==');
+    expect(redacted).toContain('[REDACTED:access-token-like]');
+  });
 });
