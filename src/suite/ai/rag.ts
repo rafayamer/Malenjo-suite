@@ -197,7 +197,14 @@ export function truncateUtf8(value:string,maxBytes:number):string{
 }
 
 function quotedSource(value:string,maxBytes:number):string{
-  return JSON.stringify(truncateUtf8(value,maxBytes));
+  let low=0;
+  let high=value.length;
+  while(low<high){
+    const mid=Math.ceil((low+high)/2);
+    if(utf8Length(JSON.stringify(value.slice(0,mid)))<=maxBytes)low=mid;
+    else high=mid-1;
+  }
+  return JSON.stringify(value.slice(0,low));
 }
 
 export function buildGroundedPrompt(
