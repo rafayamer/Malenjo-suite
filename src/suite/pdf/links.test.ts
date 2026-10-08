@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {PDFArray,PDFDict,PDFDocument,PDFName,PDFString} from 'pdf-lib';
+import {PDFArray,PDFDict,PDFDocument,PDFHexString,PDFName,PDFNumber,PDFString} from 'pdf-lib';
 import {addPdfCommentAnnotation} from './editor';
 import {
   addPdfLinkAnnotation,deletePdfLinkAnnotation,listPdfLinkAnnotations,
@@ -156,6 +156,116 @@ describe('native PDF link annotations',()=>{
     await expect(addPdfLinkAnnotation(source,bounds,{kind:'page',pageNumber:2}))
       .rejects.toThrow(/1,000-link/i);
     expect((await listPdfLinkAnnotations(source))).toHaveLength(1000);
+  });
+
+
+  it('bounds oversized imported hex URI data before decoding it',async()=>{
+    const pdf=await PDFDocument.load(await sample());
+    const huge=PDFHexString.of('41'.repeat(60_000));
+    pdf.getPage(0).node.set(PDFName.of('Annots'),pdf.context.obj([
+      pdf.context.register(pdf.context.obj({
+        Subtype:PDFName.of('Link'),Rect:[10,10,30,30],
+        A:pdf.context.obj({S:PDFName.of('URI'),URI:huge}),
+      })),
+    ]));
+    const source=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const [result]=await listPdfLinkAnnotations(source);
+    expect(result.kind).toBe('unsupported');
+    expect(result.destination).toMatch(/oversized/i);
+    await expect(updatePdfLinkAnnotation(source,result,{kind:'page',pageNumber:2}))
+      .rejects.toThrow(/unsupported/i);
+  });
+
+  it('rejects excessive cumulative imported URI source data without a partial inventory',async()=>{
+    const pdf=await PDFDocument.load(await sample());
+    const entries=[];
+    const rawUri='https://example.com/'+'x'.repeat(12_000);
+    for(let i=0;i<190;i++){
+      entries.push(pdf.context.register(pdf.context.obj({
+        Subtype:PDFName.of('Link'),Rect:[10,10,30,30],
+        A:pdf.context.obj({S:PDFName.of('URI'),URI:PDFString.of(rawUri)}),
+      })));
+    }
+    pdf.getPage(0).node.set(PDFName.of('Annots'),pdf.context.obj(entries));
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    await expect(listPdfLinkAnnotations(bytes)).rejects.toThrow(/2 MB encoded-data/i);
+  });
+
+  it('resolves imported indirect subtype names and destination arrays',async()=>{
+    const pdf=await PDFDocument.load(await sample());
+    const subtype=pdf.context.register(PDFName.of('Link'));
+    const destination=pdf.context.register(pdf.context.obj([
+      pdf.getPage(1).ref,PDFName.of('Fit'),
+    ]));
+    pdf.getPage(0).node.set(PDFName.of('Annots'),pdf.context.obj([
+      pdf.context.register(pdf.context.obj({
+        Subtype:subtype,Dest:destination,Rect:[30,40,90,60],
+      })),
+    ]));
+    const source=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const [link]=await listPdfLinkAnnotations(source);
+    expect(link).toMatchObject({pageNumber:1,kind:'page',destination:'2'});
+    const updated=await updatePdfLinkAnnotation(source,link,{
+      kind:'https',url:'https://example.org/',
+    });
+    expect((await listPdfLinkAnnotations(updated))[0].kind).toBe('https');
+  });
+
+  it('refuses edits to a shared imported annotation reference',async()=>{
+    const pdf=await PDFDocument.load(await sample());
+    const link=pdf.context.register(pdf.context.obj({
+      Subtype:PDFName.of('Link'),Rect:[10,10,30,30],
+      Dest:pdf.context.obj([pdf.getPage(1).ref,PDFName.of('Fit')]),
+    }));
+    pdf.getPage(0).node.set(PDFName.of('Annots'),pdf.context.obj([link]));
+    pdf.getPage(1).node.set(PDFName.of('Annots'),pdf.context.obj([link]));
+    const source=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const links=await listPdfLinkAnnotations(source);
+    expect(links).toHaveLength(2);
+    await expect(updatePdfLinkAnnotation(source,links[0],{
+      kind:'https',url:'https://example.com/',
+    })).rejects.toThrow(/reuses this link annotation/i);
+    expect((await listPdfLinkAnnotations(source)).every(item=>item.kind==='page')).toBe(true);
+  });
+
+  it('detaches imported shared Annots arrays before creating or removing page links',async()=>{
+    const pdf=await PDFDocument.load(await sample());
+    const link=pdf.context.register(pdf.context.obj({
+      Subtype:PDFName.of('Link'),Rect:[10,10,30,30],
+      Dest:pdf.context.obj([pdf.getPage(1).ref,PDFName.of('Fit')]),
+    }));
+    const shared=pdf.context.register(pdf.context.obj([link]));
+    pdf.getPage(0).node.set(PDFName.of('Annots'),shared);
+    pdf.getPage(1).node.set(PDFName.of('Annots'),shared);
+    const original=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const expanded=await addPdfLinkAnnotation(original,bounds,{
+      kind:'https',url:'https://example.org',
+    });
+    const added=await listPdfLinkAnnotations(expanded);
+    expect(added.filter(entry=>entry.pageNumber===1)).toHaveLength(2);
+    expect(added.filter(entry=>entry.pageNumber===2)).toHaveLength(1);
+    const [oldLink]=await listPdfLinkAnnotations(original);
+    const reduced=await deletePdfLinkAnnotation(original,oldLink);
+    const remaining=await listPdfLinkAnnotations(reduced);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].pageNumber).toBe(2);
+  });
+
+  it('positions normalized rectangles relative to the visible cropped page area',async()=>{
+    const pdf=await PDFDocument.load(await sample());
+    pdf.getPage(0).setMediaBox(10,20,500,600);
+    pdf.getPage(0).setCropBox(100,200,250,300);
+    const source=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const result=await addPdfLinkAnnotation(source,bounds,{kind:'page',pageNumber:2});
+    const reloaded=await PDFDocument.load(result);
+    const dict=reloaded.context.lookup(
+      reloaded.getPage(0).node.lookup(PDFName.of('Annots'),PDFArray).get(0),PDFDict,
+    );
+    const rect=dict.lookup(PDFName.of('Rect'),PDFArray);
+    expect(rect.lookup(0,PDFNumber).asNumber()).toBeCloseTo(125);
+    expect(rect.lookup(1,PDFNumber).asNumber()).toBeCloseTo(260);
+    expect(rect.lookup(2,PDFNumber).asNumber()).toBeCloseTo(200);
+    expect(rect.lookup(3,PDFNumber).asNumber()).toBeCloseTo(290);
   });
 
   it('marks direct Link dictionaries as read-only identities',async()=>{
