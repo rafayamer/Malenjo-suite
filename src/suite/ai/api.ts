@@ -197,9 +197,10 @@ async function runBrowserAiChat(
         for (const line of lines) {
           if (!line.trim()) continue;
           const chunk = JSON.parse(line) as Record<string, unknown>;
-          if(typeof chunk.error==='string'&&chunk.error.trim()){
+          if(chunk.error){
             await reader.cancel();
-            throw new Error(`Local model runtime error: ${chunk.error.trim()}`);
+            const detail=typeof chunk.error==='string' ? chunk.error : JSON.stringify(chunk.error);
+            throw new Error(`Local model runtime error: ${detail.slice(0,500)}`);
           }
           const token = String((chunk.message as Record<string, unknown> | undefined)?.content ?? '');
           if (token) {
@@ -214,8 +215,9 @@ async function runBrowserAiChat(
       }
       if (pending.trim()) {
         const chunk = JSON.parse(pending) as Record<string, unknown>;
-        if(typeof chunk.error==='string'&&chunk.error.trim()){
-          throw new Error(`Local model runtime error: ${chunk.error.trim()}`);
+        if(chunk.error){
+          const detail=typeof chunk.error==='string' ? chunk.error : JSON.stringify(chunk.error);
+          throw new Error(`Local model runtime error: ${detail.slice(0,500)}`);
         }
         const token = String((chunk.message as Record<string, unknown> | undefined)?.content ?? '');
         if (token) {
