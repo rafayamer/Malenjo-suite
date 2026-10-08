@@ -58,7 +58,7 @@ describe('Codespaces AI bridge', () => {
   it('surfaces Ollama errors embedded in an HTTP 200 stream', async () => {
     const body=[
       JSON.stringify({message:{content:'partial '},done:false}),
-      JSON.stringify({error:'runner crashed'}),
+      JSON.stringify({error:{message:'runner crashed',code:'runner_failed'}}),
       '',
     ].join('\n');
     vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(body,{
