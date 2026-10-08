@@ -23,7 +23,8 @@ import {
 import type { DocumentSession } from '../files/session';
 import type { RegisterDocumentCommands } from '../commands/types';
 import { isDesktopRuntime } from '../files/api';
-import { exportPdfBytes, exportPdfPlainText, readPdfDocumentBytes } from './api';
+import { exportPdfBytes, exportPdfPlainText, exportPdfPageImagesZip, readPdfDocumentBytes } from './api';
+import { exportPdfPagesAsPngZip } from './pageImageExport';
 import { extractPdfDocumentText } from './textExport';
 import {
   addPdfBatesNumbers,
@@ -162,6 +163,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const previewIdRef = useRef(`pdf-preview-${Math.random().toString(36).slice(2)}`);
   const historyRef = useRef<PdfHistory | null>(null);
   const textExportAbortRef = useRef<AbortController | null>(null);
+  const pageImageAbortRef = useRef<AbortController | null>(null);
   const imagesAbortRef = useRef<AbortController | null>(null);
 
   const [pdf, setPdf] = useState<PdfLoadResult | null>(null);
@@ -180,6 +182,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [loading, setLoading] = useState(false);
   const [mutating, setMutating] = useState(false);
   const [exportingText, setExportingText] = useState(false);
+  const [exportingPageImages, setExportingPageImages] = useState(false);
+  const [pageImageProgress, setPageImageProgress] = useState(0);
   const [creatingImagePdf, setCreatingImagePdf] = useState(false);
   const [imagePdfProgress, setImagePdfProgress] = useState(0);
   const [textExportProgress, setTextExportProgress] = useState(0);
@@ -359,6 +363,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   useEffect(() => () => {
     requestIdRef.current += 1;
     textExportAbortRef.current?.abort();
+    pageImageAbortRef.current?.abort();
     imagesAbortRef.current?.abort();
     void disposePdf(activeLoadRef.current);
   }, []);
@@ -1003,6 +1008,41 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }
   }
 
+  async function exportPageImages(){
+    if(!pdf||exportingPageImages||mutating||loading)return;
+    const activeDocument=pdf.document;
+    const controller=new AbortController();
+    pageImageAbortRef.current=controller;
+    setExportingPageImages(true);
+    setPageImageProgress(0);
+    setError('');
+    setActionNotice('Rendering PDF pages as PNG images…');
+    onSavingChange?.(true);
+    try{
+      const zipped=await exportPdfPagesAsPngZip(activeDocument,{
+        signal:controller.signal,
+        scale:1,
+        onProgress:(finished,total)=>setPageImageProgress(Math.round(100*finished/total)),
+      });
+      if(controller.signal.aborted||activeLoadRef.current?.document!==activeDocument){
+        const reason=new Error('PDF image export was cancelled or the current PDF changed.');
+        reason.name='AbortError';
+        throw reason;
+      }
+      const base=sourceName.replace(/\.pdf$/i,'').replace(/[/\\\u0000-\u001F]/g,'_').slice(0,120)||'MALENJO-document';
+      const saved=await exportPdfPageImagesZip(base+'-pages.zip',zipped);
+      if(saved)setActionNotice('Exported '+activeDocument.numPages+' PDF page(s) as PNG images.');
+    }catch(reason){
+      if(reason instanceof Error&&reason.name==='AbortError'){
+        setActionNotice('PDF-to-PNG export cancelled; no partial ZIP was saved.');
+      }else setError(reason instanceof Error?reason.message:String(reason));
+    }finally{
+      if(pageImageAbortRef.current===controller)pageImageAbortRef.current=null;
+      setExportingPageImages(false);
+      onSavingChange?.(false);
+    }
+  }
+
   async function exportCurrent(){
     if(!sourceBytes){
       setActionNotice('Open a PDF first.');
@@ -1095,6 +1135,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           enabled:!creatingImagePdf&&!mutating,
           disabledReason:creatingImagePdf?'Image conversion is running.':mutating?'Wait for the current PDF edit to finish.':undefined,
           run:()=>imagesInputRef.current?.click(),
+        },
+        {
+          id:'export-page-images',
+          label:'Export PDF pages as PNG ZIP',
+          keywords:'convert pdf pages png images zip',
+          detail:'Locally render up to 50 pages at 1× resolution and download PNG images in a ZIP',
+          enabled:!!pdf&&!mutating&&!loading&&!exportingPageImages,
+          disabledReason:!pdf?'No PDF is loaded.':exportingPageImages?'Image export in progress.':'Wait for current PDF operation.',
+          run:()=>exportPageImages(),
         },
         {
           id:'undo',
@@ -1290,7 +1339,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     });
     return () => registerCommands(null);
   }, [
-    session, registerCommands, sourceBytes, pdf, dirty, mutating, exportingText, creatingImagePdf, historyRevision, formFields.length,
+    session, registerCommands, sourceBytes, pdf, dirty, mutating, loading, exportingPageImages, exportingText, creatingImagePdf, historyRevision, formFields.length,
     headerFooterDraft, batesDraft, pageBoxDraft, formDraft, formFillDraft, formFillTouched, currentPage, pageCount, selectedPages,
     inspectorHidden, textOverlay, shapeOverlay, commentDraft,
   ]);
@@ -1404,6 +1453,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     ],
     convert:[
       {id:'export-text',label:exportingText?'Extracting text '+textExportProgress+'%':'PDF to text (.txt)',enabled:!!pdf&&!mutating&&!exportingText,disabledReason:!pdf?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':exportingText?'PDF text export is running.':undefined,run:exportText},
+      {id:'export-page-images',label:exportingPageImages?'PNG '+pageImageProgress+'%':'PDF pages to PNG ZIP',enabled:!!pdf&&!mutating&&!loading&&!exportingPageImages,disabledReason:!pdf?'No PDF is loaded.':exportingPageImages?'An image export is in progress.':'Wait for the current PDF operation to finish.',run:exportPageImages},
+      ...(exportingPageImages?[{id:'cancel-page-images',label:'Cancel PNG export',enabled:true,run:()=>pageImageAbortRef.current?.abort()}]:[]),
       {id:'images-to-pdf',label:creatingImagePdf?'Images '+imagePdfProgress+'%':'Images to PDF…',enabled:!creatingImagePdf&&!mutating,disabledReason:creatingImagePdf?'Image conversion is running.':mutating?'Wait for the current PDF mutation to finish.':undefined,run:()=>imagesInputRef.current?.click()},
       ...(exportingText?[{id:'cancel-text',label:'Cancel text export',enabled:true,run:()=>textExportAbortRef.current?.abort()}]:[]),
       ...(creatingImagePdf?[{id:'cancel-images',label:'Cancel image conversion',enabled:true,run:()=>imagesAbortRef.current?.abort()}]:[]),
