@@ -256,7 +256,7 @@ pub async fn local_ai_chat(
                 "top_p": 0.9,
                 "repeat_penalty": 1.18,
                 "repeat_last_n": 64,
-                "num_ctx": 4096,
+                "num_ctx": if lite_mode { 4096 } else { 8192 },
                 "num_predict": if lite_mode { 128 } else { 768 }
             }
         }),
