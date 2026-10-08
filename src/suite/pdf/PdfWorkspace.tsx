@@ -34,6 +34,10 @@ import {
 } from './navigation';
 import { extractPdfDocumentText } from './textExport';
 import {
+  clearPdfPageLabelRanges, listPdfPageLabelRanges, setPdfPageLabelRange,
+  type PdfPageLabelRange,
+} from './pageLabels';
+import {
   addPdfBatesNumbers,
   addPdfCheckBox,
   addPdfCommentAnnotation,
@@ -274,6 +278,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     margin:24,
     position:'bottom-right' as 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-center'|'bottom-right',
   });
+  const [pageLabelDraft, setPageLabelDraft] = useState({
+    style:'D' as PdfPageLabelRange['style'],
+    prefix:'',
+    startNumber:1,
+  });
+  const [pageLabelRanges, setPageLabelRanges] = useState<PdfPageLabelRange[]>([]);
+  const [logicalPageLabels, setLogicalPageLabels] = useState<string[]>([]);
+  const [pageLabelError, setPageLabelError] = useState('');
   const [pageBoxDraft, setPageBoxDraft] = useState({
     scope:'selected' as 'selected'|'all',
     box:'crop' as 'crop'|'trim'|'bleed'|'art',
@@ -980,6 +992,48 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     );
   }
 
+  useEffect(()=>{
+    if(!sourceBytes){
+      setPageLabelRanges([]);
+      setPageLabelError('');
+      return;
+    }
+    let cancelled=false;
+    setPageLabelRanges([]);
+    void listPdfPageLabelRanges(sourceBytes)
+      .then(ranges=>{if(!cancelled){setPageLabelRanges(ranges);setPageLabelError('');}})
+      .catch(reason=>{
+        if(!cancelled){
+          setPageLabelRanges([]);
+          setPageLabelError(reason instanceof Error?reason.message:String(reason));
+        }
+      });
+    return ()=>{cancelled=true;};
+  },[sourceBytes]);
+
+  useEffect(()=>{
+    if(!pdf){setLogicalPageLabels([]);return;}
+    let cancelled=false;
+    setLogicalPageLabels([]);
+    void pdf.document.getPageLabels()
+      .then(labels=>{if(!cancelled)setLogicalPageLabels(labels??[]);})
+      .catch(()=>{if(!cancelled)setLogicalPageLabels([]);});
+    return()=>{cancelled=true;};
+  },[pdf]);
+
+  async function applyPageLabel(){
+    await mutate(
+      'Updated PDF logical page labels at physical page '+currentPage+'.',
+      bytes=>setPdfPageLabelRange(bytes,{...pageLabelDraft,startPage:currentPage}),
+      currentPage,
+    );
+  }
+
+  async function clearAllPageLabels(){
+    if(!window.confirm('Remove all PDF logical page labels? You can Undo the change.'))return;
+    await mutate('Removed all PDF logical page labels.',clearPdfPageLabelRanges,currentPage);
+  }
+
   async function applyPageBox(){
     await mutate(
       `Updated ${pageBoxDraft.box} box on ${pageBoxDraft.scope==='selected' ? operationPages.length : pageCount} page(s).`,
@@ -1399,6 +1453,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           run:()=>applyBates(),
         },
         {
+          id:'pdf-page-label',
+          label:'Set logical PDF page label',
+          keywords:'pdf organize labels roman arabic prefix logical numbering',
+          detail:'Apply the configured style to the current physical PDF page',
+          enabled:!!sourceBytes&&!mutating,
+          disabledReason:!sourceBytes?'Open a PDF first.':'Wait for the PDF edit to finish.',
+          run:()=>applyPageLabel(),
+        },
+        {
           id:'page-box',
           label:'Apply PDF page box',
           keywords:'crop trim bleed art box margins',
@@ -1517,7 +1580,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     return () => registerCommands(null);
   }, [
     session, registerCommands, sourceBytes, pdf, dirty, mutating, loading, comparingPdf, exportingPageImages, exportingText, creatingImagePdf, historyRevision, formFields.length,
-    headerFooterDraft, batesDraft, pageBoxDraft, formDraft, formFillDraft, formFillTouched, currentPage, pageCount, selectedPages,
+    headerFooterDraft, batesDraft, pageBoxDraft, pageLabelDraft, formDraft, formFillDraft, formFillTouched, currentPage, pageCount, selectedPages,
     inspectorHidden, textOverlay, shapeOverlay, commentDraft,
   ]);
 
@@ -1648,6 +1711,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'insert',label:'Insert PDF…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>insertInputRef.current?.click()},
       {id:'append',label:'Append PDF…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>appendInputRef.current?.click()},
       {id:'blank',label:'Blank after',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Inserted a blank page after page ${currentPage}.`,bytes=>insertBlankPdfPage(bytes,currentPage),currentPage+1)},
+      {id:'page-labels',label:'Set page label',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF first.':'Wait for PDF edit.',run:applyPageLabel},
       {id:'earlier',label:'Move earlier',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&currentPage>1,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':currentPage<=1?'The first page cannot move earlier.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Moved page earlier.',bytes=>movePdfPage(bytes,currentPage,currentPage-1),currentPage-1)},
       {id:'later',label:'Move later',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&currentPage<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':currentPage>=pageCount?'The final page cannot move later.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)},
       providerAction,
@@ -1898,6 +1962,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                   key={page}
                   document={pdf.document}
                   pageNumber={page}
+                  logicalLabel={logicalPageLabels[page-1]}
                   active={page === currentPage}
                   selected={selectedPages.has(page)}
                   renderAllowed={thumbnailsRenderAllowed}
@@ -2335,6 +2400,27 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           </div>
           <button disabled={mutating} onClick={()=>void applyPageBox()}>Apply page box</button>
           <small>Margins are points inset from each page’s MediaBox. Invalid/inverted boxes are rejected; the operation is undoable before export.</small>
+        </div>
+
+        <div className="pdf-pane-title">Logical page labels</div>
+        <div className="pdf-edit-form">
+          <small>Page labels change the numbering readers display, not the physical page order. A new range starts at current page {currentPage}.</small>
+          <label>Numbering style<select value={pageLabelDraft.style} onChange={(event)=>setPageLabelDraft({...pageLabelDraft,style:event.target.value as PdfPageLabelRange['style']})}>
+            <option value="D">Decimal (1, 2, 3)</option>
+            <option value="r">Lowercase Roman (i, ii, iii)</option>
+            <option value="R">Uppercase Roman (I, II, III)</option>
+            <option value="a">Lowercase letters (a, b, c)</option>
+            <option value="A">Uppercase letters (A, B, C)</option>
+            <option value="none">Prefix only</option>
+          </select></label>
+          <label>Prefix<input maxLength={80} value={pageLabelDraft.prefix} onChange={(event)=>setPageLabelDraft({...pageLabelDraft,prefix:event.target.value})}/></label>
+          <label>Starting number<input type="number" min="1" max="1000000000" step="1" value={pageLabelDraft.startNumber} onChange={(event)=>setPageLabelDraft({...pageLabelDraft,startNumber:Number(event.target.value)})}/></label>
+          <button disabled={!sourceBytes||mutating} onClick={()=>void applyPageLabel()}>Set label at page {currentPage}</button>
+          <button disabled={!sourceBytes||mutating||!pageLabelRanges.length} onClick={()=>void clearAllPageLabels()}>Clear all page labels</button>
+          {pageLabelError&&<small role="alert">{pageLabelError}</small>}
+          <b>Configured ranges ({pageLabelRanges.length})</b>
+          {pageLabelRanges.map(range=><small key={range.startPage}>Page {range.startPage}: {range.prefix||'(no prefix)'} · {range.style==='none'?'prefix only':range.style} from {range.startNumber}</small>)}
+          <small>Existing nested /Kids number trees are preserved but require a more advanced editor.</small>
         </div>
 
         <div className="pdf-pane-title">Page tools</div>
