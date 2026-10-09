@@ -22,6 +22,7 @@ import { ensurePdfProviderRunning } from './providerLifecycle';
 import { isDesktopRuntime } from '../files/api';
 import { loadPdfBytes,disposePdf } from './engine';
 import { extractPdfDocumentText } from './textExport';
+import { exportPdfStructuredJson } from './pdfToJson';
 
 interface Props{
   provider:PdfToolProvider;
@@ -225,6 +226,34 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }
   }
 
+  async function saveLocalStructuredJson(){
+    if(!sourceBytes||busy)return;
+    setBusy(true);setError('');setNotice('');
+    let loaded:Awaited<ReturnType<typeof loadPdfBytes>>|null=null;
+    try{
+      if(!sourceBytes.byteLength||sourceBytes.byteLength>512*1024*1024){
+        throw new Error('PDF to JSON conversion requires a document of at most 512 MB.');
+      }
+      const metadata=await inspectPdfDocumentInfo(sourceBytes);
+      loaded=await loadPdfBytes(sourceBytes);
+      const output=await exportPdfStructuredJson(loaded.document,metadata,{
+        onProgress:(done,total)=>setNotice(`Extracting page text: ${done}/${total}…`),
+      });
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/json',bytes:Array.from(output),
+      },localExportStem(sourceName)+'-structured');
+      setNotice(saved
+        ?`Saved structured PDF text and metadata: ${saved}`
+        :'Structured JSON save cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+      setNotice('');
+    }finally{
+      try{await disposePdf(loaded);}
+      finally{setBusy(false);}
+    }
+  }
+
   async function saveLocalSelectableText(){
     if(!sourceBytes||busy)return;
     setBusy(true);setError('');setNotice('');
@@ -390,6 +419,9 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       </button>
       <button disabled={busy||!sourceBytes} onClick={()=>void saveLocalSelectableText()}>
         <FileOutput size={14}/>Export selectable text (offline)
+      </button>
+      <button disabled={busy||!sourceBytes} onClick={()=>void saveLocalStructuredJson()}>
+        <FileOutput size={14}/>Export structured PDF text to JSON (offline)
       </button>
       <button disabled={busy||!sourceBytes} onClick={()=>void cleanReviewAnnotations()}>
         <FileOutput size={14}/>Remove review annotations (offline)
