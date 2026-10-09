@@ -519,7 +519,7 @@ jobs:
 
             $layoutOut = Join-Path (Resolve-Path ".build/provider-smoke") "layout-n-up.pdf"
             & $curl --fail --silent --show-error -o $layoutOut `
-              -F "fileInput=@$fixture;type=application/pdf" -F "pagesPerSheet=2" `
+              -F "fileInput=@$mergeOut;type=application/pdf" -F "pagesPerSheet=2" `
               "$providerBase/api/v1/general/multi-page-layout"
             if ($LASTEXITCODE -ne 0) { throw "Multi-page layout failed on the pinned smoke fixture." }
 
@@ -529,13 +529,40 @@ jobs:
               "$providerBase/api/v1/general/crop"
             if ($LASTEXITCODE -ne 0) { throw "Crop failed on the pinned smoke fixture." }
 
-            foreach ($batchDoc in @($scaleOut, $layoutOut, $cropOut)) {
-              & $qpdf.FullName --check $batchDoc
-              if ($LASTEXITCODE -ne 0) { throw "Provider output cannot reopen in qpdf: $batchDoc" }
-              $batchPages = (& $qpdf.FullName --show-npages $batchDoc | Out-String).Trim()
-              if ($LASTEXITCODE -ne 0 -or $batchPages -ne '1') {
-                throw "Provider operation unexpectedly changed page count: $batchDoc ($batchPages)"
+            function Assert-TransformedPdf([string]$Document, [int]$ExpectedPages) {
+              & $qpdf.FullName --check $Document
+              if ($LASTEXITCODE -ne 0) { throw "Provider output cannot reopen in qpdf: $Document" }
+              $count = (& $qpdf.FullName --show-npages $Document | Out-String).Trim()
+              if ($LASTEXITCODE -ne 0 -or [int]$count -ne $ExpectedPages) {
+                throw "Unexpected transformed page count in $Document; expected $ExpectedPages, got $count"
               }
+              $raw = (& $qpdf.FullName --json=1 --json-key=pages --json-key=objects $Document | Out-String)
+              if ($LASTEXITCODE -ne 0) { throw "Unable to inspect PDF page geometry in $Document" }
+              return ($raw | ConvertFrom-Json)
+            }
+            function First-PageBox($DocumentJson, [string]$BoxName) {
+              $pageObj = $DocumentJson.pages[0].object
+              $dict = $DocumentJson.objects.PSObject.Properties["obj:$pageObj"].Value.value
+              if ($null -eq $dict) { throw "Missing page object $pageObj in qpdf JSON output" }
+              return $dict.PSObject.Properties[$BoxName].Value
+            }
+            $scaled = Assert-TransformedPdf $scaleOut 1
+            $scaledMedia = First-PageBox $scaled "/MediaBox"
+            if ($null -eq $scaledMedia -or
+                [Math]::Abs([double]$scaledMedia[2] - 595.28) -gt 2 -or
+                [Math]::Abs([double]$scaledMedia[3] - 841.89) -gt 2) {
+              throw "Scale-pages output did not change 200x200 fixture to A4"
+            }
+            $layout = Assert-TransformedPdf $layoutOut 1
+            # Two-page input must become one page, not be returned unchanged.
+            $null = First-PageBox $layout "/MediaBox"
+            $cropped = Assert-TransformedPdf $cropOut 1
+            $cropBox = First-PageBox $cropped "/CropBox"
+            if ($null -eq $cropBox) { $cropBox = First-PageBox $cropped "/MediaBox" }
+            if ($null -eq $cropBox -or
+                [Math]::Abs([double]$cropBox[2] - [double]$cropBox[0] - 100) -gt 1 -or
+                [Math]::Abs([double]$cropBox[3] - [double]$cropBox[1] - 100) -gt 1) {
+              throw "Crop output does not have the requested 100x100 visible page"
             }
 
             $repairOut = Join-Path (Resolve-Path ".build/provider-smoke") "repair.pdf"
