@@ -16,6 +16,7 @@ import { fieldAcceptsActivePdf } from './providerFileInputs';
 import { computePdfParityCoverage } from './parityCoverage';
 import { inspectPdfDocumentInfo } from './pdfInfo';
 import { updatePdfBasicMetadata,type PdfBasicMetadataUpdate } from './pdfMetadataEdit';
+import { removePdfReviewMarkup } from './pdfAnnotationCleanup';
 import { classifyPdfProviderResult } from './providerResultGuard';
 import { ensurePdfProviderRunning } from './providerLifecycle';
 import { isDesktopRuntime } from '../files/api';
@@ -204,6 +205,26 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }
   }
 
+  async function cleanReviewAnnotations(){
+    if(!sourceBytes||busy)return;
+    if(!window.confirm(
+      'Remove all review and markup annotations from this working PDF? Links, form widgets and file attachments will be kept. This is NOT secure redaction or metadata sanitization. You can Undo this edit.'
+    ))return;
+    setBusy(true);setError('');setNotice('');
+    try{
+      const result=await removePdfReviewMarkup(sourceBytes);
+      const applied=await onApplyPdf(
+        'Removed '+result.removed+' review annotations (offline)',result.bytes,
+      );
+      if(!applied)throw new Error('Review cleanup could not be applied. The original working copy is unchanged.');
+      setNotice('Removed '+result.removed+' review annotations from the working PDF. Save or export to keep the result.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }finally{
+      setBusy(false);
+    }
+  }
+
   async function saveLocalSelectableText(){
     if(!sourceBytes||busy)return;
     setBusy(true);setError('');setNotice('');
@@ -369,6 +390,9 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       </button>
       <button disabled={busy||!sourceBytes} onClick={()=>void saveLocalSelectableText()}>
         <FileOutput size={14}/>Export selectable text (offline)
+      </button>
+      <button disabled={busy||!sourceBytes} onClick={()=>void cleanReviewAnnotations()}>
+        <FileOutput size={14}/>Remove review annotations (offline)
       </button>
     </div>
     {metadataEditorOpen&&sourceBytes&&<div className="stirling-operation" aria-label="Edit PDF metadata offline">
