@@ -46,7 +46,7 @@ function isZip(bytes:number[]):boolean{
 const MAX_ZIP_BYTES=32*1024*1024;
 const MAX_EXTRACTED_BYTES=128*1024*1024;
 /** Validate the complete marker envelope and scan bounds of common JPEG files. */
-function jpegIsComplete(bytes:Uint8Array):boolean{
+export function jpegIsComplete(bytes:Uint8Array):boolean{
   if(bytes.length<32||bytes[0]!==255||bytes[1]!==216)return false;
   let pos=2,hasFrame=false,hasScan=false,scanBytes=0,frameComponents=0;
   while(pos<bytes.length){
