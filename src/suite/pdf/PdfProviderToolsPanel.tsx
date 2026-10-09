@@ -27,6 +27,7 @@ import { exportPdfStructuredXml } from './pdfToXml';
 import {exportPdfTextFormat,type PdfTextFormat} from './pdfTextFormats';
 import {exportPdfCbz} from './pdfToCbz';
 import {exportPdfRasterPptx} from './pdfToPresentation';
+import {addPdfOutlineTreeEntry,deletePdfOutlineTreeEntry,listPdfOutlineTree,movePdfOutlineTreeEntry,renamePdfOutlineTreeEntry,type PdfOutlineTreeEntry} from './pdfOutlineTree';
 import {exportPdfOfficeText,inspectPdfTextDocx,inspectPdfTextOdt,type PdfOfficeTextFormat} from './pdfOfficeText';
 import {exportPdfEpub,inspectPdfEpubArchive} from './pdfToEpub';
 import {proposePdfMetadataFilename} from './pdfAutoRename';
@@ -94,6 +95,11 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   const [error,setError]=useState('');
   const [allCategories,setAllCategories]=useState(false);
   const [metadataEditorOpen,setMetadataEditorOpen]=useState(false);
+  const [outlineItems,setOutlineItems]=useState<PdfOutlineTreeEntry[]>([]);
+  const [outlineTitle,setOutlineTitle]=useState('');
+  const [outlineTarget,setOutlineTarget]=useState('');
+  const [outlinePage,setOutlinePage]=useState('1');
+  const [outlineDeleteSubtree,setOutlineDeleteSubtree]=useState(false);
   const activeSourceRef=useRef(sourceBytes);
   activeSourceRef.current=sourceBytes;
   const metadataInspectionRef=useRef(0);
@@ -117,6 +123,9 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   useEffect(()=>{
     metadataInspectionRef.current++;
     setMetadataEditorOpen(false);
+  },[sourceBytes]);
+  useEffect(()=>{
+    setOutlineItems([]);setOutlineTarget('');setOutlineDeleteSubtree(false);
   },[sourceBytes]);
 
   const refresh=async(loadCatalog=false)=>{
@@ -728,6 +737,60 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }finally{setBusy(false);}
   }
 
+  async function refreshOfflineOutline(){
+    if(!sourceBytes||busy)return;
+    const revision=sourceBytes;
+    setBusy(true);setError('');setNotice('');
+    try{
+      const items=await listPdfOutlineTree(revision);
+      if(activeSourceRef.current!==revision){
+        throw new Error('The working PDF changed; reload the outline inventory.');
+      }
+      setOutlineItems(items);
+      setOutlineTarget(items[0]?.ref??'');
+      setNotice('Read '+items.length+' outline entries with their nesting and destinations.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }finally{setBusy(false);}
+  }
+
+  async function editOfflineOutline(kind:'add-root'|'add-child'|'rename'|'move-up'|'move-down'|'delete'){
+    if(!sourceBytes||busy)return;
+    const revision=sourceBytes;
+    setBusy(true);setError('');setNotice('');
+    try{
+      if(kind!=='add-root'&&!outlineTarget){
+        throw new Error('Load the outline and select a bookmark first.');
+      }
+      const page=Number(outlinePage);
+      let next:Uint8Array;
+      if(kind==='add-root'||kind==='add-child'){
+        if(!outlinePage.trim()||!Number.isSafeInteger(page)){
+          throw new Error('Enter an integer destination page number.');
+        }
+        next=await addPdfOutlineTreeEntry(
+          revision,outlineTitle,page,kind==='add-child'?outlineTarget:null,
+        );
+      }else if(kind==='rename'){
+        next=await renamePdfOutlineTreeEntry(revision,outlineTarget,outlineTitle);
+      }else if(kind==='move-up'||kind==='move-down'){
+        next=await movePdfOutlineTreeEntry(revision,outlineTarget,kind==='move-up'?-1:1);
+      }else{
+        next=await deletePdfOutlineTreeEntry(revision,outlineTarget,outlineDeleteSubtree);
+      }
+      if(activeSourceRef.current!==revision){
+        throw new Error('The working PDF changed; stale outline edits were not applied.');
+      }
+      const applied=await onApplyPdf('Edit PDF table of contents ('+kind+')',next,revision);
+      if(!applied){
+        throw new Error('The PDF changed before this outline edit could be committed.');
+      }
+      setNotice('PDF table of contents updated. Changes support Undo and save/reopen.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }finally{setBusy(false);}
+  }
+
   async function applyOfflinePaperSize(){
     if(!sourceBytes||busy)return;
     setBusy(true);setError('');setNotice('');
@@ -1088,6 +1151,42 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       </button>
       <small>Clears AcroForm read-only flags only. Refuses encrypted, signed or XFA PDFs and never removes password permissions.</small>
     </div>}
+    {category==='organize'&&sourceBytes&&<details className="stirling-component-details" aria-label="Offline nested PDF table of contents">
+      <summary>Edit nested PDF table of contents (offline)</summary>
+      <p>Add top-level or nested bookmarks targeting real pages; rename, reorder siblings, or remove entries. Preserve imported named destinations and hidden branches. This modifies the working PDF with Undo; certified, XFA and signed PDFs are refused.</p>
+      <div className="stirling-provider-actions">
+        <button type="button" disabled={busy} onClick={()=>void refreshOfflineOutline()}>Load / refresh PDF outline</button>
+        <label>Bookmark title <input type="text" maxLength={200} value={outlineTitle}
+          onChange={event=>setOutlineTitle(event.target.value)} placeholder="Chapter name"/></label>
+        <label>Target page <input type="number" min="1" step="1" value={outlinePage}
+          onChange={event=>setOutlinePage(event.target.value)}/></label>
+        <label>Selected bookmark
+          <select value={outlineTarget} onChange={event=>setOutlineTarget(event.target.value)}>
+            <option value="">Choose an existing bookmark</option>
+            {outlineItems.map(item=><option key={item.ref} value={item.ref}>
+              {'\u00A0'.repeat(Math.min(2*item.depth,30))}{item.title}{item.pageNumber?' (p.'+item.pageNumber+')':''}
+            </option>)}
+          </select>
+        </label>
+        <button type="button" disabled={busy||!outlineTitle.trim()}
+          onClick={()=>void editOfflineOutline('add-root')}>Add top-level bookmark</button>
+        <button type="button" disabled={busy||!outlineTarget||!outlineTitle.trim()}
+          onClick={()=>void editOfflineOutline('add-child')}>Add nested bookmark</button>
+        <button type="button" disabled={busy||!outlineTarget||!outlineTitle.trim()}
+          onClick={()=>void editOfflineOutline('rename')}>Rename selected</button>
+        <button type="button" disabled={busy||!outlineTarget}
+          onClick={()=>void editOfflineOutline('move-up')}>Move up among siblings</button>
+        <button type="button" disabled={busy||!outlineTarget}
+          onClick={()=>void editOfflineOutline('move-down')}>Move down among siblings</button>
+        <label><input type="checkbox" checked={outlineDeleteSubtree}
+          onChange={event=>setOutlineDeleteSubtree(event.target.checked)}/>
+          Permit deleting selected bookmark and all descendants
+        </label>
+        <button type="button" disabled={busy||!outlineTarget}
+          onClick={()=>void editOfflineOutline('delete')}>Delete selected bookmark</button>
+      </div>
+      <small>Loaded {outlineItems.length} bookmarks. After applying an edit, refresh the list for updated PDF object references. Nested subtree deletion requires the explicit checkbox.</small>
+    </details>}
     {category==='organize'&&sourceBytes&&<details className="stirling-component-details" aria-label="Offline PDF booklet imposition">
       <summary>Arrange PDF pages as a saddle-stitch booklet (offline)</summary>
       <p>Create double-page landscape spreads ordered for left-to-right duplex booklet printing, with blank pages added when necessary. PDF vector content is preserved; interactive fields, annotations, signed documents, links, bookmarks and rotated pages are refused rather than silently lost. Exported booklet is a separate PDF copy.</p>
