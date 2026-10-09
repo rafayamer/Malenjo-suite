@@ -3342,32 +3342,38 @@
       "malenjo": {
         "implementationPaths": [
           "src/suite/pdf/review.ts",
-          "src/suite/pdf/PdfWorkspace.tsx"
+          "src/suite/pdf/pdfAnnotationCleanup.ts",
+          "src/suite/pdf/PdfWorkspace.tsx",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
         ],
-        "frontendCommand": null,
-        "provider": null,
+        "frontendCommand": "Remove review annotations (offline)",
+        "provider": "MALENJO native pdf-lib (not Stirling sidecar)",
         "dependency": null,
         "providerCatalogMatchKey": null,
         "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
-        "localEvidenceSymbol": "deletePdfReviewAnnotation"
+        "localEvidenceSymbol": "removePdfReviewMarkup"
       },
       "evidence": {
         "functionalStatus": "partial",
         "windowsOffline": "unverified",
         "positiveTestIds": [
-          "src/suite/pdf/review.test.ts"
+          "src/suite/pdf/review.test.ts",
+          "src/suite/pdf/pdfAnnotationCleanup.test.ts"
         ],
-        "negativeTestIds": [],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfAnnotationCleanup.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "Up to 512 MB, 2,000 pages and 20,000 annotations; removes only review/markup and associated popups, preserving links/widgets/file attachments; refuses signatures."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
         "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
         "Can delete selected review annotations; not the complete Stirling RemoveAnnotations class/group workflow.",
-        "Full per-operation Windows offline execution, negative fixtures, output/save/reopen and legal traceability remain unverified."
+        "Full per-operation Windows offline execution, negative fixtures, output/save/reopen and legal traceability remain unverified.",
+        "New working-copy cleanup removes all supported visible review/markup and child popup annotations, protects Widget/Link/FileAttachment and signed PDF dictionaries. Not secure sanitization; full upstream subtype options/Windows installer still unverified."
       ]
     },
     {
