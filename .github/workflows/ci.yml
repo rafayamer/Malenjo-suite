@@ -26,7 +26,16 @@ jobs:
         run: npm install --no-audit --no-fund
       - run: npm run typecheck
       - run: npm test
+      - run: npm run test:pdf-release-gate
       - run: npm run build
+      - name: Publish PDF release-readiness evidence (does not bypass release gate)
+        shell: pwsh
+        run: node scripts/pdf-release-readiness.mjs --json > pdf-release-readiness.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-release-readiness
+          path: pdf-release-readiness.json
+          retention-days: 14
 
   rust:
     runs-on: windows-latest
