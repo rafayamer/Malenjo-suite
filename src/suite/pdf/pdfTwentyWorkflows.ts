@@ -67,7 +67,7 @@ function imageMemberIsComplete(bytes:Uint8Array):boolean{
       depth=bytes[pos+16];color=bytes[pos+17];
       const validDepths:Record<number,number[]>={0:[1,2,4,8,16],2:[8,16],3:[1,2,4,8],4:[8,16],6:[8,16]};
       if(!validDepths[color]?.includes(depth)||bytes[pos+18]!==0||bytes[pos+19]!==0||bytes[pos+20]!==0)return false;
-      channels=color===0?1:color===2?3:color===4?2:4;
+      channels=color===0||color===3?1:color===2?3:color===4?2:4;
       if(!width||!height||width>32768||height>32768)return false;
       seenHeader=true;
     }else if(type==='PLTE'){
