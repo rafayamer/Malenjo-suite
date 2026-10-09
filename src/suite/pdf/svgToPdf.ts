@@ -138,9 +138,9 @@ export async function convertSvgToPdf(input:Uint8Array):Promise<Uint8Array>{
   const scale=Math.min(pageWidth/viewWidth,pageHeight/viewHeight);
   if(scale<=0||!Number.isFinite(scale))throw new Error('SVG scale is invalid.');
   const x=(pageWidth-viewWidth*scale)/2-left*scale;
-  const y=(pageHeight-viewHeight*scale)/2+top*scale;
+  const y=(pageHeight-viewHeight*scale)/2;
   const pointX=(px:number)=>x+px*scale;
-  const pointY=(py:number)=>pageHeight-y-py*scale;
+  const pointY=(py:number)=>pageHeight-y-(py-top)*scale;
   const pdf=await PDFDocument.create();
   pdf.setTitle('Offline SVG vector import');
   pdf.setCreator('MALENJO vector-to-PDF');
@@ -152,7 +152,7 @@ export async function convertSvgToPdf(input:Uint8Array):Promise<Uint8Array>{
       if(!d||d.length>8192||!/^[MLHVQCSTAZmlhvqcstaz0-9+.\-Ee,\s]+$/.test(d)){
         throw new Error('SVG path syntax is unsupported or too large.');
       }
-      try{page.drawSvgPath(d,{x,y:pageHeight-y,scale,...opts});}
+      try{page.drawSvgPath(d,{x,y:pageHeight-y+top*scale,scale,...opts});}
       catch{throw new Error('SVG path could not be rendered as PDF vector geometry.');}
     }else if(tag==='rect'){
       const rw=numeric(attrs.width,'rectangle width');
