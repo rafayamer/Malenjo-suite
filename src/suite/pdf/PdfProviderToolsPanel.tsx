@@ -36,6 +36,7 @@ import {addPdfVisualSignature} from './pdfVisualSignature';
 import {imposePdfBooklet,PDF_BOOKLET_MAX_INPUT_BYTES} from './pdfBooklet';
 import {convertJsonToPdf,JSON_TO_PDF_MAX_INPUT_BYTES} from './jsonToPdf';
 import {convertMarkdownToPdf,MARKDOWN_TO_PDF_MAX_INPUT_BYTES} from './markdownToPdf';
+import {convertPlainTextToPdf,TEXT_TO_PDF_MAX_INPUT_BYTES} from './plainTextToPdf';
 import {convertCbzToPdf,CBZ_TO_PDF_MAX_SOURCE_BYTES} from './cbzToPdf';
 import { splitPdfByPageCount } from './splitByPageCount';
 import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput} from './pdfTwentyWorkflows';
@@ -97,6 +98,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   const [splitPagesPerPart,setSplitPagesPerPart]=useState('2');
   const [jsonToPdfFile,setJsonToPdfFile]=useState<File|null>(null);
   const [markdownToPdfFile,setMarkdownToPdfFile]=useState<File|null>(null);
+  const [textToPdfFile,setTextToPdfFile]=useState<File|null>(null);
   const [visualSigner,setVisualSigner]=useState('');
   const [visualSignPage,setVisualSignPage]=useState('1');
   const [visualSignX,setVisualSignX]=useState('0.06');
@@ -522,6 +524,25 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }finally{setBusy(false);}
   }
 
+  async function saveOfflinePlainTextPdf(){
+    if(!textToPdfFile||busy)return;
+    const file=textToPdfFile;
+    setBusy(true);setError('');setNotice('');
+    try{
+      if(!file.size||file.size>TEXT_TO_PDF_MAX_INPUT_BYTES){
+        throw new Error('Text to PDF requires a file of at most 2 MB.');
+      }
+      const output=await convertPlainTextToPdf(new Uint8Array(await file.arrayBuffer()));
+      if(textToPdfFile!==file)throw new Error('Text file changed during PDF conversion.');
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/pdf',bytes:Array.from(output),
+      },localExportStem(file.name.replace(/\.txt$/i,''))+'-text');
+      setNotice(saved?('Saved plain-text PDF: '+saved):'Plain-text PDF export cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));setNotice('');
+    }finally{setBusy(false);}
+  }
+
   async function saveOfflineMarkdownPdf(){
     if(!markdownToPdfFile||busy)return;
     const file=markdownToPdfFile;
@@ -941,6 +962,18 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       <button type="button" disabled={busy||!jsonToPdfFile}
         onClick={()=>void saveOfflineJsonPdf()}>
         <FileOutput size={14}/>Convert JSON file to PDF (offline)
+      </button>
+    </details>}
+    {category==='convert'&&<details className="stirling-component-details" aria-label="Offline plain-text to PDF conversion">
+      <summary>Plain text file to PDF (offline)</summary>
+      <p>Convert a literal UTF-8 .txt file into a selectable-text, paginated PDF. Embedded markup is displayed as text, not interpreted. Other Office formats still require a reviewed local provider. Non-WinAnsi Unicode is shown using readable escapes.</p>
+      <label className="stirling-field"><span>Plain-text file</span>
+        <input type="file" accept=".txt,text/plain" disabled={busy}
+          onChange={event=>setTextToPdfFile(event.target.files?.[0]??null)}/>
+      </label>
+      <button type="button" disabled={busy||!textToPdfFile}
+        onClick={()=>void saveOfflinePlainTextPdf()}>
+        <FileOutput size={14}/>Convert text file to PDF (offline)
       </button>
     </details>}
     {category==='convert'&&<details className="stirling-component-details" aria-label="Offline Markdown to PDF conversion">
