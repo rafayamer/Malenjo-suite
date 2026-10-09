@@ -3099,26 +3099,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfVisualSignature.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Apply non-cryptographic visual mark",
+        "provider": "MALENJO native pdf-lib visible name mark and workspace Undo",
+        "dependency": "Bundled pdf-lib",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "addPdfVisualSignature"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfVisualSignature.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfVisualSignature.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "32 MB input/output, ≤2000 pages, 80-character mark, 8–24-point font, normalized location, refuse signed, encrypted, certified and XFA documents."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Adds a clearly labeled non-cryptographic typed name mark. Pen/handwriting/photo signatures, certificate signing, trusted timestamps and PDF incremental signature preservation remain unimplemented. Packaged Windows placement/save/reopen acceptance pending."
       ]
     },
     {
@@ -5309,8 +5318,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 62,
-    "unverifiedSourceCount": 28,
+    "localSourcePartialCount": 63,
+    "unverifiedSourceCount": 27,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,

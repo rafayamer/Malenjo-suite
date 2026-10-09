@@ -4,7 +4,7 @@
 
 ## Decision
 
-**Full PDF parity release is blocked.** Exactly 90 handoff requirements are enumerated; **0 carry complete acceptance evidence**. There are 43 native/source-backed partial foundations plus 19 source-audited provider-dispatch-only partial integrations (62 partial total), with 28 implementation-source-unaudited requirements. The passing CI pipeline proves builds, tests and a subset of provider smoke routes, not the whole Windows installer + UI end-to-end matrix. The `tauri:release` command now fails closed until all 90 requirements have explicit acceptance evidence. Ordinary development builds remain possible.
+**Full PDF parity release is blocked.** Exactly 90 handoff requirements are enumerated; **0 carry complete acceptance evidence**. There are 44 native/source-backed partial foundations plus 19 source-audited provider-dispatch-only partial integrations (63 partial total), with 27 implementation-source-unaudited requirements. The passing CI pipeline proves builds, tests and a subset of provider smoke routes, not the whole Windows installer + UI end-to-end matrix. The `tauri:release` command now fails closed until all 90 requirements have explicit acceptance evidence. Ordinary development builds remain possible.
 
 The review's two PNG defects have implementation-level fixes in `pngIntegrity.ts` with Adam7/filter/palette positive and negative tests. This is not enough to accept PDF-to-images or extract-images as end-to-end workflows without live output saved and reopened on Windows.
 
@@ -14,7 +14,7 @@ The review's two PNG defects have implementation-level fixes in `pngIntegrity.ts
 |---|---:|---:|---:|
 | page | 18 | 18 | 0 |
 | conversion | 24 | 15 | 9 |
-| security | 16 | 9 | 7 |
+| security | 16 | 10 | 6 |
 | scan-extraction | 6 | 4 | 2 |
 | editing-analysis | 10 | 6 | 4 |
 | forms | 4 | 4 | 0 |
@@ -77,7 +77,7 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 | 49 | `flatten` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 50 | `unlock-pdf-forms` | Native AcroForm flag partial | No matching execution proof | Partial; Windows accepted save/reopen pending |
 | 51 | `cert-sign` | Pinned API route only | No matching execution proof | Not audited; implementation and acceptance pending |
-| 52 | `sign` | Frontend-only alias | No matching execution proof | Not audited; implementation and acceptance pending |
+| 52 | `sign` | Native graphical mark partial | No matching execution proof | Partial; handwriting/cert signing and Windows acceptance pending |
 | 53 | `timestamp-pdf` | Pinned controller only | No matching execution proof | Not audited; implementation and acceptance pending |
 | 54 | `remove-cert-sign` | Pinned API route only | No matching execution proof | Not audited; implementation and acceptance pending |
 | 55 | `validate-signature` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
