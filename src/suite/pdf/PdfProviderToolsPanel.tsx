@@ -26,6 +26,7 @@ import { exportPdfStructuredJson } from './pdfToJson';
 import { exportPdfStructuredXml } from './pdfToXml';
 import { splitPdfByPageCount } from './splitByPageCount';
 import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput} from './pdfTwentyWorkflows';
+import {fitPdfToPaper,type PdfPaperSize,type PdfPaperOrientation} from './pdfPaperResize';
 
 interface Props{
   provider:PdfToolProvider;
@@ -76,6 +77,9 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   const [allCategories,setAllCategories]=useState(false);
   const [metadataEditorOpen,setMetadataEditorOpen]=useState(false);
   const [splitPagesPerPart,setSplitPagesPerPart]=useState('2');
+  const [paperSize,setPaperSize]=useState<PdfPaperSize>('A4');
+  const [paperOrientation,setPaperOrientation]=useState<PdfPaperOrientation>('portrait');
+  const [paperMargin,setPaperMargin]=useState('18');
   const [metadataDraft,setMetadataDraft]=useState<PdfBasicMetadataUpdate>({
     title:'',author:'',subject:'',keywords:'',
   });
@@ -310,6 +314,26 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }
   }
 
+  async function applyOfflinePaperSize(){
+    if(!sourceBytes||busy)return;
+    setBusy(true);setError('');setNotice('');
+    const revision=sourceBytes;
+    try{
+      const margin=Number(paperMargin);
+      if(!paperMargin.trim()||!Number.isFinite(margin)){
+        throw new Error('Enter a finite paper margin in points.');
+      }
+      const output=await fitPdfToPaper(revision,{
+        paper:paperSize,orientation:paperOrientation,marginPt:margin,
+      });
+      const applied=await onApplyPdf('Fit pages to '+paperSize+' '+paperOrientation,output,revision);
+      if(!applied)throw new Error('The working PDF changed during paper-size conversion; output was not applied.');
+      setNotice('All pages were fitted to '+paperSize+' '+paperOrientation+'. Save or export to retain the result.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }finally{setBusy(false);}
+  }
+
   async function saveLocalSelectableText(){
     if(!sourceBytes||busy)return;
     setBusy(true);setError('');setNotice('');
@@ -490,6 +514,21 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         <FileOutput size={14}/>Remove review annotations (offline)
       </button>
     </div>
+    {category==='organize'&&sourceBytes&&<details className="stirling-component-details" aria-label="Native PDF paper size">
+      <summary>Fit pages to A4 / Letter / Legal / A5 (offline)</summary>
+      <p>Resize all pages while fitting existing page content inside the chosen paper size. This does not reflow paragraphs. For safety, documents with forms, signatures, links, annotations, rotated pages, or custom page boxes are refused instead of losing interactive content. This edit supports Undo.</p>
+      <div className="stirling-provider-actions">
+        <label>Paper <select value={paperSize} onChange={event=>setPaperSize(event.target.value as PdfPaperSize)}>
+          <option value="A4">A4</option><option value="Letter">Letter</option><option value="Legal">Legal</option><option value="A5">A5</option>
+        </select></label>
+        <label>Orientation <select value={paperOrientation} onChange={event=>setPaperOrientation(event.target.value as PdfPaperOrientation)}>
+          <option value="portrait">Portrait</option><option value="landscape">Landscape</option>
+        </select></label>
+        <label>Margin (pt) <input type="number" min="0" max="72" step="1" value={paperMargin}
+          onChange={event=>setPaperMargin(event.target.value)} /></label>
+        <button type="button" disabled={busy} onClick={()=>void applyOfflinePaperSize()}>Fit current PDF pages</button>
+      </div>
+    </details>}
     {category==='organize'&&sourceBytes&&<details className="stirling-component-details" aria-label="Offline PDF split by page count">
       <summary>Split into page groups (offline)</summary>
       <p>Save a ZIP of consecutive PDFs, each containing the selected number of pages. The original PDF is unchanged. Interactive forms and signed files are not supported by this fallback; use the provider for larger documents.</p>
