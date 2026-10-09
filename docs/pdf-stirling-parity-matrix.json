@@ -3305,27 +3305,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfPreflight.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Inspect PDF structure and security warnings (offline)",
+        "provider": "MALENJO native pdf-lib read-only PDF object inventory",
+        "dependency": "Bundled pdf-lib",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "inspectPdfStructuralSafety"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfPreflight.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfPreflight.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "1–2,000 pages; 32 MB input; 20k indirect objects; 32 graph levels; 50k annotations; 5k fields; 100 JS entries; 2 MB report."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
         "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
-        "Uses veraPDF for PDF/A, PDF/UA and standards compliance; must verify bundled provider before enabling."
+        "Uses veraPDF for PDF/A, PDF/UA and standards compliance; must verify bundled provider before enabling.",
+        "This is a structural preflight with inert script detection, not a full PDF/A, PDF/UA, cryptographic signature trust validation, malware scan or ISO-conformance validator."
       ]
     },
     {
@@ -4974,25 +4983,34 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfPreflight.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "List embedded PDF JavaScript as inert text (offline)",
+        "provider": "MALENJO native pdf-lib read-only PDF object inventory",
+        "dependency": "Bundled pdf-lib",
         "providerCatalogMatchKey": "/api/v1/misc/show-javascript",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "inspectPdfStructuralSafety"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfPreflight.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfPreflight.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "32 MB PDF input; 20k indirect objects; 100 JS entries; 64k chars/script; 2MB JSON report; PDF stream JS contents are marked unavailable, not decoded."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Local read-only extraction of direct/indirect PDF JavaScript string fields. Stream-backed scripts are flagged as not decoded; no execution occurs, and exhaustive JavaScript deobfuscation is outside scope."
       ]
     },
     {
@@ -5273,8 +5291,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 58,
-    "unverifiedSourceCount": 32,
+    "localSourcePartialCount": 60,
+    "unverifiedSourceCount": 30,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
