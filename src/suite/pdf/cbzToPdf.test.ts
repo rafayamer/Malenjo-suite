@@ -28,6 +28,15 @@ describe('native CBZ to PDF conversion',()=>{
     expect(pdf.getPage(1).getSize().width).toBe(2);
     expect(source).toEqual(original);
   });
+
+  it('converts a real complete JPEG in a comic archive into a reopenable PDF',async()=>{
+    const encoded='/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAABv/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJQB4Fv/2Q==';
+    const jpeg=Uint8Array.from(atob(encoded),char=>char.charCodeAt(0));
+    const bytes=await convertCbzToPdf(zipSync({'cover.jpg':jpeg}));
+    const document=await PDFDocument.load(bytes);
+    expect(document.getPageCount()).toBe(1);
+    expect(document.getPage(0).getWidth()).toBeGreaterThan(0);
+  });
   it('refuses traversal, Windows drive paths, and non-image archive contents',()=>{
     for(const path of ['../attack.png','folder/../../evil.png','C:bad.png','folder\\page.png']){
       expect(()=>readCbzPages(zipSync({[path]:png()}))).toThrow(/unsafe member path/);
