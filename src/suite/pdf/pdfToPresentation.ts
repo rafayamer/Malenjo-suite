@@ -57,7 +57,7 @@ function imageSlide(index:number,width:number,height:number):string{
     '</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>';
 }
 function contentTypes(count:number):string{
-  let overrides='<Override PartName="/ppt/presentation.xml" ContentType="'+contentType+'main+xml"/>'+
+  let overrides='<Override PartName="/ppt/presentation.xml" ContentType="'+contentType+'presentation.main+xml"/>'+
     '<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="'+contentType+'slideMaster+xml"/>'+
     '<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="'+contentType+'slideLayout+xml"/>'+
     '<Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>';
