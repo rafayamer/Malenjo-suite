@@ -389,7 +389,7 @@ jobs:
             if ($LASTEXITCODE -ne 0 -or $pages -ne '1') {
               throw "Stirling update-metadata changed or damaged the original page count."
             }
-            $metaJson = (& $qpdf.FullName --json --json-key=objects $metadataOut | Out-String)
+            $metaJson = (& $qpdf.FullName --json=1 --json-key=objects $metadataOut | Out-String)
             if ($LASTEXITCODE -ne 0 -or
                 $metaJson -notmatch 'MALENJO Offline Metadata Smoke' -or
                 $metaJson -notmatch 'MALENJO Runtime') {
