@@ -41,6 +41,7 @@ import {convertMarkdownToPdf,MARKDOWN_TO_PDF_MAX_INPUT_BYTES} from './markdownTo
 import {convertPlainTextToPdf,TEXT_TO_PDF_MAX_INPUT_BYTES} from './plainTextToPdf';
 import {convertEmlToPdf,EML_TO_PDF_MAX_BYTES} from './emlToPdf';
 import {convertCbzToPdf,CBZ_TO_PDF_MAX_SOURCE_BYTES} from './cbzToPdf';
+import {convertSvgToPdf,SVG_TO_PDF_MAX_INPUT_BYTES} from './svgToPdf';
 import { splitPdfByPageCount } from './splitByPageCount';
 import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput} from './pdfTwentyWorkflows';
 import {verifyProviderCompletion} from './pdfProviderCompletion';
@@ -113,6 +114,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   const [visualSignX,setVisualSignX]=useState('0.06');
   const [visualSignY,setVisualSignY]=useState('0.09');
   const [cbzToPdfFile,setCbzToPdfFile]=useState<File|null>(null);
+  const [svgToPdfFile,setSvgToPdfFile]=useState<File|null>(null);
   const [paperSize,setPaperSize]=useState<PdfPaperSize>('A4');
   const [paperOrientation,setPaperOrientation]=useState<PdfPaperOrientation>('portrait');
   const [paperMargin,setPaperMargin]=useState('18');
@@ -647,6 +649,29 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }finally{setBusy(false);}
   }
 
+  async function saveOfflineVectorPdf(){
+    if(!svgToPdfFile||busy)return;
+    const file=svgToPdfFile;
+    setBusy(true);setError('');setNotice('');
+    try{
+      if(!file.size||file.size>SVG_TO_PDF_MAX_INPUT_BYTES){
+        throw new Error('SVG vector import requires a file of at most 2 MB.');
+      }
+      const output=await convertSvgToPdf(new Uint8Array(await file.arrayBuffer()));
+      if(svgToPdfFile!==file){
+        throw new Error('SVG input changed during vector conversion.');
+      }
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/pdf',bytes:Array.from(output),
+      },localExportStem(file.name.replace(/\.svg$/i,''))+'-vector');
+      setNotice(saved?('Saved vector-based SVG PDF: '+saved):
+        'SVG vector PDF save cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+      setNotice('');
+    }finally{setBusy(false);}
+  }
+
   async function applyOfflineFormUnlock(){
     if(!sourceBytes||busy)return;
     const revision=sourceBytes;
@@ -1060,6 +1085,18 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         <FileOutput size={14}/>Remove review annotations (offline)
       </button>
     </div>
+    {category==='convert'&&<details className="stirling-component-details" aria-label="Offline SVG vector to PDF conversion">
+      <summary>Convert SVG vector shapes to PDF (offline)</summary>
+      <p>Convert trusted vector primitives—paths, rectangles, circles, ellipses, and lines—to real PDF drawing operators. No network, scripts, images, CSS, nested groups, or external assets. Unsupported SVG is refused rather than rendered incompletely.</p>
+      <label className="stirling-field"><span>SVG vector file</span>
+        <input type="file" accept=".svg,image/svg+xml" disabled={busy}
+          onChange={event=>setSvgToPdfFile(event.target.files?.[0]??null)}/>
+      </label>
+      <button type="button" disabled={busy||!svgToPdfFile}
+        onClick={()=>void saveOfflineVectorPdf()}>
+        <FileOutput size={14}/>Convert safe SVG vector shapes to PDF
+      </button>
+    </details>}
     {category==='convert'&&<details className="stirling-component-details" aria-label="Offline CBZ to PDF conversion">
       <summary>CBZ comic images to PDF (offline)</summary>
       <p>Convert up to 50 PNG/JPEG comic pages, naturally ordered by filename, into a real reopenable PDF. Malformed images, archive traversal paths, oversized files and unsupported image types are refused. This raster conversion does not reconstruct searchable text.</p>
