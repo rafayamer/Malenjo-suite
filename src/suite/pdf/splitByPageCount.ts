@@ -14,6 +14,7 @@ export interface PdfPageCountSplitResult{
 }
 
 function refusesSignedOrInteractive(pdf:PDFDocument):void{
+  if(pdf.catalog.has(PDFName.of('Perms')))throw new Error('Certified or usage-rights PDFs cannot be split; signature controls would be lost.');
   if(pdf.catalog.has(PDFName.of('AcroForm'))){
     throw new Error('This document contains interactive form fields. Use a form-aware PDF split to avoid losing field relationships.');
   }
