@@ -24,6 +24,7 @@ import { loadPdfBytes,disposePdf } from './engine';
 import { extractPdfDocumentText } from './textExport';
 import { exportPdfStructuredJson } from './pdfToJson';
 import { exportPdfStructuredXml } from './pdfToXml';
+import {exportPdfTextFormat,type PdfTextFormat} from './pdfTextFormats';
 import { splitPdfByPageCount } from './splitByPageCount';
 import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput} from './pdfTwentyWorkflows';
 import {verifyProviderCompletion} from './pdfProviderCompletion';
@@ -324,6 +325,38 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }
   }
 
+  async function saveNativeTextFormat(format:PdfTextFormat){
+    if(!sourceBytes||busy)return;
+    setBusy(true);setError('');setNotice('');
+    let loaded:Awaited<ReturnType<typeof loadPdfBytes>>|null=null;
+    const source=sourceBytes;
+    try{
+      if(source.byteLength<5||source.byteLength>512*1024*1024){
+        throw new Error('PDF text conversion requires a document of at most 512 MB.');
+      }
+      const info=await inspectPdfDocumentInfo(source);
+      loaded=await loadPdfBytes(source);
+      const output=await exportPdfTextFormat(loaded.document,info,format,{
+        onProgress:(done,total)=>setNotice('Reading PDF text: '+done+'/'+total+'…'),
+      });
+      if(activeSourceRef.current!==source){
+        throw new Error('Working PDF changed while exporting; stale output was not saved.');
+      }
+      const mime=format==='markdown'?'text/markdown; charset=utf-8':
+        format==='html'?'text/html; charset=utf-8':'text/csv; charset=utf-8';
+      const saved=await provider.saveResponse({
+        status:200,contentType:mime,bytes:Array.from(output),
+      },localExportStem(sourceName)+'-selectable-text');
+      setNotice(saved?('Saved '+format.toUpperCase()+' selectable-text export: '+saved):
+        'PDF text export save cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+      setNotice('');
+    }finally{
+      try{await disposePdf(loaded);}finally{setBusy(false);}
+    }
+  }
+
   async function applyOfflinePaperSize(){
     if(!sourceBytes||busy)return;
     setBusy(true);setError('');setNotice('');
@@ -530,6 +563,15 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       </button>
       <button disabled={busy||!sourceBytes} onClick={()=>void saveLocalStructuredXml()}>
         <FileOutput size={14}/>Export structured PDF text to XML (offline)
+      </button>
+      <button disabled={busy||!sourceBytes} onClick={()=>void saveNativeTextFormat('markdown')}>
+        <FileOutput size={14}/>Export PDF selectable text to Markdown (offline)
+      </button>
+      <button disabled={busy||!sourceBytes} onClick={()=>void saveNativeTextFormat('html')}>
+        <FileOutput size={14}/>Export PDF selectable text to HTML (offline)
+      </button>
+      <button disabled={busy||!sourceBytes} onClick={()=>void saveNativeTextFormat('csv')}>
+        <FileOutput size={14}/>Export page-indexed PDF text to CSV (offline)
       </button>
       <button disabled={busy||!sourceBytes} onClick={()=>void cleanReviewAnnotations()}>
         <FileOutput size={14}/>Remove review annotations (offline)
