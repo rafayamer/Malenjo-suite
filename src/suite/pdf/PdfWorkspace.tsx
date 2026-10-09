@@ -357,6 +357,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     name: string,
     file: File | null = null,
     preserveDirty = false,
+    onCommitted?:()=>void,
   ) => {
     const requestId = ++requestIdRef.current;
     replacementPendingRef.current=true;
@@ -400,13 +401,16 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         historyRef.current=createPdfHistory(owned,1);
         setHistoryRevision((value)=>value+1);
       }
-      // The new PDF is now active. A previous worker's teardown failure must
-      // not roll back a successful installation or leave a destroyed PDF active.
-      try {
-        await disposePdf(previousLoad);
-      } catch {
-        // Best-effort old-worker cleanup; retain the successfully loaded PDF.
-      }
+      // Finalize history/dirty state in the very same synchronous commit as
+      // the new PDF bytes. There must be no await between installing the
+      // document and recording the edit, even if an overlapping load fails.
+      onCommitted?.();
+      // Dispose the old worker asynchronously. The new PDF is already active
+      // and fully committed, so teardown must never hold the edit transaction
+      // open while another session/browser load is allowed to start.
+      void disposePdf(previousLoad).catch(()=>{
+        // Best-effort cleanup; never roll back a committed document.
+      });
       return true;
     } catch (reason) {
       if (requestId === requestIdRef.current) {
@@ -579,23 +583,22 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         throw new Error('This PDF changed or began loading another version while the tool was running. The older result was not applied.');
       }
       const targetPage=Math.max(1,preferredPage);
-      if (!await installPdf(result,sourceName,browserFile,true)) return false;
-      // installPdf awaits old-worker teardown; another load may have started
-      // after the initial check and installed a different document meanwhile.
-      if(requestIdRef.current!==sourceRevision+1||replacementPendingRef.current){
-        throw new Error('The document was replaced during PDF installation. Stale history was not recorded.');
-      }
-      historyRef.current=historyRef.current
-        ? recordPdfHistory(historyRef.current,result,targetPage,label)
-        : recordPdfHistory(createPdfHistory(sourceBytes,currentPage),result,targetPage,label);
-      setHistoryRevision((value)=>value+1);
-      setCurrentPage(targetPage);
-      setSelectedPages(new Set([targetPage]));
-      selectionAnchorRef.current=targetPage;
-      setDirty(true);
-      onDirtyChange?.(true);
-      setActionNotice(label);
-      return true;
+      // The synchronous commit callback runs before installPdf returns and
+      // before any old-worker cleanup. Later failed loads cannot leave
+      // mutated PDF bytes visible without their corresponding undo entry.
+      const installed=await installPdf(result,sourceName,browserFile,true,()=>{
+        historyRef.current=historyRef.current
+          ? recordPdfHistory(historyRef.current,result,targetPage,label)
+          : recordPdfHistory(createPdfHistory(sourceBytes,currentPage),result,targetPage,label);
+        setHistoryRevision((value)=>value+1);
+        setCurrentPage(targetPage);
+        setSelectedPages(new Set([targetPage]));
+        selectionAnchorRef.current=targetPage;
+        setDirty(true);
+        onDirtyChange?.(true);
+        setActionNotice(label);
+      });
+      return installed;
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
       return false;
@@ -659,13 +662,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setMutating(true);
     setError('');
     try{
-      if (!await installPdf(transition.entry.bytes,sourceName,browserFile,true)) return;
-      historyRef.current=transition.history;
-      setHistoryRevision((value)=>value+1);
-      setCurrentPage(transition.entry.page);
-      setDirty(transition.entry.dirty);
-      onDirtyChange?.(transition.entry.dirty);
-      setActionNotice(`Undid: ${undoneLabel}`);
+      await installPdf(transition.entry.bytes,sourceName,browserFile,true,()=>{
+        historyRef.current=transition.history;
+        setHistoryRevision((value)=>value+1);
+        setCurrentPage(transition.entry.page);
+        setDirty(transition.entry.dirty);
+        onDirtyChange?.(transition.entry.dirty);
+        setActionNotice(`Undid: ${undoneLabel}`);
+      });
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
@@ -684,13 +688,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setMutating(true);
     setError('');
     try{
-      if (!await installPdf(transition.entry.bytes,sourceName,browserFile,true)) return;
-      historyRef.current=transition.history;
-      setHistoryRevision((value)=>value+1);
-      setCurrentPage(transition.entry.page);
-      setDirty(transition.entry.dirty);
-      onDirtyChange?.(transition.entry.dirty);
-      setActionNotice(`Redid: ${transition.entry.label}`);
+      await installPdf(transition.entry.bytes,sourceName,browserFile,true,()=>{
+        historyRef.current=transition.history;
+        setHistoryRevision((value)=>value+1);
+        setCurrentPage(transition.entry.page);
+        setDirty(transition.entry.dirty);
+        onDirtyChange?.(transition.entry.dirty);
+        setActionNotice(`Redid: ${transition.entry.label}`);
+      });
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
