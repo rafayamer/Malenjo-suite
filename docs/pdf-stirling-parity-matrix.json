@@ -2969,26 +2969,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/formUnlock.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Unlock read-only form fields (offline)",
+        "provider": "MALENJO native pdf-lib AcroForm field-flag update",
+        "dependency": "Bundled pdf-lib",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "unlockReadOnlyPdfFormFields"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/formUnlock.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/formUnlock.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "1–2,000 pages; 32 MB source and result; at most 5,000 AcroForm fields; refuse encrypted, XFA, signatures and signed/certified catalog permissions."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Local AcroForm read-only flag clearing is implemented and tested, but does not remove passwords, certification restrictions, authorizations or unsupported XFA; manual packaged Windows save/undo/reopen acceptance pending."
       ]
     },
     {
@@ -5255,8 +5264,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 56,
-    "unverifiedSourceCount": 34,
+    "localSourcePartialCount": 57,
+    "unverifiedSourceCount": 33,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
