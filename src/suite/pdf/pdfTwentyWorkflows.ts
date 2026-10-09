@@ -1,4 +1,5 @@
-import {unzipSync,unzlibSync} from 'fflate';
+import {unzipSync} from 'fflate';
+import {validatePngRaster} from './pngIntegrity';
 import {PDFDocument} from 'pdf-lib';
 import {loadPdfBytes,disposePdf} from './engine';
 import type {PdfProviderOperation,PdfProviderResponse} from './backend';
@@ -44,60 +45,6 @@ function isZip(bytes:number[]):boolean{
 }
 const MAX_ZIP_BYTES=32*1024*1024;
 const MAX_EXTRACTED_BYTES=128*1024*1024;
-function imageMemberIsComplete(bytes:Uint8Array):boolean{
-  // PNG only until JPEG/TIFF can be validated by a complete decoder.
-  // Rejecting unsupported members is safer than exporting corrupt archives.
-  if(bytes.length<57||![137,80,78,71,13,10,26,10].every((v,i)=>bytes[i]===v))return false;
-  const uint=(pos:number)=>((bytes[pos]*0x1000000)+(bytes[pos+1]<<16)+(bytes[pos+2]<<8)+bytes[pos+3])>>>0;
-  const crc=(begin:number,end:number)=>{
-    let c=0xffffffff;
-    for(let i=begin;i<end;i++){c^=bytes[i];for(let j=0;j<8;j++)c=(c>>>1)^((c&1)?0xedb88320:0);}
-    return (c^0xffffffff)>>>0;
-  };
-  let pos=8,seenHeader=false,seenImage=false,seenEnd=false,seenPalette=false,width=0,height=0,depth=0,color=0,channels=0;
-  const payload:Uint8Array[]=[];
-  while(pos+12<=bytes.length&&!seenEnd){
-    const length=uint(pos),end=pos+12+length;
-    if(length>MAX_EXTRACTED_BYTES||end>bytes.length)return false;
-    const type=String.fromCharCode(...bytes.subarray(pos+4,pos+8));
-    if(crc(pos+4,pos+8+length)!==uint(pos+8+length))return false;
-    if(type==='IHDR'){
-      if(seenHeader||pos!==8||length!==13)return false;
-      width=uint(pos+8);height=uint(pos+12);
-      depth=bytes[pos+16];color=bytes[pos+17];
-      const validDepths:Record<number,number[]>={0:[1,2,4,8,16],2:[8,16],3:[1,2,4,8],4:[8,16],6:[8,16]};
-      if(!validDepths[color]?.includes(depth)||bytes[pos+18]!==0||bytes[pos+19]!==0||bytes[pos+20]!==0)return false;
-      channels=color===0||color===3?1:color===2?3:color===4?2:4;
-      if(!width||!height||width>32768||height>32768)return false;
-      seenHeader=true;
-    }else if(type==='PLTE'){
-      if(!seenHeader||seenImage||seenPalette||color===0||color===4||length<3||length>768||length%3!==0)return false;
-      if(color===3&&length/3>2**depth)return false;
-      seenPalette=true;
-    }else if(type==='IDAT'){
-      if(!seenHeader||seenEnd||(color===3&&!seenPalette))return false;
-      payload.push(bytes.subarray(pos+8,pos+8+length));seenImage=true;
-    }else if(type==='IEND'){
-      if(!seenHeader||!seenImage||length!==0)return false;
-      seenEnd=true;
-    }else if(!seenHeader||type[0]===type[0].toUpperCase())return false;
-    pos=end;
-  }
-  if(!seenEnd||pos!==bytes.length)return false;
-  const rowBytes=Math.ceil(width*channels*depth/8);
-  const expected=(rowBytes+1)*height;
-  if(expected>MAX_EXTRACTED_BYTES)return false;
-  const compressed=new Uint8Array(payload.reduce((n,x)=>n+x.length,0));
-  let offset=0;for(const block of payload){compressed.set(block,offset);offset+=block.length;}
-  try{
-    const decoded=unzlibSync(compressed,{out:new Uint8Array(expected)});
-    if(decoded.length!==expected)return false;
-    for(let y=0;y<height;y++)if(decoded[y*(rowBytes+1)]>4)return false;
-    return true;
-  }catch{return false;}
-}
-
-
 /** Validate the complete marker envelope and scan bounds of common JPEG files. */
 function jpegIsComplete(bytes:Uint8Array):boolean{
   if(bytes.length<32||bytes[0]!==255||bytes[1]!==216)return false;
@@ -196,7 +143,7 @@ function tiffIsComplete(bytes:Uint8Array):boolean{
   return pages>0;
 }
 function verifiedImage(bytes:Uint8Array):boolean{
-  return imageMemberIsComplete(bytes)||jpegIsComplete(bytes)||tiffIsComplete(bytes);
+  return validatePngRaster(bytes)||jpegIsComplete(bytes)||tiffIsComplete(bytes);
 }
 
 export async function verifyPdfBatchZip(bytes:number[],kind:'pdf'|'image'='pdf'):Promise<void>{
