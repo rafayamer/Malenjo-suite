@@ -21,7 +21,7 @@ export interface PdfParityCoverageRow{
   state:PdfParityRouteState;
   operation:PdfProviderOperation|null;
   // A responsive API provider is not enough to claim functional parity.
-  functionallyVerified:false;
+  functionallyVerified:boolean;
   locallySourceAuditedPartial:boolean;
 }
 
@@ -34,7 +34,7 @@ export interface PdfParityCoverage{
   sourceClassificationPending:number;
   liveRoutes:number;
   providerEnabled:number;
-  functionallyVerified:0;
+  functionallyVerified:number;
   locallySourceAuditedPartial:number;
   rows:PdfParityCoverageRow[];
 }
@@ -46,6 +46,25 @@ export interface PdfParityCoverage{
  * tested, redistributable, or Windows-offline verified. This function does
  * not run any operations; those separate release gates remain mandatory.
  */
+function fullyAccepted(entry:(typeof matrix.operations)[number]):boolean{
+  const evidence=entry.evidence as typeof entry.evidence & {
+    manualWindowsAcceptance?:boolean;
+    acceptedBuildSha?:string;
+  };
+  // A successful CI job or a live OpenAPI endpoint cannot promote parity.
+  // Require exact artifact, source, Windows and manual acceptance provenance.
+  return evidence.functionalStatus==='implemented'&&
+    entry.malenjo.implementationPaths.length>0&&
+    Boolean(entry.malenjo.frontendCommand)&&
+    Boolean(entry.source.license)&&entry.source.attributionVerified===true&&
+    evidence.positiveTestIds.length>0&&evidence.negativeTestIds.length>0&&
+    evidence.fixtures.length>0&&Boolean(evidence.limits)&&
+    evidence.windowsOffline==='verified'&&evidence.runtimeResultVerified===true&&
+    evidence.exportReopenVerified===true&&
+    evidence.manualWindowsAcceptance===true&&
+    /^[a-f0-9]{40}$/.test(evidence.acceptedBuildSha??'');
+}
+
 export function computePdfParityCoverage(
   operations:ReadonlyArray<PdfProviderOperation>,
   providerCatalogLoaded:boolean,
@@ -63,6 +82,7 @@ export function computePdfParityCoverage(
   let liveRoutes=0;
   let providerEnabled=0;
   let locallySourceAuditedPartial=0;
+  let functionallyVerified=0;
   const rows:PdfParityCoverageRow[]=matrix.operations.map((entry)=>{
     const expectedEndpoint=entry.source.upstreamEndpoint??entry.source.pinnedControllerEndpoint??null;
     if(entry.source.upstreamEndpoint)upstreamFixtureMatched++;
@@ -71,6 +91,8 @@ export function computePdfParityCoverage(
     else if(entry.source.pinnedConfigurationOnly)configurationOnlyMatches++;
     else sourceClassificationPending++;
     if(entry.evidence.functionalStatus==='partial')locallySourceAuditedPartial++;
+    const accepted=fullyAccepted(entry);
+    if(accepted)functionallyVerified++;
     const operation=expectedEndpoint?byPath.get(expectedEndpoint)??null:null;
     if(operation)liveRoutes++;
     if(operation?.capability.available)providerEnabled++;
@@ -91,13 +113,13 @@ export function computePdfParityCoverage(
       sourcePinned:Boolean(entry.source.endpointInPinnedFixture),
       controllerOnly:!entry.source.upstreamEndpoint&&Boolean(entry.source.pinnedControllerEndpoint),
       configurationOnly:Boolean(entry.source.pinnedConfigurationOnly),
-      state,operation,functionallyVerified:false,
+      state,operation,functionallyVerified:accepted,
       locallySourceAuditedPartial:entry.evidence.functionalStatus==='partial',
     };
   });
   return {
     total:rows.length,upstreamFixtureMatched,pinnedControllerOnlyRouteMatches,
     frontendOnlyRouteMatches,configurationOnlyMatches,sourceClassificationPending,liveRoutes,providerEnabled,
-    functionallyVerified:0,locallySourceAuditedPartial,rows,
+    functionallyVerified,locallySourceAuditedPartial,rows,
   };
 }
