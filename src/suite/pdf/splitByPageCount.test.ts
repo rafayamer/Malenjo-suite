@@ -11,6 +11,11 @@ async function sample(count:number):Promise<Uint8Array>{
 }
 
 describe('native offline PDF count-based splitter',()=>{
+  it('refuses PDFs with direct catalog permission signatures',async()=>{
+    const doc=await PDFDocument.create();doc.addPage();doc.addPage();
+    doc.catalog.set(PDFName.of('Perms'),doc.context.obj({DocMDP:{Type:PDFName.of('Sig')}}));
+    await expect(splitPdfByPageCount(Uint8Array.from(await doc.save()),1)).rejects.toThrow(/Certified or usage-rights/);
+  });
   it('exports each contiguous group as a reopenable PDF in a real ZIP',async()=>{
     const source=await sample(5);
     const original=Uint8Array.from(source);
