@@ -5052,26 +5052,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfApiManual.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Export local PDF API contract diagnostics",
+        "provider": "MALENJO runtime provider metadata exporter",
+        "dependency": "MALENJO provider contract, no network",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "buildLocalPdfApiManual"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfApiManual.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfApiManual.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "Up to 1,500 live operations, 100 components, 4 MB redacted report. No uploaded file contents or runtime paths."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Runtime provider diagnostic report documents live API paths, inputs and disabled components but does not supply a server-hosted developer portal, verified execution, or full upstream API compatibility. Windows export acceptance pending."
       ]
     },
     {
@@ -5300,8 +5309,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 61,
-    "unverifiedSourceCount": 29,
+    "localSourcePartialCount": 62,
+    "unverifiedSourceCount": 28,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
