@@ -36,6 +36,26 @@ describe('native PDF paper-size fitting',()=>{
       expect(doc.getPage(0).getHeight()).toBe(PDF_PAPER_SIZES[paper][0]);
     }
   });
+  it('updates explicit uniform crop/trim/bleed/art boxes so no original size clips new content',async()=>{
+    const document=await read(await sample(1));
+    const page=document.getPage(0);
+    for(const kind of ['crop','trim','bleed','art'] as const){
+      if(kind==='crop')page.setCropBox(0,0,612,792);
+      if(kind==='trim')page.setTrimBox(0,0,612,792);
+      if(kind==='bleed')page.setBleedBox(0,0,612,792);
+      if(kind==='art')page.setArtBox(0,0,612,792);
+    }
+    const output=await fitPdfToPaper(Uint8Array.from(await document.save()),{
+      paper:'Legal',orientation:'portrait',marginPt:36,
+    });
+    const result=(await read(output)).getPage(0);
+    for(const box of [result.getMediaBox(),result.getCropBox(),result.getTrimBox(),result.getBleedBox(),result.getArtBox()]){
+      expect(box.x).toBe(0);
+      expect(box.y).toBe(0);
+      expect(box.width).toBe(612);
+      expect(box.height).toBe(1008);
+    }
+  });
   it('refuses invalid options and unreadable inputs',async()=>{
     const bytes=await sample(1);
     await expect(fitPdfToPaper(bytes,{paper:'A4',orientation:'portrait',marginPt:-1})).rejects.toThrow(/Margin/);

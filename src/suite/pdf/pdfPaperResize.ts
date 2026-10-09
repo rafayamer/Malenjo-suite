@@ -89,6 +89,13 @@ export async function fitPdfToPaper(
     page.scaleContent(scale,scale);
     page.translateContent(x,y);
     page.setSize(width,height);
+    // Explicit page boxes that originally equalled MediaBox otherwise retain
+    // the OLD dimensions and clip the newly centered/scaled page content.
+    // Updating all five boxes keeps the verified uniform-box semantics.
+    page.setCropBox(0,0,width,height);
+    page.setTrimBox(0,0,width,height);
+    page.setBleedBox(0,0,width,height);
+    page.setArtBox(0,0,width,height);
   }
   const output=Uint8Array.from(await pdf.save({useObjectStreams:false}));
   if(output.byteLength>MAX_BYTES)throw new Error('Resized PDF exceeds the 512 MB safety limit.');
