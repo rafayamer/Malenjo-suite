@@ -2,7 +2,7 @@
 
 The machine-readable source of truth is [pdf-stirling-parity-matrix.json](./pdf-stirling-parity-matrix.json). Its 90 operation identifiers were transcribed in order from the October 8, 2026 MALENJO development handoff (§5A–5G), **not** independently re-audited against a newer upstream release. The upstream comparison baseline is `Stirling-Tools/Stirling-PDF@25220cbdbde2d526cebf173b94357884e180b8c1`.
 
-**No operation is credited as complete.** Twenty-seven operations with real MALENJO source symbols, workspace paths and unit-test evidence are classified **`partial`**, and the other 63 remain **`null` (not yet source-audited)**. This is not a claim of Windows/provider end-to-end verification. For every tool, verify the real MALENJO code, UI command, actual local Windows execution, source license and notices, positive/negative fixtures and golden tests, memory/size limits, and export/save/reopen outcomes; then set a supported status: `implemented`, `partial`, `unavailable`, or `excluded-by-license`. Exclusions need user approval.
+**No operation is credited as complete.** Thirty operations with real MALENJO source symbols, workspace paths and unit-test evidence are classified **`partial`**, and the other 60 remain **`null` (not yet source-audited)**. This is not a claim of Windows/provider end-to-end verification. For every tool, verify the real MALENJO code, UI command, actual local Windows execution, source license and notices, positive/negative fixtures and golden tests, memory/size limits, and export/save/reopen outcomes; then set a supported status: `implemented`, `partial`, `unavailable`, or `excluded-by-license`. Exclusions need user approval.
 
 ## Source-backed endpoint audit — pinned commit
 
@@ -24,7 +24,7 @@ The last six conversion operations (`pdf-to-epub`, `pdf-to-vector`, `pdf-to-json
 
 **Offline caveats from upstream source:** `TimestampController` contacts a remote RFC 3161 timestamp authority; `VerifyPDFController` uses a veraPDF service whose Windows redistribution has not been verified; and `PipelineController` is conditionally excluded in `STIRLING_PDF_TAURI_MODE`. MALENJO's provider capability gate explicitly prevents all three from being advertised as verified offline operations. These do not meet the user's full-functionality requirement.
 
-**Pinned source classification of all 90:** 54 endpoint-fixture routes + 8 controller-only routes + 22 frontend-only entries + 6 configuration-only entries. **Actual function status is still only 27 partial / 63 unaudited; 0 complete.** Source classification cannot substitute for operation fixture execution.
+**Pinned source classification of all 90:** 54 endpoint-fixture routes + 8 controller-only routes + 22 frontend-only entries + 6 configuration-only entries. **Actual function status is 30 partial / 60 unaudited; 0 complete.** Source classification cannot substitute for operation fixture execution.
 
 ## Runnable, local-only PDF utilities added to the panel
 
@@ -40,6 +40,8 @@ An open PDF can now be exported without starting the Java Stirling sidecar:
 - **Remove review/markup annotations**: the existing selected-note deletion in `src/suite/pdf/review.ts` has been supplemented with `src/suite/pdf/pdfAnnotationCleanup.ts` and four real PDF tests. The user can remove all common review/markup subtypes and related popups from the current working PDF through an undoable command. Form widgets, links, other interactive annotations and file attachments are preserved; signature dictionaries are refused. This is **partial** `remove-annotations` coverage—not signed-document rewriting, secure sanitization, or every upstream subtype.
 
 Both use the MALENJO local save implementation and carry the same Windows final-output verification gate as other tools. Neither sends the PDF to an internet service. The buttons remain usable even when the Java provider is stopped.
+
+- **PDF → Markdown / HTML / page-indexed CSV**: `pdfTextFormats.ts` and `pdfTextFormats.test.ts` add three local selectable-text conversion pathways exposed in Local PDF tools. Markdown and HTML guard against executable markup; CSV neutralizes spreadsheet formula prefixes. The conversions reuse bounded PDF.js text extraction and refuse textless scans without OCR. These are **partial** parity: Markdown does not infer headings/tables/images, HTML does not reproduce positioned graphics/resources, and CSV is page-indexed text rather than table recognition. Clean standalone Windows save/open acceptance is pending.
 
 ## Release and license constraints
 

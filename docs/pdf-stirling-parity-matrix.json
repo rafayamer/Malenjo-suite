@@ -1382,25 +1382,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTextFormats.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/pdfToJson.ts"
+        ],
+        "frontendCommand": "Export PDF selectable text to HTML (offline)",
+        "provider": "MALENJO native PDF.js selectable-text exporter",
+        "dependency": "Bundled PDF.js worker; pdf-lib",
         "providerCatalogMatchKey": "/api/v1/convert/pdf/html",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "exportPdfTextFormat"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTextFormats.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTextFormats.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "PDF.js 2,000 pages / 8M selectable text chars; 16 MB HTML output; no remote resources; escaped document content."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Native local text-only HTML preserves page divisions and selectable text but does not preserve positioned HTML, images, style/layout, reading order, or resource bundles."
       ]
     },
     {
@@ -1494,25 +1504,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTextFormats.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/pdfToJson.ts"
+        ],
+        "frontendCommand": "Export PDF selectable text to Markdown (offline)",
+        "provider": "MALENJO native PDF.js selectable-text exporter",
+        "dependency": "Bundled PDF.js worker; pdf-lib",
         "providerCatalogMatchKey": "/api/v1/convert/pdf/markdown",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "exportPdfTextFormat"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTextFormats.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTextFormats.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "PDF.js 2,000 pages / 8M selectable text chars; 16 MB Markdown output; HTML and Markdown syntax escaped."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Native local text-only Markdown does not infer headings, tables, images or semantic reading order; upstream full conversion parity unverified."
       ]
     },
     {
@@ -1545,25 +1565,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTextFormats.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/pdfToJson.ts"
+        ],
+        "frontendCommand": "Export page-indexed PDF text to CSV (offline)",
+        "provider": "MALENJO native PDF.js selectable-text exporter",
+        "dependency": "Bundled PDF.js worker; pdf-lib",
         "providerCatalogMatchKey": "/api/v1/convert/pdf/csv",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "exportPdfTextFormat"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTextFormats.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTextFormats.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "PDF.js 2,000 pages / 8M selectable text chars; 16 MB CSV output; formula-prefixed cells neutralized."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Native local CSV is one row per PDF page and does NOT extract tables, column boundaries, or selection: upstream table-extraction parity is unverified."
       ]
     },
     {
@@ -4944,8 +4974,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 27,
-    "unverifiedSourceCount": 63,
+    "localSourcePartialCount": 30,
+    "unverifiedSourceCount": 60,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
