@@ -731,26 +731,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfBooklet.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Export two-up booklet PDF (offline)",
+        "provider": "MALENJO native pdf-lib embedded PDF page artwork",
+        "dependency": "pdf-lib",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "imposePdfBooklet"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfBooklet.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfBooklet.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "1–200 pages; 32 MB input, 128 MB output; max 7200 pt input page width; refuse forms, annotations, bookmarks and rotation."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Native left-to-right saddle-stitched double-page spreads are vector-preserving and padded to multiples of four. No right-to-left, crop marks, printer bleed, paper fold guide, interactive content support or clean installed Windows booklet printing acceptance. Not full upstream booklet parity."
       ]
     },
     {
@@ -5264,8 +5273,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 57,
-    "unverifiedSourceCount": 33,
+    "localSourcePartialCount": 58,
+    "unverifiedSourceCount": 32,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
