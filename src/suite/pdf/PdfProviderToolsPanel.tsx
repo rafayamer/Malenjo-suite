@@ -28,6 +28,7 @@ import {exportPdfTextFormat,type PdfTextFormat} from './pdfTextFormats';
 import {exportPdfCbz} from './pdfToCbz';
 import {exportPdfOfficeText,inspectPdfTextDocx,type PdfOfficeTextFormat} from './pdfOfficeText';
 import {exportPdfEpub,inspectPdfEpubArchive} from './pdfToEpub';
+import {proposePdfMetadataFilename} from './pdfAutoRename';
 import { splitPdfByPageCount } from './splitByPageCount';
 import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput} from './pdfTwentyWorkflows';
 import {verifyProviderCompletion} from './pdfProviderCompletion';
@@ -458,6 +459,29 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }
   }
 
+  async function saveMetadataNamedPdfCopy(){
+    if(!sourceBytes||busy)return;
+    const original=sourceBytes;
+    setBusy(true);setError('');setNotice('');
+    try{
+      if(original.byteLength<5||original.byteLength>32*1024*1024){
+        throw new Error('Offline metadata auto-rename supports PDFs up to 32 MB.');
+      }
+      const info=await inspectPdfDocumentInfo(original);
+      const name=proposePdfMetadataFilename(info);
+      if(activeSourceRef.current!==original){
+        throw new Error('PDF changed during filename inspection. No copy was saved.');
+      }
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/pdf',bytes:Array.from(original),
+      },name.replace(/\.pdf$/i,''));
+      setNotice(saved?('PDF copy saved under its metadata title: '+saved):
+        'Renamed PDF copy save cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));setNotice('');
+    }finally{setBusy(false);}
+  }
+
   async function applyOfflinePaperSize(){
     if(!sourceBytes||busy)return;
     setBusy(true);setError('');setNotice('');
@@ -651,6 +675,9 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       <button disabled={busy} onClick={()=>void refresh(Boolean(status?.running))}><RefreshCw size={14}/>Refresh</button>
       <button disabled={busy||!sourceBytes} onClick={()=>void saveLocalPdfInfo()}>
         <FileOutput size={14}/>Export PDF information (offline)
+      </button>
+      <button disabled={busy||!sourceBytes} onClick={()=>void saveMetadataNamedPdfCopy()}>
+        <FileOutput size={14}/>Save PDF copy named from metadata title (offline)
       </button>
       <button disabled={busy||!sourceBytes} aria-expanded={metadataEditorOpen}
         onClick={()=>void openLocalMetadataEditor()}>
