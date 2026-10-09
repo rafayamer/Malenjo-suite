@@ -1,4 +1,4 @@
-import {PDFDocument,PDFName} from 'pdf-lib';
+import {PDFArray,PDFDict,PDFDocument,PDFName} from 'pdf-lib';
 
 export const PDF_PAPER_SIZES={
   A4:[595.28,841.89],
@@ -43,6 +43,15 @@ export async function fitPdfToPaper(
   const pdf=await PDFDocument.load(bytes,{ignoreEncryption:false,updateMetadata:false});
   const count=pdf.getPageCount();
   if(count<1||count>MAX_PAGES)throw new Error('Page resizing supports 1 to 2,000 pages.');
+  if(pdf.catalog.get(PDFName.of('Perms'))){
+    throw new Error('PDF certification/usage rights restrict page resizing.');
+  }
+  const signature=PDFName.of('ByteRange'),field=PDFName.of('FT'),type=PDFName.of('Type');
+  if(pdf.context.enumerateIndirectObjects().some(([,value])=>value instanceof PDFDict&&(
+    value.has(signature)||value.get(field)?.toString()==='/Sig'||value.get(type)?.toString()==='/Sig'
+  ))){
+    throw new Error('PDF contains a signature dictionary. Resizing could invalidate the signature.');
+  }
   if(pdf.catalog.get(PDFName.of('AcroForm'))){
     throw new Error('Page resizing refuses PDFs with form or signature dictionaries; use the provider after reviewing preservation requirements.');
   }
@@ -61,8 +70,14 @@ export async function fitPdfToPaper(
     if(page.getRotation().angle%360!==0){
       throw new Error('Page '+(index+1)+' is rotated; normalize rotation before changing paper size.');
     }
-    if(page.node.get(PDFName.of('Annots'))){
-      throw new Error('Page '+(index+1)+' contains annotations or links. Resizing is refused to preserve their geometry.');
+    const annotations=page.node.get(PDFName.of('Annots'));
+    if(annotations){
+      const entries=pdf.context.lookup(annotations);
+      // pdf-lib writes an empty /Annots array for ordinary pages. Empty is
+      // safe; malformed arrays or any real annotation must still fail closed.
+      if(!(entries instanceof PDFArray)||entries.size()>0){
+        throw new Error('Page '+(index+1)+' contains annotations or links. Resizing is refused to preserve their geometry.');
+      }
     }
   }
   for(const page of pdf.getPages()){

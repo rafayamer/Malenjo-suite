@@ -54,7 +54,8 @@ describe('native PDF paper-size fitting',()=>{
   });
   it('refuses annotations and custom crop boxes instead of dropping geometry',async()=>{
     const doc=await read(await sample(1));
-    doc.getPage(0).node.set(PDFName.of('Annots'),doc.context.obj([]));
+    const annotation=doc.context.register(doc.context.obj({Subtype:PDFName.of('Text'),Rect:[0,0,10,10]}));
+    doc.getPage(0).node.set(PDFName.of('Annots'),doc.context.obj([annotation]));
     await expect(fitPdfToPaper(Uint8Array.from(await doc.save()),{
       paper:'A4',orientation:'portrait',marginPt:0,
     })).rejects.toThrow(/annotations or links/);
