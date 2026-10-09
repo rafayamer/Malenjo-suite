@@ -51,7 +51,7 @@ describe('offline PDF Markdown HTML and CSV export',()=>{
     const csv=decode(serializePdfTextFormat(fixture(' \t=HYPERLINK("evil")\nnext'),'csv'));
     expect(csv).toContain('"page","text"');
     expect(csv).toContain('"\' \t=HYPERLINK(""evil"")\nnext"');
-    expect(csv).toMatch(/^\uFEFF/);
+    expect(Array.from(serializePdfTextFormat(fixture('=1'),'csv').slice(0,3))).toEqual([239,187,191]);
   });
   it('exports actual PDF info with page-indexed local text and progress',async()=>{
     const info=await metadata(),seen:number[]=[];
