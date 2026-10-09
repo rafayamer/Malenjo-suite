@@ -120,6 +120,7 @@ describe('Stirling open-core PDF integration contract',()=>{
     expect(proposedPdfToolFilename({status:200,contentType:'application/x-cbz',bytes:[80,75,3,4]},'comic')).toBe('comic.cbz');
     expect(proposedPdfToolFilename({status:200,contentType:'application/x-cbr',bytes:[82,97,114,33]},'comic')).toBe('comic.cbr');
     expect(proposedPdfToolFilename({status:200,contentType:'image/svg+xml',bytes:[60,115,118,103,62]},'diagram')).toBe('diagram.svg');
+    expect(proposedPdfToolFilename({status:200,contentType:'application/xml; charset=utf-8',bytes:[60,63,120,109,108]},'structured')).toBe('structured.xml');
     expect(proposedPdfToolFilename({status:200,contentType:'application/pdf',contentDisposition:'attachment; filename="evil.exe"',bytes:[37,80,68,70,45]},'result')).toBe('result.pdf');
     expect(proposedPdfToolFilename({status:200,contentType:'application/pdf',contentDisposition:'attachment; filename="../safe.pdf"',bytes:[37,80,68,70,45]},'result')).toBe('safe.pdf');
   });
