@@ -197,6 +197,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
   const [pdf, setPdf] = useState<PdfLoadResult | null>(null);
   const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
+  // Updated at the same instant a new PDF is installed, before React renders.
+  // Provider operations must not apply a result from an older working copy.
+  const currentPdfBytesRef=useRef<Uint8Array|null>(null);
   const [sourceName, setSourceName] = useState('PDF Workspace');
   const [browserFile, setBrowserFile] = useState<File | null>(null);
   const [pageCount, setPageCount] = useState(0);
@@ -372,6 +375,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setPdf(result);
       comparisonAbortRef.current?.abort();
       setComparisonResult(null);
+      currentPdfBytesRef.current=owned;
       setSourceBytes(owned);
       setBrowserFile(file);
       setSourceName(name);
@@ -552,11 +556,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     operation:(bytes:Uint8Array)=>Promise<Uint8Array>,
     preferredPage=currentPage,
   ):Promise<boolean>{
-    if(!sourceBytes||mutating)return false;
+    if(!sourceBytes||mutating||currentPdfBytesRef.current!==sourceBytes)return false;
     setMutating(true);
     setError('');
     try{
       const result=await operation(Uint8Array.from(sourceBytes));
+      if(currentPdfBytesRef.current!==sourceBytes){
+        throw new Error('This PDF changed while the tool was running. The older result was not applied.');
+      }
       const targetPage=Math.max(1,preferredPage);
       if (!await installPdf(result,sourceName,browserFile,true)) return false;
       historyRef.current=historyRef.current
@@ -2187,7 +2194,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       sourceBytes={sourceBytes}
       sourceName={sourceName}
       category={providerCategory}
-      onApplyPdf={(label,bytes)=>mutate(label,async()=>bytes,currentPage)}
+      onApplyPdf={(label,bytes,expectedSource)=>{
+        if(currentPdfBytesRef.current!==expectedSource||sourceBytes!==expectedSource){
+          return false;
+        }
+        return mutate(label,async()=>bytes,currentPage);
+      }}
     />}
 
     {(notice || actionNotice) && <div className="pdf-notice">{notice || actionNotice}</div>}
