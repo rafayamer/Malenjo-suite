@@ -65,7 +65,10 @@ export async function imposePdfBooklet(source:Uint8Array):Promise<Uint8Array>{
   const output=await PDFDocument.create();
   output.setTitle('MALENJO booklet');
   output.setCreator('MALENJO offline booklet imposition');
-  const artwork=await output.embedPdf(source);
+  // pdf-lib embeds only page 1 when indices are omitted. Booklet spreads
+  // require every original page, including those appearing on later sheets.
+  const indices=Array.from({length:count},(_,index)=>index);
+  const artwork=await output.embedPdf(source,indices);
   if(artwork.length!==count)throw new Error('Could not embed all booklet source pages.');
   for(const spread of plan){
     const sheet=output.addPage([2*halfWidth,height]);
