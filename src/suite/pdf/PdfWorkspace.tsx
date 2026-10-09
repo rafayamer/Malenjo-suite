@@ -186,6 +186,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const selectionAnchorRef = useRef<number | null>(null);
   const activeLoadRef = useRef<PdfLoadResult | null>(null);
   const requestIdRef = useRef(0);
+  // A replacement is reserved immediately at load start, before PDF.js has
+  // finished parsing. Async provider results must not overtake this request.
+  const replacementPendingRef=useRef(false);
+  const mutationPendingRef=useRef(false);
   const loadStartedRef = useRef(0);
   const firstPageReportedRef = useRef(false);
   const previewIdRef = useRef(`pdf-preview-${Math.random().toString(36).slice(2)}`);
@@ -355,6 +359,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     preserveDirty = false,
   ) => {
     const requestId = ++requestIdRef.current;
+    replacementPendingRef.current=true;
     setLoading(true);
     setError('');
     setActionNotice('');
@@ -411,7 +416,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       }
       return false;
     } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
+      if(requestId===requestIdRef.current){
+        replacementPendingRef.current=false;
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -556,13 +564,19 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     operation:(bytes:Uint8Array)=>Promise<Uint8Array>,
     preferredPage=currentPage,
   ):Promise<boolean>{
-    if(!sourceBytes||mutating||currentPdfBytesRef.current!==sourceBytes)return false;
+    if(!sourceBytes||mutating||mutationPendingRef.current||
+      replacementPendingRef.current||currentPdfBytesRef.current!==sourceBytes)return false;
+    // Snapshot the replacement counter before awaiting any document processing.
+    // It changes at the START of installPdf, not only after PDF.js parsing.
+    const sourceRevision=requestIdRef.current;
+    mutationPendingRef.current=true;
     setMutating(true);
     setError('');
     try{
       const result=await operation(Uint8Array.from(sourceBytes));
-      if(currentPdfBytesRef.current!==sourceBytes){
-        throw new Error('This PDF changed while the tool was running. The older result was not applied.');
+      if(currentPdfBytesRef.current!==sourceBytes||
+        requestIdRef.current!==sourceRevision||replacementPendingRef.current){
+        throw new Error('This PDF changed or began loading another version while the tool was running. The older result was not applied.');
       }
       const targetPage=Math.max(1,preferredPage);
       if (!await installPdf(result,sourceName,browserFile,true)) return false;
@@ -581,6 +595,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setError(reason instanceof Error?reason.message:String(reason));
       return false;
     }finally{
+      mutationPendingRef.current=false;
       setMutating(false);
     }
   }
@@ -2195,7 +2210,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       sourceName={sourceName}
       category={providerCategory}
       onApplyPdf={(label,bytes,expectedSource)=>{
-        if(currentPdfBytesRef.current!==expectedSource||sourceBytes!==expectedSource){
+        if(currentPdfBytesRef.current!==expectedSource||sourceBytes!==expectedSource||
+          replacementPendingRef.current||mutationPendingRef.current){
           return false;
         }
         return mutate(label,async()=>bytes,currentPage);
