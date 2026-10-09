@@ -1695,28 +1695,37 @@
         ]
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfToJson.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Export structured PDF text to JSON (offline)",
+        "provider": "MALENJO native PDF.js and pdf-lib",
+        "dependency": "Bundled PDF.js worker; pdf-lib",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "exportPdfStructuredJson"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfToJson.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfToJson.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "1–2,000 pages; 200,000 text fragments; 8M selectable characters; 10,000 bookmarks; 16 MB JSON output."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
         "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
         "Configuration references a Java route, but pinned functional endpoint fixture and frontend core registry do not verify a callable handler.",
-        "Upstream endpoint group declaration is not executable proof; no live OpenAPI path or Windows result has been verified."
+        "Upstream endpoint group declaration is not executable proof; no live OpenAPI path or Windows result has been verified.",
+        "Working offline semantic export covers selectable text, page geometry, standard Info metadata, and bookmark titles; not full PDF object model, annotations, images, layout, XMP or upstream route parity. Windows UI save/export/reopen verification remains outstanding."
       ]
     },
     {
@@ -4916,8 +4925,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 24,
-    "unverifiedSourceCount": 66,
+    "localSourcePartialCount": 25,
+    "unverifiedSourceCount": 65,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
