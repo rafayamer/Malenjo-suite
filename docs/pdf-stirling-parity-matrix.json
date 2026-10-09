@@ -2273,25 +2273,34 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/markdownToPdf.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Convert Markdown file to PDF (offline)",
+        "provider": "MALENJO native pdf-lib text renderer",
+        "dependency": "Bundled pdf-lib",
         "providerCatalogMatchKey": "/api/v1/convert/markdown/pdf",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "convertMarkdownToPdf"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/markdownToPdf.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/markdownToPdf.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "2 MB UTF-8 input, 500,000 characters, 100 PDF pages, 16 MB output; no network or embedded file resolution."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Native Markdown renderer supports headings, paragraphs, code, lists, quote and wrapping but not images, tables, full CSS/HTML, syntax-highlighted code or embedded Unicode fonts. Clean Windows PDF save/reopen acceptance pending."
       ]
     },
     {
@@ -5291,8 +5300,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 60,
-    "unverifiedSourceCount": 30,
+    "localSourcePartialCount": 61,
+    "unverifiedSourceCount": 29,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
