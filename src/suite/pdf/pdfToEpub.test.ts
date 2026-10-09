@@ -70,7 +70,7 @@ describe('offline selectable PDF text to EPUB 3',()=>{
     expect(()=>serializePdfEpub(fixture(['&'.repeat(3_300_000)])))
       .toThrow(/16 MB/);
     expect(()=>inspectPdfEpubArchive(zipSync({
-      'fake.txt':new TextEncoder().encode('bad'),
+      'fake.txt':[new TextEncoder().encode('bad'),{level:0}],
       'mimetype':new TextEncoder().encode('application/epub+zip'),
     }))).toThrow(/first archive member/);
   });
