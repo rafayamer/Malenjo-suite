@@ -12,8 +12,8 @@ export const MARKDOWN_TO_PDF_MAX_CHARACTERS=500_000;
 export const MARKDOWN_TO_PDF_MAX_PAGES=100;
 export const MARKDOWN_TO_PDF_MAX_OUTPUT_BYTES=16*1024*1024;
 type LineStyle='body'|'heading1'|'heading2'|'heading3'|'list'|'code'|'quote';
-interface TextLine{text:string;style:LineStyle}
-function asciiSafe(input:string):string{
+export interface TextLine{text:string;style:LineStyle}
+export function asciiSafe(input:string):string{
   let text='';
   for(let i=0;i<input.length;i++){
     const code=input.charCodeAt(i);
@@ -62,10 +62,11 @@ export function parseOfflineMarkdown(source:Uint8Array):TextLine[]{
   }
   return output;
 }
-export async function convertMarkdownToPdf(source:Uint8Array):Promise<Uint8Array>{
-  const lines=parseOfflineMarkdown(source);
+export async function renderOfflineTextLines(
+  lines:readonly TextLine[],title='Markdown report',
+):Promise<Uint8Array>{
   const doc=await PDFDocument.create();
-  doc.setTitle('Markdown report');
+  doc.setTitle(title);
   doc.setCreator('MALENJO offline Markdown to PDF');
   const body=await doc.embedFont(StandardFonts.Helvetica);
   const bold=await doc.embedFont(StandardFonts.HelveticaBold);
@@ -125,4 +126,8 @@ export async function convertMarkdownToPdf(source:Uint8Array):Promise<Uint8Array
     throw new Error('Markdown PDF output could not be reopened safely.');
   }
   return result;
+}
+
+export async function convertMarkdownToPdf(source:Uint8Array):Promise<Uint8Array>{
+  return renderOfflineTextLines(parseOfflineMarkdown(source));
 }
