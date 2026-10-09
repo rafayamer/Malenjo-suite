@@ -25,6 +25,7 @@ import type { RegisterDocumentCommands } from '../commands/types';
 import { isDesktopRuntime } from '../files/api';
 import { exportPdfBytes, exportPdfPlainText, exportPdfEmbeddedAttachment, exportPdfPageImagesZip, readPdfDocumentBytes } from './api';
 import { exportPdfPagesAsPngZip } from './pageImageExport';
+import {finishPdfInstallCommit} from './pdfInstallCommit';
 import {
   comparePdfSelectableText, formatPdfTextComparison, type PdfTextComparison,
 } from './textCompare';
@@ -401,16 +402,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         historyRef.current=createPdfHistory(owned,1);
         setHistoryRevision((value)=>value+1);
       }
-      // Finalize history/dirty state in the very same synchronous commit as
-      // the new PDF bytes. There must be no await between installing the
-      // document and recording the edit, even if an overlapping load fails.
-      onCommitted?.();
-      // Dispose the old worker asynchronously. The new PDF is already active
-      // and fully committed, so teardown must never hold the edit transaction
-      // open while another session/browser load is allowed to start.
-      void disposePdf(previousLoad).catch(()=>{
-        // Best-effort cleanup; never roll back a committed document.
-      });
+      finishPdfInstallCommit(onCommitted,()=>disposePdf(previousLoad));
       return true;
     } catch (reason) {
       if (requestId === requestIdRef.current) {
