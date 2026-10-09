@@ -1,5 +1,6 @@
 import {unzipSync,unzlibSync} from 'fflate';
 import {PDFDocument} from 'pdf-lib';
+import {loadPdfBytes,disposePdf} from './engine';
 import type {PdfProviderOperation,PdfProviderResponse} from './backend';
 import {classifyPdfProviderResult,type PdfProviderResultAction} from './providerResultGuard';
 
@@ -138,7 +139,31 @@ export async function classifyPdfBatchOutput(
   const pdf=isPdf(response);
   if(workflow.output==='pdf'||workflow.output==='copy'){
     if(!pdf)throw new Error(workflow.label+' returned non-PDF data; original preserved.');
-    return workflow.output==='copy'?'save-pdf-copy':'apply-pdf';
+    if(workflow.output==='copy'){
+      const data=Uint8Array.from(response.bytes);
+      if(workflow.id==='sanitize-pdf'){
+        try{
+          const parsed=await PDFDocument.load(data,{ignoreEncryption:false,updateMetadata:false});
+          if(parsed.getPageCount()<1)throw new Error('empty document');
+        }catch{throw new Error('Sanitized PDF output cannot be reopened.');}
+      }else if(workflow.id==='add-password'){
+        // An encrypted PDF cannot be opened normally by pdf-lib. PDF.js parses
+        // the complete cross-reference/Encrypt structure before requesting
+        // a password; a plain header or corrupt file must never pass.
+        let encrypted=false;
+        try{
+          const opened=await loadPdfBytes(data);
+          await disposePdf(opened);
+        }catch(reason){
+          const error=reason as {name?:string;code?:number};
+          if(error?.name==='PasswordException'&&error?.code===1)encrypted=true;
+          else throw new Error('Protected PDF output is unreadable or damaged.');
+        }
+        if(!encrypted)throw new Error('Password protection was not verified on the provider output.');
+      }
+      return 'save-pdf-copy';
+    }
+    return 'apply-pdf';
   }
   if(pdf)throw new Error(workflow.label+' unexpectedly returned PDF data; original preserved.');
   if(workflow.output==='zip'){
