@@ -1433,25 +1433,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfToXml.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts"
+        ],
+        "frontendCommand": "saveLocalStructuredXml",
+        "provider": "MALENJO native selectable-text XML export",
+        "dependency": "pdfjs-dist, pdf-lib",
         "providerCatalogMatchKey": "/api/v1/convert/pdf/xml",
         "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfToXml.test.ts",
+          "src/suite/pdf/stirlingCore.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfToXml.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "1–2,000 pages, 512 MB PDF input, 200,000 selectable text fragments, 8,000,000 text characters, 10,000 bookmarks, 16 MB XML output. No OCR or graphics."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Native text-to-XML export supports bounded selectable text, page geometry, PDF Info metadata and bookmark titles, not complete PDF object/XML semantics.",
+        "Clean offline Windows export/save/reopen, full upstream behavior and image/graphics fidelity remain unverified."
       ]
     },
     {
@@ -4934,8 +4944,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 26,
-    "unverifiedSourceCount": 64,
+    "localSourcePartialCount": 27,
+    "unverifiedSourceCount": 63,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,

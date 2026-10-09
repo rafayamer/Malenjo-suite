@@ -21,6 +21,10 @@ function xmlEscape(value:string):string{
     }else if(character==='&')result+='&amp;';
     else if(character==='<')result+='&lt;';
     else if(character==='>')result+='&gt;';
+    // Preserve literal whitespace in XML attributes and content on reparse.
+    else if(character==='\r')result+='&#13;';
+    else if(character==='\n')result+='&#10;';
+    else if(character==='\t')result+='&#9;';
     else if(character==='"')result+='&quot;';
     else if(character==="'")result+='&apos;';
     else result+=character;

@@ -47,7 +47,7 @@ describe('offline PDF to structured XML',()=>{
     expect(xml).toContain('<author>O&apos;Malley</author>');
     expect(xml).toContain('title="Chapter &amp; introduction"');
     expect(xml).toContain('width-pt="595" height-pt="842"');
-    expect(xml).toContain('A &amp; B &lt; C &gt; D &quot;quote&quot; O&apos;Malley\nEmoji 😀 \uFFFD');
+    expect(xml).toContain('A &amp; B &lt; C &gt; D &quot;quote&quot; O&apos;Malley&#10;Emoji 😀 \uFFFD');
     expect(xml).not.toContain('\u0001');
     expect(xml).toContain('</malenjo-pdf>');
   });

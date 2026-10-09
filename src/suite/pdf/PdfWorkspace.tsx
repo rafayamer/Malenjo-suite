@@ -631,39 +631,26 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     const files=Array.from(event.target.files??[]);
     event.target.value='';
     if(!files.length||!sourceBytes)return;
-    setMutating(true);
-    setError('');
-    try{
-      let result=Uint8Array.from(sourceBytes);
+    // Reuse the transactional edit lane so a slower multi-file append cannot
+    // overwrite a document load or another user edit that began later.
+    await mutate(`Appended ${files.length} PDF file(s).`,async(bytes)=>{
+      let result=bytes;
       for(const file of files){
         if(file.size>512*1024*1024)throw new Error(`${file.name} exceeds the 512 MB safety limit.`);
-        const merged=await appendPdf(result,new Uint8Array(await file.arrayBuffer()));
-        const owned=new Uint8Array(merged.byteLength);
-        owned.set(merged);
-        result=owned;
+        result=Uint8Array.from(await appendPdf(result,new Uint8Array(await file.arrayBuffer())));
       }
-      const label=`Appended ${files.length} PDF file(s).`;
-      if (!await installPdf(result,sourceName,browserFile,true)) return;
-      historyRef.current=historyRef.current
-        ? recordPdfHistory(historyRef.current,result,currentPage,label)
-        : recordPdfHistory(createPdfHistory(sourceBytes,currentPage),result,currentPage,label);
-      setHistoryRevision((value)=>value+1);
-      setDirty(true);
-      onDirtyChange?.(true);
-      setActionNotice(label);
-    }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
-    }finally{
-      setMutating(false);
-    }
+      return result;
+    },currentPage);
   }
 
   async function undoEdit(){
     const history=historyRef.current;
-    if(!history||mutating||!canUndoPdfHistory(history))return;
+    if(!history||mutating||mutationPendingRef.current||replacementPendingRef.current||
+      currentPdfBytesRef.current!==sourceBytes||!canUndoPdfHistory(history))return;
     const undoneLabel=history.entries[history.cursor]?.label??'PDF edit';
     const transition=undoPdfHistory(history);
     if(!transition.changed)return;
+    mutationPendingRef.current=true;
     setMutating(true);
     setError('');
     try{
@@ -677,15 +664,18 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
+      mutationPendingRef.current=false;
       setMutating(false);
     }
   }
 
   async function redoEdit(){
     const history=historyRef.current;
-    if(!history||mutating||!canRedoPdfHistory(history))return;
+    if(!history||mutating||mutationPendingRef.current||replacementPendingRef.current||
+      currentPdfBytesRef.current!==sourceBytes||!canRedoPdfHistory(history))return;
     const transition=redoPdfHistory(history);
     if(!transition.changed)return;
+    mutationPendingRef.current=true;
     setMutating(true);
     setError('');
     try{
@@ -699,6 +689,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
+      mutationPendingRef.current=false;
       setMutating(false);
     }
   }
