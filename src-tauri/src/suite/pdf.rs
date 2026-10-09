@@ -122,9 +122,14 @@ fn write_export_with_recovery(path: &Path, bytes: &[u8]) -> Result<(), String> {
     }
 
     if had_original {
-        // Export is complete: do not report failure solely because cleanup
-        // of a recoverable backup was blocked by antivirus/file locks.
-        let _ = fs::remove_file(&backup);
+        // Sensitive source bytes must never be silently left beside a
+        // protected or sanitized export. Report their exact retained path.
+        if let Err(error) = fs::remove_file(&backup) {
+            return Err(format!(
+                "PDF export was written, but the previous (potentially unprotected) file remains at {} because cleanup failed ({error}). Remove that backup securely.",
+                backup.display()
+            ));
+        }
     }
     Ok(())
 }
