@@ -93,7 +93,7 @@ describe('offline Word DOCX and RTF text conversions',()=>{
       .rejects.toMatchObject({name:'AbortError'});
   });
   it('refuses oversized DOCX/RTF output and false page sequences',()=>{
-    expect(()=>serializePdfDocx(sample(['&'.repeat(PDF_OFFICE_TEXT_MAX_BYTES)])))
+    expect(()=>serializePdfDocx(sample(['&'.repeat(3_300_000)])))
       .toThrow(/16 MB/);
     expect(()=>serializePdfRtf(sample(['x'.repeat(PDF_OFFICE_TEXT_MAX_BYTES)])))
       .toThrow(/16 MB/);

@@ -67,7 +67,7 @@ describe('offline selectable PDF text to EPUB 3',()=>{
       .rejects.toMatchObject({name:'AbortError'});
   });
   it('refuses excessive XHTML and forged first EPUB member',()=>{
-    expect(()=>serializePdfEpub(fixture(['&'.repeat(PDF_EPUB_MAX_BYTES)])))
+    expect(()=>serializePdfEpub(fixture(['&'.repeat(3_300_000)])))
       .toThrow(/16 MB/);
     expect(()=>inspectPdfEpubArchive(zipSync({
       'fake.txt':new TextEncoder().encode('bad'),

@@ -1640,28 +1640,38 @@
         ]
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfToEpub.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/pdfToJson.ts"
+        ],
+        "frontendCommand": "Export selectable PDF text to EPUB 3 e-book (offline)",
+        "provider": "MALENJO native PDF.js and fflate EPUB 3 reflowable OCF container",
+        "dependency": "Bundled PDF.js worker; fflate; pdf-lib",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "exportPdfEpub"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfToEpub.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfToEpub.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "1–2,000 pages; 8M selectable chars; 200k fragments; 16 MB EPUB/XHTML output."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
         "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
         "Endpoint grouped under Calibre as well as Java; no tested handler in evidence supplied.",
-        "Upstream endpoint group declaration is not executable proof; no live OpenAPI path or Windows result has been verified."
+        "Upstream endpoint group declaration is not executable proof; no live OpenAPI path or Windows result has been verified.",
+        "Native reflowable EPUB 3 exports selectable text and page navigation. It intentionally omits original graphics, layout, embedded fonts, semantic sections and Calibre-level reflow. Real installed Windows EPUB reader acceptance is pending."
       ]
     },
     {
@@ -5006,8 +5016,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 33,
-    "unverifiedSourceCount": 57,
+    "localSourcePartialCount": 34,
+    "unverifiedSourceCount": 56,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
