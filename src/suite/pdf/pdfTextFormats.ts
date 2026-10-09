@@ -19,8 +19,11 @@ function escapeMarkdown(value:string):string{
 }
 function safeCsvValue(value:string):string{
   // Protect spreadsheet consumers against formula injection from PDF text.
-  const safe=/^[\s\uFEFF]*[=+\-@\t\r]/u.test(value)?"'"+value:value;
-  return '"'+safe.replace(/"/g,'""').replace(/\u0000/g,'')+'"';
+  // Strip NUL *before* formula detection; otherwise a PDF NUL can conceal
+  // a formula prefix until after safety screening.
+  const cleaned=value.replace(/\u0000/g,'');
+  const safe=/^[\s\uFEFF\u200B\u200C\u200D]*[=+\-@\t\r]/u.test(cleaned)?"'"+cleaned:cleaned;
+  return '"'+safe.replace(/"/g,'""')+'"';
 }
 function encodeBounded(value:string):Uint8Array{
   const bytes=new TextEncoder().encode(value);

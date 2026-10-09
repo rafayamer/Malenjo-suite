@@ -153,7 +153,14 @@ export async function verifyPdfBatchZip(bytes:number[],kind:'pdf'|'image'='pdf')
   try{
     archive=unzipSync(Uint8Array.from(bytes),{
       filter:(file)=>{
-        if(file.name.endsWith('/'))return false;
+        const name=file.name;
+        const parts=name.split('/');
+        if(name.startsWith('/')||/[\\:\u0000-\u001f]/.test(name)||
+          parts.some((segment,index)=>segment==='.'||segment==='..'||
+            (!segment&&index<parts.length-1))){
+          throw new Error('Archive contains an unsafe member path.');
+        }
+        if(name.endsWith('/'))return false;
         if(kind==='pdf'?!file.name.toLowerCase().endsWith('.pdf'):!/(\.png|\.jpe?g|\.tiff?)$/.test(file.name.toLowerCase()))throw new Error('Archive contains an unexpected file type.');
         if(file.originalSize<=0||file.originalSize>MAX_EXTRACTED_BYTES-total){
           throw new Error('Archive extraction exceeds 128 MB budget.');

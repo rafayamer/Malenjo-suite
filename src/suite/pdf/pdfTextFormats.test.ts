@@ -53,6 +53,13 @@ describe('offline PDF Markdown HTML and CSV export',()=>{
     expect(csv).toContain('"\' \t=HYPERLINK(""evil"")\nnext"');
     expect(Array.from(serializePdfTextFormat(fixture('=1'),'csv').slice(0,3))).toEqual([239,187,191]);
   });
+  it('neutralizes a formula hidden behind NUL or zero-width text',()=>{
+    for(const value of ['\\u0000=HYPERLINK("evil")','\\u200B@SUM(1,2)']){
+      const injected=value.replace('\\u0000','\u0000').replace('\\u200B','\u200B');
+      const csv=new TextDecoder().decode(serializePdfTextFormat(fixture(injected),'csv'));
+      expect(csv).toContain('"\'='); 
+    }
+  });
   it('exports actual PDF info with page-indexed local text and progress',async()=>{
     const info=await metadata(),seen:number[]=[];
     const doc=reader([[{str:'First page',hasEOL:false}]]);
