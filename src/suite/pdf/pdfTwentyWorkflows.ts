@@ -54,7 +54,7 @@ function imageMemberIsComplete(bytes:Uint8Array):boolean{
     for(let i=begin;i<end;i++){c^=bytes[i];for(let j=0;j<8;j++)c=(c>>>1)^((c&1)?0xedb88320:0);}
     return (c^0xffffffff)>>>0;
   };
-  let pos=8,seenHeader=false,seenImage=false,seenEnd=false,width=0,height=0,channels=0;
+  let pos=8,seenHeader=false,seenImage=false,seenEnd=false,seenPalette=false,width=0,height=0,depth=0,color=0,channels=0;
   const payload:Uint8Array[]=[];
   while(pos+12<=bytes.length&&!seenEnd){
     const length=uint(pos),end=pos+12+length;
@@ -64,13 +64,18 @@ function imageMemberIsComplete(bytes:Uint8Array):boolean{
     if(type==='IHDR'){
       if(seenHeader||pos!==8||length!==13)return false;
       width=uint(pos+8);height=uint(pos+12);
-      const depth=bytes[pos+16],color=bytes[pos+17];
-      if(depth!==8||![0,2,4,6].includes(color)||bytes[pos+18]!==0||bytes[pos+19]!==0||bytes[pos+20]!==0)return false;
+      depth=bytes[pos+16];color=bytes[pos+17];
+      const validDepths:Record<number,number[]>={0:[1,2,4,8,16],2:[8,16],3:[1,2,4,8],4:[8,16],6:[8,16]};
+      if(!validDepths[color]?.includes(depth)||bytes[pos+18]!==0||bytes[pos+19]!==0||bytes[pos+20]!==0)return false;
       channels=color===0?1:color===2?3:color===4?2:4;
       if(!width||!height||width>32768||height>32768)return false;
       seenHeader=true;
+    }else if(type==='PLTE'){
+      if(!seenHeader||seenImage||seenPalette||color===0||color===4||length<3||length>768||length%3!==0)return false;
+      if(color===3&&length/3>2**depth)return false;
+      seenPalette=true;
     }else if(type==='IDAT'){
-      if(!seenHeader||seenEnd)return false;
+      if(!seenHeader||seenEnd||(color===3&&!seenPalette))return false;
       payload.push(bytes.subarray(pos+8,pos+8+length));seenImage=true;
     }else if(type==='IEND'){
       if(!seenHeader||!seenImage||length!==0)return false;
@@ -79,14 +84,15 @@ function imageMemberIsComplete(bytes:Uint8Array):boolean{
     pos=end;
   }
   if(!seenEnd||pos!==bytes.length)return false;
-  const expected=(width*channels+1)*height;
+  const rowBytes=Math.ceil(width*channels*depth/8);
+  const expected=(rowBytes+1)*height;
   if(expected>MAX_EXTRACTED_BYTES)return false;
   const compressed=new Uint8Array(payload.reduce((n,x)=>n+x.length,0));
   let offset=0;for(const block of payload){compressed.set(block,offset);offset+=block.length;}
   try{
     const decoded=unzlibSync(compressed,{out:new Uint8Array(expected)});
     if(decoded.length!==expected)return false;
-    for(let y=0;y<height;y++)if(decoded[y*(width*channels+1)]>4)return false;
+    for(let y=0;y<height;y++)if(decoded[y*(rowBytes+1)]>4)return false;
     return true;
   }catch{return false;}
 }
@@ -95,7 +101,7 @@ function imageMemberIsComplete(bytes:Uint8Array):boolean{
 /** Validate the complete marker envelope and scan bounds of common JPEG files. */
 function jpegIsComplete(bytes:Uint8Array):boolean{
   if(bytes.length<32||bytes[0]!==255||bytes[1]!==216)return false;
-  let pos=2,hasFrame=false,hasScan=false,scanBytes=0;
+  let pos=2,hasFrame=false,hasScan=false,scanBytes=0,frameComponents=0;
   while(pos<bytes.length){
     if(bytes[pos++]!==255)return false;
     while(pos<bytes.length&&bytes[pos]===255)pos++;
@@ -108,14 +114,17 @@ function jpegIsComplete(bytes:Uint8Array):boolean{
     const length=bytes[pos]*256+bytes[pos+1];
     if(length<2||pos+length>bytes.length)return false;
     if((marker>=192&&marker<=207)&&![196,200,204].includes(marker)){
-      if(length<8)return false;
+      if(length<11)return false;
+      const componentCount=bytes[pos+7];
+      if(componentCount<1||componentCount>4||length!==8+3*componentCount)return false;
       const height=bytes[pos+3]*256+bytes[pos+4];
       const width=bytes[pos+5]*256+bytes[pos+6];
       if(!width||!height||width>32768||height>32768)return false;
-      hasFrame=true;
+      hasFrame=true;frameComponents=componentCount;
     }
     if(marker===218){
-      if(!hasFrame||length<6)return false;
+      const scanComponents=bytes[pos+2];
+      if(!hasFrame||length<8||scanComponents<1||scanComponents>frameComponents||length!==6+2*scanComponents)return false;
       hasScan=true;pos+=length;
       while(pos<bytes.length){
         if(bytes[pos]!==255){scanBytes++;pos++;continue;}
@@ -152,7 +161,7 @@ function tiffIsComplete(bytes:Uint8Array):boolean{
       const unit=type===3?2:4,span=unit*items;
       const start=span<=4?p+8:u32(p+8);
       if(start<0||start+span>bytes.length)return false;
-      if([256,257,259,273,279,277,324,325].includes(tag)){
+      if([256,257,258,259,273,277,278,279,284,324,325].includes(tag)){
         const values:number[]=[];
         for(let j=0;j<items;j++)values.push(type===3?u16(start+j*2):u32(start+j*4));
         tags.set(tag,values);
@@ -160,12 +169,27 @@ function tiffIsComplete(bytes:Uint8Array):boolean{
     }
     const width=tags.get(256)?.[0],height=tags.get(257)?.[0];
     if(!width||!height||width>32768||height>32768)return false;
+    const compression=tags.get(259)?.[0]??1;
+    const samples=tags.get(277)?.[0]??1;
+    const planar=tags.get(284)?.[0]??1;
+    const bits=tags.get(258)??[1];
+    if(samples<1||samples>8||![1,2].includes(planar)||bits.some(v=>![1,2,4,8,16,32].includes(v)))return false;
+    // Without a dedicated codec, compressed TIFF integrity is not provable.
+    // Reject it rather than accepting byte ranges as decoded raster evidence.
+    if(compression!==1)return false;
+    const rowBits=planar===1?bits.reduce((a,b)=>a+b,0)*width:
+      bits.reduce((a,b)=>a+Math.ceil(width*b/8)*8,0);
+    const requiredRaster=Math.ceil(rowBits/8)*height;
+    if(!Number.isSafeInteger(requiredRaster)||requiredRaster>MAX_EXTRACTED_BYTES)return false;
     const offsets=tags.get(273)??tags.get(324);
     const counts=tags.get(279)??tags.get(325);
     if(!offsets||!counts||offsets.length!==counts.length||offsets.length>8192)return false;
+    let written=0;
     for(let i=0;i<offsets.length;i++){
       if(!counts[i]||offsets[i]<8||offsets[i]+counts[i]>bytes.length)return false;
+      written+=counts[i];
     }
+    if(written<requiredRaster)return false;
     offset=u32(end);
     if(offset<0)return false;
   }
