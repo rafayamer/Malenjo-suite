@@ -1,7 +1,7 @@
 import {describe,expect,it} from 'vitest';
 import type {PdfProviderResponse} from './backend';
-import {classifyPdfProviderResult,PDF_PROVIDER_MAX_OUTPUT_BYTES} from './providerResultGuard';
-import {responseIsPdf} from './stirlingCore';
+import {classifyPdfProviderResult,PDF_PROVIDER_MAX_OUTPUT_BYTES,safePdfCopyResponse} from './providerResultGuard';
+import {responseIsPdf,proposedPdfToolFilename} from './stirlingCore';
 
 const pdfBytes=[37,80,68,70,45,49,46,55];
 
@@ -35,6 +35,14 @@ describe('PDF provider output safety before applying document changes',()=>{
       .toThrow(/missing/i);
     expect(()=>classifyPdfProviderResult(response([60,104,116,109,108,62],200),'/api/v1/general/merge-pdfs',responseIsPdf))
       .toThrow(/invalid output/i);
+  });
+
+  it('does not suggest the original provider filename when saving a protected or sanitized copy',()=>{
+    const protectedPdf={...response(),contentDisposition:'attachment; filename="original.pdf"'};
+    expect(proposedPdfToolFilename(protectedPdf,'malenjo-protected')).toBe('original.pdf');
+    const safe=safePdfCopyResponse(protectedPdf);
+    expect(proposedPdfToolFilename(safe,'malenjo-protected')).toBe('malenjo-protected.pdf');
+    expect(protectedPdf.contentDisposition).toContain('original.pdf');
   });
 
   it('enforces a finite bounded maximum for each provider result',()=>{

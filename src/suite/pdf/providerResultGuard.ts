@@ -32,3 +32,12 @@ export function classifyPdfProviderResult(
   if(operationPath.toLowerCase().endsWith('/add-password'))return 'save-pdf-copy';
   return 'apply-pdf';
 }
+
+/**
+ * An export-as-copy must not reuse the provider-supplied Content-Disposition
+ * filename. Otherwise a provider returning "document.pdf" can cause the
+ * save dialog to suggest overwriting the still-open original PDF.
+ */
+export function safePdfCopyResponse(response:PdfProviderResponse):PdfProviderResponse{
+  return {...response,contentDisposition:null};
+}

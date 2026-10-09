@@ -17,7 +17,7 @@ import { computePdfParityCoverage } from './parityCoverage';
 import { inspectPdfDocumentInfo } from './pdfInfo';
 import { updatePdfBasicMetadata,type PdfBasicMetadataUpdate } from './pdfMetadataEdit';
 import { removePdfReviewMarkup } from './pdfAnnotationCleanup';
-import { classifyPdfProviderResult } from './providerResultGuard';
+import { classifyPdfProviderResult,safePdfCopyResponse } from './providerResultGuard';
 import { ensurePdfProviderRunning } from './providerLifecycle';
 import { isDesktopRuntime } from '../files/api';
 import { loadPdfBytes,disposePdf } from './engine';
@@ -438,7 +438,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       }else{
         const stem=localExportStem(sourceName);
         const saved=await provider.saveResponse(
-          response,
+          action==='save-pdf-copy'?safePdfCopyResponse(response):response,
           action==='save-pdf-copy'?stem+(batchWorkflow?.id==='sanitize-pdf'?'-sanitized-copy':'-protected'):stem,
         );
         setNotice(action==='save-pdf-copy'
