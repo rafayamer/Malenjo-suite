@@ -25,6 +25,7 @@ import { extractPdfDocumentText } from './textExport';
 import { exportPdfStructuredJson } from './pdfToJson';
 import { exportPdfStructuredXml } from './pdfToXml';
 import {exportPdfTextFormat,type PdfTextFormat} from './pdfTextFormats';
+import {exportPdfCbz} from './pdfToCbz';
 import { splitPdfByPageCount } from './splitByPageCount';
 import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput} from './pdfTwentyWorkflows';
 import {verifyProviderCompletion} from './pdfProviderCompletion';
@@ -357,6 +358,33 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }
   }
 
+  async function saveOfflineComicBook(){
+    if(!sourceBytes||busy)return;
+    const original=sourceBytes;
+    setBusy(true);setError('');setNotice('');
+    let loaded:Awaited<ReturnType<typeof loadPdfBytes>>|null=null;
+    try{
+      if(!original.byteLength||original.byteLength>512*1024*1024){
+        throw new Error('PDF to CBZ conversion requires a document of at most 512 MB.');
+      }
+      loaded=await loadPdfBytes(original);
+      const output=await exportPdfCbz(loaded.document,{
+        onProgress:(done,total)=>setNotice('Rendering comic-book page '+done+'/'+total+'…'),
+      });
+      if(activeSourceRef.current!==original){
+        throw new Error('PDF changed during CBZ export; stale output was not saved.');
+      }
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/vnd.comicbook+zip',bytes:Array.from(output),
+      },localExportStem(sourceName)+'-pages');
+      setNotice(saved?('Saved rasterized CBZ comic: '+saved):'CBZ export save cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));setNotice('');
+    }finally{
+      try{await disposePdf(loaded);}finally{setBusy(false);}
+    }
+  }
+
   async function applyOfflinePaperSize(){
     if(!sourceBytes||busy)return;
     setBusy(true);setError('');setNotice('');
@@ -572,6 +600,9 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       </button>
       <button disabled={busy||!sourceBytes} onClick={()=>void saveNativeTextFormat('csv')}>
         <FileOutput size={14}/>Export page-indexed PDF text to CSV (offline)
+      </button>
+      <button disabled={busy||!sourceBytes} onClick={()=>void saveOfflineComicBook()}>
+        <FileOutput size={14}/>Export rasterized PDF pages to CBZ comic (offline)
       </button>
       <button disabled={busy||!sourceBytes} onClick={()=>void cleanReviewAnnotations()}>
         <FileOutput size={14}/>Remove review annotations (offline)
