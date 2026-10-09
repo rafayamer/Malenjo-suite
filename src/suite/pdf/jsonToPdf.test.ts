@@ -42,8 +42,9 @@ describe('offline JSON to real PDF',()=>{
     expect(()=>prepareJsonPdfLines(utf8(deeplyNested))).toThrow(/64 levels/);
     const many={records:'x'.repeat(JSON_TO_PDF_MAX_CHARACTERS)};
     expect(()=>prepareJsonPdfLines(utf8(JSON.stringify(many)))).toThrow(/500,000-character/);
-    const lines=Array.from({length:6500},(_,i)=>String(i)).join('\n');
-    expect(()=>prepareJsonPdfLines(utf8(JSON.stringify(lines)))).not.toThrow();
+    const lines=Array.from({length:6500},(_,i)=>i);
+    expect(()=>prepareJsonPdfLines(utf8(JSON.stringify(lines))))
+      .toThrow(/100-page PDF limit/);
     expect(JSON_TO_PDF_MAX_PAGES).toBe(100);
   });
 });
