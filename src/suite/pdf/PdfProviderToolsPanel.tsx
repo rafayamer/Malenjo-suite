@@ -25,7 +25,8 @@ import { extractPdfDocumentText } from './textExport';
 import { exportPdfStructuredJson } from './pdfToJson';
 import { exportPdfStructuredXml } from './pdfToXml';
 import { splitPdfByPageCount } from './splitByPageCount';
-import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput,verifyPdfBatchZip} from './pdfTwentyWorkflows';
+import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput} from './pdfTwentyWorkflows';
+import {verifyProviderCompletion} from './pdfProviderCompletion';
 import {fitPdfToPaper,type PdfPaperSize,type PdfPaperOrientation} from './pdfPaperResize';
 import {validatePdfUploadPlan,validatePdfOperationValue} from './providerRequestGuard';
 
@@ -437,17 +438,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       const action=batchWorkflow
         ?await classifyPdfBatchOutput(batchWorkflow,response,provider.responseIsPdf)
         :classifyPdfProviderResult(response,selected.path,provider.responseIsPdf);
-      if(!batchWorkflow&&['/api/v1/general/split-pages','/api/v1/general/split-by-size-or-count'].includes(selected.path)){
-        if(action!=='save-file')throw new Error('Split operation returned a PDF instead of a ZIP. No output was saved.');
-        await verifyPdfBatchZip(response.bytes,'pdf');
-      }
-      // With an uploaded input but no active workspace, apply-pdf takes the
-      // export path. Reopen the PDF before reporting a successful save.
-      if(action==='apply-pdf'&&!sourceRevision){
-        const verified=await loadPdfBytes(Uint8Array.from(response.bytes));
-        try{if(verified.document.numPages<1)throw new Error('Provider returned an empty PDF.');}
-        finally{await disposePdf(verified);}
-      }
+      await verifyProviderCompletion(selected.path,action,response,Boolean(sourceRevision));
       if(action==='apply-pdf'&&sourceRevision){
         const applied=await onApplyPdf(`Local PDF core: ${selected.summary}`,Uint8Array.from(response.bytes),sourceRevision);
         if(!applied){
