@@ -37,6 +37,7 @@ import {imposePdfBooklet,PDF_BOOKLET_MAX_INPUT_BYTES} from './pdfBooklet';
 import {convertJsonToPdf,JSON_TO_PDF_MAX_INPUT_BYTES} from './jsonToPdf';
 import {convertMarkdownToPdf,MARKDOWN_TO_PDF_MAX_INPUT_BYTES} from './markdownToPdf';
 import {convertPlainTextToPdf,TEXT_TO_PDF_MAX_INPUT_BYTES} from './plainTextToPdf';
+import {convertEmlToPdf,EML_TO_PDF_MAX_BYTES} from './emlToPdf';
 import {convertCbzToPdf,CBZ_TO_PDF_MAX_SOURCE_BYTES} from './cbzToPdf';
 import { splitPdfByPageCount } from './splitByPageCount';
 import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput} from './pdfTwentyWorkflows';
@@ -99,6 +100,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   const [jsonToPdfFile,setJsonToPdfFile]=useState<File|null>(null);
   const [markdownToPdfFile,setMarkdownToPdfFile]=useState<File|null>(null);
   const [textToPdfFile,setTextToPdfFile]=useState<File|null>(null);
+  const [emlToPdfFile,setEmlToPdfFile]=useState<File|null>(null);
   const [visualSigner,setVisualSigner]=useState('');
   const [visualSignPage,setVisualSignPage]=useState('1');
   const [visualSignX,setVisualSignX]=useState('0.06');
@@ -543,6 +545,26 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }finally{setBusy(false);}
   }
 
+  async function saveOfflineEmlPdf(){
+    if(!emlToPdfFile||busy)return;
+    const file=emlToPdfFile;
+    setBusy(true);setError('');setNotice('');
+    try{
+      if(!file.size||file.size>EML_TO_PDF_MAX_BYTES){
+        throw new Error('EML to PDF requires an email file of at most 2 MB.');
+      }
+      const output=await convertEmlToPdf(new Uint8Array(await file.arrayBuffer()));
+      // EML conversion preserves no active PDF mutations.
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/pdf',bytes:Array.from(output),
+      },localExportStem(file.name.replace(/\.eml$/i,''))+'-mail-text');
+      setNotice(saved?('Saved text-only email PDF: '+saved):
+        'Email PDF export cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));setNotice('');
+    }finally{setBusy(false);}
+  }
+
   async function saveOfflineMarkdownPdf(){
     if(!markdownToPdfFile||busy)return;
     const file=markdownToPdfFile;
@@ -962,6 +984,17 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       <button type="button" disabled={busy||!jsonToPdfFile}
         onClick={()=>void saveOfflineJsonPdf()}>
         <FileOutput size={14}/>Convert JSON file to PDF (offline)
+      </button>
+    </details>}
+    {category==='convert'&&<details className="stirling-component-details" aria-label="Offline EML email to PDF conversion">
+      <summary>EML plain-text email to PDF (offline)</summary>
+      <p>Convert a local text/plain email or multipart/alternative MIME message to a searchable PDF, displaying headers and body as inert text. HTML-only messages, attachments, malformed encodings, and unsupported MIME parts are refused rather than fetching remote content or dropping attachments.</p>
+      <label className="stirling-field"><span>EML mail file</span>
+        <input type="file" accept=".eml,message/rfc822" disabled={busy}
+          onChange={event=>setEmlToPdfFile(event.target.files?.[0]??null)}/>
+      </label>
+      <button type="button" disabled={busy||!emlToPdfFile} onClick={()=>void saveOfflineEmlPdf()}>
+        <FileOutput size={14}/>Convert plain-text EML email to PDF (offline)
       </button>
     </details>}
     {category==='convert'&&<details className="stirling-component-details" aria-label="Offline plain-text to PDF conversion">
