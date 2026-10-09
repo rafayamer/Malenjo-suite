@@ -81,6 +81,21 @@ describe('offline PDF review annotation cleanup',()=>{
     await expect(removePdfReviewMarkup(original)).rejects.toThrow(/no supported review/);
   });
 
+  it('refuses mixed redaction and review markup rather than leaving unannounced redaction annotations',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([595,842]);
+    const annotations=pdf.context.obj([]);
+    page.node.set(annotsKey,annotations);
+    addAnnotation(pdf,annotations,'Text');
+    addAnnotation(pdf,annotations,'Redact');
+    const original=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const snapshot=Uint8Array.from(original);
+    await expect(removePdfReviewMarkup(original)).rejects.toThrow(/unapplied redaction markup/i);
+    expect(original).toEqual(snapshot);
+    const reopened=await PDFDocument.load(original);
+    expect(types(reopened)).toEqual(['/Text','/Redact']);
+  });
+
   it('refuses signature-bearing PDFs rather than breaking document signatures',async()=>{
     const pdf=await PDFDocument.create();
     const page=pdf.addPage();
