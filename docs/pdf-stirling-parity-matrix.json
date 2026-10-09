@@ -1865,26 +1865,38 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfToCbz.ts",
+          "src/suite/pdf/pageImageExport.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Export rasterized PDF pages to CBZ comic (offline)",
+        "provider": "MALENJO native PDF.js canvas and fflate",
+        "dependency": "Bundled PDF.js worker; fflate",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "exportPdfCbz"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfToCbz.test.ts",
+          "src/suite/pdf/pageImageExport.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfToCbz.test.ts",
+          "src/suite/pdf/pageImageExport.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "1–50 pages, 16 megapixels/page, 12 MB PNG/page, 100 MB in-memory images, 32 MB validated final ZIP."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Native CBZ rasterizes PDF pages into PNGs in a comic-book archive, losing searchable text, vector artwork and form/signature data. Archives exceeding 32 MB are refused. Physical Windows export/open acceptance remains outstanding."
       ]
     },
     {
@@ -4974,8 +4986,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 30,
-    "unverifiedSourceCount": 60,
+    "localSourcePartialCount": 31,
+    "unverifiedSourceCount": 59,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
