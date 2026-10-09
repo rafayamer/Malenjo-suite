@@ -192,7 +192,13 @@ export async function listPdfOutlineTree(bytes:Uint8Array):Promise<PdfOutlineTre
   const pages=new Map(source.pdf.getPages().map((page,index)=>[page.ref.toString(),index+1]));
   const output:PdfOutlineTreeEntry[]=[];
   walk(source.nodes,(node,depth,parentRef)=>{
-    const dest=node.dict.lookupMaybe(N('Dest'),PDFArray);
+    // Imported outlines can use named destinations (Name/String) rather
+    // than explicit /Dest arrays. Keep their actions intact and show an
+    // unknown page instead of throwing or rewriting the destination.
+    const destValue=node.dict.get(N('Dest'));
+    const dest=destValue instanceof PDFArray?destValue:
+      destValue instanceof PDFRef?
+        source.pdf.context.lookupMaybe(destValue,PDFArray):undefined;
     const target=dest?.get(0);
     output.push({
       ref:node.ref.toString(),title:titleText(node.dict),depth,parentRef,
