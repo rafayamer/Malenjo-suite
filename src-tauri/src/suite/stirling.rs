@@ -18,6 +18,7 @@ const STIRLING_BASE_URL: &str = "http://127.0.0.1:28970";
 const STIRLING_HEALTH_PATH: &str = "/api/v1/info/health";
 const STIRLING_OPENAPI_PATH: &str = "/v1/api-docs";
 const START_TIMEOUT: Duration = Duration::from_secs(75);
+const HEALTH_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
 const MAX_INPUT_BYTES: usize = 512 * 1024 * 1024;
 const MAX_OUTPUT_BYTES: usize = 512 * 1024 * 1024;
@@ -855,16 +856,24 @@ fn validate_api_path(base_url: &str, path: &str) -> Result<String, String> {
 }
 
 async fn health_payload(base_url: &str) -> Option<Value> {
-    let client = api_client().ok()?;
-    let response = client
-        .get(format!("{base_url}{STIRLING_HEALTH_PATH}"))
-        .send()
-        .await
-        .ok()?;
-    if !response.status().is_success() {
-        return None;
-    }
-    response.json::<Value>().await.ok()
+    // The ordinary PDF operation client permits 300-second requests.
+    // Startup and status probes must NOT inherit that timeout, especially
+    // while holding the process-start mutex across several document tabs.
+    tokio::time::timeout(HEALTH_PROBE_TIMEOUT, async {
+        let client = api_client().ok()?;
+        let response = client
+            .get(format!("{base_url}{STIRLING_HEALTH_PATH}"))
+            .send()
+            .await
+            .ok()?;
+        if !response.status().is_success() {
+            return None;
+        }
+        response.json::<Value>().await.ok()
+    })
+    .await
+    .ok()
+    .flatten()
 }
 
 async fn is_healthy(base_url: &str) -> bool {
