@@ -17,10 +17,13 @@ const java=resolve(dir,'bin/java.exe');
 const license=resolve(dir,'legal/java.base/LICENSE');
 const release=resolve(dir,'release');
 const manifestPath=resolve(dir,'malenjo-runtime-manifest.json');
-for(const file of [java,license,release,manifestPath]){
+const coreJar=resolve(root,'provider-packs/stirling-core/stirling-pdf.jar');
+for(const file of [java,license,release,manifestPath,coreJar]){
   if(!existsSync(file))throw Error('Windows offline installer cannot be built: missing '+file+'. Run scripts/build-temurin-runtime-windows.ps1 first.');
 }
+if(readFileSync(coreJar).length<1024)throw Error('Bundled Stirling provider jar is missing or empty.');
 const manifest=JSON.parse(readFileSync(manifestPath,'utf8'));
+
 if(manifest.version!=='25.0.4.1+1'||
    manifest.archiveSha256!=='00c847d804f4a78e9f04f2683faf14fed898535b177b7fc704486cb0284e9283'||
    manifest.component!=='temurin-windows-x64'||
@@ -33,4 +36,4 @@ const version=readFileSync(release,'utf8');
 if(!version.includes('JAVA_VERSION="25.0.4.1"')||!version.includes('IMPLEMENTOR="Eclipse Adoptium"')){
   throw Error('Bundled offline Java vendor or version metadata is unexpected.');
 }
-console.log('Windows installer offline Java runtime is present and verified against pinned manifest.');
+console.log('Windows installer offline Java runtime and Stirling core jar are present; Java matches the pinned manifest.');
