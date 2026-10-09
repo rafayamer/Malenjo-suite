@@ -111,6 +111,11 @@ pub fn run() {
             stirling_core_openapi,
             stirling_core_request
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running MALENJO Suite");
+        .build(tauri::generate_context!())
+        .expect("error while building MALENJO Suite")
+        .run(|_app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                suite::stirling::stop_owned_provider_on_exit();
+            }
+        });
 }

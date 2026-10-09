@@ -28,6 +28,20 @@ struct OwnedStirlingProcess {
     context_path: String,
 }
 
+impl Drop for OwnedStirlingProcess {
+    fn drop(&mut self) {
+        // Only terminate the JVM owned by this application, never a foreign port listener.
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+pub fn stop_owned_provider_on_exit() {
+    if let Ok(mut guard) = process_slot().lock() {
+        *guard = None;
+    }
+}
+
 // Native Tauri commands can arrive concurrently from multiple windows/tabs.
 // Serialize the complete spawn-and-health-check sequence, not only Child
 // assignment, so only one owned loopback Stirling process is ever launched.
