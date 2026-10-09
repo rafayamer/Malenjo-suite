@@ -44,7 +44,8 @@ describe('offline PDF Markdown HTML and CSV export',()=>{
     expect(md).toContain('\\# heading');
     expect(md).toContain('\\*\\*bold\\*\\*');
     expect(md).toContain('\\[link\\]\\(url\\)');
-    expect(md).toContain('<script>');
+    expect(md).toContain('&lt;script&gt;');
+    expect(md).not.toContain('<script>');
   });
   it('preserves multiline CSV text and blocks spreadsheet formulas in any cell',()=>{
     const csv=decode(serializePdfTextFormat(fixture(' \t=HYPERLINK("evil")\nnext'),'csv'));

@@ -12,7 +12,8 @@ function escapeHtml(value:string):string{
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'\uFFFD');
 }
 function escapeMarkdown(value:string):string{
-  return value.replace(/\\/g,'\\\\')
+  return value.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\\/g,'\\\\')
     .replace(/([\x60*_{}\[\]()#+.!|>~-])/g,'\\$1')
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'\uFFFD');
 }
