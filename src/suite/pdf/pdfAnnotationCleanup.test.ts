@@ -57,6 +57,30 @@ describe('offline PDF review annotation cleanup',()=>{
     expect(input).toEqual(snapshot);
   });
 
+  it('preserves links when separate pages share one indirect annotation array',async()=>{
+    const pdf=await PDFDocument.create();
+    const first=pdf.addPage([400,500]);
+    const second=pdf.addPage([400,500]);
+    const shared=pdf.context.obj([]);
+    const sharedRef=pdf.context.register(shared);
+    first.node.set(annotsKey,sharedRef);
+    second.node.set(annotsKey,sharedRef);
+    addAnnotation(pdf,shared,'Text');
+    addAnnotation(pdf,shared,'Link');
+    const original=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const snapshot=Uint8Array.from(original);
+
+    const result=await removePdfReviewMarkup(original);
+    const reopened=await PDFDocument.load(result.bytes);
+    expect(result.removed).toBe(1);
+    expect(types(reopened,0)).toEqual(['/Link']);
+    expect(types(reopened,1)).toEqual(['/Link']);
+    const firstArray=reopened.getPage(0).node.lookup(annotsKey,PDFArray);
+    const secondArray=reopened.getPage(1).node.lookup(annotsKey,PDFArray);
+    expect(firstArray).toBe(secondArray);
+    expect(original).toEqual(snapshot);
+  });
+
   it('preserves Popup annotations when their parent annotation is not removed',async()=>{
     const pdf=await PDFDocument.create();
     const page=pdf.addPage([400,400]);
