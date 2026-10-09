@@ -2322,28 +2322,37 @@
         ]
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/jsonToPdf.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Convert JSON file to PDF (offline)",
+        "provider": "MALENJO native pdf-lib JSON text report",
+        "dependency": "pdf-lib; bundled StandardFonts.Courier",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "convertJsonToPdf"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/jsonToPdf.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/jsonToPdf.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "2 MB UTF-8 JSON input, 64 hierarchy levels, 100k entries, 500k printable chars, 100 PDF pages, 16 MB output."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
         "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
         "Java conversion route appears only as a configuration entry in these audited source files.",
-        "Upstream endpoint group declaration is not executable proof; no live OpenAPI path or Windows result has been verified."
+        "Upstream endpoint group declaration is not executable proof; no live OpenAPI path or Windows result has been verified.",
+        "Native JSON-to-PDF produces a searchable, paginated, ASCII-escaped JSON report, not schema-aware object layouts, tables, forms, charts or full Stirling conversion fidelity. Installed Windows workflow acceptance outstanding."
       ]
     },
     {
@@ -5026,8 +5035,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 35,
-    "unverifiedSourceCount": 55,
+    "localSourcePartialCount": 36,
+    "unverifiedSourceCount": 54,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
