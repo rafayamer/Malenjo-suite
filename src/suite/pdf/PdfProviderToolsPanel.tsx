@@ -29,6 +29,7 @@ import {exportPdfCbz} from './pdfToCbz';
 import {exportPdfOfficeText,inspectPdfTextDocx,type PdfOfficeTextFormat} from './pdfOfficeText';
 import {exportPdfEpub,inspectPdfEpubArchive} from './pdfToEpub';
 import {proposePdfMetadataFilename} from './pdfAutoRename';
+import {convertJsonToPdf,JSON_TO_PDF_MAX_INPUT_BYTES} from './jsonToPdf';
 import { splitPdfByPageCount } from './splitByPageCount';
 import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput} from './pdfTwentyWorkflows';
 import {verifyProviderCompletion} from './pdfProviderCompletion';
@@ -87,6 +88,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   activeSourceRef.current=sourceBytes;
   const metadataInspectionRef=useRef(0);
   const [splitPagesPerPart,setSplitPagesPerPart]=useState('2');
+  const [jsonToPdfFile,setJsonToPdfFile]=useState<File|null>(null);
   const [paperSize,setPaperSize]=useState<PdfPaperSize>('A4');
   const [paperOrientation,setPaperOrientation]=useState<PdfPaperOrientation>('portrait');
   const [paperMargin,setPaperMargin]=useState('18');
@@ -482,6 +484,27 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }finally{setBusy(false);}
   }
 
+  async function saveOfflineJsonPdf(){
+    if(!jsonToPdfFile||busy)return;
+    const file=jsonToPdfFile;
+    setBusy(true);setError('');setNotice('');
+    try{
+      if(!file.size||file.size>JSON_TO_PDF_MAX_INPUT_BYTES){
+        throw new Error('JSON to PDF requires a file of at most 2 MB.');
+      }
+      const input=new Uint8Array(await file.arrayBuffer());
+      const output=await convertJsonToPdf(input);
+      if(jsonToPdfFile!==file)throw new Error('JSON source changed during conversion.');
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/pdf',bytes:Array.from(output),
+      },localExportStem(file.name.replace(/\.json$/i,''))+'-json-report');
+      setNotice(saved?('Saved JSON report as PDF: '+saved):
+        'JSON to PDF save cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));setNotice('');
+    }finally{setBusy(false);}
+  }
+
   async function applyOfflinePaperSize(){
     if(!sourceBytes||busy)return;
     setBusy(true);setError('');setNotice('');
@@ -717,6 +740,18 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         <FileOutput size={14}/>Remove review annotations (offline)
       </button>
     </div>
+    {category==='convert'&&<details className="stirling-component-details" aria-label="Offline JSON to PDF conversion">
+      <summary>JSON to PDF text report (offline)</summary>
+      <p>Choose a valid UTF-8 JSON document to create a paginated, searchable PDF report. This text-only conversion retains the JSON structure and renders non-ASCII characters as reversible JSON Unicode escapes. It does not infer tables, graphical layouts or PDF forms; maximum JSON source is 2 MB.</p>
+      <label className="stirling-field"><span>JSON document</span>
+        <input type="file" accept=".json,application/json" disabled={busy}
+          onChange={event=>setJsonToPdfFile(event.target.files?.[0]??null)}/>
+      </label>
+      <button type="button" disabled={busy||!jsonToPdfFile}
+        onClick={()=>void saveOfflineJsonPdf()}>
+        <FileOutput size={14}/>Convert JSON file to PDF (offline)
+      </button>
+    </details>}
     {category==='organize'&&sourceBytes&&<details className="stirling-component-details" aria-label="Native PDF paper size">
       <summary>Fit pages to A4 / Letter / Legal / A5 (offline)</summary>
       <p>Resize all pages while fitting existing page content inside the chosen paper size. This does not reflow paragraphs. For safety, documents with forms, signatures, links, annotations, rotated pages, or custom page boxes are refused instead of losing interactive content. This edit supports Undo.</p>
