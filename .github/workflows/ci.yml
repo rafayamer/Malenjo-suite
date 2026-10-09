@@ -508,6 +508,36 @@ jobs:
               }
             }
 
+            # Three additional 20-batch routes: exercise real Windows
+            # Java/PDFBox output, reopen with qpdf and verify page count.
+            # Parameters are taken from the pinned upstream smoke fixture.
+            $scaleOut = Join-Path (Resolve-Path ".build/provider-smoke") "scaled-a4.pdf"
+            & $curl --fail --silent --show-error -o $scaleOut `
+              -F "fileInput=@$fixture;type=application/pdf" -F "pageSize=A4" `
+              "$providerBase/api/v1/general/scale-pages"
+            if ($LASTEXITCODE -ne 0) { throw "Scale-pages failed on the pinned smoke fixture." }
+
+            $layoutOut = Join-Path (Resolve-Path ".build/provider-smoke") "layout-n-up.pdf"
+            & $curl --fail --silent --show-error -o $layoutOut `
+              -F "fileInput=@$fixture;type=application/pdf" -F "pagesPerSheet=2" `
+              "$providerBase/api/v1/general/multi-page-layout"
+            if ($LASTEXITCODE -ne 0) { throw "Multi-page layout failed on the pinned smoke fixture." }
+
+            $cropOut = Join-Path (Resolve-Path ".build/provider-smoke") "cropped.pdf"
+            & $curl --fail --silent --show-error -o $cropOut `
+              -F "fileInput=@$fixture;type=application/pdf" -F "x=0" -F "y=0" -F "width=100" -F "height=100" `
+              "$providerBase/api/v1/general/crop"
+            if ($LASTEXITCODE -ne 0) { throw "Crop failed on the pinned smoke fixture." }
+
+            foreach ($batchDoc in @($scaleOut, $layoutOut, $cropOut)) {
+              & $qpdf.FullName --check $batchDoc
+              if ($LASTEXITCODE -ne 0) { throw "Provider output cannot reopen in qpdf: $batchDoc" }
+              $batchPages = (& $qpdf.FullName --show-npages $batchDoc | Out-String).Trim()
+              if ($LASTEXITCODE -ne 0 -or $batchPages -ne '1') {
+                throw "Provider operation unexpectedly changed page count: $batchDoc ($batchPages)"
+              }
+            }
+
             $repairOut = Join-Path (Resolve-Path ".build/provider-smoke") "repair.pdf"
             & $curl --fail --silent --show-error -o $repairOut -F "fileInput=@$fixture;type=application/pdf" "$providerBase/api/v1/misc/repair"
             if ($LASTEXITCODE -ne 0) { throw "qpdf repair operation smoke failed." }
