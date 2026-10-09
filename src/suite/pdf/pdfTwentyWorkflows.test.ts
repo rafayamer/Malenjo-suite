@@ -21,6 +21,9 @@ function validPng():number[]{
     ...chunk('IEND',[])];
 }
 const png=validPng();
+const imageBytes=(encoded:string)=>Array.from(atob(encoded),char=>char.charCodeAt(0));
+const jpeg=imageBytes('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAACAAIDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDKooor7w+LP//Z');
+const tiff=imageBytes('SUkqAAgAAAAKAAABBAABAAAAAgAAAAEBBAABAAAAAgAAAAIBAwADAAAAhgAAAAMBAwABAAAAAQAAAAYBAwABAAAAAgAAABEBBAABAAAAjAAAABUBAwABAAAAAwAAABYBBAABAAAAAgAAABcBBAABAAAADAAAABwBAwABAAAAAQAAAAAAAAAIAAgACAAZfeEZfeEZfeEZfeE=');
 const csv=Array.from(new TextEncoder().encode('page,text\n1,hello\n'));
 const response=(bytes:number[],contentType='application/octet-stream',status=200):PdfProviderResponse=>({bytes,contentType,status});
 function live(path:string,method:'POST'|'GET'='POST'):PdfProviderOperation{
@@ -52,7 +55,9 @@ describe('20 source-pinned PDF processing workflows',()=>{
       workflow.output==='image'?response(png,'image/png'):
       workflow.output==='csv'?response(csv,'text/csv'):
       response(pdf,'application/pdf');
-    expect(await classifyPdfBatchOutput(workflow,good,responseIsPdf)).toBe(
+    if(workflow.id==='add-password'){
+      await expect(classifyPdfBatchOutput(workflow,good,responseIsPdf)).rejects.toThrow(/Protected PDF|Password protection/);
+    }else expect(await classifyPdfBatchOutput(workflow,good,responseIsPdf)).toBe(
       workflow.output==='pdf'?'apply-pdf':workflow.output==='copy'?'save-pdf-copy':'save-file',
     );
     await expect(classifyPdfBatchOutput(workflow,{...good,status:500},responseIsPdf)).rejects.toThrow();
@@ -65,6 +70,16 @@ describe('20 source-pinned PDF processing workflows',()=>{
     for(const item of workflows){
       expect(await classifyPdfBatchOutput(item,response(Array.from(zipSync({'sample.png':Uint8Array.from(png)})),'application/zip'),responseIsPdf)).toBe('save-file');
       await expect(classifyPdfBatchOutput(item,response(pdf,'application/pdf'),responseIsPdf)).rejects.toThrow();
+    }
+  });
+  it('accepts complete standalone and archived JPEG and TIFF exports, but not truncated files',async()=>{
+    for(const workflow of PDF_TWENTY_WORKFLOWS.filter(item=>item.output==='image')){
+      for(const [extension,bytes] of [['jpg',jpeg],['tiff',tiff]] as const){
+        expect(await classifyPdfBatchOutput(workflow,response(bytes,'image/'+extension),responseIsPdf)).toBe('save-file');
+        expect(await classifyPdfBatchOutput(workflow,response(Array.from(zipSync({['image.'+extension]:Uint8Array.from(bytes)})),'application/zip'),responseIsPdf)).toBe('save-file');
+        await expect(classifyPdfBatchOutput(workflow,response(bytes.slice(0,-10),'image/'+extension),responseIsPdf)).rejects.toThrow();
+        await expect(classifyPdfBatchOutput(workflow,response(Array.from(zipSync({['image.'+extension]:Uint8Array.from(bytes.slice(0,-10))})),'application/zip'),responseIsPdf)).rejects.toThrow();
+      }
     }
   });
   it('rejects false ZIP exports and invalid CSV bytes or MIME',async()=>{
@@ -97,7 +112,7 @@ describe('20 source-pinned PDF processing workflows',()=>{
     for(const id of ['add-password','sanitize-pdf']){
       const workflow=PDF_TWENTY_WORKFLOWS.find(item=>item.id===id)!;
       if(id==='sanitize-pdf')expect(await classifyPdfBatchOutput(workflow,response(pdf,'application/pdf'),responseIsPdf)).toBe('save-pdf-copy');
-      else await expect(classifyPdfBatchOutput(workflow,response(pdf,'application/pdf'),responseIsPdf)).rejects.toThrow(/Password protection/);
+      else await expect(classifyPdfBatchOutput(workflow,response(pdf,'application/pdf'),responseIsPdf)).rejects.toThrow(/Protected PDF|Password protection/);
     }
   });
 });

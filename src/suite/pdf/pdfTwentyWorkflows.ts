@@ -91,6 +91,90 @@ function imageMemberIsComplete(bytes:Uint8Array):boolean{
   }catch{return false;}
 }
 
+
+/** Validate the complete marker envelope and scan bounds of common JPEG files. */
+function jpegIsComplete(bytes:Uint8Array):boolean{
+  if(bytes.length<32||bytes[0]!==255||bytes[1]!==216)return false;
+  let pos=2,hasFrame=false,hasScan=false,scanBytes=0;
+  while(pos<bytes.length){
+    if(bytes[pos++]!==255)return false;
+    while(pos<bytes.length&&bytes[pos]===255)pos++;
+    if(pos>=bytes.length)return false;
+    const marker=bytes[pos++];
+    if(marker===217)return pos===bytes.length&&hasFrame&&hasScan&&scanBytes>0;
+    if(marker===216||marker===0||(marker>=208&&marker<=215))return false;
+    if(marker===1)continue;
+    if(pos+2>bytes.length)return false;
+    const length=bytes[pos]*256+bytes[pos+1];
+    if(length<2||pos+length>bytes.length)return false;
+    if((marker>=192&&marker<=207)&&![196,200,204].includes(marker)){
+      if(length<8)return false;
+      const height=bytes[pos+3]*256+bytes[pos+4];
+      const width=bytes[pos+5]*256+bytes[pos+6];
+      if(!width||!height||width>32768||height>32768)return false;
+      hasFrame=true;
+    }
+    if(marker===218){
+      if(!hasFrame||length<6)return false;
+      hasScan=true;pos+=length;
+      while(pos<bytes.length){
+        if(bytes[pos]!==255){scanBytes++;pos++;continue;}
+        if(pos+1>=bytes.length)return false;
+        const next=bytes[pos+1];
+        if(next===0||(next>=208&&next<=215)){scanBytes++;pos+=2;continue;}
+        break;
+      }
+    }else pos+=length;
+  }
+  return false;
+}
+/** Validate standard TIFF IFDs, dimensions and on-disk strip/tile extents. */
+function tiffIsComplete(bytes:Uint8Array):boolean{
+  if(bytes.length<40)return false;
+  const le=bytes[0]===73&&bytes[1]===73;
+  if(!le&&!(bytes[0]===77&&bytes[1]===77))return false;
+  const u16=(p:number)=>p+2<=bytes.length?(le?bytes[p]+bytes[p+1]*256:bytes[p]*256+bytes[p+1]):-1;
+  const u32=(p:number)=>p+4<=bytes.length?(le?
+    (bytes[p]+bytes[p+1]*256+bytes[p+2]*65536+bytes[p+3]*16777216)>>>0:
+    (bytes[p]*16777216+bytes[p+1]*65536+bytes[p+2]*256+bytes[p+3])>>>0):-1;
+  if(u16(2)!==42)return false;
+  let offset=u32(4),pages=0;
+  const seen=new Set<number>();
+  while(offset!==0){
+    if(offset<8||seen.has(offset)||++pages>100||offset+6>bytes.length)return false;
+    seen.add(offset);
+    const count=u16(offset),end=offset+2+count*12;
+    if(count<=0||count>4096||end+4>bytes.length)return false;
+    const tags=new Map<number,number[]>();
+    for(let i=0;i<count;i++){
+      const p=offset+2+i*12,tag=u16(p),type=u16(p+2),items=u32(p+4);
+      if(![3,4].includes(type)||items<=0||items>8192)continue;
+      const unit=type===3?2:4,span=unit*items;
+      const start=span<=4?p+8:u32(p+8);
+      if(start<0||start+span>bytes.length)return false;
+      if([256,257,259,273,279,277,324,325].includes(tag)){
+        const values:number[]=[];
+        for(let j=0;j<items;j++)values.push(type===3?u16(start+j*2):u32(start+j*4));
+        tags.set(tag,values);
+      }
+    }
+    const width=tags.get(256)?.[0],height=tags.get(257)?.[0];
+    if(!width||!height||width>32768||height>32768)return false;
+    const offsets=tags.get(273)??tags.get(324);
+    const counts=tags.get(279)??tags.get(325);
+    if(!offsets||!counts||offsets.length!==counts.length||offsets.length>8192)return false;
+    for(let i=0;i<offsets.length;i++){
+      if(!counts[i]||offsets[i]<8||offsets[i]+counts[i]>bytes.length)return false;
+    }
+    offset=u32(end);
+    if(offset<0)return false;
+  }
+  return pages>0;
+}
+function verifiedImage(bytes:Uint8Array):boolean{
+  return imageMemberIsComplete(bytes)||jpegIsComplete(bytes)||tiffIsComplete(bytes);
+}
+
 export async function verifyPdfBatchZip(bytes:number[],kind:'pdf'|'image'='pdf'):Promise<void>{
   if(bytes.length>MAX_ZIP_BYTES)throw new Error('ZIP export exceeds 32 MB inspection limit.');
   let total=0,files=0;
@@ -118,7 +202,7 @@ export async function verifyPdfBatchZip(bytes:number[],kind:'pdf'|'image'='pdf')
     if(kind==='pdf'){
       try{const doc=await PDFDocument.load(entry,{ignoreEncryption:false,updateMetadata:false});if(doc.getPageCount()<1)throw new Error('Empty PDF');}
       catch{throw new Error('ZIP export contains a damaged or unreadable PDF.');}
-    }else if(!imageMemberIsComplete(entry))throw new Error('Image ZIP export contains an incomplete or unsupported image.');
+    }else if(!verifiedImage(entry))throw new Error('Image ZIP export contains an incomplete or unsupported image.');
   }
 }
 function isImage(bytes:number[]):boolean{
@@ -171,11 +255,8 @@ export async function classifyPdfBatchOutput(
     await verifyPdfBatchZip(response.bytes,'pdf');
   }
   if(workflow.output==='image'&&isZip(response.bytes))await verifyPdfBatchZip(response.bytes,'image');
-  if(workflow.output==='image'&&!isZip(response.bytes)&&!imageMemberIsComplete(Uint8Array.from(response.bytes))){
+  if(workflow.output==='image'&&!isZip(response.bytes)&&!verifiedImage(Uint8Array.from(response.bytes))){
     throw new Error('Image export contains an incomplete or unsupported image.');
-  }
-  if(workflow.output==='image'&&!isZip(response.bytes)&&!isImage(response.bytes)){
-    throw new Error(workflow.label+' did not return a supported image/ZIP export.');
   }
   if(workflow.output==='csv'){
     if(/text\/html|application\/json|application\/pdf/i.test(response.contentType??'')){
