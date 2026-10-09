@@ -25,7 +25,7 @@ import { extractPdfDocumentText } from './textExport';
 import { exportPdfStructuredJson } from './pdfToJson';
 import { exportPdfStructuredXml } from './pdfToXml';
 import { splitPdfByPageCount } from './splitByPageCount';
-import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput} from './pdfTwentyWorkflows';
+import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput,verifyPdfBatchZip} from './pdfTwentyWorkflows';
 import {fitPdfToPaper,type PdfPaperSize,type PdfPaperOrientation} from './pdfPaperResize';
 import {validatePdfUploadPlan,validatePdfOperationValue} from './providerRequestGuard';
 
@@ -248,7 +248,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     setBusy(true);setError('');setNotice('');
     try{
       const count=Number(splitPagesPerPart);
-      const result=await splitPdfByPageCount(sourceBytes,count);
+      const result=await splitPdfByPageCount(sourceBytes,count,32*1024*1024);
       // Provider.saveResponse currently bridges bytes as number[]. Keep the
       // small-document fallback bounded until binary streaming IPC is added.
       if(result.archive.byteLength>32*1024*1024){
@@ -437,6 +437,17 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       const action=batchWorkflow
         ?await classifyPdfBatchOutput(batchWorkflow,response,provider.responseIsPdf)
         :classifyPdfProviderResult(response,selected.path,provider.responseIsPdf);
+      if(!batchWorkflow&&['/api/v1/general/split-pages','/api/v1/general/split-by-size-or-count'].includes(selected.path)){
+        if(action!=='save-file')throw new Error('Split operation returned a PDF instead of a ZIP. No output was saved.');
+        await verifyPdfBatchZip(response.bytes,'pdf');
+      }
+      // With an uploaded input but no active workspace, apply-pdf takes the
+      // export path. Reopen the PDF before reporting a successful save.
+      if(action==='apply-pdf'&&!sourceRevision){
+        const verified=await loadPdfBytes(Uint8Array.from(response.bytes));
+        try{if(verified.document.numPages<1)throw new Error('Provider returned an empty PDF.');}
+        finally{await disposePdf(verified);}
+      }
       if(action==='apply-pdf'&&sourceRevision){
         const applied=await onApplyPdf(`Local PDF core: ${selected.summary}`,Uint8Array.from(response.bytes),sourceRevision);
         if(!applied){

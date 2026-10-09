@@ -580,6 +580,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       }
       const targetPage=Math.max(1,preferredPage);
       if (!await installPdf(result,sourceName,browserFile,true)) return false;
+      // installPdf awaits old-worker teardown; another load may have started
+      // after the initial check and installed a different document meanwhile.
+      if(requestIdRef.current!==sourceRevision+1||replacementPendingRef.current){
+        throw new Error('The document was replaced during PDF installation. Stale history was not recorded.');
+      }
       historyRef.current=historyRef.current
         ? recordPdfHistory(historyRef.current,result,targetPage,label)
         : recordPdfHistory(createPdfHistory(sourceBytes,currentPage),result,targetPage,label);

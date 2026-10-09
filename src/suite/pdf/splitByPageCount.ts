@@ -35,8 +35,11 @@ function refusesSignedOrInteractive(pdf:PDFDocument):void{
  * signed documents are deliberately refused.
  */
 export async function splitPdfByPageCount(
-  source:Uint8Array,pagesPerPart:number,
+  source:Uint8Array,pagesPerPart:number,maxArchiveBytes=PDF_SPLIT_MAX_OUTPUT_BYTES,
 ):Promise<PdfPageCountSplitResult>{
+  if(!Number.isSafeInteger(maxArchiveBytes)||maxArchiveBytes<1024||maxArchiveBytes>PDF_SPLIT_MAX_OUTPUT_BYTES){
+    throw new Error('Split archive budget must be between 1 KB and 256 MB.');
+  }
   if(source.byteLength<5||source.byteLength>PDF_SPLIT_MAX_INPUT_BYTES){
     throw new Error('Offline page-count splitting accepts PDFs up to 128 MB.');
   }
@@ -63,6 +66,10 @@ export async function splitPdfByPageCount(
   const files:Record<string,Uint8Array>={};
   const pageCounts:number[]=[];
   let total=0;
+  // ZIP central directory and local headers add at least 30+46 bytes/member;
+  // reserve extra bytes per output so we fail before allocating the final ZIP.
+  const archiveBudget=maxArchiveBytes-parts*256-128;
+  if(archiveBudget<=0)throw new Error('Split output exceeds the configured archive budget.');
   for(let start=0;start<count;start+=pagesPerPart){
     const next=await PDFDocument.create();
     const indices=Array.from({length:Math.min(pagesPerPart,count-start)},(_,i)=>start+i);
@@ -70,8 +77,8 @@ export async function splitPdfByPageCount(
     copied.forEach(page=>next.addPage(page));
     const bytes=Uint8Array.from(await next.save({useObjectStreams:false}));
     total+=bytes.byteLength;
-    if(total>PDF_SPLIT_MAX_OUTPUT_BYTES){
-      throw new Error('The split output exceeds the 256 MB safety limit; use smaller input documents.');
+    if(total>archiveBudget){
+      throw new Error('The split output exceeds the configured archive budget; use smaller input documents.');
     }
     // Verify every standalone PDF before placing it into the returned archive.
     const reopened=await PDFDocument.load(bytes,{updateMetadata:false});
@@ -83,8 +90,8 @@ export async function splitPdfByPageCount(
     pageCounts.push(indices.length);
   }
   const archive=zipSync(files,{level:0});
-  if(archive.byteLength>PDF_SPLIT_MAX_OUTPUT_BYTES){
-    throw new Error('The split ZIP exceeds the 256 MB safety limit.');
+  if(archive.byteLength>maxArchiveBytes){
+    throw new Error('The split ZIP exceeds the configured archive budget.');
   }
   return {archive,pageCounts,sourcePageCount:count};
 }

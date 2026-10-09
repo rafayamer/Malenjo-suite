@@ -36,6 +36,10 @@ describe('native offline PDF count-based splitter',()=>{
     expect(source).toEqual(original);
   });
 
+  it('rejects output during page generation when the caller archive budget is exhausted',async()=>{
+    await expect(splitPdfByPageCount(await sample(5),1,1024)).rejects.toThrow(/archive budget/);
+    await expect(splitPdfByPageCount(await sample(5),1,512)).rejects.toThrow(/archive budget/);
+  });
   it('supports a single page per part without rewriting the input',async()=>{
     const result=await splitPdfByPageCount(await sample(3),1);
     expect(result.pageCounts).toEqual([1,1,1]);
