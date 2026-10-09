@@ -30,6 +30,7 @@ import {exportPdfOfficeText,inspectPdfTextDocx,inspectPdfTextOdt,type PdfOfficeT
 import {exportPdfEpub,inspectPdfEpubArchive} from './pdfToEpub';
 import {proposePdfMetadataFilename} from './pdfAutoRename';
 import {unlockReadOnlyPdfFormFields} from './formUnlock';
+import {inspectPdfStructuralSafety,serializePdfPreflightJson} from './pdfPreflight';
 import {imposePdfBooklet,PDF_BOOKLET_MAX_INPUT_BYTES} from './pdfBooklet';
 import {convertJsonToPdf,JSON_TO_PDF_MAX_INPUT_BYTES} from './jsonToPdf';
 import {convertCbzToPdf,CBZ_TO_PDF_MAX_SOURCE_BYTES} from './cbzToPdf';
@@ -577,6 +578,30 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }finally{setBusy(false);}
   }
 
+  async function saveOfflineSecurityInspection(includeScriptText:boolean){
+    if(!sourceBytes||busy)return;
+    const revision=sourceBytes;
+    setBusy(true);setError('');setNotice('');
+    try{
+      const report=await inspectPdfStructuralSafety(revision);
+      const output=serializePdfPreflightJson(report,includeScriptText);
+      if(activeSourceRef.current!==revision){
+        throw new Error('Working PDF changed during inspection. Stale report was not exported.');
+      }
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/json',bytes:Array.from(output),
+      },localExportStem(sourceName)+(includeScriptText?'-inert-javascript':'-structural-preflight'));
+      setNotice(saved
+        ?('Saved '+(includeScriptText?'inert JavaScript inventory':'PDF preflight report')+
+          ': '+saved+' ('+report.pageCount+' pages, '+report.embeddedJavaScriptCount+
+          ' script entries). This is not signature or PDF/A validation.')
+        :'PDF inspection export cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+      setNotice('');
+    }finally{setBusy(false);}
+  }
+
   async function applyOfflinePaperSize(){
     if(!sourceBytes||busy)return;
     setBusy(true);setError('');setNotice('');
@@ -770,6 +795,12 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       <button disabled={busy} onClick={()=>void refresh(Boolean(status?.running))}><RefreshCw size={14}/>Refresh</button>
       <button disabled={busy||!sourceBytes} onClick={()=>void saveLocalPdfInfo()}>
         <FileOutput size={14}/>Export PDF information (offline)
+      </button>
+      <button disabled={busy||!sourceBytes} onClick={()=>void saveOfflineSecurityInspection(false)}>
+        <FileOutput size={14}/>Inspect PDF structure and security warnings (offline)
+      </button>
+      <button disabled={busy||!sourceBytes} onClick={()=>void saveOfflineSecurityInspection(true)}>
+        <FileOutput size={14}/>List embedded PDF JavaScript as inert text (offline)
       </button>
       <button disabled={busy||!sourceBytes} onClick={()=>void saveMetadataNamedPdfCopy()}>
         <FileOutput size={14}/>Save PDF copy named from metadata title (offline)
