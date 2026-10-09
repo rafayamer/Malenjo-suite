@@ -33,6 +33,7 @@ import {unlockReadOnlyPdfFormFields} from './formUnlock';
 import {inspectPdfStructuralSafety,serializePdfPreflightJson} from './pdfPreflight';
 import {imposePdfBooklet,PDF_BOOKLET_MAX_INPUT_BYTES} from './pdfBooklet';
 import {convertJsonToPdf,JSON_TO_PDF_MAX_INPUT_BYTES} from './jsonToPdf';
+import {convertMarkdownToPdf,MARKDOWN_TO_PDF_MAX_INPUT_BYTES} from './markdownToPdf';
 import {convertCbzToPdf,CBZ_TO_PDF_MAX_SOURCE_BYTES} from './cbzToPdf';
 import { splitPdfByPageCount } from './splitByPageCount';
 import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput} from './pdfTwentyWorkflows';
@@ -93,6 +94,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   const metadataInspectionRef=useRef(0);
   const [splitPagesPerPart,setSplitPagesPerPart]=useState('2');
   const [jsonToPdfFile,setJsonToPdfFile]=useState<File|null>(null);
+  const [markdownToPdfFile,setMarkdownToPdfFile]=useState<File|null>(null);
   const [cbzToPdfFile,setCbzToPdfFile]=useState<File|null>(null);
   const [paperSize,setPaperSize]=useState<PdfPaperSize>('A4');
   const [paperOrientation,setPaperOrientation]=useState<PdfPaperOrientation>('portrait');
@@ -514,6 +516,26 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }finally{setBusy(false);}
   }
 
+  async function saveOfflineMarkdownPdf(){
+    if(!markdownToPdfFile||busy)return;
+    const file=markdownToPdfFile;
+    setBusy(true);setError('');setNotice('');
+    try{
+      if(!file.size||file.size>MARKDOWN_TO_PDF_MAX_INPUT_BYTES){
+        throw new Error('Markdown to PDF requires a file of at most 2 MB.');
+      }
+      const output=await convertMarkdownToPdf(new Uint8Array(await file.arrayBuffer()));
+      if(markdownToPdfFile!==file)throw new Error('Markdown source changed during conversion.');
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/pdf',bytes:Array.from(output),
+      },localExportStem(file.name.replace(/\.(?:md|markdown|txt)$/i,''))+'-markdown');
+      setNotice(saved?('Saved Markdown PDF: '+saved):'Markdown PDF export cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+      setNotice('');
+    }finally{setBusy(false);}
+  }
+
   async function saveOfflineCbzPdf(){
     if(!cbzToPdfFile||busy)return;
     const file=cbzToPdfFile;
@@ -868,6 +890,18 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       <button type="button" disabled={busy||!jsonToPdfFile}
         onClick={()=>void saveOfflineJsonPdf()}>
         <FileOutput size={14}/>Convert JSON file to PDF (offline)
+      </button>
+    </details>}
+    {category==='convert'&&<details className="stirling-component-details" aria-label="Offline Markdown to PDF conversion">
+      <summary>Markdown to PDF report (offline)</summary>
+      <p>Render UTF-8 Markdown headings, paragraphs, lists, quotes and code to a paginated PDF. No embedded HTML execution or network access. Complex tables, images and Unicode fonts are not reconstructed; characters outside bundled WinAnsi fonts become visible escape sequences.</p>
+      <label className="stirling-field"><span>Markdown document</span>
+        <input type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" disabled={busy}
+          onChange={event=>setMarkdownToPdfFile(event.target.files?.[0]??null)}/>
+      </label>
+      <button type="button" disabled={busy||!markdownToPdfFile}
+        onClick={()=>void saveOfflineMarkdownPdf()}>
+        <FileOutput size={14}/>Convert Markdown file to PDF (offline)
       </button>
     </details>}
     {category==='forms'&&sourceBytes&&<div className="stirling-provider-actions">
