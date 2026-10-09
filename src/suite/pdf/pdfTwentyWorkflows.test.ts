@@ -1,4 +1,4 @@
-import {zipSync,strToU8} from 'fflate';
+import {zipSync,strToU8,zlibSync} from 'fflate';
 import {PDFDocument} from 'pdf-lib';
 import {describe,expect,it} from 'vitest';
 import matrix from '../../../docs/pdf-stirling-parity-matrix.json';
@@ -7,7 +7,20 @@ import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput,verify
 import {responseIsPdf} from './stirlingCore';
 const pdf=Array.from(await (async()=>{const d=await PDFDocument.create();d.addPage([200,200]);return d.save();})());
 const zip=Array.from(zipSync({'one.pdf':Uint8Array.from(pdf)}));
-const png=[137,80,78,71,13,10,26,10,0];
+function validPng():number[]{
+  const be=(x:number)=>[(x>>>24)&255,(x>>>16)&255,(x>>>8)&255,x&255];
+  const chunk=(name:string,data:number[]):number[]=>{
+    const payload=[...Array.from(name).map(c=>c.charCodeAt(0)),...data];
+    let crc=0xffffffff;
+    for(const value of payload){crc^=value;for(let j=0;j<8;j++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}
+    return [...be(data.length),...payload,...be((crc^0xffffffff)>>>0)];
+  };
+  return [137,80,78,71,13,10,26,10,
+    ...chunk('IHDR',[...be(1),...be(1),8,6,0,0,0]),
+    ...chunk('IDAT',Array.from(zlibSync(Uint8Array.from([0,200,80,40,255])))),
+    ...chunk('IEND',[])];
+}
+const png=validPng();
 const csv=Array.from(new TextEncoder().encode('page,text\n1,hello\n'));
 const response=(bytes:number[],contentType='application/octet-stream',status=200):PdfProviderResponse=>({bytes,contentType,status});
 function live(path:string,method:'POST'|'GET'='POST'):PdfProviderOperation{
@@ -71,6 +84,7 @@ describe('20 source-pinned PDF processing workflows',()=>{
     await expect(verifyPdfBatchZip(zip)).resolves.toBeUndefined();
     await expect(verifyPdfBatchZip(Array.from(zipSync({'bad.pdf':strToU8('%PDF-')})))).rejects.toThrow(/unreadable PDF/);
     await expect(verifyPdfBatchZip([80,75,3,4,0,0], 'image')).rejects.toThrow();
+    await expect(verifyPdfBatchZip(Array.from(zipSync({'broken.png':Uint8Array.from(png.slice(0,20))})),'image')).rejects.toThrow(/incomplete/);
     await expect(verifyPdfBatchZip(Array.from(zipSync({'image.png':Uint8Array.from(png)})),'image')).resolves.toBeUndefined();
   });
   it('keeps password and sanitization outputs as copies',async()=>{
