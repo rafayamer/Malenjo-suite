@@ -30,6 +30,7 @@ import {exportPdfOfficeText,inspectPdfTextDocx,inspectPdfTextOdt,type PdfOfficeT
 import {exportPdfEpub,inspectPdfEpubArchive} from './pdfToEpub';
 import {proposePdfMetadataFilename} from './pdfAutoRename';
 import {unlockReadOnlyPdfFormFields} from './formUnlock';
+import {imposePdfBooklet,PDF_BOOKLET_MAX_INPUT_BYTES} from './pdfBooklet';
 import {convertJsonToPdf,JSON_TO_PDF_MAX_INPUT_BYTES} from './jsonToPdf';
 import {convertCbzToPdf,CBZ_TO_PDF_MAX_SOURCE_BYTES} from './cbzToPdf';
 import { splitPdfByPageCount } from './splitByPageCount';
@@ -554,6 +555,28 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }finally{setBusy(false);}
   }
 
+  async function saveOfflineBooklet(){
+    if(!sourceBytes||busy)return;
+    const revision=sourceBytes;
+    setBusy(true);setError('');setNotice('');
+    try{
+      if(!revision.byteLength||revision.byteLength>PDF_BOOKLET_MAX_INPUT_BYTES){
+        throw new Error('Booklet conversion supports source PDFs of at most 32 MB.');
+      }
+      const result=await imposePdfBooklet(revision);
+      if(activeSourceRef.current!==revision){
+        throw new Error('PDF changed during booklet conversion; stale output was not saved.');
+      }
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/pdf',bytes:Array.from(result),
+      },localExportStem(sourceName)+'-booklet');
+      setNotice(saved?('Saved two-up booklet PDF: '+saved):
+        'Booklet export save cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));setNotice('');
+    }finally{setBusy(false);}
+  }
+
   async function applyOfflinePaperSize(){
     if(!sourceBytes||busy)return;
     setBusy(true);setError('');setNotice('');
@@ -822,6 +845,13 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       </button>
       <small>Clears AcroForm read-only flags only. Refuses encrypted, signed or XFA PDFs and never removes password permissions.</small>
     </div>}
+    {category==='organize'&&sourceBytes&&<details className="stirling-component-details" aria-label="Offline PDF booklet imposition">
+      <summary>Arrange PDF pages as a saddle-stitch booklet (offline)</summary>
+      <p>Create double-page landscape spreads ordered for left-to-right duplex booklet printing, with blank pages added when necessary. PDF vector content is preserved; interactive fields, annotations, signed documents, links, bookmarks and rotated pages are refused rather than silently lost. Exported booklet is a separate PDF copy.</p>
+      <button type="button" disabled={busy} onClick={()=>void saveOfflineBooklet()}>
+        <FileOutput size={14}/>Export two-up booklet PDF
+      </button>
+    </details>}
     {category==='organize'&&sourceBytes&&<details className="stirling-component-details" aria-label="Native PDF paper size">
       <summary>Fit pages to A4 / Letter / Legal / A5 (offline)</summary>
       <p>Resize all pages while fitting existing page content inside the chosen paper size. This does not reflow paragraphs. For safety, documents with forms, signatures, links, annotations, rotated pages, or custom page boxes are refused instead of losing interactive content. This edit supports Undo.</p>
