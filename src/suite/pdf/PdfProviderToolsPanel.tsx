@@ -28,7 +28,7 @@ interface Props{
   sourceBytes:Uint8Array|null;
   sourceName:string;
   category:PdfProviderToolCategory;
-  onApplyPdf(label:string,bytes:Uint8Array):boolean|Promise<boolean>;
+  onApplyPdf(label:string,bytes:Uint8Array,expectedSource:Uint8Array):boolean|Promise<boolean>;
 }
 
 function defaultFieldValue(field:PdfProviderOperationField):string{
@@ -194,7 +194,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     setBusy(true);setError('');setNotice('');
     try{
       const output=await updatePdfBasicMetadata(sourceBytes,metadataDraft);
-      const applied=await onApplyPdf('Updated PDF metadata (offline)',output);
+      const applied=await onApplyPdf('Updated PDF metadata (offline)',output,sourceBytes);
       if(!applied)throw new Error('PDF metadata changes could not be applied; the original working copy was preserved.');
       setMetadataEditorOpen(false);
       setNotice('PDF metadata updated in the working copy. Save or export the document to keep the change.');
@@ -214,7 +214,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     try{
       const result=await removePdfReviewMarkup(sourceBytes);
       const applied=await onApplyPdf(
-        'Removed '+result.removed+' review annotations (offline)',result.bytes,
+        'Removed '+result.removed+' review annotations (offline)',result.bytes,sourceBytes,
       );
       if(!applied)throw new Error('Review cleanup could not be applied. The original working copy is unchanged.');
       setNotice('Removed '+result.removed+' review annotations from the working PDF. Save or export to keep the result.');
@@ -306,7 +306,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       const response=await provider.run(selected,fields,files);
       const action=classifyPdfProviderResult(response,selected.path,provider.responseIsPdf);
       if(action==='apply-pdf'){
-        const applied=await onApplyPdf(`Local PDF core: ${selected.summary}`,Uint8Array.from(response.bytes));
+        const applied=await onApplyPdf(`Local PDF core: ${selected.summary}`,Uint8Array.from(response.bytes),sourceBytes!);
         if(!applied){
           throw new Error('The generated PDF could not be applied. The original working document was preserved.');
         }
