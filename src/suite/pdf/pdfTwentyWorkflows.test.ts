@@ -69,7 +69,7 @@ describe('20 source-pinned PDF processing workflows',()=>{
     await expect(verifyPdfBatchZip(Array.from(zipSync({'evil.pdf':strToU8('<html>')})))).rejects.toThrow(/unreadable PDF/i);
     await expect(verifyPdfBatchZip(Array.from(zipSync({'evil.txt':strToU8('hi')})))).rejects.toThrow(/file type/i);
     await expect(verifyPdfBatchZip(zip)).resolves.toBeUndefined();
-    await expect(verifyPdfBatchZip(Array.from(zipSync({'bad.pdf':strToU8('%PDF-')})).rejects.toThrow(/unreadable PDF/);
+    await expect(verifyPdfBatchZip(Array.from(zipSync({'bad.pdf':strToU8('%PDF-')})))).rejects.toThrow(/unreadable PDF/);
     await expect(verifyPdfBatchZip([80,75,3,4,0,0], 'image')).rejects.toThrow();
     await expect(verifyPdfBatchZip(Array.from(zipSync({'image.png':Uint8Array.from(png)})),'image')).resolves.toBeUndefined();
   });

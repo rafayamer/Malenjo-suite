@@ -57,6 +57,10 @@ export async function fitPdfToPaper(
   }
   // Validate all pages before changing any: no partially modified exports.
   for(const [index,page] of pdf.getPages().entries()){
+    const unitValue=page.node.get(PDFName.of('UserUnit'));
+    if(unitValue&&pdf.context.lookup(unitValue)?.toString()!=='1'){
+      throw new Error('Page '+(index+1)+' has a non-default /UserUnit; physical page-size conversion is refused.');
+    }
     const box=page.getMediaBox();
     const crop=page.getCropBox(),trim=page.getTrimBox(),bleed=page.getBleedBox(),art=page.getArtBox();
     if(!Number.isFinite(box.width)||!Number.isFinite(box.height)||box.width<=0||box.height<=0){

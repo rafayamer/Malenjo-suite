@@ -85,6 +85,13 @@ describe('native PDF paper-size fitting',()=>{
       paper:'A4',orientation:'portrait',marginPt:0,
     })).rejects.toThrow(/custom page boxes/);
   });
+  it('rejects non-default user units that change physical paper dimensions',async()=>{
+    const doc=await read(await sample(1));
+    doc.getPage(0).node.set(PDFName.of('UserUnit'),doc.context.obj(2));
+    await expect(fitPdfToPaper(Uint8Array.from(await doc.save()),{
+      paper:'A4',orientation:'portrait',marginPt:0,
+    })).rejects.toThrow(/UserUnit/);
+  });
   it('refuses rotated pages to avoid changing visual orientation',async()=>{
     const doc=await read(await sample(1));
     doc.getPage(0).setRotation(degrees(90));

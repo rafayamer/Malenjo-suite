@@ -25,6 +25,14 @@ function addAnnotation(pdf:PDFDocument,array:PDFArray,subtype:string,parent?:PDF
 }
 
 describe('offline PDF review annotation cleanup',()=>{
+  it('refuses direct catalog permission signatures',async()=>{
+    const doc=await PDFDocument.create();
+    const page=doc.addPage([300,400]);
+    addAnnotation(doc,page.node.lookup(annotsKey,PDFArray),'Text');
+    doc.catalog.set(PDFName.of('Perms'),doc.context.obj({DocMDP:{Type:PDFName.of('Sig')}}));
+    const bytes=Uint8Array.from(await doc.save({useObjectStreams:false}));
+    await expect(removePdfReviewMarkup(bytes)).rejects.toThrow(/certification or usage-right/);
+  });
   it('removes notes, highlights and their popups while preserving links, form widgets and page content',async()=>{
     const pdf=await PDFDocument.create();
     const page=pdf.addPage([595,842]);

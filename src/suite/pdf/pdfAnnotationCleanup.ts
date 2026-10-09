@@ -24,6 +24,9 @@ export interface PdfReviewRemovalResult{
 }
 
 function assertUnsigned(pdf:PDFDocument):void{
+  if(pdf.catalog.has(PDFName.of('Perms'))){
+    throw new Error('This PDF contains certification or usage-right permissions; annotation cleanup could invalidate a signature.');
+  }
   for(const [,object] of pdf.context.enumerateIndirectObjects()){
     if(!(object instanceof PDFDict))continue;
     if(object.has(BYTE_RANGE)||
