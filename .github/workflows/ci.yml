@@ -88,8 +88,6 @@ jobs:
               !(Test-Path 'runtime/java/bin/java.exe')) {
             throw 'The bundled runtime or its required GPL/ClassPath license text is missing.'
           }
-          node scripts/verify-offline-runtime.mjs --windows
-          if ($LASTEXITCODE -ne 0) { throw 'Windows release packaging Java runtime gate failed.' }
       - name: Build approved qpdf Windows provider pack
         shell: pwsh
         run: |
@@ -300,6 +298,11 @@ jobs:
             throw "Generated Stirling dependency-license report does not contain the embedded Office converter."
           }
           $null = $licenseText | ConvertFrom-Json
+      - name: Verify offline Windows installer bundle prerequisites
+        shell: pwsh
+        run: |
+          node scripts/verify-offline-runtime.mjs --windows
+          if ($LASTEXITCODE -ne 0) { throw 'Windows release package prerequisite check failed.' }
       - name: Smoke-test local Windows PDF provider
         shell: pwsh
         run: |
