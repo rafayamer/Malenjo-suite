@@ -179,7 +179,23 @@ export function inspectPdfRasterPptx(bytes:Uint8Array):{slideCount:number;images
   if(bytes.length<100||bytes.length>PDF_SLIDES_MAX_OUTPUT_BYTES){
     throw new Error('PowerPoint archive is empty or too large.');
   }
-  const files=unzipSync(bytes);
+  let extracted=0,files:Record<string,Uint8Array>;
+  try{
+    files=unzipSync(bytes,{filter:(entry)=>{
+      if(entry.originalSize>PDF_SLIDES_MAX_OUTPUT_BYTES-extracted){
+        throw new Error('PowerPoint decompression exceeds the 34 MB inspection budget.');
+      }
+      if(entry.name.startsWith('/')||entry.name.includes('\\')||
+         entry.name.split('/').some(part=>part==='..'||part==='.')||
+         /[\u0000-\u001f]/.test(entry.name)){
+        throw new Error('PowerPoint contains an unsafe package path.');
+      }
+      extracted+=entry.originalSize;
+      return true;
+    }});
+  }catch(error){
+    throw new Error('PowerPoint package is invalid or unsafe: '+(error instanceof Error?error.message:String(error)));
+  }
   const count=Object.keys(files).filter(k=>/^ppt\/slides\/slide[1-9]\d*\.xml$/.test(k)).length;
   if(!count||count>PDF_SLIDES_MAX_PAGES||Object.keys(files).length!==9+3*count){
     throw new Error('PowerPoint package has missing or unexpected parts.');
