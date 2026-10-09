@@ -89,7 +89,14 @@ export async function removePdfReviewMarkup(
     for(let i=0;i<annots.size();i++){
       const item=annots.get(i);
       const dict=readAnnotation(pdf,item);
-      if(!REMOVABLE_SUBTYPES.has(dict.get(SUBTYPE_KEY)?.toString()??''))continue;
+      const subtype=dict.get(SUBTYPE_KEY)?.toString()??'';
+      // A redaction annotation is not itself applied redaction. Removing it
+      // without permanently deleting its underlying content is dangerous,
+      // so refuse the whole bulk operation rather than silently leaving it.
+      if(subtype==='/Redact'){
+        throw new Error('This PDF contains unapplied redaction markup. Use the dedicated redaction workflow before review annotation cleanup; nothing was changed.');
+      }
+      if(!REMOVABLE_SUBTYPES.has(subtype))continue;
       indices.push(i);
       if(item instanceof PDFRef)removableRefs.add(item.toString());
     }
