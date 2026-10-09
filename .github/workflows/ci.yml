@@ -540,14 +540,29 @@ jobs:
               if ($LASTEXITCODE -ne 0) { throw "Unable to inspect PDF page geometry in $Document" }
               return ($raw | ConvertFrom-Json)
             }
-            function First-PageBox($DocumentJson, [string]$BoxName) {
-              $pageObj = $DocumentJson.pages[0].object
-              $dict = $DocumentJson.objects.PSObject.Properties["obj:$pageObj"].Value.value
-              if ($null -eq $dict) { throw "Missing page object $pageObj in qpdf JSON output" }
-              return $dict.PSObject.Properties[$BoxName].Value
+            function First-PageBox($DocumentJson, [string]$DocumentPath, [string]$BoxName) {
+              # qpdf --json-key=objects does not guarantee that the page
+              # dictionaries are included; inspect the page reference directly.
+              $pageObj = [string]$DocumentJson.pages[0].object
+              if ([string]::IsNullOrWhiteSpace($pageObj)) {
+                throw "qpdf did not report a page object for $DocumentPath"
+              }
+              $dictionary = (& $qpdf.FullName "--show-object=$pageObj" $DocumentPath | Out-String)
+              if ($LASTEXITCODE -ne 0) {
+                throw "qpdf could not inspect page object $pageObj in $DocumentPath"
+              }
+              $pattern = [regex]::Escape($BoxName) + '\\s*\\[\\s*([-+]?\\d+(?:\\.\\d+)?)\\s+([-+]?\\d+(?:\\.\\d+)?)\\s+([-+]?\\d+(?:\\.\\d+)?)\\s+([-+]?\\d+(?:\\.\\d+)?)\\s*\\]'
+              $matched = [regex]::Match($dictionary, $pattern)
+              if (-not $matched.Success) { return $null }
+              return @(
+                [double]::Parse($matched.Groups[1].Value,[Globalization.CultureInfo]::InvariantCulture),
+                [double]::Parse($matched.Groups[2].Value,[Globalization.CultureInfo]::InvariantCulture),
+                [double]::Parse($matched.Groups[3].Value,[Globalization.CultureInfo]::InvariantCulture),
+                [double]::Parse($matched.Groups[4].Value,[Globalization.CultureInfo]::InvariantCulture)
+              )
             }
             $scaled = Assert-TransformedPdf $scaleOut 1
-            $scaledMedia = First-PageBox $scaled "/MediaBox"
+            $scaledMedia = First-PageBox $scaled $scaleOut "/MediaBox"
             if ($null -eq $scaledMedia -or
                 [Math]::Abs([double]$scaledMedia[2] - 595.28) -gt 2 -or
                 [Math]::Abs([double]$scaledMedia[3] - 841.89) -gt 2) {
@@ -555,10 +570,10 @@ jobs:
             }
             $layout = Assert-TransformedPdf $layoutOut 1
             # Two-page input must become one page, not be returned unchanged.
-            $null = First-PageBox $layout "/MediaBox"
+            $null = First-PageBox $layout $layoutOut "/MediaBox"
             $cropped = Assert-TransformedPdf $cropOut 1
-            $cropBox = First-PageBox $cropped "/CropBox"
-            if ($null -eq $cropBox) { $cropBox = First-PageBox $cropped "/MediaBox" }
+            $cropBox = First-PageBox $cropped $cropOut "/CropBox"
+            if ($null -eq $cropBox) { $cropBox = First-PageBox $cropped $cropOut "/MediaBox" }
             if ($null -eq $cropBox -or
                 [Math]::Abs([double]$cropBox[2] - [double]$cropBox[0] - 100) -gt 1 -or
                 [Math]::Abs([double]$cropBox[3] - [double]$cropBox[1] - 100) -gt 1) {
