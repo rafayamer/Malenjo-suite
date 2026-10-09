@@ -398,6 +398,7 @@ function extensionForContentType(contentType:string|undefined|null):string|undef
   if(value.includes('image/tiff'))return 'tiff';
   if(value.includes('text/csv'))return 'csv';
   if(value.includes('application/json'))return 'json';
+  if(value.includes('application/xml')||value.includes('text/xml'))return 'xml';
   if(value.includes('text/html'))return 'html';
   if(value.includes('text/markdown'))return 'md';
   if(value.includes('text/plain'))return 'txt';
