@@ -78,9 +78,22 @@ export async function removePdfReviewMarkup(
   let removed=0;
   const removableRefs=new Set<string>();
   const pageEntries:Array<{annots:PDFArray,indices:number[]}>=[];
+
+  // Distinct pages can reference the *same* indirect /Annots array. Collect
+  // each array once; otherwise descending deletions run twice against an
+  // already-mutated array and can remove unrelated Link/Widget annotations.
+  const visitedArrayRefs=new Set<string>();
+  const visitedArrays=new WeakSet<PDFArray>();
   for(const page of pdf.getPages()){
     const annots=page.node.lookupMaybe(ANNOT_KEY,PDFArray);
     if(!annots)continue;
+    const ref=page.node.get(ANNOT_KEY);
+    const key=ref instanceof PDFRef?ref.toString():null;
+    if((key!==null&&visitedArrayRefs.has(key))||visitedArrays.has(annots)){
+      continue;
+    }
+    if(key!==null)visitedArrayRefs.add(key);
+    visitedArrays.add(annots);
     total+=annots.size();
     if(total>PDF_REVIEW_REMOVE_MAX_ANNOTATIONS){
       throw new Error('Review cleanup exceeds the 20,000-annotation safety limit.');
