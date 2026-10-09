@@ -29,6 +29,7 @@ import {exportPdfCbz} from './pdfToCbz';
 import {exportPdfOfficeText,inspectPdfTextDocx,inspectPdfTextOdt,type PdfOfficeTextFormat} from './pdfOfficeText';
 import {exportPdfEpub,inspectPdfEpubArchive} from './pdfToEpub';
 import {proposePdfMetadataFilename} from './pdfAutoRename';
+import {unlockReadOnlyPdfFormFields} from './formUnlock';
 import {convertJsonToPdf,JSON_TO_PDF_MAX_INPUT_BYTES} from './jsonToPdf';
 import {convertCbzToPdf,CBZ_TO_PDF_MAX_SOURCE_BYTES} from './cbzToPdf';
 import { splitPdfByPageCount } from './splitByPageCount';
@@ -532,6 +533,27 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }finally{setBusy(false);}
   }
 
+  async function applyOfflineFormUnlock(){
+    if(!sourceBytes||busy)return;
+    const revision=sourceBytes;
+    setBusy(true);setError('');setNotice('');
+    try{
+      const result=await unlockReadOnlyPdfFormFields(revision);
+      const applied=await onApplyPdf(
+        'Unlock '+result.unlockedFields.length+' read-only AcroForm fields',
+        result.bytes,revision,
+      );
+      if(!applied){
+        throw new Error('The working PDF changed; form unlock was not applied.');
+      }
+      setNotice('Made '+result.unlockedFields.length+
+        ' existing AcroForm fields editable. Changes support Undo. Save to retain them.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+      setNotice('');
+    }finally{setBusy(false);}
+  }
+
   async function applyOfflinePaperSize(){
     if(!sourceBytes||busy)return;
     setBusy(true);setError('');setNotice('');
@@ -794,6 +816,12 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         <FileOutput size={14}/>Convert JSON file to PDF (offline)
       </button>
     </details>}
+    {category==='forms'&&sourceBytes&&<div className="stirling-provider-actions">
+      <button disabled={busy} type="button" onClick={()=>void applyOfflineFormUnlock()}>
+        <FileOutput size={14}/>Unlock read-only form fields (offline)
+      </button>
+      <small>Clears AcroForm read-only flags only. Refuses encrypted, signed or XFA PDFs and never removes password permissions.</small>
+    </div>}
     {category==='organize'&&sourceBytes&&<details className="stirling-component-details" aria-label="Native PDF paper size">
       <summary>Fit pages to A4 / Letter / Legal / A5 (offline)</summary>
       <p>Resize all pages while fitting existing page content inside the chosen paper size. This does not reflow paragraphs. For safety, documents with forms, signatures, links, annotations, rotated pages, or custom page boxes are refused instead of losing interactive content. This edit supports Undo.</p>
