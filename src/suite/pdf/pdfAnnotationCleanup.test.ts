@@ -28,7 +28,9 @@ describe('offline PDF review annotation cleanup',()=>{
   it('refuses direct catalog permission signatures',async()=>{
     const doc=await PDFDocument.create();
     const page=doc.addPage([300,400]);
-    addAnnotation(doc,page.node.lookup(annotsKey,PDFArray),'Text');
+    const annots=doc.context.obj([]);
+    page.node.set(annotsKey,annots);
+    addAnnotation(doc,annots,'Text');
     doc.catalog.set(PDFName.of('Perms'),doc.context.obj({DocMDP:{Type:PDFName.of('Sig')}}));
     const bytes=Uint8Array.from(await doc.save({useObjectStreams:false}));
     await expect(removePdfReviewMarkup(bytes)).rejects.toThrow(/certification or usage-right/);
