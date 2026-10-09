@@ -27,6 +27,7 @@ import { exportPdfStructuredXml } from './pdfToXml';
 import { splitPdfByPageCount } from './splitByPageCount';
 import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput} from './pdfTwentyWorkflows';
 import {fitPdfToPaper,type PdfPaperSize,type PdfPaperOrientation} from './pdfPaperResize';
+import {validatePdfUploadPlan,validatePdfOperationValue} from './providerRequestGuard';
 
 interface Props{
   provider:PdfToolProvider;
@@ -396,11 +397,21 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       const files:PdfProviderInputFile[]=[];
       const sourceRevision=sourceBytes;
       const batchWorkflow=PDF_TWENTY_WORKFLOWS.find(item=>item.path===selected.path);
+      // Reject oversized uploads BEFORE materializing file bytes as JS number[].
+      const uploadFields=selected.fields.filter(field=>field.kind==='file'||field.kind==='files');
+      const activeTotal=uploadFields.reduce((total,field)=>
+        total+(useActive[field.name]&&fieldAcceptsActivePdf(field)?sourceRevision?.byteLength??0:0),0);
+      const chosen=uploadFields.flatMap(field=>extraFiles[field.name]??[]);
+      validatePdfUploadPlan(chosen,activeTotal);
       for(const field of selected.fields){
         if(field.kind==='file'||field.kind==='files'){
           const picked=extraFiles[field.name]??[];
-          const active=useActive[field.name]&&fieldAcceptsActivePdf(field)&&sourceBytes?[{
-            field:field.name,filename:providerFilename(sourceName),contentType:'application/pdf',bytes:Array.from(sourceBytes),
+          const usingActive=Boolean(useActive[field.name]&&fieldAcceptsActivePdf(field)&&sourceRevision);
+          if(field.kind==='file'&&usingActive&&picked.length){
+            throw new Error('Use the current PDF OR one uploaded file for '+field.label+'.');
+          }
+          const active=usingActive&&sourceRevision?[{
+            field:field.name,filename:providerFilename(sourceName),contentType:'application/pdf',bytes:Array.from(sourceRevision),
           }]:[];
           const extras=await Promise.all(picked.map(async(file)=>({
             field:field.name,filename:file.name,contentType:file.type||undefined,bytes:Array.from(new Uint8Array(await file.arrayBuffer())),
@@ -411,7 +422,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
           files.push(...combined);continue;
         }
         const value=values[field.name]??'';
-        if(field.required&&!value.trim())throw new Error(`${field.label} is required.`);
+        validatePdfOperationValue(field,value);
         if(value.trim()||field.kind==='boolean')fields.push({name:field.name,value});
       }
       const response=await provider.run(selected,fields,files);
