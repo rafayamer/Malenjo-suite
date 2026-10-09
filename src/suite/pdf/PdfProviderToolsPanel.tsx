@@ -23,6 +23,7 @@ import { isDesktopRuntime } from '../files/api';
 import { loadPdfBytes,disposePdf } from './engine';
 import { extractPdfDocumentText } from './textExport';
 import { exportPdfStructuredJson } from './pdfToJson';
+import { splitPdfByPageCount } from './splitByPageCount';
 
 interface Props{
   provider:PdfToolProvider;
@@ -72,6 +73,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   const [error,setError]=useState('');
   const [allCategories,setAllCategories]=useState(false);
   const [metadataEditorOpen,setMetadataEditorOpen]=useState(false);
+  const [splitPagesPerPart,setSplitPagesPerPart]=useState('2');
   const [metadataDraft,setMetadataDraft]=useState<PdfBasicMetadataUpdate>({
     title:'',author:'',subject:'',keywords:'',
   });
@@ -219,6 +221,30 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       );
       if(!applied)throw new Error('Review cleanup could not be applied. The original working copy is unchanged.');
       setNotice('Removed '+result.removed+' review annotations from the working PDF. Save or export to keep the result.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }finally{
+      setBusy(false);
+    }
+  }
+
+  async function saveOfflinePageGroups(){
+    if(!sourceBytes||busy)return;
+    setBusy(true);setError('');setNotice('');
+    try{
+      const count=Number(splitPagesPerPart);
+      const result=await splitPdfByPageCount(sourceBytes,count);
+      // Provider.saveResponse currently bridges bytes as number[]. Keep the
+      // small-document fallback bounded until binary streaming IPC is added.
+      if(result.archive.byteLength>32*1024*1024){
+        throw new Error('This ZIP exceeds the 32 MB in-app export limit. Use the Stirling split tool for larger PDFs.');
+      }
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/zip',bytes:Array.from(result.archive),
+      },localExportStem(sourceName)+'-split');
+      setNotice(saved
+        ?'Saved '+result.pageCounts.length+' PDF parts ('+result.sourcePageCount+' pages): '+saved
+        :'PDF splitting was cancelled; the original document was not changed.');
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
@@ -427,6 +453,18 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         <FileOutput size={14}/>Remove review annotations (offline)
       </button>
     </div>
+    {category==='organize'&&sourceBytes&&<details className="stirling-component-details" aria-label="Offline PDF split by page count">
+      <summary>Split into page groups (offline)</summary>
+      <p>Save a ZIP of consecutive PDFs, each containing the selected number of pages. The original PDF is unchanged. Interactive forms and signed files are not supported by this fallback; use the provider for larger documents.</p>
+      <label className="stirling-field"><span>Pages per PDF</span>
+        <input type="number" min={1} max={1000} step={1}
+          value={splitPagesPerPart}
+          onChange={event=>setSplitPagesPerPart(event.target.value)}/>
+      </label>
+      <button disabled={busy} onClick={()=>void saveOfflinePageGroups()}>
+        <FileOutput size={14}/>Export separate PDFs as ZIP
+      </button>
+    </details>}
     {metadataEditorOpen&&sourceBytes&&<div className="stirling-operation" aria-label="Edit PDF metadata offline">
       <b>Edit standard PDF metadata</b>
       <p>Changes the PDF Info title, author, subject and keywords locally. This is not privacy sanitization or XMP removal. Signed PDFs are refused because rewriting may invalidate signatures.</p>
