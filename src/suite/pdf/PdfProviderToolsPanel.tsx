@@ -32,6 +32,7 @@ import {proposePdfMetadataFilename} from './pdfAutoRename';
 import {unlockReadOnlyPdfFormFields} from './formUnlock';
 import {inspectPdfStructuralSafety,serializePdfPreflightJson} from './pdfPreflight';
 import {buildLocalPdfApiManual} from './pdfApiManual';
+import {addPdfVisualSignature} from './pdfVisualSignature';
 import {imposePdfBooklet,PDF_BOOKLET_MAX_INPUT_BYTES} from './pdfBooklet';
 import {convertJsonToPdf,JSON_TO_PDF_MAX_INPUT_BYTES} from './jsonToPdf';
 import {convertMarkdownToPdf,MARKDOWN_TO_PDF_MAX_INPUT_BYTES} from './markdownToPdf';
@@ -96,6 +97,10 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   const [splitPagesPerPart,setSplitPagesPerPart]=useState('2');
   const [jsonToPdfFile,setJsonToPdfFile]=useState<File|null>(null);
   const [markdownToPdfFile,setMarkdownToPdfFile]=useState<File|null>(null);
+  const [visualSigner,setVisualSigner]=useState('');
+  const [visualSignPage,setVisualSignPage]=useState('1');
+  const [visualSignX,setVisualSignX]=useState('0.06');
+  const [visualSignY,setVisualSignY]=useState('0.09');
   const [cbzToPdfFile,setCbzToPdfFile]=useState<File|null>(null);
   const [paperSize,setPaperSize]=useState<PdfPaperSize>('A4');
   const [paperOrientation,setPaperOrientation]=useState<PdfPaperOrientation>('portrait');
@@ -625,6 +630,29 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }finally{setBusy(false);}
   }
 
+  async function applyVisualSignature(){
+    if(!sourceBytes||busy)return;
+    const original=sourceBytes;
+    setBusy(true);setError('');setNotice('');
+    try{
+      if(!visualSignPage.trim()||!visualSignX.trim()||!visualSignY.trim()){
+        throw new Error('Enter a page number and signature coordinates.');
+      }
+      const output=await addPdfVisualSignature(original,{
+        name:visualSigner,pageNumber:Number(visualSignPage),
+        x:Number(visualSignX),y:Number(visualSignY),
+      });
+      const applied=await onApplyPdf(
+        'Add explicitly non-cryptographic visual signature',output,original,
+      );
+      if(!applied)throw new Error('The PDF changed during signing; mark was not applied.');
+      setNotice('Visual signature mark added to the working PDF (Undo available). '+
+        'This is not a cryptographic digital signature, trusted timestamp or legal identity verification.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));setNotice('');
+    }finally{setBusy(false);}
+  }
+
   async function applyOfflinePaperSize(){
     if(!sourceBytes||busy)return;
     setBusy(true);setError('');setNotice('');
@@ -925,6 +953,32 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       <button type="button" disabled={busy||!markdownToPdfFile}
         onClick={()=>void saveOfflineMarkdownPdf()}>
         <FileOutput size={14}/>Convert Markdown file to PDF (offline)
+      </button>
+    </details>}
+    {category==='sign'&&sourceBytes&&<details className="stirling-component-details" aria-label="Add a clearly labeled visual PDF signature">
+      <summary>Place a visual signature mark (offline)</summary>
+      <p>Draws a name stamp visibly onto the selected PDF page and supports Undo. This is only a graphical name mark; it does not authenticate identity, use a certificate, or cryptographically sign a PDF. Existing signed or certified PDFs are refused.</p>
+      <div className="stirling-fields">
+        <label className="stirling-field"><span>Name shown on the mark</span>
+          <input maxLength={80} value={visualSigner}
+            onChange={event=>setVisualSigner(event.target.value)}/>
+        </label>
+        <label className="stirling-field"><span>Page (1-based)</span>
+          <input type="number" min="1" step="1" value={visualSignPage}
+            onChange={event=>setVisualSignPage(event.target.value)}/>
+        </label>
+        <label className="stirling-field"><span>Horizontal position (0–1)</span>
+          <input type="number" min="0" max="1" step="0.01" value={visualSignX}
+            onChange={event=>setVisualSignX(event.target.value)}/>
+        </label>
+        <label className="stirling-field"><span>Vertical position (0–1, from bottom)</span>
+          <input type="number" min="0" max="1" step="0.01" value={visualSignY}
+            onChange={event=>setVisualSignY(event.target.value)}/>
+        </label>
+      </div>
+      <button disabled={busy||!visualSigner.trim()} type="button"
+        onClick={()=>void applyVisualSignature()}>
+        <FileOutput size={14}/>Apply non-cryptographic visual mark
       </button>
     </details>}
     {category==='forms'&&sourceBytes&&<div className="stirling-provider-actions">
