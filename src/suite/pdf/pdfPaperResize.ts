@@ -1,4 +1,4 @@
-import {PDFArray,PDFDocument,PDFName,StandardFonts} from 'pdf-lib';
+import {PDFDocument,PDFName} from 'pdf-lib';
 
 export const PDF_PAPER_SIZES={
   A4:[595.28,841.89],
