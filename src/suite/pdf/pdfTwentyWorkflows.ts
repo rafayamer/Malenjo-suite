@@ -1,3 +1,4 @@
+import {unzipSync} from 'fflate';
 import type {PdfProviderOperation,PdfProviderResponse} from './backend';
 import {classifyPdfProviderResult,type PdfProviderResultAction} from './providerResultGuard';
 
@@ -39,6 +40,34 @@ function isZip(bytes:number[]):boolean{
   return bytes.length>=4&&bytes[0]===80&&bytes[1]===75&&
     ((bytes[2]===3&&bytes[3]===4)||(bytes[2]===5&&bytes[3]===6)||(bytes[2]===7&&bytes[3]===8));
 }
+const MAX_ZIP_BYTES=32*1024*1024;
+const MAX_EXTRACTED_BYTES=128*1024*1024;
+export function verifyPdfBatchZip(bytes:number[]):void{
+  if(bytes.length>MAX_ZIP_BYTES)throw new Error('ZIP export exceeds 32 MB inspection limit.');
+  let total=0,files=0;
+  let archive:Record<string,Uint8Array>;
+  try{
+    archive=unzipSync(Uint8Array.from(bytes),{
+      filter:(file)=>{
+        if(file.name.endsWith('/'))return false;
+        if(!file.name.toLowerCase().endsWith('.pdf'))throw new Error('Archive contains a non-PDF member.');
+        if(file.originalSize<=0||file.originalSize>MAX_EXTRACTED_BYTES-total){
+          throw new Error('Archive extraction exceeds 128 MB budget.');
+        }
+        total+=file.originalSize;
+        files++;
+        if(files>2000)throw new Error('Archive contains too many PDF files.');
+        return true;
+      },
+    });
+  }catch(reason){
+    throw new Error('PDF ZIP export is invalid or unsafe: '+(reason instanceof Error?reason.message:String(reason)));
+  }
+  const entries=Object.values(archive);
+  if(!entries.length||entries.length!==files||entries.some(v=>v.length<5||v[0]!==37||v[1]!==80||v[2]!==68||v[3]!==70||v[4]!==45)){
+    throw new Error('PDF ZIP export contains no valid PDF entries.');
+  }
+}
 function isImage(bytes:number[]):boolean{
   const png=bytes.length>=8&&[137,80,78,71,13,10,26,10].every((b,i)=>bytes[i]===b);
   const jpg=bytes.length>=3&&bytes[0]===255&&bytes[1]===216&&bytes[2]===255;
@@ -60,7 +89,10 @@ export function classifyPdfBatchOutput(
     return workflow.output==='copy'?'save-pdf-copy':'apply-pdf';
   }
   if(pdf)throw new Error(workflow.label+' unexpectedly returned PDF data; original preserved.');
-  if(workflow.output==='zip'&&!isZip(response.bytes))throw new Error(workflow.label+' did not return ZIP data.');
+  if(workflow.output==='zip'){
+    if(!isZip(response.bytes))throw new Error(workflow.label+' did not return ZIP data.');
+    verifyPdfBatchZip(response.bytes);
+  }
   if(workflow.output==='image'&&!isZip(response.bytes)&&!isImage(response.bytes)){
     throw new Error(workflow.label+' did not return a supported image/ZIP export.');
   }

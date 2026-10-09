@@ -1,10 +1,11 @@
+import {zipSync,strToU8} from 'fflate';
 import {describe,expect,it} from 'vitest';
 import matrix from '../../../docs/pdf-stirling-parity-matrix.json';
 import type {PdfProviderOperation,PdfProviderResponse} from './backend';
-import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput} from './pdfTwentyWorkflows';
+import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput,verifyPdfBatchZip} from './pdfTwentyWorkflows';
 import {responseIsPdf} from './stirlingCore';
 const pdf=[37,80,68,70,45,49,46,55,10];
-const zip=[80,75,3,4,0,0,0,0];
+const zip=Array.from(zipSync({'one.pdf':Uint8Array.from(pdf)}));
 const png=[137,80,78,71,13,10,26,10,0];
 const csv=Array.from(new TextEncoder().encode('page,text\n1,hello\n'));
 const response=(bytes:number[],contentType='application/octet-stream',status=200):PdfProviderResponse=>({bytes,contentType,status});
@@ -60,6 +61,13 @@ describe('20 source-pinned PDF processing workflows',()=>{
     expect(()=>classifyPdfBatchOutput(workflow,response([255,254,0],'text/csv'),responseIsPdf)).toThrow(/UTF-8/);
     expect(()=>classifyPdfBatchOutput(workflow,response(csv,'text/html'),responseIsPdf)).toThrow(/content type/);
     expect(()=>classifyPdfBatchOutput(workflow,response(pdf,'text/csv'),responseIsPdf)).toThrow();
+  });
+  it('rejects truncated, empty, corrupt and non-PDF split archives before saving',()=>{
+    expect(()=>verifyPdfBatchZip([80,75,3,4,0,0,0,0])).toThrow(/invalid|unsafe/i);
+    expect(()=>verifyPdfBatchZip(Array.from(zipSync({})))).toThrow(/no valid/i);
+    expect(()=>verifyPdfBatchZip(Array.from(zipSync({'evil.pdf':strToU8('<html>')})))).toThrow(/no valid/i);
+    expect(()=>verifyPdfBatchZip(Array.from(zipSync({'evil.txt':strToU8('hi')})))).toThrow(/non-PDF/i);
+    expect(()=>verifyPdfBatchZip(zip)).not.toThrow();
   });
   it('keeps password and sanitization outputs as copies',()=>{
     for(const id of ['add-password','sanitize-pdf']){
