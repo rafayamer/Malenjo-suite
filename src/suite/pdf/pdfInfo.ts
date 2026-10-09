@@ -1,4 +1,4 @@
-import {PDFDocument} from 'pdf-lib';
+import {PDFDocument,PDFName,PDFNumber} from 'pdf-lib';
 
 export const PDF_INFO_MAX_INPUT_BYTES=512*1024*1024;
 export const PDF_INFO_MAX_PAGES=2000;
@@ -48,11 +48,17 @@ export async function inspectPdfDocumentInfo(bytes:Uint8Array):Promise<PdfDocume
   }
   const pages=pdf.getPages().map((page,index)=>{
     const {width,height}=page.getSize();
+    const rawUnit=page.node.get(PDFName.of('UserUnit'));
+    const parsedUnit=rawUnit?pdf.context.lookup(rawUnit):undefined;
+    const factor=parsedUnit instanceof PDFNumber?parsedUnit.asNumber():1;
+    if((rawUnit&&!(parsedUnit instanceof PDFNumber))||!Number.isFinite(factor)||factor<=0||factor>75000){
+      throw new Error('PDF page '+(index+1)+' has invalid /UserUnit.');
+    }
     if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0){
       throw new Error('PDF page '+(index+1)+' has invalid geometry.');
     }
     return {
-      page:index+1,widthPt:width,heightPt:height,
+      page:index+1,widthPt:width*factor,heightPt:height*factor,
       rotationDegrees:page.getRotation().angle,
     };
   });
