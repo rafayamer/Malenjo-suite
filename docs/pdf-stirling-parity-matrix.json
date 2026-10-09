@@ -1401,25 +1401,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfToPresentation.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/pageImageExport.ts"
+        ],
+        "frontendCommand": "Export PDF pages to PowerPoint PPTX slides (offline, rasterized)",
+        "provider": "MALENJO PDF.js offline raster/OpenXML packager",
+        "dependency": "Bundled PDF.js worker and fflate",
         "providerCatalogMatchKey": "/api/v1/convert/pdf/presentation",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "exportPdfRasterPptx"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfToPresentation.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfToPresentation.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "1–50 pages, <=16MP PNG/page, <=12MB PNG/page, <=32MB source PDF/images and <=34MB PPTX; validated PNG and OOXML relationship checks."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Rasterized genuine OpenXML PPTX preserves page appearance, ordering, and aspect ratio via PNG slide images; it does NOT reconstruct editable PDF text, vectors, charts or PowerPoint objects. Manual PowerPoint/LibreOffice Windows opening and UI acceptance remain unverified."
       ]
     },
     {
@@ -5338,8 +5348,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 65,
-    "unverifiedSourceCount": 25,
+    "localSourcePartialCount": 66,
+    "unverifiedSourceCount": 24,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
