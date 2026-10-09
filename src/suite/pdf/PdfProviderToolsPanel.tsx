@@ -25,6 +25,7 @@ import { extractPdfDocumentText } from './textExport';
 import { exportPdfStructuredJson } from './pdfToJson';
 import { exportPdfStructuredXml } from './pdfToXml';
 import { splitPdfByPageCount } from './splitByPageCount';
+import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput} from './pdfTwentyWorkflows';
 
 interface Props{
   provider:PdfToolProvider;
@@ -369,6 +370,8 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     try{
       const fields:Array<{name:string;value:string}>=[];
       const files:PdfProviderInputFile[]=[];
+      const sourceRevision=sourceBytes;
+      const batchWorkflow=PDF_TWENTY_WORKFLOWS.find(item=>item.path===selected.path);
       for(const field of selected.fields){
         if(field.kind==='file'||field.kind==='files'){
           const picked=extraFiles[field.name]??[];
@@ -379,7 +382,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
             field:field.name,filename:file.name,contentType:file.type||undefined,bytes:Array.from(new Uint8Array(await file.arrayBuffer())),
           })));
           const combined=[...active,...extras];
-          if(field.kind==='file'&&combined.length>1)combined.splice(1);
+          if(field.kind==='file'&&combined.length>1)throw new Error('Use the current PDF OR one uploaded file for '+field.label+'.');
           if(field.required&&!combined.length)throw new Error(`${field.label} is required.`);
           files.push(...combined);continue;
         }
@@ -388,9 +391,11 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         if(value.trim()||field.kind==='boolean')fields.push({name:field.name,value});
       }
       const response=await provider.run(selected,fields,files);
-      const action=classifyPdfProviderResult(response,selected.path,provider.responseIsPdf);
-      if(action==='apply-pdf'){
-        const applied=await onApplyPdf(`Local PDF core: ${selected.summary}`,Uint8Array.from(response.bytes),sourceBytes!);
+      const action=batchWorkflow
+        ?classifyPdfBatchOutput(batchWorkflow,response,provider.responseIsPdf)
+        :classifyPdfProviderResult(response,selected.path,provider.responseIsPdf);
+      if(action==='apply-pdf'&&sourceRevision){
+        const applied=await onApplyPdf(`Local PDF core: ${selected.summary}`,Uint8Array.from(response.bytes),sourceRevision);
         if(!applied){
           throw new Error('The generated PDF could not be applied. The original working document was preserved.');
         }
@@ -399,10 +404,10 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         const stem=localExportStem(sourceName);
         const saved=await provider.saveResponse(
           response,
-          action==='save-pdf-copy'?stem+'-protected':stem,
+          action==='save-pdf-copy'?stem+(batchWorkflow?.id==='sanitize-pdf'?'-sanitized-copy':'-protected'):stem,
         );
         setNotice(action==='save-pdf-copy'
-          ?saved?'Protected PDF copy saved; original remains unchanged.':'Protected PDF export cancelled; original unchanged.'
+          ?saved?'PDF copy saved; original remains unchanged.':'PDF copy export cancelled; original unchanged.'
           :saved?`${selected.summary} completed. Output saved.`:`${selected.summary} completed; output save was cancelled.`);
       }
     }catch(reason){setError(reason instanceof Error?reason.message:String(reason));}
@@ -551,6 +556,20 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
             </tr>)}
           </tbody>
         </table>
+      </div>
+    </details>
+    <details className="stirling-component-details" aria-label="20 PDF processing workflows">
+      <summary>20-operation PDF batch · source-pinned local workflows</summary>
+      <p className="stirling-provider-message">Open a workflow's live provider form to configure its inputs. Operations are enabled only when present and capability-approved in the local runtime. Source-pinning and type checks do not establish clean Windows offline or export/reopen parity.</p>
+      <div className="stirling-provider-actions" role="group" aria-label="PDF processing workflow selector">
+        {PDF_TWENTY_WORKFLOWS.map(workflow=>{
+          const operation=findPdfBatchOperation(workflow,operations);
+          return <button type="button" key={workflow.id} disabled={busy||!operation?.capability.available}
+            title={operation?.capability.available?workflow.path:operation?.capability.disabledReason??'Unavailable in live local API'}
+            onClick={()=>{if(operation){setAllCategories(true);setSearch('');setSelectedId(operation.id);}}}>
+            {workflow.label}
+          </button>;
+        })}
       </div>
     </details>
     {!status?.installed&&<p className="stirling-provider-help">Windows development pack: <code>powershell -ExecutionPolicy Bypass -File scripts/build-stirling-core.ps1</code>. The provider runs on 127.0.0.1 only and never starts at MALENJO launch.</p>}
