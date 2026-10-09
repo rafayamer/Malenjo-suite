@@ -31,6 +31,7 @@ import {exportPdfEpub,inspectPdfEpubArchive} from './pdfToEpub';
 import {proposePdfMetadataFilename} from './pdfAutoRename';
 import {unlockReadOnlyPdfFormFields} from './formUnlock';
 import {inspectPdfStructuralSafety,serializePdfPreflightJson} from './pdfPreflight';
+import {buildLocalPdfApiManual} from './pdfApiManual';
 import {imposePdfBooklet,PDF_BOOKLET_MAX_INPUT_BYTES} from './pdfBooklet';
 import {convertJsonToPdf,JSON_TO_PDF_MAX_INPUT_BYTES} from './jsonToPdf';
 import {convertMarkdownToPdf,MARKDOWN_TO_PDF_MAX_INPUT_BYTES} from './markdownToPdf';
@@ -673,6 +674,24 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }
   }
 
+  async function saveOfflineApiManual(){
+    if(!status?.running||!catalogLoaded||busy)return;
+    setBusy(true);setError('');setNotice('');
+    try{
+      const output=buildLocalPdfApiManual(operations,components,status);
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/json',bytes:Array.from(output),
+      },'malenjo-local-pdf-api-diagnostics');
+      setNotice(saved
+        ?'Saved local provider API diagnostics: '+saved+
+          '. These are reported capabilities, not verified operation results.'
+        :'API diagnostics export cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+      setNotice('');
+    }finally{setBusy(false);}
+  }
+
   async function startProvider(){
     setBusy(true);setError('');
     try{
@@ -815,6 +834,10 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       <button disabled={busy||Boolean(status?.running)} onClick={()=>void startProvider()}><Play size={14}/>Start local provider</button>
       <button disabled={busy||!status?.running} onClick={()=>void stopProvider()}><Square size={14}/>Stop</button>
       <button disabled={busy} onClick={()=>void refresh(Boolean(status?.running))}><RefreshCw size={14}/>Refresh</button>
+      <button disabled={busy||!status?.running||!catalogLoaded}
+        onClick={()=>void saveOfflineApiManual()}>
+        <FileOutput size={14}/>Export local PDF API contract diagnostics
+      </button>
       <button disabled={busy||!sourceBytes} onClick={()=>void saveLocalPdfInfo()}>
         <FileOutput size={14}/>Export PDF information (offline)
       </button>
