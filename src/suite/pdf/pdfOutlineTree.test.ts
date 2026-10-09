@@ -91,7 +91,7 @@ describe('hierarchical PDF table-of-contents editor',()=>{
     root.set(PDFName.of('First'),parentRef);
     root.set(PDFName.of('Last'),parentRef);
     pdf.catalog.set(PDFName.of('Outlines'),rootRef);
-    let bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    let bytes:Uint8Array=Uint8Array.from(await pdf.save({useObjectStreams:false}));
     expect(await listPdfOutlineTree(bytes)).toMatchObject([
       {title:'Closed group',depth:0,expanded:false},
       {title:'Named target',depth:1,pageNumber:null},
