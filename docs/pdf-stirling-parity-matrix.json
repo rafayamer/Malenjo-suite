@@ -4607,25 +4607,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfAutoRename.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/pdfInfo.ts"
+        ],
+        "frontendCommand": "Save PDF copy named from metadata title (offline)",
+        "provider": "MALENJO native metadata inspection and PDF copy save",
+        "dependency": "pdf-lib; Tauri save dialog",
         "providerCatalogMatchKey": "/api/v1/misc/auto-rename",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "proposePdfMetadataFilename"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfAutoRename.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfAutoRename.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "32 MB source copy budget; metadata title required; Windows-safe filename; no content mutation."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Offline fallback uses PDF Info title metadata only. It does not infer a title from page text/OCR, classify documents, or match Stirling intelligent AutoRename. Clean installed Windows save/read acceptance is pending."
       ]
     },
     {
@@ -5016,8 +5026,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 34,
-    "unverifiedSourceCount": 56,
+    "localSourcePartialCount": 35,
+    "unverifiedSourceCount": 55,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,

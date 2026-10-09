@@ -2,7 +2,7 @@
 
 The machine-readable source of truth is [pdf-stirling-parity-matrix.json](./pdf-stirling-parity-matrix.json). Its 90 operation identifiers were transcribed in order from the October 8, 2026 MALENJO development handoff (§5A–5G), **not** independently re-audited against a newer upstream release. The upstream comparison baseline is `Stirling-Tools/Stirling-PDF@25220cbdbde2d526cebf173b94357884e180b8c1`.
 
-**No operation is credited as complete.** Thirty-four operations with real MALENJO source symbols, workspace paths and unit-test evidence are classified **`partial`**, and the other 56 remain **`null` (not yet source-audited)**. This is not a claim of Windows/provider end-to-end verification. For every tool, verify the real MALENJO code, UI command, actual local Windows execution, source license and notices, positive/negative fixtures and golden tests, memory/size limits, and export/save/reopen outcomes; then set a supported status: `implemented`, `partial`, `unavailable`, or `excluded-by-license`. Exclusions need user approval.
+**No operation is credited as complete.** Thirty-five operations with real MALENJO source symbols, workspace paths and unit-test evidence are classified **`partial`**, and the other 55 remain **`null` (not yet source-audited)**. This is not a claim of Windows/provider end-to-end verification. For every tool, verify the real MALENJO code, UI command, actual local Windows execution, source license and notices, positive/negative fixtures and golden tests, memory/size limits, and export/save/reopen outcomes; then set a supported status: `implemented`, `partial`, `unavailable`, or `excluded-by-license`. Exclusions need user approval.
 
 ## Source-backed endpoint audit — pinned commit
 
@@ -24,7 +24,7 @@ The last six conversion operations (`pdf-to-epub`, `pdf-to-vector`, `pdf-to-json
 
 **Offline caveats from upstream source:** `TimestampController` contacts a remote RFC 3161 timestamp authority; `VerifyPDFController` uses a veraPDF service whose Windows redistribution has not been verified; and `PipelineController` is conditionally excluded in `STIRLING_PDF_TAURI_MODE`. MALENJO's provider capability gate explicitly prevents all three from being advertised as verified offline operations. These do not meet the user's full-functionality requirement.
 
-**Pinned source classification of all 90:** 54 endpoint-fixture routes + 8 controller-only routes + 22 frontend-only entries + 6 configuration-only entries. **Actual function status is 34 partial / 56 unaudited; 0 complete.** Source classification cannot substitute for operation fixture execution.
+**Pinned source classification of all 90:** 54 endpoint-fixture routes + 8 controller-only routes + 22 frontend-only entries + 6 configuration-only entries. **Actual function status is 35 partial / 55 unaudited; 0 complete.** Source classification cannot substitute for operation fixture execution.
 
 ## Runnable, local-only PDF utilities added to the panel
 
@@ -48,6 +48,8 @@ Both use the MALENJO local save implementation and carry the same Windows final-
 - **PDF → Word DOCX and RTF**: `pdfOfficeText.ts` and corresponding tests supply two offline conversions based on selectable PDF text, WordprocessingML package parts and escaped RTF text. They preserve page breaks and Unicode while refusing textless scans, malformed XML, excessive data and source changes. They remain **partial** because DOCX/RTF fidelity to PDF layout, tables, graphics and styles is missing and installed Windows Word/RTF reopen acceptance is outstanding.
 
 - **PDF → EPUB 3 (reflowable)**: `pdfToEpub.ts` produces a five-part standards-oriented EPUB Open Container Format archive (first uncompressed mimetype, package manifest/spine, navigation and escaped XHTML page text), with output verification and invalid-input tests. It remains **partial**: no reconstruction of images, complex reading order, embedded fonts or Calibre-equivalent layout, and no Windows EPUB-reader acceptance.
+
+- **Auto-rename PDF (metadata-title fallback)**: `pdfAutoRename.ts` generates Windows-safe PDF copy names from the existing PDF Info title, without changing the document bytes or overwriting the working copy in memory. It refuses missing/unsafe titles and files above 32 MB. It is **partial**, not content-aware/OCR title extraction, and requires a clean Windows save/reopen acceptance run.
 
 ## Release and license constraints
 
