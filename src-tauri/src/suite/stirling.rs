@@ -27,6 +27,14 @@ struct OwnedStirlingProcess {
     context_path: String,
 }
 
+// Native Tauri commands can arrive concurrently from multiple windows/tabs.
+// Serialize the complete spawn-and-health-check sequence, not only Child
+// assignment, so only one owned loopback Stirling process is ever launched.
+fn startup_lock() -> &'static tokio::sync::Mutex<()> {
+    static START: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+    START.get_or_init(|| tokio::sync::Mutex::new(()))
+}
+
 fn process_slot() -> &'static Mutex<Option<OwnedStirlingProcess>> {
     static SLOT: OnceLock<Mutex<Option<OwnedStirlingProcess>>> = OnceLock::new();
     SLOT.get_or_init(|| Mutex::new(None))
@@ -1026,6 +1034,9 @@ pub async fn stirling_core_components(app: AppHandle) -> Vec<StirlingComponentSt
 
 #[tauri::command]
 pub async fn stirling_core_start(app: AppHandle) -> Result<StirlingCoreStatus, String> {
+    // Frontend deduplication is not enough: another desktop window or direct
+    // native command can request startup at the same instant.
+    let _starting = startup_lock().lock().await;
     if let Some(base_url) = owned_base_url() {
         let started = Instant::now();
         while started.elapsed() < START_TIMEOUT {
@@ -1037,7 +1048,10 @@ pub async fn stirling_core_start(app: AppHandle) -> Result<StirlingCoreStatus, S
             }
             tokio::time::sleep(Duration::from_millis(250)).await;
         }
-        return Err("The existing Stirling core process did not become healthy within 75 seconds.".into());
+        // A never-healthy owned JVM must not linger indefinitely and block
+        // the next automatic recovery attempt on its reserved loopback port.
+        let _ = stirling_core_stop().await;
+        return Err("The existing Stirling core process did not become healthy within 75 seconds; it was stopped so retry is possible.".into());
     }
 
     if stirling_port_in_use() {
