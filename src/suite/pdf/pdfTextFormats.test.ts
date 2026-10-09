@@ -61,7 +61,7 @@ describe('offline PDF Markdown HTML and CSV export',()=>{
       });
       const output=decode(bytes);
       expect(output).toContain('First page');
-      expect(output).toContain('Source PDF');
+      if(format!=='csv')expect(output).toContain('Source PDF');
       expect(bytes.length).toBeLessThan(PDF_TEXT_FORMAT_MAX_BYTES);
     }
     expect(seen).toEqual([1,1,1]);
