@@ -552,103 +552,11 @@ jobs:
               if ([string]::IsNullOrWhiteSpace($pageObj)) {
                 throw "qpdf did not report a page object for $DocumentPath"
               }
-              $objectRef = [regex]::Match($pageObj, '^\\s*(\\d+)\\s+(\\d+)\\s+R\\s*
-              if ($LASTEXITCODE -ne 0) {
-                throw "qpdf could not inspect page object $pageObj in $DocumentPath"
-              }
-              $pattern = [regex]::Escape($BoxName) + '\s*\[\s*([-+]?\d+(?:\.\d+)?)\s+([-+]?\d+(?:\.\d+)?)\s+([-+]?\d+(?:\.\d+)?)\s+([-+]?\d+(?:\.\d+)?)\s*\]'
-              $matched = [regex]::Match($dictionary, $pattern)
-              if (-not $matched.Success) { return $null }
-              return @(
-                [double]::Parse($matched.Groups[1].Value,[Globalization.CultureInfo]::InvariantCulture),
-                [double]::Parse($matched.Groups[2].Value,[Globalization.CultureInfo]::InvariantCulture),
-                [double]::Parse($matched.Groups[3].Value,[Globalization.CultureInfo]::InvariantCulture),
-                [double]::Parse($matched.Groups[4].Value,[Globalization.CultureInfo]::InvariantCulture)
-              )
-            }
-            $scaled = Assert-TransformedPdf $scaleOut 1
-            $scaledMedia = First-PageBox $scaled $scaleOut "/MediaBox"
-            if ($null -eq $scaledMedia -or
-                [Math]::Abs([double]$scaledMedia[2] - 595.28) -gt 2 -or
-                [Math]::Abs([double]$scaledMedia[3] - 841.89) -gt 2) {
-              throw "Scale-pages output did not change 200x200 fixture to A4"
-            }
-            $layout = Assert-TransformedPdf $layoutOut 1
-            # Two-page input must become one page, not be returned unchanged.
-            $null = First-PageBox $layout $layoutOut "/MediaBox"
-            $cropped = Assert-TransformedPdf $cropOut 1
-            $cropBox = First-PageBox $cropped $cropOut "/CropBox"
-            if ($null -eq $cropBox) { $cropBox = First-PageBox $cropped $cropOut "/MediaBox" }
-            if ($null -eq $cropBox -or
-                [Math]::Abs([double]$cropBox[2] - [double]$cropBox[0] - 100) -gt 1 -or
-                [Math]::Abs([double]$cropBox[3] - [double]$cropBox[1] - 100) -gt 1) {
-              throw "Crop output does not have the requested 100x100 visible page"
-            }
-
-            $repairOut = Join-Path (Resolve-Path ".build/provider-smoke") "repair.pdf"
-            & $curl --fail --silent --show-error -o $repairOut -F "fileInput=@$fixture;type=application/pdf" "$providerBase/api/v1/misc/repair"
-            if ($LASTEXITCODE -ne 0) { throw "qpdf repair operation smoke failed." }
-
-            $compressOut = Join-Path (Resolve-Path ".build/provider-smoke") "compress.pdf"
-            & $curl --fail --silent --show-error -o $compressOut -F "fileInput=@$fixture;type=application/pdf" -F "optimizeLevel=3" -F "linearize=false" -F "normalize=false" -F "grayscale=false" "$providerBase/api/v1/misc/compress-pdf"
-            if ($LASTEXITCODE -ne 0) { throw "qpdf compression operation smoke failed." }
-
-            $replaceOut = Join-Path (Resolve-Path ".build/provider-smoke") "replace-invert.pdf"
-            & $curl --fail --silent --show-error -o $replaceOut -F "fileInput=@$fixture;type=application/pdf" -F "replaceAndInvertOption=FULL_INVERSION" -F "highContrastColorCombination=WHITE_TEXT_ON_BLACK" "$providerBase/api/v1/misc/replace-invert-pdf"
-            if ($LASTEXITCODE -ne 0) { throw "Java/PDFBox replace-invert operation smoke failed." }
-
-            $scannerOut = Join-Path (Resolve-Path ".build/provider-smoke") "scanner-effect.pdf"
-            & $curl --fail --silent --show-error -o $scannerOut -F "fileInput=@$fixture;type=application/pdf" -F "quality=low" -F "rotation=none" -F "colorspace=grayscale" -F "advancedEnabled=false" "$providerBase/api/v1/misc/scanner-effect"
-            if ($LASTEXITCODE -ne 0) { throw "Java/PDFBox scanner-effect operation smoke failed." }
-
-            $ocrFixture = Join-Path (Resolve-Path ".build/provider-smoke") "ocr-text-page.pdf"
-            ./scripts/write-ocr-pdf-smoke-fixture.ps1 -OutputPath $ocrFixture
-            & $qpdf.FullName --check $ocrFixture
-            if ($LASTEXITCODE -ne 0) { throw "Generated OCR fixture failed qpdf validation." }
-
-            $ocrOut = Join-Path (Resolve-Path ".build/provider-smoke") "ocr.pdf"
-            & $curl --fail --silent --show-error -o $ocrOut -F "fileInput=@$ocrFixture;type=application/pdf" -F "languages=eng" -F "sidecar=false" -F "deskew=false" -F "rotatePages=false" -F "clean=false" -F "cleanFinal=false" -F "ocrType=force-ocr" -F "ocrRenderType=hocr" -F "removeImagesAfter=false" "$providerBase/api/v1/misc/ocr-pdf"
-            if ($LASTEXITCODE -ne 0) { throw "Tesseract OCR PDF operation smoke failed." }
-
-            $rotateReport = Join-Path (Resolve-Path ".build/provider-smoke") "auto-rotate-report.json"
-            & $curl --fail --silent --show-error -o $rotateReport -F "fileInput=@$ocrFixture;type=application/pdf" -F "detectionMode=osd" -F "confidenceThreshold=0" -F "dryRun=true" -F "inferUndetected=false" "$providerBase/api/v1/misc/auto-rotate-pdf"
-            if ($LASTEXITCODE -ne 0) { throw "Tesseract auto-rotate OSD analysis smoke failed." }
-            $analysis = Get-Content $rotateReport -Raw | ConvertFrom-Json
-            $osdPages = @($analysis.pages | Where-Object { $_.method -eq "osd" })
-            if ($osdPages.Count -lt 1 -or [int]$analysis.detectedByOsd -lt 1) {
-              throw "Auto-rotate endpoint returned without a positive Tesseract OSD verdict."
-            }
-
-            $rotateOut = Join-Path (Resolve-Path ".build/provider-smoke") "auto-rotate.pdf"
-            & $curl --fail --silent --show-error -o $rotateOut -F "fileInput=@$ocrFixture;type=application/pdf" -F "detectionMode=osd" -F "confidenceThreshold=0" -F "dryRun=false" -F "inferUndetected=false" "$providerBase/api/v1/misc/auto-rotate-pdf"
-            if ($LASTEXITCODE -ne 0) { throw "Tesseract auto-rotate PDF operation smoke failed." }
-
-            foreach ($output in @($officePdfOut, $repairOut, $compressOut, $replaceOut, $scannerOut, $ocrOut, $rotateOut)) {
-              $bytes = [System.IO.File]::ReadAllBytes($output)
-              if ($bytes.Length -lt 5 -or [Text.Encoding]::ASCII.GetString($bytes, 0, 5) -ne "%PDF-") {
-                throw "Provider smoke output is not a PDF: $output"
-              }
-            }
-            $xmlDisabledOut = Join-Path (Resolve-Path ".build/provider-smoke") "xml-disabled.bin"
-            $xmlStatus = (& $curl --silent --show-error -o $xmlDisabledOut -w "%{http_code}" -F "fileInput=@$fixture;type=application/pdf" "$providerBase/api/v1/convert/pdf/xml" | Out-String).Trim()
-            if ($xmlStatus -match "^2") {
-              throw "LibreOffice-only PDF-to-XML unexpectedly executed without a reviewed LibreOffice provider."
-            }
-
-            $vectorDisabledOut = Join-Path (Resolve-Path ".build/provider-smoke") "vector-disabled.bin"
-            $vectorStatus = (& $curl --silent --show-error -o $vectorDisabledOut -w "%{http_code}" -F "fileInput=@$fixture;type=application/pdf" -F "outputFormat=eps" "$providerBase/api/v1/convert/pdf/vector" | Out-String).Trim()
-            if ($vectorStatus -match "^2") {
-              throw "Ghostscript-only PDF-to-vector unexpectedly executed without a reviewed Ghostscript provider."
-            }
-            Write-Host "Reviewed local provider groups passed embedded Office (PDF/DOCX/PPTX/RTF/XLSX), repair, compression, Java effects, OCR and auto-rotate localhost smoke tests; LibreOffice-only XML and Ghostscript-only vector conversion remained unavailable."
-          } finally {
-            if (!$process.HasExited) { Stop-Process -Id $process.Id -Force }
-          }
-)
+              $objectRef = [regex]::Match($pageObj, '^\s*(\d+)\s+(\d+)\s+R\s*$')
               if (-not $objectRef.Success) {
                 throw "Unexpected qpdf page reference '$pageObj' in $DocumentPath"
               }
-              # qpdf JSON uses '3 0 R'; CLI --show-object uses '3,0'.
+              # qpdf JSON references are '3 0 R', but the CLI requires '3,0'.
               $objectSpec = "$($objectRef.Groups[1].Value),$($objectRef.Groups[2].Value)"
               $dictionary = (& $qpdf.FullName "--show-object=$objectSpec" $DocumentPath | Out-String)
               if ($LASTEXITCODE -ne 0) {
