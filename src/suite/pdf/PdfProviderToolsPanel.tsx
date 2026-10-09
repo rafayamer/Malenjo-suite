@@ -26,6 +26,7 @@ import { exportPdfStructuredJson } from './pdfToJson';
 import { exportPdfStructuredXml } from './pdfToXml';
 import {exportPdfTextFormat,type PdfTextFormat} from './pdfTextFormats';
 import {exportPdfCbz} from './pdfToCbz';
+import {exportPdfOfficeText,inspectPdfTextDocx,type PdfOfficeTextFormat} from './pdfOfficeText';
 import { splitPdfByPageCount } from './splitByPageCount';
 import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput} from './pdfTwentyWorkflows';
 import {verifyProviderCompletion} from './pdfProviderCompletion';
@@ -385,6 +386,43 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }
   }
 
+  async function saveOfflineWordText(format:PdfOfficeTextFormat){
+    if(!sourceBytes||busy)return;
+    const original=sourceBytes;
+    setBusy(true);setError('');setNotice('');
+    let loaded:Awaited<ReturnType<typeof loadPdfBytes>>|null=null;
+    try{
+      if(!original.byteLength||original.byteLength>512*1024*1024){
+        throw new Error('Office text export requires a PDF of at most 512 MB.');
+      }
+      const info=await inspectPdfDocumentInfo(original);
+      loaded=await loadPdfBytes(original);
+      const output=await exportPdfOfficeText(loaded.document,info,format,{
+        onProgress:(done,total)=>setNotice('Reading PDF text '+done+'/'+total+'…'),
+      });
+      if(format==='docx'){
+        const validated=inspectPdfTextDocx(output);
+        if(validated.paragraphCount<1)throw new Error('DOCX output contains no paragraphs.');
+      }
+      if(activeSourceRef.current!==original){
+        throw new Error('PDF changed during Office export; stale output was not saved.');
+      }
+      const type=format==='docx'
+        ?'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        :'application/rtf';
+      const saved=await provider.saveResponse({
+        status:200,contentType:type,bytes:Array.from(output),
+      },localExportStem(sourceName)+'-selectable-text');
+      setNotice(saved?('Saved '+format.toUpperCase()+' text conversion: '+saved):
+        'Office text export save cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+      setNotice('');
+    }finally{
+      try{await disposePdf(loaded);}finally{setBusy(false);}
+    }
+  }
+
   async function applyOfflinePaperSize(){
     if(!sourceBytes||busy)return;
     setBusy(true);setError('');setNotice('');
@@ -603,6 +641,12 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       </button>
       <button disabled={busy||!sourceBytes} onClick={()=>void saveOfflineComicBook()}>
         <FileOutput size={14}/>Export rasterized PDF pages to CBZ comic (offline)
+      </button>
+      <button disabled={busy||!sourceBytes} onClick={()=>void saveOfflineWordText('docx')}>
+        <FileOutput size={14}/>Export selectable PDF text to Word DOCX (offline)
+      </button>
+      <button disabled={busy||!sourceBytes} onClick={()=>void saveOfflineWordText('rtf')}>
+        <FileOutput size={14}/>Export selectable PDF text to RTF (offline)
       </button>
       <button disabled={busy||!sourceBytes} onClick={()=>void cleanReviewAnnotations()}>
         <FileOutput size={14}/>Remove review annotations (offline)
