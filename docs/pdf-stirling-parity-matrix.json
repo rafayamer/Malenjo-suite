@@ -2343,26 +2343,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/emlToPdf.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/markdownToPdf.ts"
+        ],
+        "frontendCommand": "Convert plain-text EML email to PDF (offline)",
+        "provider": "MALENJO native MIME text/plain parser and pdf-lib report renderer",
+        "dependency": "Bundled pdf-lib; browser TextDecoder; no network",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "convertEmlToPdf"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/emlToPdf.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/emlToPdf.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "2 MB EML source; 250k decoded chars; 32 MIME parts; depth 4; 100 pages and 16 MB PDF output."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Native MIME parser converts text/plain and multipart/alternative plain body, with encoded MIME bodies, attachments refused. Does not render HTML-only mail, incorporate attachment content, or support complete MIME/office attachments. Clean Windows export/open acceptance pending."
       ]
     },
     {
@@ -5328,8 +5338,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 64,
-    "unverifiedSourceCount": 26,
+    "localSourcePartialCount": 65,
+    "unverifiedSourceCount": 25,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,

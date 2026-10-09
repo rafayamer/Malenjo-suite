@@ -4,7 +4,7 @@
 
 ## Decision
 
-**Full PDF parity release is blocked.** Exactly 90 handoff requirements are enumerated; **0 carry complete acceptance evidence**. There are 45 native/source-backed partial foundations plus 19 source-audited provider-dispatch-only partial integrations (64 partial total), with 26 implementation-source-unaudited requirements. The passing CI pipeline proves builds, tests and a subset of provider smoke routes, not the whole Windows installer + UI end-to-end matrix. The `tauri:release` command now fails closed until all 90 requirements have explicit acceptance evidence. Ordinary development builds remain possible.
+**Full PDF parity release is blocked.** Exactly 90 handoff requirements are enumerated; **0 carry complete acceptance evidence**. There are 46 native/source-backed partial foundations plus 19 source-audited provider-dispatch-only partial integrations (65 partial total), with 25 implementation-source-unaudited requirements. The passing CI pipeline proves builds, tests and a subset of provider smoke routes, not the whole Windows installer + UI end-to-end matrix. The `tauri:release` command now fails closed until all 90 requirements have explicit acceptance evidence. Ordinary development builds remain possible.
 
 The review's two PNG defects have implementation-level fixes in `pngIntegrity.ts` with Adam7/filter/palette positive and negative tests. This is not enough to accept PDF-to-images or extract-images as end-to-end workflows without live output saved and reopened on Windows.
 
@@ -64,7 +64,7 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 | 36 | `html-to-pdf` | Pinned API route only | No matching execution proof | Not audited; implementation and acceptance pending |
 | 37 | `url-to-pdf` | Pinned API route only | No matching execution proof | Not audited; implementation and acceptance pending |
 | 38 | `markdown-to-pdf` | Native Markdown render partial | No matching execution proof | Partial; full Markdown fidelity and Windows acceptance pending |
-| 39 | `eml-to-pdf` | Frontend-only alias | No matching execution proof | Not audited; implementation and acceptance pending |
+| 39 | `eml-to-pdf` | Native text/plain MIME partial | No matching execution proof | Partial; HTML, attachments, Windows reopen pending |
 | 40 | `cbz-to-pdf` | Native PNG/JPEG CBZ partial | No matching execution proof | Partial; full format parity and Windows acceptance pending |
 | 41 | `json-to-pdf` | Native JSON text-report partial | No matching execution proof | Partial; visual conversion and Windows acceptance pending |
 | 42 | `vector-to-pdf` | Configuration only | No matching execution proof | Not audited; implementation and acceptance pending |
