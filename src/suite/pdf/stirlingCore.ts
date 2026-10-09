@@ -402,6 +402,7 @@ function extensionForContentType(contentType:string|undefined|null):string|undef
   if(value.includes('text/html'))return 'html';
   if(value.includes('text/markdown'))return 'md';
   if(value.includes('text/plain'))return 'txt';
+  if(value.includes('application/vnd.oasis.opendocument.text'))return 'odt';
   if(value.includes('wordprocessingml'))return 'docx';
   if(value.includes('spreadsheetml'))return 'xlsx';
   if(value.includes('presentationml'))return 'pptx';

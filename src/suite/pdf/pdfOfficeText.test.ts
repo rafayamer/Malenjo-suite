@@ -5,8 +5,8 @@ import type {PDFDocumentProxy} from 'pdfjs-dist';
 import type {PdfStructuredJson} from './pdfToJson';
 import {inspectPdfDocumentInfo} from './pdfInfo';
 import {
-  serializePdfDocx,serializePdfRtf,serializePdfOfficeText,
-  inspectPdfTextDocx,exportPdfOfficeText,PDF_OFFICE_TEXT_MAX_BYTES,
+  serializePdfDocx,serializePdfOdt,serializePdfRtf,serializePdfOfficeText,
+  inspectPdfTextDocx,inspectPdfTextOdt,exportPdfOfficeText,PDF_OFFICE_TEXT_MAX_BYTES,
 } from './pdfOfficeText';
 
 type Reader=Pick<PDFDocumentProxy,'numPages'|'getPage'|'getOutline'>;
@@ -55,6 +55,22 @@ describe('offline Word DOCX and RTF text conversions',()=>{
     expect(text).toContain('\uFFFD');
     expect(text).not.toContain('\u0001');
     expect(text).not.toContain('<w:t>INJECTED</w:t>');
+  });
+  it('writes a real OpenDocument ODT with required OCF mimetype, manifest and page-break styles',()=>{
+    const odt=serializePdfOdt(sample(['First\t  & <script>','Second\nRésumé 😀']));
+    expect(odt.slice(0,4)).toEqual(Uint8Array.from([80,75,3,4]));
+    expect(odt[8]).toBe(0);expect(odt[9]).toBe(0);
+    const entries=unzipSync(odt);
+    expect(decode(entries.mimetype)).toBe('application/vnd.oasis.opendocument.text');
+    const xml=decode(entries['content.xml']);
+    expect(xml).toContain('First<text:tab/><text:s text:c="2"/>&amp; &lt;script&gt;');
+    expect(xml).toContain('<text:p text:style-name="PageBreak">Second</text:p>');
+    expect(xml).toContain('Résumé 😀');
+    expect(inspectPdfTextOdt(odt)).toEqual({paragraphCount:3,hasPageBreak:true});
+  });
+  it('rejects malformed and incomplete ODT packages',()=>{
+    expect(()=>inspectPdfTextOdt(Uint8Array.from([80,75,3,4]))).toThrow();
+    expect(()=>inspectPdfTextOdt(serializePdfDocx(sample(['One'])))).toThrow();
   });
   it('writes escaped ASCII-compatible RTF with signed UTF-16 for Unicode',()=>{
     const text=decode(serializePdfRtf(sample(['Text {a} \\server\nEmoji 😀'])));

@@ -26,7 +26,7 @@ import { exportPdfStructuredJson } from './pdfToJson';
 import { exportPdfStructuredXml } from './pdfToXml';
 import {exportPdfTextFormat,type PdfTextFormat} from './pdfTextFormats';
 import {exportPdfCbz} from './pdfToCbz';
-import {exportPdfOfficeText,inspectPdfTextDocx,type PdfOfficeTextFormat} from './pdfOfficeText';
+import {exportPdfOfficeText,inspectPdfTextDocx,inspectPdfTextOdt,type PdfOfficeTextFormat} from './pdfOfficeText';
 import {exportPdfEpub,inspectPdfEpubArchive} from './pdfToEpub';
 import {proposePdfMetadataFilename} from './pdfAutoRename';
 import {convertJsonToPdf,JSON_TO_PDF_MAX_INPUT_BYTES} from './jsonToPdf';
@@ -409,12 +409,16 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       if(format==='docx'){
         const validated=inspectPdfTextDocx(output);
         if(validated.paragraphCount<1)throw new Error('DOCX output contains no paragraphs.');
+      }else if(format==='odt'){
+        const verified=inspectPdfTextOdt(output);
+        if(verified.paragraphCount<1)throw new Error('ODT output contains no paragraphs.');
       }
       if(activeSourceRef.current!==original){
         throw new Error('PDF changed during Office export; stale output was not saved.');
       }
       const type=format==='docx'
         ?'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        :format==='odt'?'application/vnd.oasis.opendocument.text'
         :'application/rtf';
       const saved=await provider.saveResponse({
         status:200,contentType:type,bytes:Array.from(output),
@@ -752,6 +756,9 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       </button>
       <button disabled={busy||!sourceBytes} onClick={()=>void saveOfflineWordText('docx')}>
         <FileOutput size={14}/>Export selectable PDF text to Word DOCX (offline)
+      </button>
+      <button disabled={busy||!sourceBytes} onClick={()=>void saveOfflineWordText('odt')}>
+        <FileOutput size={14}/>Export selectable PDF text to OpenDocument ODT (offline)
       </button>
       <button disabled={busy||!sourceBytes} onClick={()=>void saveOfflineWordText('rtf')}>
         <FileOutput size={14}/>Export selectable PDF text to RTF (offline)
