@@ -9,7 +9,7 @@ import {exportPdfStructuredJson,type PdfStructuredJson} from './pdfToJson';
  * Both reject image-only scans (OCR first), preserve original PDFs and enforce
  * the structured text extraction limits and a separate output budget.
  */
-export type PdfOfficeTextFormat='docx'|'rtf';
+export type PdfOfficeTextFormat='docx'|'odt'|'rtf';
 export const PDF_OFFICE_TEXT_MAX_BYTES=16_000_000;
 const encode=(value:string):Uint8Array=>new TextEncoder().encode(value);
 
@@ -92,6 +92,88 @@ export function serializePdfDocx(data:PdfStructuredJson):Uint8Array{
   return result;
 }
 
+/** OpenDocument Text 1.3 ZIP, with uncompressed mimetype as the first entry. */
+function odtTextLine(line:string):string{
+  return line.split(/(\t| {2,})/g).map(part=>{
+    if(part==='\t')return '<text:tab/>';
+    if(/^ {2,}$/.test(part))return '<text:s text:c="'+part.length+'"/>';
+    return xmlEscape(part);
+  }).join('');
+}
+export function serializePdfOdt(data:PdfStructuredJson):Uint8Array{
+  checkPages(data);
+  const paras:string[]=[];
+  for(let index=0;index<data.pages.length;index++){
+    for(const [lineIndex,line] of data.pages[index].text.split(/\r\n|\r|\n/).entries()){
+      const style=index>0&&lineIndex===0?' text:style-name="PageBreak"':'';
+      paras.push('<text:p'+style+'>'+odtTextLine(line)+'</text:p>');
+    }
+  }
+  const document=bounded('<?xml version="1.0" encoding="UTF-8"?>'+
+    '<office:document-content '+
+    'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '+
+    'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" '+
+    'xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" '+
+    'xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" office:version="1.3">'+
+    '<office:automatic-styles>'+
+    '<style:style style:name="PageBreak" style:family="paragraph">'+
+    '<style:paragraph-properties fo:break-before="page"/>'+
+    '</style:style></office:automatic-styles>'+
+    '<office:body><office:text>'+paras.join('')+
+    '</office:text></office:body></office:document-content>');
+  const styles=bounded('<?xml version="1.0" encoding="UTF-8"?>'+
+    '<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" office:version="1.3">'+
+    '<office:styles/></office:document-styles>');
+  const manifest=bounded('<?xml version="1.0" encoding="UTF-8"?>'+
+    '<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3">'+
+    '<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/>'+
+    '<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>'+
+    '<manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>'+
+    '</manifest:manifest>');
+  const bytes=zipSync({
+    mimetype:[encode('application/vnd.oasis.opendocument.text'),{level:0}],
+    'content.xml':[document,{level:6}],
+    'styles.xml':[styles,{level:6}],
+    'META-INF/manifest.xml':[manifest,{level:6}],
+  });
+  if(bytes.length>PDF_OFFICE_TEXT_MAX_BYTES){
+    throw new Error('ODT archive exceeds the 16 MB output safety limit.');
+  }
+  return bytes;
+}
+export function inspectPdfTextOdt(bytes:Uint8Array):{
+  paragraphCount:number;hasPageBreak:boolean;
+}{
+  if(bytes.length<38||bytes.length>PDF_OFFICE_TEXT_MAX_BYTES||
+     bytes[0]!==80||bytes[1]!==75||bytes[2]!==3||bytes[3]!==4||
+     bytes[8]!==0||bytes[9]!==0){
+    throw new Error('ODT must start with an uncompressed ZIP mimetype entry.');
+  }
+  const length=bytes[26]+bytes[27]*256;
+  const name=new TextDecoder('utf-8',{fatal:true}).decode(bytes.slice(30,30+length));
+  if(name!=='mimetype')throw new Error('ODT mimetype must be the first archive member.');
+  const files=unzipSync(bytes);
+  if(Object.keys(files).length!==4||
+     !['mimetype','content.xml','styles.xml','META-INF/manifest.xml'].every(name=>name in files)){
+    throw new Error('ODT is missing required package members.');
+  }
+  for(const entry of Object.values(files)){
+    if(entry.length>PDF_OFFICE_TEXT_MAX_BYTES)throw new Error('ODT member is too large.');
+  }
+  const read=(key:string)=>new TextDecoder('utf-8',{fatal:true}).decode(files[key]);
+  const content=read('content.xml');
+  if(read('mimetype')!=='application/vnd.oasis.opendocument.text'||
+     !read('META-INF/manifest.xml').includes('manifest:full-path="/"')||
+     !content.includes('<office:document-content ')||
+     !content.includes('</office:document-content>')){
+    throw new Error('ODT document content or manifest is invalid.');
+  }
+  return {
+    paragraphCount:(content.match(/<text:p(?:\s|>)/g)??[]).length,
+    hasPageBreak:content.includes('text:style-name="PageBreak"'),
+  };
+}
+
 /** RTF supports UTF-16 signed \uN code units with an ASCII fallback. */
 function rtfEscape(value:string):string{
   let output='';
@@ -126,6 +208,7 @@ export function serializePdfOfficeText(
   data:PdfStructuredJson,format:PdfOfficeTextFormat,
 ):Uint8Array{
   if(format==='docx')return serializePdfDocx(data);
+  if(format==='odt')return serializePdfOdt(data);
   if(format==='rtf')return serializePdfRtf(data);
   throw new Error('Unsupported PDF Office text format.');
 }
