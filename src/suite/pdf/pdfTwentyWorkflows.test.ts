@@ -76,6 +76,12 @@ describe('20 source-pinned PDF processing workflows',()=>{
     await expect(classifyPdfBatchOutput(workflow,response(csv,'text/html'),responseIsPdf)).rejects.toThrow(/content type/);
     await expect(classifyPdfBatchOutput(workflow,response(pdf,'text/csv'),responseIsPdf)).rejects.toThrow();
   });
+  it('does not accept truncated protected or sanitized copies',async()=>{
+    for(const id of ['sanitize-pdf','add-password']){
+      const workflow=PDF_TWENTY_WORKFLOWS.find(item=>item.id===id)!;
+      await expect(classifyPdfBatchOutput(workflow,response([37,80,68,70,45],'application/pdf'),responseIsPdf)).rejects.toThrow();
+    }
+  });
   it('rejects truncated, empty, corrupt and non-PDF split archives before saving',async()=>{
     await expect(verifyPdfBatchZip([80,75,3,4,0,0,0,0])).rejects.toThrow(/invalid|unsafe/i);
     await expect(verifyPdfBatchZip(Array.from(zipSync({})))).rejects.toThrow(/no valid/i);
@@ -87,10 +93,11 @@ describe('20 source-pinned PDF processing workflows',()=>{
     await expect(verifyPdfBatchZip(Array.from(zipSync({'broken.png':Uint8Array.from(png.slice(0,20))})),'image')).rejects.toThrow(/incomplete/);
     await expect(verifyPdfBatchZip(Array.from(zipSync({'image.png':Uint8Array.from(png)})),'image')).resolves.toBeUndefined();
   });
-  it('keeps password and sanitization outputs as copies',async()=>{
+  it('rejects fake protected copy results while allowing verified sanitized PDFs',async()=>{
     for(const id of ['add-password','sanitize-pdf']){
       const workflow=PDF_TWENTY_WORKFLOWS.find(item=>item.id===id)!;
-      expect(await classifyPdfBatchOutput(workflow,response(pdf,'application/pdf'),responseIsPdf)).toBe('save-pdf-copy');
+      if(id==='sanitize-pdf')expect(await classifyPdfBatchOutput(workflow,response(pdf,'application/pdf'),responseIsPdf)).toBe('save-pdf-copy');
+      else await expect(classifyPdfBatchOutput(workflow,response(pdf,'application/pdf'),responseIsPdf)).rejects.toThrow(/Password protection/);
     }
   });
 });
