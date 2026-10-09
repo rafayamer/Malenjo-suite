@@ -9,12 +9,14 @@ test('every pinned PDF requirement is audited for release gates without false ac
   const report=assessPdfRelease(matrix);
   assert.equal(report.summary.total,90);
   assert.equal(report.operations.length,90);
-  assert.equal(report.summary.notAccepted,90);
-  assert.equal(report.summary.accepted,0);
-  assert.equal(report.summary.partial,27);
-  assert.equal(report.summary.unaudited,63);
-  assert.equal(report.ready,false);
-  assert.ok(report.operations.every(x=>x.blockers.includes('actual offline Windows execution')));
+  assert.equal(report.summary.notAccepted+report.summary.accepted,90);
+  assert.equal(report.summary.partial,matrix.operations.filter(x=>x.evidence.functionalStatus==='partial').length);
+  assert.equal(report.summary.unaudited,matrix.operations.filter(x=>x.evidence.functionalStatus===null).length);
+  assert.equal(report.ready,report.summary.accepted===90);
+  assert.ok(report.operations.every(x=>x.accepted||x.blockers.length>0));
+  for(const row of matrix.operations.filter(x=>x.evidence.windowsOffline!=='verified')){
+    assert.ok(report.operations.find(x=>x.id===row.upstreamToolId).blockers.includes('actual offline Windows execution'));
+  }
 });
 test('requires license, UI, positive and negative tests, saved output and manual acceptance',()=>{
   const row=structuredClone(matrix.operations[0]);

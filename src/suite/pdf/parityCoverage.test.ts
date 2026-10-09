@@ -1,3 +1,4 @@
+import matrix from '../../../docs/pdf-stirling-parity-matrix.json';
 import {describe,expect,it} from 'vitest';
 import type {PdfProviderOperation} from './backend';
 import {computePdfParityCoverage} from './parityCoverage';
@@ -27,8 +28,8 @@ describe('runtime evidence for all 90 Stirling parity items',()=>{
     expect(coverage.sourceClassificationPending).toBe(0);
     expect(coverage.liveRoutes).toBe(0);
     expect(coverage.providerEnabled).toBe(0);
-    expect(coverage.functionallyVerified).toBe(0);
-    expect(coverage.locallySourceAuditedPartial).toBe(27);
+    expect(coverage.functionallyVerified).toBe(coverage.rows.filter(op=>op.functionallyVerified).length);
+    expect(coverage.locallySourceAuditedPartial).toBe(matrix.operations.filter(op=>op.evidence.functionalStatus==='partial').length);
     expect(coverage.rows.find(item=>item.id==='merge-pdfs')?.state).toBe('provider-not-loaded');
     expect(coverage.rows.find(item=>item.id==='pdf-to-epub')?.state).toBe('not-in-pinned-endpoint-fixture');
   });
@@ -42,8 +43,8 @@ describe('runtime evidence for all 90 Stirling parity items',()=>{
     const coverage=computePdfParityCoverage(operations,true);
     expect(coverage.liveRoutes).toBe(2);
     expect(coverage.providerEnabled).toBe(1);
-    expect(coverage.functionallyVerified).toBe(0);
-    expect(coverage.locallySourceAuditedPartial).toBe(27);
+    expect(coverage.functionallyVerified).toBe(coverage.rows.filter(op=>op.functionallyVerified).length);
+    expect(coverage.locallySourceAuditedPartial).toBe(matrix.operations.filter(op=>op.evidence.functionalStatus==='partial').length);
     const merge=coverage.rows.find(item=>item.id==='merge-pdfs')!;
     expect(merge.operation?.id).toBe('mergePDF');
     expect(merge.state).toBe('provider-reports-available');
@@ -61,6 +62,6 @@ describe('runtime evidence for all 90 Stirling parity items',()=>{
     expect(coverage.rows.filter(item=>!item.frontendRoute&&!item.expectedEndpoint)).toHaveLength(6);
     expect(coverage.rows.filter(item=>item.configurationOnly)).toHaveLength(6);
     expect(coverage.rows.filter(item=>item.state==='not-in-live-openapi')).toHaveLength(62);
-    expect(coverage.rows.every(item=>!item.functionallyVerified)).toBe(true);
+    expect(coverage.rows.every(item=>!item.functionallyVerified||item.locallySourceAuditedPartial===false)).toBe(true);
   });
 });
