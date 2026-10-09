@@ -7,7 +7,7 @@ import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput,verify
 import {responseIsPdf} from './stirlingCore';
 const pdf=Array.from(await (async()=>{const d=await PDFDocument.create();d.addPage([200,200]);return d.save();})());
 const zip=Array.from(zipSync({'one.pdf':Uint8Array.from(pdf)}));
-function validPng():number[]{
+function validPng(depth=8,color=6,pixels:number[]=[200,80,40,255],palette:number[]=[]):number[]{
   const be=(x:number)=>[(x>>>24)&255,(x>>>16)&255,(x>>>8)&255,x&255];
   const chunk=(name:string,data:number[]):number[]=>{
     const payload=[...Array.from(name).map(c=>c.charCodeAt(0)),...data];
@@ -16,8 +16,9 @@ function validPng():number[]{
     return [...be(data.length),...payload,...be((crc^0xffffffff)>>>0)];
   };
   return [137,80,78,71,13,10,26,10,
-    ...chunk('IHDR',[...be(1),...be(1),8,6,0,0,0]),
-    ...chunk('IDAT',Array.from(zlibSync(Uint8Array.from([0,200,80,40,255])))),
+    ...chunk('IHDR',[...be(1),...be(1),depth,color,0,0,0]),
+    ...(palette.length?chunk('PLTE',palette):[]),
+    ...chunk('IDAT',Array.from(zlibSync(Uint8Array.from([0,...pixels])))),
     ...chunk('IEND',[])];
 }
 const png=validPng();
@@ -81,6 +82,39 @@ describe('20 source-pinned PDF processing workflows',()=>{
         await expect(classifyPdfBatchOutput(workflow,response(Array.from(zipSync({['image.'+extension]:Uint8Array.from(bytes.slice(0,-10))})),'application/zip'),responseIsPdf)).rejects.toThrow();
       }
     }
+  });
+  it('accepts legal bilevel, indexed and 16-bit PNG images in direct and ZIP exports',async()=>{
+    const workflow=PDF_TWENTY_WORKFLOWS.find(item=>item.id==='extract-images')!;
+    for(const data of [
+      validPng(1,0,[128]),
+      validPng(1,3,[0],[0,0,0,255,255,255]),
+      validPng(16,0,[0,200]),
+    ]){
+      expect(await classifyPdfBatchOutput(workflow,response(data,'image/png'),responseIsPdf)).toBe('save-file');
+      expect(await classifyPdfBatchOutput(workflow,response(Array.from(zipSync({'image.png':Uint8Array.from(data)})),'application/zip'),responseIsPdf)).toBe('save-file');
+    }
+  });
+  it('rejects JPEGs with zero SOF or SOS component counts even with a complete envelope',async()=>{
+    const workflow=PDF_TWENTY_WORKFLOWS.find(item=>item.id==='extract-images')!;
+    for(const marker of [0xc0,0xda]){
+      const damaged=jpeg.slice();
+      let start=-1;
+      for(let i=0;i<damaged.length-2;i++){
+        if(damaged[i]===255&&damaged[i+1]===marker){start=i;break;}
+      }
+      expect(start).toBeGreaterThan(0);
+      damaged[start+(marker===0xc0?9:4)]=0;
+      await expect(classifyPdfBatchOutput(workflow,response(damaged,'image/jpeg'),responseIsPdf)).rejects.toThrow();
+    }
+  });
+  it('rejects uncompressed TIFF strips smaller than their stated raster dimensions',async()=>{
+    const workflow=PDF_TWENTY_WORKFLOWS.find(item=>item.id==='extract-images')!;
+    const damaged=tiff.slice();
+    const index=damaged.findIndex((v,i)=>v===0x17&&damaged[i+1]===0x01);
+    expect(index).toBeGreaterThan(0);
+    damaged[index+8]=1;damaged[index+9]=0;damaged[index+10]=0;damaged[index+11]=0;
+    await expect(classifyPdfBatchOutput(workflow,response(damaged,'image/tiff'),responseIsPdf)).rejects.toThrow();
+    await expect(classifyPdfBatchOutput(workflow,response(Array.from(zipSync({'damaged.tiff':Uint8Array.from(damaged)})),'application/zip'),responseIsPdf)).rejects.toThrow();
   });
   it('rejects false ZIP exports and invalid CSV bytes or MIME',async()=>{
     for(const workflow of PDF_TWENTY_WORKFLOWS.filter(item=>item.output==='zip')){
