@@ -594,7 +594,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       <p className="stirling-provider-message">
         {parity.locallySourceAuditedPartial} local MALENJO operations have partial source/test evidence; {parity.total-parity.locallySourceAuditedPartial} still need a full implementation-source audit. A provider reporting an available endpoint is
         NOT proof of functional correctness, offline Windows operation, safe licensing,
-        or export/reopen fidelity. None has passed the complete parity acceptance gate.
+        or export/reopen fidelity. {parity.functionallyVerified} of {parity.total} operations have passed the complete parity acceptance gate.
       </p>
       <div style={{maxHeight:340,overflowY:'auto'}}>
         <table aria-label="Stirling PDF tool parity by requirement">
@@ -603,7 +603,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
             {parity.rows.map((row)=><tr key={row.id}>
               <th scope="row">{row.order}. {row.id}</th>
               <td>{row.expectedEndpoint?`${row.expectedEndpoint}${row.controllerOnly?' (controller only)':''}`:(row.frontendRoute?`${row.frontendRoute} (frontend only)`:'No pinned route identified')}</td>
-              <td>{row.locallySourceAuditedPartial?'Local foundation partial; ':''}{row.state==='provider-reports-available'?'Reported enabled; unverified'
+              <td>{row.functionallyVerified?'Release accepted; ':row.locallySourceAuditedPartial?'Local foundation partial; ':''}{row.state==='provider-reports-available'?'Reported enabled; unverified'
                 :row.state==='provider-disabled'?'Provider disabled'
                 :row.state==='not-in-live-openapi'?'Missing from loaded OpenAPI'
                 :row.state==='provider-not-loaded'?'Start local provider'
