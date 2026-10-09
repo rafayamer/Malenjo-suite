@@ -435,7 +435,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       }
       const response=await provider.run(selected,fields,files);
       const action=batchWorkflow
-        ?classifyPdfBatchOutput(batchWorkflow,response,provider.responseIsPdf)
+        ?await classifyPdfBatchOutput(batchWorkflow,response,provider.responseIsPdf)
         :classifyPdfProviderResult(response,selected.path,provider.responseIsPdf);
       if(action==='apply-pdf'&&sourceRevision){
         const applied=await onApplyPdf(`Local PDF core: ${selected.summary}`,Uint8Array.from(response.bytes),sourceRevision);

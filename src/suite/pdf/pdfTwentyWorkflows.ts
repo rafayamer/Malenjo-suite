@@ -1,4 +1,5 @@
 import {unzipSync} from 'fflate';
+import {PDFDocument} from 'pdf-lib';
 import type {PdfProviderOperation,PdfProviderResponse} from './backend';
 import {classifyPdfProviderResult,type PdfProviderResultAction} from './providerResultGuard';
 
@@ -42,7 +43,7 @@ function isZip(bytes:number[]):boolean{
 }
 const MAX_ZIP_BYTES=32*1024*1024;
 const MAX_EXTRACTED_BYTES=128*1024*1024;
-export function verifyPdfBatchZip(bytes:number[]):void{
+export async function verifyPdfBatchZip(bytes:number[],kind:'pdf'|'image'='pdf'):Promise<void>{
   if(bytes.length>MAX_ZIP_BYTES)throw new Error('ZIP export exceeds 32 MB inspection limit.');
   let total=0,files=0;
   let archive:Record<string,Uint8Array>;
@@ -50,7 +51,7 @@ export function verifyPdfBatchZip(bytes:number[]):void{
     archive=unzipSync(Uint8Array.from(bytes),{
       filter:(file)=>{
         if(file.name.endsWith('/'))return false;
-        if(!file.name.toLowerCase().endsWith('.pdf'))throw new Error('Archive contains a non-PDF member.');
+        if(kind==='pdf'?!file.name.toLowerCase().endsWith('.pdf'):!/(\.png|\.jpe?g|\.tiff?)$/.test(file.name.toLowerCase()))throw new Error('Archive contains an unexpected file type.');
         if(file.originalSize<=0||file.originalSize>MAX_EXTRACTED_BYTES-total){
           throw new Error('Archive extraction exceeds 128 MB budget.');
         }
@@ -64,8 +65,12 @@ export function verifyPdfBatchZip(bytes:number[]):void{
     throw new Error('PDF ZIP export is invalid or unsafe: '+(reason instanceof Error?reason.message:String(reason)));
   }
   const entries=Object.values(archive);
-  if(!entries.length||entries.length!==files||entries.some(v=>v.length<5||v[0]!==37||v[1]!==80||v[2]!==68||v[3]!==70||v[4]!==45)){
-    throw new Error('PDF ZIP export contains no valid PDF entries.');
+  if(!entries.length||entries.length!==files)throw new Error('ZIP export contains no valid entries.');
+  for(const entry of entries){
+    if(kind==='pdf'){
+      try{const doc=await PDFDocument.load(entry,{ignoreEncryption:false,updateMetadata:false});if(doc.getPageCount()<1)throw new Error('Empty PDF');}
+      catch{throw new Error('ZIP export contains a damaged or unreadable PDF.');}
+    }else if(!isImage(Array.from(entry)))throw new Error('Image ZIP export contains a malformed image header.');
   }
 }
 function isImage(bytes:number[]):boolean{
@@ -78,10 +83,10 @@ function isImage(bytes:number[]):boolean{
 /** Validate provider bytes, not just its claimed MIME or HTTP status.
  * Header checks are a preflight, not a substitute for PDF/ZIP reopening.
  */
-export function classifyPdfBatchOutput(
+export async function classifyPdfBatchOutput(
   workflow:PdfBatchWorkflow, response:PdfProviderResponse,
   isPdf:(response:PdfProviderResponse)=>boolean,
-):PdfProviderResultAction{
+):Promise<PdfProviderResultAction>{
   const generic=classifyPdfProviderResult(response,workflow.path,isPdf);
   const pdf=isPdf(response);
   if(workflow.output==='pdf'||workflow.output==='copy'){
@@ -91,8 +96,9 @@ export function classifyPdfBatchOutput(
   if(pdf)throw new Error(workflow.label+' unexpectedly returned PDF data; original preserved.');
   if(workflow.output==='zip'){
     if(!isZip(response.bytes))throw new Error(workflow.label+' did not return ZIP data.');
-    verifyPdfBatchZip(response.bytes);
+    await verifyPdfBatchZip(response.bytes,'pdf');
   }
+  if(workflow.output==='image'&&isZip(response.bytes))await verifyPdfBatchZip(response.bytes,'image');
   if(workflow.output==='image'&&!isZip(response.bytes)&&!isImage(response.bytes)){
     throw new Error(workflow.label+' did not return a supported image/ZIP export.');
   }
