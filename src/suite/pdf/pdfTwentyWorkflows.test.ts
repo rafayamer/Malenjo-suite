@@ -64,12 +64,12 @@ describe('20 source-pinned PDF processing workflows',()=>{
     await expect(classifyPdfBatchOutput(workflow,response(pdf,'text/csv'),responseIsPdf)).rejects.toThrow();
   });
   it('rejects truncated, empty, corrupt and non-PDF split archives before saving',async()=>{
-    await expect(verifyPdfBatchZip([80,75,3,4,0,0,0,0]))).rejects.toThrow(/invalid|unsafe/i);
-    await expect(verifyPdfBatchZip(Array.from(zipSync({}))))).rejects.toThrow(/no valid/i);
-    await expect(verifyPdfBatchZip(Array.from(zipSync({'evil.pdf':strToU8('<html>')}))))).rejects.toThrow(/no valid/i);
-    await expect(verifyPdfBatchZip(Array.from(zipSync({'evil.txt':strToU8('hi')}))))).rejects.toThrow(/non-PDF/i);
+    await expect(verifyPdfBatchZip([80,75,3,4,0,0,0,0])).rejects.toThrow(/invalid|unsafe/i);
+    await expect(verifyPdfBatchZip(Array.from(zipSync({})))).rejects.toThrow(/no valid/i);
+    await expect(verifyPdfBatchZip(Array.from(zipSync({'evil.pdf':strToU8('<html>')})))).rejects.toThrow(/unreadable PDF/i);
+    await expect(verifyPdfBatchZip(Array.from(zipSync({'evil.txt':strToU8('hi')})))).rejects.toThrow(/file type/i);
     await expect(verifyPdfBatchZip(zip)).resolves.toBeUndefined();
-    await expect(verifyPdfBatchZip(Array.from(zipSync({'bad.pdf':strToU8('%PDF-')})))).rejects.toThrow(/unreadable PDF/);
+    await expect(verifyPdfBatchZip(Array.from(zipSync({'bad.pdf':strToU8('%PDF-')})).rejects.toThrow(/unreadable PDF/);
     await expect(verifyPdfBatchZip([80,75,3,4,0,0], 'image')).rejects.toThrow();
     await expect(verifyPdfBatchZip(Array.from(zipSync({'image.png':Uint8Array.from(png)})),'image')).resolves.toBeUndefined();
   });
