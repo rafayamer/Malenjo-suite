@@ -3939,26 +3939,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfOutlineTree.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/bookmarkEditor.ts"
+        ],
+        "frontendCommand": "Edit nested PDF table of contents (offline)",
+        "provider": "MALENJO pdf-lib PDF /Outlines editor",
+        "dependency": "Bundled pdf-lib",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "addPdfOutlineTreeEntry"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfOutlineTree.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfOutlineTree.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "Max 32 MB PDF, 1–2,000 pages, 1,000 outline entries, 16 nesting levels; rejects signature byte ranges, AcroForm signatures, XFA, certifications and encrypted PDFs."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Locally edits nested PDF /Outlines, preserves named destinations/hidden branches, adds child page destinations, reorders siblings, renames and optionally removes entire subtrees; full named-destination editing, cross-parent drag/reorder and packaged Windows acceptance remain unverified."
       ]
     },
     {
@@ -5348,8 +5358,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 66,
-    "unverifiedSourceCount": 24,
+    "localSourcePartialCount": 67,
+    "unverifiedSourceCount": 23,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
