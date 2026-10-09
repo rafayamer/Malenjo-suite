@@ -38,7 +38,7 @@ function boundedOutline(outline:OutlineItem[]|null):PdfStructuredJson['bookmarks
   const pending=(outline??[]).map(item=>({item,depth:0})).reverse();
   while(pending.length){
     const {item,depth}=pending.pop()!;
-    if(++bookmarks.length>PDF_JSON_MAX_BOOKMARKS){
+    if(bookmarks.length>=PDF_JSON_MAX_BOOKMARKS){
       throw new Error('PDF bookmark inventory exceeds 10,000 entries.');
     }
     if(depth>32){
@@ -47,7 +47,7 @@ function boundedOutline(outline:OutlineItem[]|null):PdfStructuredJson['bookmarks
     if(typeof item.title!=='string'||item.title.length>4096){
       throw new Error('PDF bookmark title is invalid or too long.');
     }
-    bookmarks[bookmarks.length-1]={title:item.title,depth};
+    bookmarks.push({title:item.title,depth});
     for(let i=item.items.length-1;i>=0;i--){
       pending.push({item:item.items[i],depth:depth+1});
     }
