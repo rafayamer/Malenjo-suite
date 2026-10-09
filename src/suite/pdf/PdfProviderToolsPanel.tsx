@@ -27,6 +27,7 @@ import { exportPdfStructuredXml } from './pdfToXml';
 import {exportPdfTextFormat,type PdfTextFormat} from './pdfTextFormats';
 import {exportPdfCbz} from './pdfToCbz';
 import {exportPdfOfficeText,inspectPdfTextDocx,type PdfOfficeTextFormat} from './pdfOfficeText';
+import {exportPdfEpub,inspectPdfEpubArchive} from './pdfToEpub';
 import { splitPdfByPageCount } from './splitByPageCount';
 import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput} from './pdfTwentyWorkflows';
 import {verifyProviderCompletion} from './pdfProviderCompletion';
@@ -423,6 +424,40 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }
   }
 
+  async function saveOfflineEpub(){
+    if(!sourceBytes||busy)return;
+    const original=sourceBytes;
+    setBusy(true);setError('');setNotice('');
+    let loaded:Awaited<ReturnType<typeof loadPdfBytes>>|null=null;
+    try{
+      if(!original.byteLength||original.byteLength>512*1024*1024){
+        throw new Error('PDF to EPUB requires a document of at most 512 MB.');
+      }
+      const info=await inspectPdfDocumentInfo(original);
+      loaded=await loadPdfBytes(original);
+      const output=await exportPdfEpub(loaded.document,info,{
+        onProgress:(done,total)=>setNotice('Extracting e-book text '+done+'/'+total+'…'),
+      });
+      const verified=inspectPdfEpubArchive(output);
+      if(verified.pageLinks!==loaded.document.numPages||!verified.hasText){
+        throw new Error('EPUB navigation or readable content is missing.');
+      }
+      if(activeSourceRef.current!==original){
+        throw new Error('PDF changed during EPUB conversion; stale output was not saved.');
+      }
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/epub+zip',bytes:Array.from(output),
+      },localExportStem(sourceName)+'-text');
+      setNotice(saved?('Saved reflowable EPUB 3 e-book: '+saved):
+        'EPUB save cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+      setNotice('');
+    }finally{
+      try{await disposePdf(loaded);}finally{setBusy(false);}
+    }
+  }
+
   async function applyOfflinePaperSize(){
     if(!sourceBytes||busy)return;
     setBusy(true);setError('');setNotice('');
@@ -647,6 +682,9 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       </button>
       <button disabled={busy||!sourceBytes} onClick={()=>void saveOfflineWordText('rtf')}>
         <FileOutput size={14}/>Export selectable PDF text to RTF (offline)
+      </button>
+      <button disabled={busy||!sourceBytes} onClick={()=>void saveOfflineEpub()}>
+        <FileOutput size={14}/>Export selectable PDF text to EPUB 3 e-book (offline)
       </button>
       <button disabled={busy||!sourceBytes} onClick={()=>void cleanReviewAnnotations()}>
         <FileOutput size={14}/>Remove review annotations (offline)
