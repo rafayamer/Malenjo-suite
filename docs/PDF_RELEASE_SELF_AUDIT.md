@@ -4,7 +4,7 @@
 
 ## Decision
 
-**Full PDF parity release is blocked.** Exactly 90 handoff requirements are enumerated; **0 carry complete acceptance evidence**. There are 48 native/source-backed partial foundations plus 19 source-audited provider-dispatch-only partial integrations (67 partial total), with 23 implementation-source-unaudited requirements. The passing CI pipeline proves builds, tests and a subset of provider smoke routes, not the whole Windows installer + UI end-to-end matrix. The `tauri:release` command now fails closed until all 90 requirements have explicit acceptance evidence. Ordinary development builds remain possible.
+**Full PDF parity release is blocked.** Exactly 90 handoff requirements are enumerated; **0 carry complete acceptance evidence**. There are 49 native/source-backed partial foundations plus 19 source-audited provider-dispatch-only partial integrations (68 partial total), with 22 implementation-source-unaudited requirements. The passing CI pipeline proves builds, tests and a subset of provider smoke routes, not the whole Windows installer + UI end-to-end matrix. The `tauri:release` command now fails closed until all 90 requirements have explicit acceptance evidence. Ordinary development builds remain possible.
 
 The review's two PNG defects have implementation-level fixes in `pngIntegrity.ts` with Adam7/filter/palette positive and negative tests. This is not enough to accept PDF-to-images or extract-images as end-to-end workflows without live output saved and reopened on Windows.
 
@@ -13,7 +13,7 @@ The review's two PNG defects have implementation-level fixes in `pngIntegrity.ts
 | Group | Requirements | Source-backed partial | Awaiting implementation audit |
 |---|---:|---:|---:|
 | page | 18 | 18 | 0 |
-| conversion | 24 | 17 | 7 |
+| conversion | 24 | 18 | 6 |
 | security | 16 | 10 | 6 |
 | scan-extraction | 6 | 4 | 2 |
 | editing-analysis | 10 | 7 | 3 |
@@ -67,7 +67,7 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 | 39 | `eml-to-pdf` | Native text/plain MIME partial | No matching execution proof | Partial; HTML, attachments, Windows reopen pending |
 | 40 | `cbz-to-pdf` | Native PNG/JPEG CBZ partial | No matching execution proof | Partial; full format parity and Windows acceptance pending |
 | 41 | `json-to-pdf` | Native JSON text-report partial | No matching execution proof | Partial; visual conversion and Windows acceptance pending |
-| 42 | `vector-to-pdf` | Configuration only | No matching execution proof | Not audited; implementation and acceptance pending |
+| 42 | `vector-to-pdf` | Native SVG vector-subset partial | No clean installed-Windows proof | Partial; arbitrary SVG and EPS parity and Windows acceptance pending |
 | 43 | `add-password` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
 | 44 | `remove-password` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
 | 45 | `change-permissions` | Frontend-only alias | No matching execution proof | Not audited; implementation and acceptance pending |

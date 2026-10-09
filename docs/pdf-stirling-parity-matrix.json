@@ -2546,28 +2546,37 @@
         ]
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/svgToPdf.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Convert safe SVG vector shapes to PDF",
+        "provider": "MALENJO native SVG-path to pdf-lib vector renderer",
+        "dependency": "Bundled pdf-lib",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "convertSvgToPdf"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/svgToPdf.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/svgToPdf.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "2 MB UTF-8 SVG source, 2,000 safe shapes, 19,200 px max dimensions, 16 MB generated PDF; rejects active content, external URLs, unsupported markup and non-vector imports."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
         "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
         "Ghostscript-only route is not available in reviewed default Windows provider pack.",
-        "Upstream endpoint group declaration is not executable proof; no live OpenAPI path or Windows result has been verified."
+        "Upstream endpoint group declaration is not executable proof; no live OpenAPI path or Windows result has been verified.",
+        "The native SVG subset writes actual PDF path/shape drawing operators offline and refuses active/external SVG constructs. It does not support text, raster assets, transforms, curves/groups beyond accepted path syntax, colorspaces or arbitrary SVG parity. Clean Windows viewer acceptance remains pending."
       ]
     },
     {
@@ -5358,8 +5367,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 67,
-    "unverifiedSourceCount": 23,
+    "localSourcePartialCount": 68,
+    "unverifiedSourceCount": 22,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
