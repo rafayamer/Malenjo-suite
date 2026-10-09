@@ -9,7 +9,7 @@ export const PDF_JSON_MAX_PAGES=2000;
 export const PDF_JSON_MAX_CHARS=8_000_000;
 export const PDF_JSON_MAX_TEXT_ITEMS=200_000;
 export const PDF_JSON_MAX_BOOKMARKS=10_000;
-export const PDF_JSON_MAX_OUTPUT_BYTES=32_000_000;
+export const PDF_JSON_MAX_OUTPUT_BYTES=16_000_000;
 
 type OutlineItem={title:string;items:OutlineItem[]};
 export interface PdfStructuredJson{
