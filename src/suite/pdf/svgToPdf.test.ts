@@ -22,7 +22,7 @@ describe('safe offline SVG shapes to real vector PDF',()=>{
     expect(result.getPage(0).getHeight()).toBe(75);
     const xobject=result.getPage(0).node.normalizedEntries().Resources.lookupMaybe(
       PDFName.of('XObject'),PDFDict);
-    expect(xobject?.size()??0).toBe(0);
+    expect(xobject?.keys().length??0).toBe(0);
   });
   it('accepts nonzero viewBox origins without pixel rasterization',async()=>{
     const pdf=await accepts(svg('<rect x="100" y="-50" width="50" height="25" fill="#f00"/>',
