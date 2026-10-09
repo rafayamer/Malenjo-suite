@@ -1325,7 +1325,7 @@
           "src/suite/pdf/PdfProviderToolsPanel.tsx",
           "src/suite/pdf/pdfToJson.ts"
         ],
-        "frontendCommand": "Export selectable PDF text to Word DOCX (offline)",
+        "frontendCommand": "Export selectable PDF text to Word DOCX or OpenDocument ODT (offline)",
         "provider": "MALENJO native pdf-lib/PDF.js with fflate OpenXML container",
         "dependency": "Bundled PDF.js worker; pdf-lib; fflate",
         "providerCatalogMatchKey": "/api/v1/convert/pdf/word",
@@ -1344,11 +1344,12 @@
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": "1–2,000 pages, 8M selectable chars, 200k fragments; 16 MB DOCX/XML cap."
+        "limits": "1–2,000 pages, 8M selectable chars, 200k fragments; 16 MB DOCX or ODT package/XML output."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Native DOCX contains bounded selectable text and explicit page breaks, not original PDF graphics, tables, layout, fonts or complete DOCX/ODT conversion. No clean Windows Word reopen acceptance yet."
+        "Native DOCX contains bounded selectable text and explicit page breaks, not original PDF graphics, tables, layout, fonts or complete DOCX/ODT conversion. No clean Windows Word reopen acceptance yet.",
+        "ODT added as a real OpenDocument ZIP container with first uncompressed mimetype, content/style and manifest parts plus Unicode/page-break tests. Windows LibreOffice/Word acceptance and fidelity remain unverified."
       ]
     },
     {
