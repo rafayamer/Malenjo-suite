@@ -30,6 +30,7 @@ import {exportPdfOfficeText,inspectPdfTextDocx,type PdfOfficeTextFormat} from '.
 import {exportPdfEpub,inspectPdfEpubArchive} from './pdfToEpub';
 import {proposePdfMetadataFilename} from './pdfAutoRename';
 import {convertJsonToPdf,JSON_TO_PDF_MAX_INPUT_BYTES} from './jsonToPdf';
+import {convertCbzToPdf,CBZ_TO_PDF_MAX_SOURCE_BYTES} from './cbzToPdf';
 import { splitPdfByPageCount } from './splitByPageCount';
 import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput} from './pdfTwentyWorkflows';
 import {verifyProviderCompletion} from './pdfProviderCompletion';
@@ -89,6 +90,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   const metadataInspectionRef=useRef(0);
   const [splitPagesPerPart,setSplitPagesPerPart]=useState('2');
   const [jsonToPdfFile,setJsonToPdfFile]=useState<File|null>(null);
+  const [cbzToPdfFile,setCbzToPdfFile]=useState<File|null>(null);
   const [paperSize,setPaperSize]=useState<PdfPaperSize>('A4');
   const [paperOrientation,setPaperOrientation]=useState<PdfPaperOrientation>('portrait');
   const [paperMargin,setPaperMargin]=useState('18');
@@ -505,6 +507,27 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }finally{setBusy(false);}
   }
 
+  async function saveOfflineCbzPdf(){
+    if(!cbzToPdfFile||busy)return;
+    const file=cbzToPdfFile;
+    setBusy(true);setError('');setNotice('');
+    try{
+      if(!file.size||file.size>CBZ_TO_PDF_MAX_SOURCE_BYTES){
+        throw new Error('CBZ conversion requires a comic archive of at most 32 MB.');
+      }
+      const output=await convertCbzToPdf(new Uint8Array(await file.arrayBuffer()));
+      if(cbzToPdfFile!==file){
+        throw new Error('CBZ source changed during conversion. No stale output saved.');
+      }
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/pdf',bytes:Array.from(output),
+      },localExportStem(file.name.replace(/\.cbz$/i,''))+'-comic');
+      setNotice(saved?('Saved comic PDF: '+saved):'CBZ to PDF export save cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));setNotice('');
+    }finally{setBusy(false);}
+  }
+
   async function applyOfflinePaperSize(){
     if(!sourceBytes||busy)return;
     setBusy(true);setError('');setNotice('');
@@ -740,6 +763,18 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         <FileOutput size={14}/>Remove review annotations (offline)
       </button>
     </div>
+    {category==='convert'&&<details className="stirling-component-details" aria-label="Offline CBZ to PDF conversion">
+      <summary>CBZ comic images to PDF (offline)</summary>
+      <p>Convert up to 50 PNG/JPEG comic pages, naturally ordered by filename, into a real reopenable PDF. Malformed images, archive traversal paths, oversized files and unsupported image types are refused. This raster conversion does not reconstruct searchable text.</p>
+      <label className="stirling-field"><span>CBZ comic archive</span>
+        <input type="file" accept=".cbz,application/vnd.comicbook+zip" disabled={busy}
+          onChange={event=>setCbzToPdfFile(event.target.files?.[0]??null)}/>
+      </label>
+      <button type="button" disabled={busy||!cbzToPdfFile}
+        onClick={()=>void saveOfflineCbzPdf()}>
+        <FileOutput size={14}/>Convert CBZ comic to PDF (offline)
+      </button>
+    </details>}
     {category==='convert'&&<details className="stirling-component-details" aria-label="Offline JSON to PDF conversion">
       <summary>JSON to PDF text report (offline)</summary>
       <p>Choose a valid UTF-8 JSON document to create a paginated, searchable PDF report. This text-only conversion retains the JSON structure and renders non-ASCII characters as reversible JSON Unicode escapes. It does not infer tables, graphical layouts or PDF forms; maximum JSON source is 2 MB.</p>
