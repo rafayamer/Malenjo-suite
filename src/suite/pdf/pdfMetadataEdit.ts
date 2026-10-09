@@ -59,7 +59,7 @@ export async function updatePdfBasicMetadata(
   if(pages<1||pages>PDF_INFO_MAX_PAGES){
     throw new Error('PDF metadata editing supports 1–2,000 pages.');
   }
-  if(hasSignatureDictionary(pdf)){
+  if(pdf.catalog.has(PDFName.of('Perms'))||hasSignatureDictionary(pdf)){
     throw new Error('PDF contains a signature field or byte range. Editing it here could invalidate a digital signature; use a signed-document workflow.');
   }
 

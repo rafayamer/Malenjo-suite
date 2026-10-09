@@ -12,6 +12,7 @@ describe('renderer-side safe provider request bounds',()=>{
   });
   it('rejects oversize, malicious metadata and invalid input counts before JS number[] conversion',()=>{
     expect(()=>validatePdfUploadPlan([{name:'a.pdf',size:1}],PDF_PROVIDER_RENDERER_UPLOAD_LIMIT)).toThrow(/32 MB/);
+    expect(()=>validatePdfUploadPlan([],PDF_PROVIDER_RENDERER_UPLOAD_LIMIT+1)).toThrow(/32 MB/);
     expect(()=>validatePdfUploadPlan([],Infinity)).toThrow(/invalid size/);
     expect(()=>validatePdfUploadPlan([{name:'a.pdf',size:-1}])).toThrow(/nonnegative/);
     expect(()=>validatePdfUploadPlan([{name:'a.pdf',size:NaN}])).toThrow(/nonnegative/);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2, ChevronDown, FileOutput, Play, RefreshCw, Search,
   ServerCog, Square, TriangleAlert,
@@ -77,6 +77,9 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   const [error,setError]=useState('');
   const [allCategories,setAllCategories]=useState(false);
   const [metadataEditorOpen,setMetadataEditorOpen]=useState(false);
+  const activeSourceRef=useRef(sourceBytes);
+  activeSourceRef.current=sourceBytes;
+  const metadataInspectionRef=useRef(0);
   const [splitPagesPerPart,setSplitPagesPerPart]=useState('2');
   const [paperSize,setPaperSize]=useState<PdfPaperSize>('A4');
   const [paperOrientation,setPaperOrientation]=useState<PdfPaperOrientation>('portrait');
@@ -86,6 +89,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   });
 
   useEffect(()=>{
+    metadataInspectionRef.current++;
     setMetadataEditorOpen(false);
   },[sourceBytes]);
 
@@ -183,8 +187,11 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       return;
     }
     setBusy(true);setError('');setNotice('');
+    const inspectedSource=sourceBytes;
+    const requestId=++metadataInspectionRef.current;
     try{
-      const inspected=await inspectPdfDocumentInfo(sourceBytes);
+      const inspected=await inspectPdfDocumentInfo(inspectedSource);
+      if(activeSourceRef.current!==inspectedSource||metadataInspectionRef.current!==requestId)return;
       setMetadataDraft({
         title:inspected.metadata.title??'',
         author:inspected.metadata.author??'',
@@ -201,6 +208,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
 
   async function applyLocalMetadata(){
     if(!sourceBytes||busy)return;
+    if(!metadataEditorOpen)throw new Error('The metadata editor is not open for the current PDF.');
     setBusy(true);setError('');setNotice('');
     try{
       const output=await updatePdfBasicMetadata(sourceBytes,metadataDraft);

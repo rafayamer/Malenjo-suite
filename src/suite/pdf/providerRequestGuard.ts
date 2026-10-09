@@ -14,6 +14,9 @@ export function validatePdfUploadPlan(
   }
   if(uploads.length>64)throw new Error('Select at most 64 files per local PDF request.');
   let total=currentPdfBytes;
+  if(total>PDF_PROVIDER_RENDERER_UPLOAD_LIMIT){
+    throw new Error('The current PDF exceeds the 32 MB safe renderer upload limit. Use native streaming for larger inputs.');
+  }
   for(const input of uploads){
     if(!Number.isSafeInteger(input.size)||input.size<0){
       throw new Error('PDF upload file sizes must be finite nonnegative integers.');

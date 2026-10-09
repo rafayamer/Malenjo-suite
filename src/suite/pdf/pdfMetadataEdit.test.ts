@@ -75,6 +75,15 @@ describe('offline PDF Info-dictionary metadata editing',()=>{
     })).rejects.toThrow(/No PDF metadata values were changed/i);
   });
 
+  it('rejects catalog permission signatures including direct nested dictionaries',async()=>{
+    const pdf=await PDFDocument.create();
+    pdf.addPage();
+    pdf.catalog.set(PDFName.of('Perms'),pdf.context.obj({
+      DocMDP:pdf.context.obj({Type:PDFName.of('Sig')}),
+    }));
+    const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    await expect(updatePdfBasicMetadata(bytes,next)).rejects.toThrow(/signature field or byte range/i);
+  });
   it('blocks PDF signature dictionaries rather than silently invalidating signing evidence',async()=>{
     const pdf=await PDFDocument.create();
     pdf.addPage();
