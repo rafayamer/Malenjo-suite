@@ -425,25 +425,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTwentyWorkflows.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts",
+          "src/suite/pdf/providerCapabilities.ts"
+        ],
+        "frontendCommand": "20-operation PDF batch: Crop pages",
+        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
+        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
         "providerCatalogMatchKey": "/api/v1/general/crop",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
       ]
     },
     {
@@ -476,25 +487,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTwentyWorkflows.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts",
+          "src/suite/pdf/providerCapabilities.ts"
+        ],
+        "frontendCommand": "20-operation PDF batch: Scale pages",
+        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
+        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
         "providerCatalogMatchKey": "/api/v1/general/scale-pages",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
       ]
     },
     {
@@ -585,25 +607,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTwentyWorkflows.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts",
+          "src/suite/pdf/providerCapabilities.ts"
+        ],
+        "frontendCommand": "20-operation PDF batch: Single large page",
+        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
+        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
         "providerCatalogMatchKey": "/api/v1/general/pdf-to-single-page",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
       ]
     },
     {
@@ -636,25 +669,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTwentyWorkflows.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts",
+          "src/suite/pdf/providerCapabilities.ts"
+        ],
+        "frontendCommand": "20-operation PDF batch: Multi-page layout",
+        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
+        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
         "providerCatalogMatchKey": "/api/v1/general/multi-page-layout",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
       ]
     },
     {
@@ -739,25 +783,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTwentyWorkflows.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts",
+          "src/suite/pdf/providerCapabilities.ts"
+        ],
+        "frontendCommand": "20-operation PDF batch: Overlay PDF",
+        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
+        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
         "providerCatalogMatchKey": "/api/v1/general/overlay-pdfs",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
       ]
     },
     {
@@ -790,25 +845,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTwentyWorkflows.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts",
+          "src/suite/pdf/providerCapabilities.ts"
+        ],
+        "frontendCommand": "20-operation PDF batch: Split sections",
+        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
+        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
         "providerCatalogMatchKey": "/api/v1/general/split-pdf-by-sections",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
       ]
     },
     {
@@ -841,25 +907,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTwentyWorkflows.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts",
+          "src/suite/pdf/providerCapabilities.ts"
+        ],
+        "frontendCommand": "20-operation PDF batch: Split chapters",
+        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
+        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
         "providerCatalogMatchKey": "/api/v1/general/split-pdf-by-chapters",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
       ]
     },
     {
@@ -892,25 +969,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTwentyWorkflows.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts",
+          "src/suite/pdf/providerCapabilities.ts"
+        ],
+        "frontendCommand": "20-operation PDF batch: Auto split",
+        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
+        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
         "providerCatalogMatchKey": "/api/v1/misc/auto-split-pdf",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
       ]
     },
     {
@@ -1061,25 +1149,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTwentyWorkflows.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts",
+          "src/suite/pdf/providerCapabilities.ts"
+        ],
+        "frontendCommand": "20-operation PDF batch: PDF to images",
+        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
+        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
         "providerCatalogMatchKey": "/api/v1/convert/pdf/img",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
       ]
     },
     {
@@ -2452,25 +2551,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTwentyWorkflows.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts",
+          "src/suite/pdf/providerCapabilities.ts"
+        ],
+        "frontendCommand": "20-operation PDF batch: Add password",
+        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
+        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
         "providerCatalogMatchKey": "/api/v1/security/add-password",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
       ]
     },
     {
@@ -2503,25 +2613,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTwentyWorkflows.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts",
+          "src/suite/pdf/providerCapabilities.ts"
+        ],
+        "frontendCommand": "20-operation PDF batch: Remove password",
+        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
+        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
         "providerCatalogMatchKey": "/api/v1/security/remove-password",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
       ]
     },
     {
@@ -2665,25 +2786,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTwentyWorkflows.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts",
+          "src/suite/pdf/providerCapabilities.ts"
+        ],
+        "frontendCommand": "20-operation PDF batch: Add stamp",
+        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
+        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
         "providerCatalogMatchKey": "/api/v1/misc/add-stamp",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
       ]
     },
     {
@@ -2716,25 +2848,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTwentyWorkflows.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts",
+          "src/suite/pdf/providerCapabilities.ts"
+        ],
+        "frontendCommand": "20-operation PDF batch: Sanitize copy",
+        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
+        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
         "providerCatalogMatchKey": "/api/v1/security/sanitize-pdf",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
       ]
     },
     {
@@ -3306,25 +3449,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTwentyWorkflows.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts",
+          "src/suite/pdf/providerCapabilities.ts"
+        ],
+        "frontendCommand": "20-operation PDF batch: Extract images",
+        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
+        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
         "providerCatalogMatchKey": "/api/v1/misc/extract-images",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
       ]
     },
     {
@@ -3408,25 +3562,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTwentyWorkflows.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts",
+          "src/suite/pdf/providerCapabilities.ts"
+        ],
+        "frontendCommand": "20-operation PDF batch: Remove images",
+        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
+        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
         "providerCatalogMatchKey": "/api/v1/general/remove-image-pdf",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
       ]
     },
     {
@@ -3525,25 +3690,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTwentyWorkflows.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts",
+          "src/suite/pdf/providerCapabilities.ts"
+        ],
+        "frontendCommand": "20-operation PDF batch: Remove blank pages",
+        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
+        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
         "providerCatalogMatchKey": "/api/v1/misc/remove-blanks",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
       ]
     },
     {
@@ -4073,25 +4249,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTwentyWorkflows.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts",
+          "src/suite/pdf/providerCapabilities.ts"
+        ],
+        "frontendCommand": "20-operation PDF batch: Repair PDF",
+        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
+        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
         "providerCatalogMatchKey": "/api/v1/misc/repair",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
       ]
     },
     {
@@ -4124,25 +4311,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTwentyWorkflows.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts",
+          "src/suite/pdf/providerCapabilities.ts"
+        ],
+        "frontendCommand": "20-operation PDF batch: Add image",
+        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
+        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
         "providerCatalogMatchKey": "/api/v1/misc/add-image",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
       ]
     },
     {
@@ -4471,25 +4669,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTwentyWorkflows.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/stirlingCore.ts",
+          "src/suite/pdf/providerCapabilities.ts"
+        ],
+        "frontendCommand": "20-operation PDF batch: Compress PDF",
+        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
+        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
         "providerCatalogMatchKey": "/api/v1/misc/compress-pdf",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
       ]
     },
     {
@@ -5045,8 +5254,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 37,
-    "unverifiedSourceCount": 53,
+    "localSourcePartialCount": 56,
+    "unverifiedSourceCount": 34,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
