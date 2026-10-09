@@ -1,4 +1,4 @@
-import {unzipSync} from 'fflate';
+import {unzipSync,unzlibSync} from 'fflate';
 import {PDFDocument} from 'pdf-lib';
 import type {PdfProviderOperation,PdfProviderResponse} from './backend';
 import {classifyPdfProviderResult,type PdfProviderResultAction} from './providerResultGuard';
@@ -43,6 +43,53 @@ function isZip(bytes:number[]):boolean{
 }
 const MAX_ZIP_BYTES=32*1024*1024;
 const MAX_EXTRACTED_BYTES=128*1024*1024;
+function imageMemberIsComplete(bytes:Uint8Array):boolean{
+  // PNG only until JPEG/TIFF can be validated by a complete decoder.
+  // Rejecting unsupported members is safer than exporting corrupt archives.
+  if(bytes.length<57||![137,80,78,71,13,10,26,10].every((v,i)=>bytes[i]===v))return false;
+  const uint=(pos:number)=>((bytes[pos]*0x1000000)+(bytes[pos+1]<<16)+(bytes[pos+2]<<8)+bytes[pos+3])>>>0;
+  const crc=(begin:number,end:number)=>{
+    let c=0xffffffff;
+    for(let i=begin;i<end;i++){c^=bytes[i];for(let j=0;j<8;j++)c=(c>>>1)^((c&1)?0xedb88320:0);}
+    return (c^0xffffffff)>>>0;
+  };
+  let pos=8,seenHeader=false,seenImage=false,seenEnd=false,width=0,height=0,channels=0;
+  const payload:Uint8Array[]=[];
+  while(pos+12<=bytes.length&&!seenEnd){
+    const length=uint(pos),end=pos+12+length;
+    if(length>MAX_EXTRACTED_BYTES||end>bytes.length)return false;
+    const type=String.fromCharCode(...bytes.subarray(pos+4,pos+8));
+    if(crc(pos+4,pos+8+length)!==uint(pos+8+length))return false;
+    if(type==='IHDR'){
+      if(seenHeader||pos!==8||length!==13)return false;
+      width=uint(pos+8);height=uint(pos+12);
+      const depth=bytes[pos+16],color=bytes[pos+17];
+      if(depth!==8||![0,2,4,6].includes(color)||bytes[pos+18]!==0||bytes[pos+19]!==0||bytes[pos+20]!==0)return false;
+      channels=color===0?1:color===2?3:color===4?2:4;
+      if(!width||!height||width>32768||height>32768)return false;
+      seenHeader=true;
+    }else if(type==='IDAT'){
+      if(!seenHeader||seenEnd)return false;
+      payload.push(bytes.subarray(pos+8,pos+8+length));seenImage=true;
+    }else if(type==='IEND'){
+      if(!seenHeader||!seenImage||length!==0)return false;
+      seenEnd=true;
+    }else if(!seenHeader||type[0]===type[0].toUpperCase())return false;
+    pos=end;
+  }
+  if(!seenEnd||pos!==bytes.length)return false;
+  const expected=(width*channels+1)*height;
+  if(expected>MAX_EXTRACTED_BYTES)return false;
+  const compressed=new Uint8Array(payload.reduce((n,x)=>n+x.length,0));
+  let offset=0;for(const block of payload){compressed.set(block,offset);offset+=block.length;}
+  try{
+    const decoded=unzlibSync(compressed,{out:new Uint8Array(expected)});
+    if(decoded.length!==expected)return false;
+    for(let y=0;y<height;y++)if(decoded[y*(width*channels+1)]>4)return false;
+    return true;
+  }catch{return false;}
+}
+
 export async function verifyPdfBatchZip(bytes:number[],kind:'pdf'|'image'='pdf'):Promise<void>{
   if(bytes.length>MAX_ZIP_BYTES)throw new Error('ZIP export exceeds 32 MB inspection limit.');
   let total=0,files=0;
@@ -70,7 +117,7 @@ export async function verifyPdfBatchZip(bytes:number[],kind:'pdf'|'image'='pdf')
     if(kind==='pdf'){
       try{const doc=await PDFDocument.load(entry,{ignoreEncryption:false,updateMetadata:false});if(doc.getPageCount()<1)throw new Error('Empty PDF');}
       catch{throw new Error('ZIP export contains a damaged or unreadable PDF.');}
-    }else if(!isImage(Array.from(entry)))throw new Error('Image ZIP export contains a malformed image header.');
+    }else if(!imageMemberIsComplete(entry))throw new Error('Image ZIP export contains an incomplete or unsupported image.');
   }
 }
 function isImage(bytes:number[]):boolean{
@@ -99,6 +146,9 @@ export async function classifyPdfBatchOutput(
     await verifyPdfBatchZip(response.bytes,'pdf');
   }
   if(workflow.output==='image'&&isZip(response.bytes))await verifyPdfBatchZip(response.bytes,'image');
+  if(workflow.output==='image'&&!isZip(response.bytes)&&!imageMemberIsComplete(Uint8Array.from(response.bytes))){
+    throw new Error('Image export contains an incomplete or unsupported image.');
+  }
   if(workflow.output==='image'&&!isZip(response.bytes)&&!isImage(response.bytes)){
     throw new Error(workflow.label+' did not return a supported image/ZIP export.');
   }
