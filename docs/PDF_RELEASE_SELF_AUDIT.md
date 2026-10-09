@@ -4,7 +4,7 @@
 
 ## Decision
 
-**Full PDF parity release is blocked.** Exactly 90 handoff requirements are enumerated; **0 carry complete acceptance evidence**. There are 31 source-backed partial native foundations and 59 implementation-source-unaudited requirements. The passing CI pipeline proves builds, tests and a subset of provider smoke routes, not the whole Windows installer + UI end-to-end matrix. The `tauri:release` command now fails closed until all 90 requirements have explicit acceptance evidence. Ordinary development builds remain possible.
+**Full PDF parity release is blocked.** Exactly 90 handoff requirements are enumerated; **0 carry complete acceptance evidence**. There are 33 source-backed partial native foundations and 57 implementation-source-unaudited requirements. The passing CI pipeline proves builds, tests and a subset of provider smoke routes, not the whole Windows installer + UI end-to-end matrix. The `tauri:release` command now fails closed until all 90 requirements have explicit acceptance evidence. Ordinary development builds remain possible.
 
 The review's two PNG defects have implementation-level fixes in `pngIntegrity.ts` with Adam7/filter/palette positive and negative tests. This is not enough to accept PDF-to-images or extract-images as end-to-end workflows without live output saved and reopened on Windows.
 
@@ -13,7 +13,7 @@ The review's two PNG defects have implementation-level fixes in `pngIntegrity.ts
 | Group | Requirements | Source-backed partial | Awaiting implementation audit |
 |---|---:|---:|---:|
 | page | 18 | 9 | 9 |
-| conversion | 24 | 8 | 16 |
+| conversion | 24 | 10 | 14 |
 | security | 16 | 4 | 12 |
 | scan-extraction | 6 | 1 | 5 |
 | editing-analysis | 10 | 4 | 6 |
@@ -47,7 +47,7 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 | 19 | `pdf-to-img` | Pinned API route only | No matching execution proof | Not audited; implementation and acceptance pending |
 | 20 | `img-to-pdf` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 21 | `file-to-pdf` | Pinned API route only | Route exercised (partial) | Not audited; implementation and acceptance pending |
-| 22 | `pdf-to-word` | Pinned API route only | Route exercised (partial) | Not audited; implementation and acceptance pending |
+| 22 | `pdf-to-word` | Native text-only partial | No matching execution proof | Partial; layout fidelity and Windows acceptance pending |
 | 23 | `pdf-to-presentation` | Pinned API route only | Route exercised (partial) | Not audited; implementation and acceptance pending |
 | 24 | `pdf-to-text` | Native partial | Route exercised (partial) | Partial; full parity and Windows acceptance pending |
 | 25 | `pdf-to-html` | Native partial (text-only) | No matching execution proof | Partial; full parity and Windows acceptance pending |
@@ -57,7 +57,7 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 | 29 | `pdf-to-epub` | Configuration only | No matching execution proof | Not audited; implementation and acceptance pending |
 | 30 | `pdf-to-vector` | Configuration only | No matching execution proof | Not audited; implementation and acceptance pending |
 | 31 | `pdf-to-json` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
-| 32 | `pdf-to-rtf` | Configuration only | No matching execution proof | Not audited; implementation and acceptance pending |
+| 32 | `pdf-to-rtf` | Native text-only partial | No matching execution proof | Partial; layout fidelity and Windows acceptance pending |
 | 33 | `pdf-to-cbz` | Native partial (rasterized) | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 34 | `pdf-to-cbr` | Frontend-only alias | No matching execution proof | Not audited; implementation and acceptance pending |
 | 35 | `pdf-to-pdfa` | Pinned API route only | No matching execution proof | Not audited; implementation and acceptance pending |

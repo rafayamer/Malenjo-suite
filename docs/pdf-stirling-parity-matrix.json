@@ -1221,25 +1221,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfOfficeText.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/pdfToJson.ts"
+        ],
+        "frontendCommand": "Export selectable PDF text to Word DOCX (offline)",
+        "provider": "MALENJO native pdf-lib/PDF.js with fflate OpenXML container",
+        "dependency": "Bundled PDF.js worker; pdf-lib; fflate",
         "providerCatalogMatchKey": "/api/v1/convert/pdf/word",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "exportPdfOfficeText"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfOfficeText.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfOfficeText.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "1–2,000 pages, 8M selectable chars, 200k fragments; 16 MB DOCX/XML cap."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Native DOCX contains bounded selectable text and explicit page breaks, not original PDF graphics, tables, layout, fonts or complete DOCX/ODT conversion. No clean Windows Word reopen acceptance yet."
       ]
     },
     {
@@ -1811,28 +1821,38 @@
         ]
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfOfficeText.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/pdfToJson.ts"
+        ],
+        "frontendCommand": "Export selectable PDF text to RTF (offline)",
+        "provider": "MALENJO native pdf-lib/PDF.js with fflate OpenXML container",
+        "dependency": "Bundled PDF.js worker; pdf-lib; fflate",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "exportPdfOfficeText"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfOfficeText.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfOfficeText.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "1–2,000 pages, 8M selectable chars, 200k fragments; 16 MB RTF cap."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
         "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
         "LibreOffice/CLI route with Java alternative configured; complete local converter remains unverified.",
-        "Upstream endpoint group declaration is not executable proof; no live OpenAPI path or Windows result has been verified."
+        "Upstream endpoint group declaration is not executable proof; no live OpenAPI path or Windows result has been verified.",
+        "Native RTF preserves Unicode text and page boundaries but not original PDF rich styling, vector graphics, tables, annotations or positioning. No clean Windows WordPad/Word reopen acceptance yet."
       ]
     },
     {
@@ -4986,8 +5006,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 31,
-    "unverifiedSourceCount": 59,
+    "localSourcePartialCount": 33,
+    "unverifiedSourceCount": 57,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
