@@ -424,7 +424,27 @@ jobs:
             New-Item -ItemType Directory -Force -Path $splitDir | Out-Null
             $splitArchive = [System.IO.Compression.ZipFile]::OpenRead($splitZip)
             try {
-              $pdfEntries = @($splitArchive.Entries | Where-Object { $_.FullName -match '\\.pdf
+              $pdfEntries = @($splitArchive.Entries | Where-Object { $_.FullName -match '\.pdf$' })
+              if ($pdfEntries.Count -ne 2 -or $splitArchive.Entries.Count -ne 2) {
+                throw "Split-pages did not return exactly two PDF documents."
+              }
+              $index = 0
+              foreach ($entry in $pdfEntries) {
+                $index++
+                $extracted = Join-Path $splitDir ("page-" + $index + ".pdf")
+                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $extracted)
+                & $qpdf.FullName --check $extracted
+                if ($LASTEXITCODE -ne 0) { throw "Split-pages member $index is not a valid PDF." }
+                $memberPages = (& $qpdf.FullName --show-npages $extracted | Out-String).Trim()
+                if ($LASTEXITCODE -ne 0 -or $memberPages -ne '1') {
+                  throw "Split-pages member $index contains $memberPages pages; expected 1."
+                }
+              }
+            } finally {
+              $splitArchive.Dispose()
+            }
+
+            function Assert-ZipEntry([string]$Path, [string]$Entry) {
               $zip = [System.IO.Compression.ZipFile]::OpenRead($Path)
               try {
                 if (-not ($zip.Entries | Where-Object { $_.FullName -eq $Entry })) {
