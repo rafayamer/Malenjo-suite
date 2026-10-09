@@ -26,6 +26,7 @@ import { exportPdfStructuredJson } from './pdfToJson';
 import { exportPdfStructuredXml } from './pdfToXml';
 import {exportPdfTextFormat,type PdfTextFormat} from './pdfTextFormats';
 import {exportPdfCbz} from './pdfToCbz';
+import {exportPdfRasterPptx} from './pdfToPresentation';
 import {exportPdfOfficeText,inspectPdfTextDocx,inspectPdfTextOdt,type PdfOfficeTextFormat} from './pdfOfficeText';
 import {exportPdfEpub,inspectPdfEpubArchive} from './pdfToEpub';
 import {proposePdfMetadataFilename} from './pdfAutoRename';
@@ -402,6 +403,37 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       setNotice(saved?('Saved rasterized CBZ comic: '+saved):'CBZ export save cancelled.');
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));setNotice('');
+    }finally{
+      try{await disposePdf(loaded);}finally{setBusy(false);}
+    }
+  }
+
+  async function saveOfflinePresentation(){
+    if(!sourceBytes||busy)return;
+    const revision=sourceBytes;
+    setBusy(true);setError('');setNotice('');
+    let loaded:Awaited<ReturnType<typeof loadPdfBytes>>|null=null;
+    try{
+      if(!revision.byteLength||revision.byteLength>32*1024*1024){
+        throw new Error('Offline PowerPoint export supports PDFs up to 32 MB.');
+      }
+      loaded=await loadPdfBytes(revision);
+      const output=await exportPdfRasterPptx(loaded.document,{
+        onProgress:(done,total)=>setNotice('Rendering PowerPoint slide '+done+'/'+total+'…'),
+      });
+      if(activeSourceRef.current!==revision){
+        throw new Error('PDF changed during PowerPoint export; stale presentation was not saved.');
+      }
+      const saved=await provider.saveResponse({
+        status:200,
+        contentType:'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        bytes:Array.from(output),
+      },localExportStem(sourceName)+'-rasterized');
+      setNotice(saved?('Saved PowerPoint presentation (rasterized PDF pages): '+saved):
+        'PowerPoint export save cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+      setNotice('');
     }finally{
       try{await disposePdf(loaded);}finally{setBusy(false);}
     }
@@ -945,6 +977,9 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       </button>
       <button disabled={busy||!sourceBytes} onClick={()=>void saveOfflineComicBook()}>
         <FileOutput size={14}/>Export rasterized PDF pages to CBZ comic (offline)
+      </button>
+      <button disabled={busy||!sourceBytes} onClick={()=>void saveOfflinePresentation()}>
+        <FileOutput size={14}/>Export PDF pages to PowerPoint PPTX slides (offline, rasterized)
       </button>
       <button disabled={busy||!sourceBytes} onClick={()=>void saveOfflineWordText('docx')}>
         <FileOutput size={14}/>Export selectable PDF text to Word DOCX (offline)
