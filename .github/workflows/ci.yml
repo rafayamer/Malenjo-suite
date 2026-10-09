@@ -551,7 +551,7 @@ jobs:
               if ($LASTEXITCODE -ne 0) {
                 throw "qpdf could not inspect page object $pageObj in $DocumentPath"
               }
-              $pattern = [regex]::Escape($BoxName) + '\\s*\\[\\s*([-+]?\\d+(?:\\.\\d+)?)\\s+([-+]?\\d+(?:\\.\\d+)?)\\s+([-+]?\\d+(?:\\.\\d+)?)\\s+([-+]?\\d+(?:\\.\\d+)?)\\s*\\]'
+              $pattern = [regex]::Escape($BoxName) + '\s*\[\s*([-+]?\d+(?:\.\d+)?)\s+([-+]?\d+(?:\.\d+)?)\s+([-+]?\d+(?:\.\d+)?)\s+([-+]?\d+(?:\.\d+)?)\s*\]'
               $matched = [regex]::Match($dictionary, $pattern)
               if (-not $matched.Success) { return $null }
               return @(
