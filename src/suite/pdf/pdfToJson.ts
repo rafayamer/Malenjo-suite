@@ -120,7 +120,7 @@ export async function exportPdfStructuredJson(
   };
   const bytes=new TextEncoder().encode(JSON.stringify(result,null,2)+'\n');
   if(bytes.byteLength>PDF_JSON_MAX_OUTPUT_BYTES){
-    throw new Error('PDF to JSON output exceeds the 32 MB safety limit.');
+    throw new Error('PDF to JSON output exceeds the 16 MB safety limit.');
   }
   return bytes;
 }
