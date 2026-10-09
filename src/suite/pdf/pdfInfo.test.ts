@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {PDFDocument,degrees} from 'pdf-lib';
+import {PDFDocument,PDFName,degrees} from 'pdf-lib';
 import {
   inspectPdfDocumentInfo,PDF_INFO_MAX_INPUT_BYTES,PDF_INFO_MAX_METADATA_CHARS,
 } from './pdfInfo';
@@ -27,6 +27,12 @@ describe('offline native PDF information',()=>{
     expect(bytes).toEqual(original);
   });
 
+  it('reports true physical paper dimensions for non-default UserUnit',async()=>{
+    const doc=await PDFDocument.create();const page=doc.addPage([612,792]);
+    page.node.set(PDFName.of('UserUnit'),doc.context.obj(2));
+    const info=await inspectPdfDocumentInfo(Uint8Array.from(await doc.save()));
+    expect(info.pages[0]).toMatchObject({widthPt:1224,heightPt:1584});
+  });
   it('rejects corrupt or empty PDFs without fabricating information',async()=>{
     await expect(inspectPdfDocumentInfo(new Uint8Array(0))).rejects.toThrow(/requires a file/i);
     await expect(inspectPdfDocumentInfo(Uint8Array.from([1,2,3]))).rejects.toThrow();
