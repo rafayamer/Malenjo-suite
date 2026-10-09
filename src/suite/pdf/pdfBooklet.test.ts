@@ -46,7 +46,8 @@ describe('offline saddle-stitched PDF booklet',()=>{
       .rejects.toThrow(/forms, signatures/);
     const plain=await PDFDocument.create();
     const linkPage=plain.addPage([200,300]);
-    linkPage.node.set(PDFName.of('Annots'),plain.context.obj([]));
+    const link=plain.context.obj({Subtype:PDFName.of('Link'),Rect:[0,0,20,20]});
+    linkPage.node.set(PDFName.of('Annots'),plain.context.obj([link]));
     await expect(imposePdfBooklet(Uint8Array.from(await plain.save())))
       .rejects.toThrow(/annotations/);
   });
