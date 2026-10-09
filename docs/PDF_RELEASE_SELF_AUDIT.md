@@ -4,7 +4,7 @@
 
 ## Decision
 
-**Full PDF parity release is blocked.** Exactly 90 handoff requirements are enumerated; **0 carry complete acceptance evidence**. There are 44 native/source-backed partial foundations plus 19 source-audited provider-dispatch-only partial integrations (63 partial total), with 27 implementation-source-unaudited requirements. The passing CI pipeline proves builds, tests and a subset of provider smoke routes, not the whole Windows installer + UI end-to-end matrix. The `tauri:release` command now fails closed until all 90 requirements have explicit acceptance evidence. Ordinary development builds remain possible.
+**Full PDF parity release is blocked.** Exactly 90 handoff requirements are enumerated; **0 carry complete acceptance evidence**. There are 45 native/source-backed partial foundations plus 19 source-audited provider-dispatch-only partial integrations (64 partial total), with 26 implementation-source-unaudited requirements. The passing CI pipeline proves builds, tests and a subset of provider smoke routes, not the whole Windows installer + UI end-to-end matrix. The `tauri:release` command now fails closed until all 90 requirements have explicit acceptance evidence. Ordinary development builds remain possible.
 
 The review's two PNG defects have implementation-level fixes in `pngIntegrity.ts` with Adam7/filter/palette positive and negative tests. This is not enough to accept PDF-to-images or extract-images as end-to-end workflows without live output saved and reopened on Windows.
 
@@ -13,7 +13,7 @@ The review's two PNG defects have implementation-level fixes in `pngIntegrity.ts
 | Group | Requirements | Source-backed partial | Awaiting implementation audit |
 |---|---:|---:|---:|
 | page | 18 | 18 | 0 |
-| conversion | 24 | 15 | 9 |
+| conversion | 24 | 16 | 8 |
 | security | 16 | 10 | 6 |
 | scan-extraction | 6 | 4 | 2 |
 | editing-analysis | 10 | 6 | 4 |
@@ -46,7 +46,7 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 | 18 | `add-attachments` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 19 | `pdf-to-img` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
 | 20 | `img-to-pdf` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
-| 21 | `file-to-pdf` | Pinned API route only | Route exercised (partial) | Not audited; implementation and acceptance pending |
+| 21 | `file-to-pdf` | Native TXT-only partial | No matching execution proof | Partial; Office input formats and Windows acceptance pending |
 | 22 | `pdf-to-word` | Native text-only partial | No matching execution proof | Partial; layout fidelity and Windows acceptance pending |
 | 23 | `pdf-to-presentation` | Pinned API route only | Route exercised (partial) | Not audited; implementation and acceptance pending |
 | 24 | `pdf-to-text` | Native partial | Route exercised (partial) | Partial; full parity and Windows acceptance pending |

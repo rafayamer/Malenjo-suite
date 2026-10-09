@@ -1278,25 +1278,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/plainTextToPdf.ts",
+          "src/suite/pdf/markdownToPdf.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Convert text file to PDF (offline)",
+        "provider": "MALENJO native pdf-lib text renderer; other Office formats remain provider-gated",
+        "dependency": "Bundled pdf-lib",
         "providerCatalogMatchKey": "/api/v1/convert/file/pdf",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "convertPlainTextToPdf"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/plainTextToPdf.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/plainTextToPdf.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "2 MB UTF-8 TXT input; 500k characters; 100 PDF pages; 16 MB PDF output."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Actual native file-to-PDF supports UTF-8 plain-text .txt only. DOCX, ODT, XLSX, ODS, PPTX, ODP and RTF input require a lawful offline Office provider and Windows end-to-end acceptance; must not call partial TXT fallback full feature parity."
       ]
     },
     {
@@ -5318,8 +5328,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 63,
-    "unverifiedSourceCount": 27,
+    "localSourcePartialCount": 64,
+    "unverifiedSourceCount": 26,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
