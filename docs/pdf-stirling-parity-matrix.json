@@ -943,25 +943,34 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
+        "implementationPaths": [
+          "src/suite/pdf/splitByPageCount.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Split into page groups (offline) / Export separate PDFs as ZIP",
+        "provider": "MALENJO native pdf-lib + fflate page-count fallback",
         "dependency": null,
         "providerCatalogMatchKey": "/api/v1/general/split-by-size-or-count",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "splitPdfByPageCount"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/splitByPageCount.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/splitByPageCount.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "Native page-count-only fallback: 128 MB input, 1,000 pages, 200 PDF parts, 256 MB output; in-app ZIP export capped at 32 MB. Does not preserve interactive form relationships, signatures, outlines or metadata; size-based splitting remains provider-only."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Native page-count splitting creates verified standalone PDFs in a ZIP and is exposed in Organize. No local byte-budget splitter, full upstream parity, native Windows save/reopen, or license completion claim."
       ]
     },
     {
@@ -4925,8 +4934,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 25,
-    "unverifiedSourceCount": 65,
+    "localSourcePartialCount": 26,
+    "unverifiedSourceCount": 64,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
