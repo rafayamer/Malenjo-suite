@@ -2,7 +2,7 @@
 
 The machine-readable source of truth is [pdf-stirling-parity-matrix.json](./pdf-stirling-parity-matrix.json). Its 90 operation identifiers were transcribed in order from the October 8, 2026 MALENJO development handoff (§5A–5G), **not** independently re-audited against a newer upstream release. The upstream comparison baseline is `Stirling-Tools/Stirling-PDF@25220cbdbde2d526cebf173b94357884e180b8c1`.
 
-**No operation is credited as complete.** Thirty-six operations with real MALENJO source symbols, workspace paths and unit-test evidence are classified **`partial`**, and the other 54 remain **`null` (not yet source-audited)**. This is not a claim of Windows/provider end-to-end verification. For every tool, verify the real MALENJO code, UI command, actual local Windows execution, source license and notices, positive/negative fixtures and golden tests, memory/size limits, and export/save/reopen outcomes; then set a supported status: `implemented`, `partial`, `unavailable`, or `excluded-by-license`. Exclusions need user approval.
+**No operation is credited as complete.** Thirty-seven operations with real MALENJO source symbols, workspace paths and unit-test evidence are classified **`partial`**, and the other 53 remain **`null` (not yet source-audited)**. This is not a claim of Windows/provider end-to-end verification. For every tool, verify the real MALENJO code, UI command, actual local Windows execution, source license and notices, positive/negative fixtures and golden tests, memory/size limits, and export/save/reopen outcomes; then set a supported status: `implemented`, `partial`, `unavailable`, or `excluded-by-license`. Exclusions need user approval.
 
 ## Source-backed endpoint audit — pinned commit
 
@@ -24,7 +24,7 @@ The last six conversion operations (`pdf-to-epub`, `pdf-to-vector`, `pdf-to-json
 
 **Offline caveats from upstream source:** `TimestampController` contacts a remote RFC 3161 timestamp authority; `VerifyPDFController` uses a veraPDF service whose Windows redistribution has not been verified; and `PipelineController` is conditionally excluded in `STIRLING_PDF_TAURI_MODE`. MALENJO's provider capability gate explicitly prevents all three from being advertised as verified offline operations. These do not meet the user's full-functionality requirement.
 
-**Pinned source classification of all 90:** 54 endpoint-fixture routes + 8 controller-only routes + 22 frontend-only entries + 6 configuration-only entries. **Actual function status is 36 partial / 54 unaudited; 0 complete.** Source classification cannot substitute for operation fixture execution.
+**Pinned source classification of all 90:** 54 endpoint-fixture routes + 8 controller-only routes + 22 frontend-only entries + 6 configuration-only entries. **Actual function status is 37 partial / 53 unaudited; 0 complete.** Source classification cannot substitute for operation fixture execution.
 
 ## Runnable, local-only PDF utilities added to the panel
 
@@ -52,6 +52,8 @@ Both use the MALENJO local save implementation and carry the same Windows final-
 - **Auto-rename PDF (metadata-title fallback)**: `pdfAutoRename.ts` generates Windows-safe PDF copy names from the existing PDF Info title, without changing the document bytes or overwriting the working copy in memory. It refuses missing/unsafe titles and files above 32 MB. It is **partial**, not content-aware/OCR title extraction, and requires a clean Windows save/reopen acceptance run.
 
 - **JSON → searchable PDF (text report)**: `jsonToPdf.ts` formats validated UTF-8 JSON onto bounded PDF pages using pdf-lib, converts non-ASCII characters to reversible Unicode escapes, and reopens output in real PDF tests. The React Convert workspace accepts local JSON files; native-only, no network or Java. It remains **partial** because this is text/report pagination rather than structured visual object rendering or arbitrary Stirling schema conversion, with installed Windows acceptance outstanding.
+
+- **CBZ comic → PDF**: `cbzToPdf.ts` extracts bounded image-only CBZ ZIP archives, validates PNG/JPEG integrity, natural-sorts numbered filenames, embeds images in real pdf-lib pages and verifies the saved PDF can be reopened. It rejects ZIP path traversal, archive overexpansion and damaged raster inputs. This is **partial** full upstream parity: limited supported image formats, no comic metadata or text reconstruction, Windows installer acceptance pending.
 
 ## Release and license constraints
 

@@ -2267,26 +2267,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/cbzToPdf.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/pngIntegrity.ts"
+        ],
+        "frontendCommand": "Convert CBZ comic to PDF (offline)",
+        "provider": "MALENJO native fflate PDF-lib PNG/JPEG CBZ renderer",
+        "dependency": "fflate; pdf-lib; bounded PNG/JPEG integrity scanner",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "convertCbzToPdf"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/cbzToPdf.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/cbzToPdf.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "32 MB CBZ source; 50 image pages; 12 MB/image; 128 MB total extracted bytes; 16M pixels/page; 128 MB PDF output."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Native conversion supports real PNG/JPEG CBZ image pages, natural ordering and PDF-lib output reopens; it excludes archive metadata and image formats requiring additional codecs and does not reconstruct text. Clean installed Windows CBZ-to-PDF save/reopen acceptance is pending."
       ]
     },
     {
@@ -5035,8 +5045,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 36,
-    "unverifiedSourceCount": 54,
+    "localSourcePartialCount": 37,
+    "unverifiedSourceCount": 53,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
