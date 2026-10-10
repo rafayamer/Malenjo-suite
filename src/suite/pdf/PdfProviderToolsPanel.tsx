@@ -43,6 +43,7 @@ import PdfPermissionsPanel from './PdfPermissionsPanel';
 import PdfUrlCapturePanel from './PdfUrlCapturePanel';
 import PdfCbrPanel from './PdfCbrPanel';
 import PdfaPanel from './PdfaPanel';
+import PdfLocalTimestampPanel from './PdfLocalTimestampPanel';
 import {imposePdfBooklet,PDF_BOOKLET_MAX_INPUT_BYTES} from './pdfBooklet';
 import {convertJsonToPdf,JSON_TO_PDF_MAX_INPUT_BYTES} from './jsonToPdf';
 import {convertMarkdownToPdf,MARKDOWN_TO_PDF_MAX_INPUT_BYTES} from './markdownToPdf';
@@ -1466,6 +1467,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
        <small>Redacted page content is omitted, not covered by a removable annotation. Inspect the resulting PDF carefully before distribution. Original workspace is untouched.</small>
      </details>}
      {category==='sign'&&<PdfCertificateSigningPanel/>}
+     {category==='sign'&&sourceBytes&&<PdfLocalTimestampPanel sourceBytes={sourceBytes} sourceName={sourceName} provider={provider}/>}
      {category==='sign'&&sourceBytes&&<details className="stirling-component-details" aria-label="Remove certificate signature by rasterizing a separate PDF copy">
        <summary>Create an unsigned raster PDF copy from signed PDF</summary>
        <p>Explicitly discard digital signature and certification evidence from a COPY of the signed document. Every page is rendered into pixels and placed in a new PDF. The result is NOT signed, not incremental signature removal, and may lose selectable text, vector quality, links, bookmarks and forms. Refuses unsigned source documents.</p>
