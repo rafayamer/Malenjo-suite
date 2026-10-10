@@ -80,6 +80,24 @@ async function main(){
   await page.locator('.pdf-page-shell canvas').first().waitFor({timeout:30000});
   requireEvidence(await documentTab.count()===1,'browser PDF tab vanished after navigation');
   console.log('MALENJO browser tab retention: PASS');
+  // Also exercise the exact direct PDF Workspace -> Choose PDF path, which
+  // previously opened a disposable preview that vanished on navigation.
+  await page.locator('.sidebar .nav-item').filter({hasText:'PDF Workspace'}).first().click();
+  await page.locator('main.workspace > .pdf-workspace > input[type="file"][accept="application/pdf,.pdf"]').first()
+    .setInputFiles({
+      name:'standalone-picker-keeps-tab.pdf',
+      mimeType:'application/pdf',
+      buffer:source,
+    });
+  const pickerTab=page.locator('.document-tab-main').filter({hasText:'standalone-picker-keeps-tab.pdf'});
+  await pickerTab.waitFor({timeout:20000});
+  await page.locator('.sidebar .nav-item').filter({hasText:'Home'}).first().click();
+  await pickerTab.click();
+  requireEvidence(await pickerTab.count()===1,
+    'the PDF Workspace picker did not keep the opened document in a regular tab');
+  console.log('MALENJO PDF Workspace Choose PDF tab retention: PASS');
+  // Return to the original PDF to verify edit/export without altering it.
+  await documentTab.click();
   await page.locator('.pdf-task-categories button').filter({hasText:'Organize'}).click();
   await page.locator('.pdf-context-toolbar button').filter({hasText:/^Rotate selected$/}).click();
   await page.waitForFunction(()=>
