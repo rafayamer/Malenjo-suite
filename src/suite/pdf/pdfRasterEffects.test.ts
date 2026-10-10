@@ -1,4 +1,6 @@
-import {describe,expect,it} from 'vitest';
+import {describe,expect,it,vi} from 'vitest';
+import {PDFDocument} from 'pdf-lib';
+import {zlibSync} from 'fflate';
 import {
   exportPdfRasterEffect,transformPdfRasterPixels,
   PDF_RASTER_EFFECT_MAX_PIXELS,
@@ -41,5 +43,78 @@ describe('native offline PDF raster processing',()=>{
     const controller=new AbortController();controller.abort();
     await expect(exportPdfRasterEffect({numPages:1,getPage:unused} as never,
       {effect:'contrast',signal:controller.signal})).rejects.toMatchObject({name:'AbortError'});
+  });
+});
+
+/** Create a real CRC-valid PNG from the mock rendered canvas pixels. */
+function rasterPng(width:number,height:number,rgba:Uint8ClampedArray):Uint8Array{
+  const word=(n:number)=>Uint8Array.of(n>>>24,(n>>>16)&255,(n>>>8)&255,n&255);
+  const join=(...parts:Uint8Array[])=>{
+    const out=new Uint8Array(parts.reduce((a,x)=>a+x.length,0));
+    let p=0;for(const bytes of parts){out.set(bytes,p);p+=bytes.length;}return out;
+  };
+  const chunk=(type:string,bytes:Uint8Array)=>{
+    const data=join(new TextEncoder().encode(type),bytes);
+    let crc=0xffffffff;
+    for(const byte of data){
+      crc^=byte;
+      for(let j=0;j<8;j++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);
+    }
+    return join(word(bytes.length),data,word((crc^0xffffffff)>>>0));
+  };
+  const raw=new Uint8Array(height*(1+width*3));
+  let cursor=0;
+  for(let y=0;y<height;y++){
+    raw[cursor++]=0;
+    for(let x=0;x<width;x++){
+      const i=(y*width+x)*4;
+      raw[cursor++]=rgba[i];raw[cursor++]=rgba[i+1];raw[cursor++]=rgba[i+2];
+    }
+  }
+  return join(Uint8Array.of(137,80,78,71,13,10,26,10),
+    chunk('IHDR',join(word(width),word(height),Uint8Array.of(8,2,0,0,0))),
+    chunk('IDAT',zlibSync(raw)),chunk('IEND',new Uint8Array()));
+}
+
+describe('real PDF export from a mocked PDF.js render surface',()=>{
+  it('renders, changes pixels, embeds a valid PNG and reopens a separate PDF',async()=>{
+    let savedPixels:Uint8ClampedArray|null=null;
+    const canvas={
+      width:0,height:0,
+      getContext:()=>({
+        getImageData:()=>({
+          data:Uint8ClampedArray.from([10,20,30,255,10,20,30,255]),
+        }),
+        putImageData:(image:{data:Uint8ClampedArray})=>{
+          savedPixels=Uint8ClampedArray.from(image.data);
+        },
+      }),
+      toBlob:(callback:(blob:Blob)=>void)=>{
+        if(!savedPixels)throw new Error('Pixels were not modified before PNG encoding.');
+        callback(new Blob([rasterPng(2,1,savedPixels)],{type:'image/png'}));
+      },
+    };
+    vi.stubGlobal('document',{createElement:()=>canvas});
+    try{
+      const pdf={
+        numPages:1,
+        getPage:async()=>({
+          getViewport:()=>({width:2,height:1}),
+          render:()=>({promise:Promise.resolve(),cancel:()=>{}}),
+        }),
+      };
+      const progress=vi.fn();
+      const result=await exportPdfRasterEffect(pdf as never,{effect:'invert',onProgress:progress});
+      const reopened=await PDFDocument.load(result);
+      expect(reopened.getPageCount()).toBe(1);
+      expect(reopened.getPage(0).getWidth()).toBe(2);
+      expect(reopened.getPage(0).getHeight()).toBe(1);
+      expect(savedPixels?Array.from(savedPixels):null).toEqual([245,235,225,255,245,235,225,255]);
+      expect(progress).toHaveBeenCalledWith(1,1);
+      expect(canvas.width).toBe(0);
+      expect(canvas.height).toBe(0);
+    }finally{
+      vi.unstubAllGlobals();
+    }
   });
 });
