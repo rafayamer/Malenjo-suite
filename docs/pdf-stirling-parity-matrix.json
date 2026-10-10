@@ -2191,25 +2191,34 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/htmlToPdf.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Convert safe HTML text to PDF",
+        "provider": "MALENJO native inert HTML text renderer",
+        "dependency": "Bundled pdf-lib",
         "providerCatalogMatchKey": "/api/v1/convert/html/pdf",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "convertHtmlToPdf"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/htmlToPdf.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/htmlToPdf.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "1 MB UTF-8 HTML text subset; no CSS, images, scripts, remote assets, or WebView execution; source parser rejects unsupported elements."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Partial: inert HTML body text/headings/lists/code only; full HTML/CSS/fonts/images/browser fidelity and Windows GUI acceptance remain open."
       ]
     },
     {
@@ -3596,25 +3605,34 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfScanExtraction.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Export image-only scan pages ZIP",
+        "provider": "MALENJO native PDF.js image-operator inspection and PNG ZIP",
+        "dependency": "Bundled PDF.js, fflate and PNG validator",
         "providerCatalogMatchKey": "/api/v1/misc/extract-image-scans",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "extractPdfImageScanPages"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfScanExtraction.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfScanExtraction.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "Up to 50 PDF pages, 16 megapixels/page, 32 MB exported ZIP; only image-painted pages with no selectable text."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Partial: renders selected image-only pages into PNG; does not extract original XObjects or recognize scans with OCR text layers."
       ]
     },
     {
@@ -4188,26 +4206,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfRasterEffects.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Export processed PDF copy — Adjust contrast",
+        "provider": "MALENJO offline PDF.js canvas and pdf-lib raster export",
+        "dependency": "Bundled PDF.js and pdf-lib",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "exportPdfRasterEffect"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfRasterEffects.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfRasterEffects.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "Up to 20 pages, 8 megapixels/page, 32 MB PDF input/output; 0.5–3 contrast; image-only export; no live preview."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Partial: contrast factor applied to rasterized copies only; no selective regions, scanner presets, or text/vector/interactive preservation."
       ]
     },
     {
@@ -4240,25 +4267,34 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfRasterEffects.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Export processed PDF copy — Invert colors",
+        "provider": "MALENJO offline PDF.js canvas and pdf-lib raster export",
+        "dependency": "Bundled PDF.js and pdf-lib",
         "providerCatalogMatchKey": "/api/v1/misc/replace-invert-pdf",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "transformPdfRasterPixels"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfRasterEffects.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfRasterEffects.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "Up to 20 pages, 8 megapixels/page, 32 MB PDF input/output; full-page RGB inversion as a raster copy."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Partial: inversion only, not content-vector replacement or ICC/CMYK profile-safe conversion; text selection and interactivity are rasterized."
       ]
     },
     {
@@ -4291,27 +4327,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfRasterEffects.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Export processed PDF copy — Grayscale scan look",
+        "provider": "MALENJO offline PDF.js canvas and pdf-lib raster export",
+        "dependency": "Bundled PDF.js and pdf-lib",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "transformPdfRasterPixels"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfRasterEffects.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfRasterEffects.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "Up to 20 pages, 8 megapixels/page, 32 MB PDF input/output; grayscale contrast curve; original PDF untouched."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
         "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
-        "Pinned Java/PDFBox source exists, but resource bounds, provider deployment and golden render tests remain open."
+        "Pinned Java/PDFBox source exists, but resource bounds, provider deployment and golden render tests remain open.",
+        "Partial: grayscale scan appearance only; actual deskew, noise, border artifacts, scanner presets and OCR remain unimplemented."
       ]
     },
     {
@@ -4712,26 +4757,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfOfflinePipeline.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Apply page pipeline to working PDF",
+        "provider": "MALENJO native pdf-lib page multi-step executor",
+        "dependency": "Bundled pdf-lib",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "runOfflinePdfPipeline"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfOfflinePipeline.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfOfflinePipeline.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "1–20 JSON steps; rotate/delete/move only; up to 200 pages, 32 MB source/output; rejects interactive PDFs."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Partial: limited page organization multi-tool only; no generalized visual multi-tool UI or other operation families."
       ]
     },
     {
@@ -4826,26 +4880,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfOfflinePipeline.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Apply page pipeline to working PDF",
+        "provider": "MALENJO native pdf-lib explicit page automation executor",
+        "dependency": "Bundled pdf-lib",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "runOfflinePdfPipeline"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfOfflinePipeline.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfOfflinePipeline.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "Single user-invoked 1–20 step offline plan; rotate/delete/move; no scheduled tasks or folders."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Partial: manual, one-shot local automation; scheduled/batch-folder/watch capabilities are not implemented."
       ]
     },
     {
@@ -4878,26 +4941,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfOfflinePipeline.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Apply page pipeline to working PDF",
+        "provider": "MALENJO native pdf-lib JSON page pipeline",
+        "dependency": "Bundled pdf-lib",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "parseOfflinePdfPipeline"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfOfflinePipeline.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfOfflinePipeline.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "Strict local JSON schema with rotate, delete and move; 1–20 steps, up to 200 pages, 32 MB source/output."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Partial: limited native page-transform pipeline, not arbitrary Stirling process graph, handleData or file watch service."
       ]
     },
     {
@@ -5367,8 +5439,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 68,
-    "unverifiedSourceCount": 22,
+    "localSourcePartialCount": 76,
+    "unverifiedSourceCount": 14,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
