@@ -83,6 +83,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Use npm 11, matching the passing Windows frontend job
+        run: npm install --global npm@11 --no-audit --no-fund
       - name: Install project PDF runtime dependencies
         run: npm install --no-audit --no-fund
       - name: Run real PDF processing, save outputs and reopen on disk
