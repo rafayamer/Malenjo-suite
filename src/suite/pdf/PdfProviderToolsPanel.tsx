@@ -41,6 +41,7 @@ import {convertMarkdownToPdf,MARKDOWN_TO_PDF_MAX_INPUT_BYTES} from './markdownTo
 import {convertHtmlToPdf,HTML_TO_PDF_MAX_INPUT_BYTES} from './htmlToPdf';
 import {exportPdfRasterEffect,PDF_RASTER_EFFECT_MAX_SOURCE_BYTES,type PdfRasterEffect} from './pdfRasterEffects';
 import {extractPdfImageScanPages} from './pdfScanExtraction';
+import {parseOfflinePdfPipeline,runOfflinePdfPipeline} from './pdfOfflinePipeline';
 import {convertPlainTextToPdf,TEXT_TO_PDF_MAX_INPUT_BYTES} from './plainTextToPdf';
 import {convertEmlToPdf,EML_TO_PDF_MAX_BYTES} from './emlToPdf';
 import {convertCbzToPdf,CBZ_TO_PDF_MAX_SOURCE_BYTES} from './cbzToPdf';
@@ -113,6 +114,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   const [htmlToPdfFile,setHtmlToPdfFile]=useState<File|null>(null);
   const [rasterEffect,setRasterEffect]=useState<PdfRasterEffect>('contrast');
   const [rasterContrast,setRasterContrast]=useState('1.4');
+  const [pipelineJson,setPipelineJson]=useState('[{"action":"rotate","pages":[1],"angle":90}]');
   const [textToPdfFile,setTextToPdfFile]=useState<File|null>(null);
   const [emlToPdfFile,setEmlToPdfFile]=useState<File|null>(null);
   const [visualSigner,setVisualSigner]=useState('');
@@ -712,6 +714,25 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }finally{
       await disposePdf(loaded);setBusy(false);
     }
+  }
+
+  async function applyOfflinePipeline(){
+    if(!sourceBytes||busy)return;
+    const revision=sourceBytes;
+    setBusy(true);setError('');setNotice('');
+    try{
+      const steps=parseOfflinePdfPipeline(pipelineJson);
+      const result=await runOfflinePdfPipeline(revision,steps);
+      const applied=await onApplyPdf(
+        'Applied '+steps.length+' offline PDF page pipeline steps',result,revision,
+      );
+      if(!applied){
+        throw new Error('Working PDF changed during pipeline; no stale result was applied.');
+      }
+      setNotice('Applied '+steps.length+' page transformations to the working PDF. Undo is available. Save or export to retain.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));setNotice('');
+    }finally{setBusy(false);}
   }
 
   async function saveOfflineCbzPdf(){
@@ -1347,6 +1368,17 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
            <FileOutput size={14}/>Export processed PDF copy
          </button>
        </div>
+     </details>}
+     {category==='automate'&&sourceBytes&&<details className="stirling-component-details" aria-label="Offline multi-tool PDF page automation pipeline">
+       <summary>Run an offline PDF page pipeline</summary>
+       <p>Combine up to 20 JSON steps in sequence to rotate, delete or move pages (1-based numbering, recalculated after each step). All steps execute as one undoable edit. Encrypted, signed, annotated, form-bearing or bookmark-bearing PDFs are refused. No scripts, plugins, network calls or arbitrary file actions are executed.</p>
+       <label className="stirling-field"><span>Pipeline JSON — rotate: pages + 90/180/270 angle; delete: pages; move: from + to</span>
+         <textarea rows={5} maxLength={8192} spellCheck={false} value={pipelineJson}
+           onChange={event=>setPipelineJson(event.target.value)}/>
+       </label>
+       <button type="button" disabled={busy||!pipelineJson.trim()} onClick={()=>void applyOfflinePipeline()}>
+         <FileOutput size={14}/>Apply page pipeline to working PDF
+       </button>
      </details>}
      {category==='organize'&&sourceBytes&&<details className="stirling-component-details" aria-label="Offline PDF booklet imposition">
       <summary>Arrange PDF pages as a saddle-stitch booklet (offline)</summary>
