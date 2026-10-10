@@ -13,8 +13,8 @@ The review's two PNG defects have implementation-level fixes in `pngIntegrity.ts
 | Group | Requirements | Source-backed partial | Awaiting implementation audit |
 |---|---:|---:|---:|
 | page | 18 | 18 | 0 |
-| conversion | 24 | 18 | 6 |
-| security | 16 | 10 | 6 |
+| conversion | 24 | 19 | 5 |
+| security | 16 | 11 | 5 |
 | scan-extraction | 6 | 4 | 2 |
 | editing-analysis | 10 | 7 | 3 |
 | forms | 4 | 4 | 0 |
