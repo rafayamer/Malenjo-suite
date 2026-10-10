@@ -38,6 +38,8 @@ import {addPdfVisualSignature} from './pdfVisualSignature';
 import {imposePdfBooklet,PDF_BOOKLET_MAX_INPUT_BYTES} from './pdfBooklet';
 import {convertJsonToPdf,JSON_TO_PDF_MAX_INPUT_BYTES} from './jsonToPdf';
 import {convertMarkdownToPdf,MARKDOWN_TO_PDF_MAX_INPUT_BYTES} from './markdownToPdf';
+import {convertHtmlToPdf,HTML_TO_PDF_MAX_INPUT_BYTES} from './htmlToPdf';
+import {exportPdfRasterEffect,PDF_RASTER_EFFECT_MAX_SOURCE_BYTES,type PdfRasterEffect} from './pdfRasterEffects';
 import {convertPlainTextToPdf,TEXT_TO_PDF_MAX_INPUT_BYTES} from './plainTextToPdf';
 import {convertEmlToPdf,EML_TO_PDF_MAX_BYTES} from './emlToPdf';
 import {convertCbzToPdf,CBZ_TO_PDF_MAX_SOURCE_BYTES} from './cbzToPdf';
@@ -107,6 +109,9 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   const [splitPagesPerPart,setSplitPagesPerPart]=useState('2');
   const [jsonToPdfFile,setJsonToPdfFile]=useState<File|null>(null);
   const [markdownToPdfFile,setMarkdownToPdfFile]=useState<File|null>(null);
+  const [htmlToPdfFile,setHtmlToPdfFile]=useState<File|null>(null);
+  const [rasterEffect,setRasterEffect]=useState<PdfRasterEffect>('contrast');
+  const [rasterContrast,setRasterContrast]=useState('1.4');
   const [textToPdfFile,setTextToPdfFile]=useState<File|null>(null);
   const [emlToPdfFile,setEmlToPdfFile]=useState<File|null>(null);
   const [visualSigner,setVisualSigner]=useState('');
@@ -628,6 +633,58 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }finally{setBusy(false);}
   }
 
+  async function saveOfflineHtmlPdf(){
+    if(!htmlToPdfFile||busy)return;
+    const file=htmlToPdfFile;
+    setBusy(true);setError('');setNotice('');
+    try{
+      if(!file.size||file.size>HTML_TO_PDF_MAX_INPUT_BYTES){
+        throw new Error('HTML conversion requires a nonempty file of at most 1 MB.');
+      }
+      const output=await convertHtmlToPdf(new Uint8Array(await file.arrayBuffer()));
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/pdf',bytes:Array.from(output),
+      },localExportStem(file.name.replace(/\.html?$/i,''))+'-html-text');
+      setNotice(saved?'Saved offline HTML text PDF: '+saved:'HTML PDF export cancelled.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));setNotice('');
+    }finally{setBusy(false);}
+  }
+
+  async function saveOfflineRasterPdf(){
+    if(!sourceBytes||busy)return;
+    const revision=sourceBytes;
+    const mode=rasterEffect;
+    setBusy(true);setError('');setNotice('');
+    let loaded:Awaited<ReturnType<typeof loadPdfBytes>>|null=null;
+    try{
+      if(!revision.length||revision.byteLength>PDF_RASTER_EFFECT_MAX_SOURCE_BYTES){
+        throw new Error('PDF image effects require a source of at most 32 MB.');
+      }
+      const factor=Number(rasterContrast);
+      if(mode==='contrast'&&(!rasterContrast.trim()||!Number.isFinite(factor))){
+        throw new Error('Enter a finite contrast multiplier between 0.5 and 3.');
+      }
+      loaded=await loadPdfBytes(revision);
+      const result=await exportPdfRasterEffect(loaded.document,{
+        effect:mode,contrast:factor,
+        onProgress:(done,total)=>setNotice('Processing PDF page '+done+'/'+total+'…'),
+      });
+      if(activeSourceRef.current!==revision){
+        throw new Error('The working PDF changed during rasterization; stale output was not saved.');
+      }
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/pdf',bytes:Array.from(result),
+      },localExportStem(sourceName)+'-'+mode+'-raster');
+      setNotice(saved?'Saved rasterized PDF copy (text and interactive PDF content not retained): '+saved:
+        'Rasterized export cancelled. Original PDF unchanged.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));setNotice('');
+    }finally{
+      await disposePdf(loaded);setBusy(false);
+    }
+  }
+
   async function saveOfflineCbzPdf(){
     if(!cbzToPdfFile||busy)return;
     const file=cbzToPdfFile;
@@ -1144,7 +1201,18 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         <FileOutput size={14}/>Convert text file to PDF (offline)
       </button>
     </details>}
-    {category==='convert'&&<details className="stirling-component-details" aria-label="Offline Markdown to PDF conversion">
+    {category==='convert'&&<details className="stirling-component-details" aria-label="Offline HTML text to PDF conversion">
+       <summary>HTML text to PDF (offline)</summary>
+       <p>Convert local UTF-8 HTML headings, paragraphs, lists and code to selectable PDF text. The inert parser rejects scripts, styling, images, remote resources, attributes and unsupported tags. This is not CSS/page-layout rendering.</p>
+       <label className="stirling-field"><span>Local HTML file</span>
+         <input type="file" accept=".html,.htm,text/html" disabled={busy}
+           onChange={event=>setHtmlToPdfFile(event.target.files?.[0]??null)}/>
+       </label>
+       <button type="button" disabled={busy||!htmlToPdfFile} onClick={()=>void saveOfflineHtmlPdf()}>
+         <FileOutput size={14}/>Convert safe HTML text to PDF
+       </button>
+     </details>}
+     {category==='convert'&&<details className="stirling-component-details" aria-label="Offline Markdown to PDF conversion">
       <summary>Markdown to PDF report (offline)</summary>
       <p>Render UTF-8 Markdown headings, paragraphs, lists, quotes and code to a paginated PDF. No embedded HTML execution or network access. Complex tables, images and Unicode fonts are not reconstructed; characters outside bundled WinAnsi fonts become visible escape sequences.</p>
       <label className="stirling-field"><span>Markdown document</span>
@@ -1224,7 +1292,27 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       </div>
       <small>Loaded {outlineItems.length} bookmarks. After applying an edit, refresh the list for updated PDF object references. Nested subtree deletion requires the explicit checkbox.</small>
     </details>}
-    {category==='organize'&&sourceBytes&&<details className="stirling-component-details" aria-label="Offline PDF booklet imposition">
+    {(category==='edit'||category==='scan')&&sourceBytes&&<details className="stirling-component-details" aria-label="Offline PDF contrast inversion and scanning effects">
+       <summary>PDF contrast, invert and scan appearance (offline)</summary>
+       <p>Render up to 20 pages locally, transform page pixels, and export a separate PDF copy. Selectable text, vectors, form fields, links, annotations, bookmarks, attachments and cryptographic signatures are NOT preserved. The working document is not modified.</p>
+       <div className="stirling-provider-actions">
+         <label>Appearance
+           <select value={rasterEffect} onChange={event=>setRasterEffect(event.target.value as PdfRasterEffect)}>
+             <option value="contrast">Adjust contrast</option>
+             <option value="invert">Invert colors</option>
+             <option value="scan">Grayscale scan look</option>
+           </select>
+         </label>
+         {rasterEffect==='contrast'&&<label>Contrast factor
+           <input type="number" min="0.5" max="3" step="0.1" value={rasterContrast}
+             onChange={event=>setRasterContrast(event.target.value)}/>
+         </label>}
+         <button type="button" disabled={busy} onClick={()=>void saveOfflineRasterPdf()}>
+           <FileOutput size={14}/>Export processed PDF copy
+         </button>
+       </div>
+     </details>}
+     {category==='organize'&&sourceBytes&&<details className="stirling-component-details" aria-label="Offline PDF booklet imposition">
       <summary>Arrange PDF pages as a saddle-stitch booklet (offline)</summary>
       <p>Create double-page landscape spreads ordered for left-to-right duplex booklet printing, with blank pages added when necessary. PDF vector content is preserved; interactive fields, annotations, signed documents, links, bookmarks and rotated pages are refused rather than silently lost. Exported booklet is a separate PDF copy.</p>
       <button type="button" disabled={busy} onClick={()=>void saveOfflineBooklet()}>
