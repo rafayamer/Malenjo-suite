@@ -48,6 +48,7 @@ import {convertEmlToPdf,EML_TO_PDF_MAX_BYTES} from './emlToPdf';
 import {convertCbzToPdf,CBZ_TO_PDF_MAX_SOURCE_BYTES} from './cbzToPdf';
 import {convertSvgToPdf,SVG_TO_PDF_MAX_INPUT_BYTES} from './svgToPdf';
 import { splitPdfByPageCount } from './splitByPageCount';
+import {splitPdfByChapters} from './pdfChapterSplit';
 import {PDF_TWENTY_WORKFLOWS,findPdfBatchOperation,classifyPdfBatchOutput} from './pdfTwentyWorkflows';
 import {verifyProviderCompletion} from './pdfProviderCompletion';
 import {fitPdfToPaper,type PdfPaperSize,type PdfPaperOrientation} from './pdfPaperResize';
@@ -288,6 +289,25 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }finally{
       setBusy(false);
     }
+  }
+
+  async function saveOfflineChapters(){
+    if(!sourceBytes||busy)return;
+    const revision=sourceBytes;
+    setBusy(true);setError('');setNotice('');
+    try{
+      const result=await splitPdfByChapters(revision);
+      if(activeSourceRef.current!==revision){
+        throw new Error('The working PDF changed during chapter splitting; stale output was not saved.');
+      }
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/zip',bytes:Array.from(result.archive),
+      },localExportStem(sourceName)+'-chapters');
+      setNotice(saved?'Saved '+result.chapters.length+' bookmark-defined chapters as ZIP: '+saved:
+        'Chapter PDF ZIP save cancelled; original document unchanged.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));setNotice('');
+    }finally{setBusy(false);}
   }
 
   async function saveOfflinePageGroups(){
@@ -1455,7 +1475,14 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         <button type="button" disabled={busy} onClick={()=>void applyOfflinePaperSize()}>Fit current PDF pages</button>
       </div>
     </details>}
-    {category==='organize'&&sourceBytes&&<details className="stirling-component-details" aria-label="Offline PDF split by page count">
+    {category==='organize'&&sourceBytes&&<details className="stirling-component-details" aria-label="Offline PDF split by top-level bookmarks">
+       <summary>Split PDF by chapter bookmarks (offline)</summary>
+       <p>Use existing top-level PDF bookmarks as chapter boundaries and export independently reopenable PDFs in a ZIP. All pages are preserved in their original order. Pages preceding the first bookmark become front matter. Requires at least two output parts, explicit increasing bookmark page destinations, no interactive annotations, forms, signatures or certification. Up to 200 pages, 50 parts and 32 MB export.</p>
+       <button type="button" disabled={busy} onClick={()=>void saveOfflineChapters()}>
+         <FileOutput size={14}/>Export chapters as PDF ZIP
+       </button>
+     </details>}
+     {category==='organize'&&sourceBytes&&<details className="stirling-component-details" aria-label="Offline PDF split by page count">
       <summary>Split into page groups (offline)</summary>
       <p>Save a ZIP of consecutive PDFs, each containing the selected number of pages. The original PDF is unchanged. Interactive forms and signed files are not supported by this fallback; use the provider for larger documents.</p>
       <label className="stirling-field"><span>Pages per PDF</span>
