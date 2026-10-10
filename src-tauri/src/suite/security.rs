@@ -425,13 +425,20 @@ fn validate_output_path(path: &str) -> Result<PathBuf, String> {
         return Err("Signing destination directory does not exist.".into());
     }
     if candidate.exists() {
-        let metadata = fs::symlink_metadata(&candidate)
-            .map_err(|error| format!("Unable to inspect signing destination: {error}"))?;
-        if metadata.file_type().is_symlink() || !metadata.is_file() {
-            return Err("Signing destination must be a regular non-symbolic-link file.".into());
-        }
+        // Never overwrite a library source or another already-signed PDF.
+        // pyHanko may create a partial destination before failing; deleting
+        // that partial output must never delete a user's existing file.
+        return Err("Signing destination already exists. Choose a new PDF copy filename.".into());
     }
-    Ok(candidate)
+    if candidate.extension().and_then(|e| e.to_str())
+        .is_none_or(|e| !e.eq_ignore_ascii_case("pdf")) {
+        return Err("Signing destination must end in .pdf.".into());
+    }
+    let canonical_parent = fs::canonicalize(parent)
+        .map_err(|error| format!("Unable to resolve signing destination directory: {error}"))?;
+    let filename = candidate.file_name()
+        .ok_or_else(|| "Signing destination has no filename.".to_string())?;
+    Ok(canonical_parent.join(filename))
 }
 
 const PYHANKO_SIGN_SCRIPT: &str = r#"

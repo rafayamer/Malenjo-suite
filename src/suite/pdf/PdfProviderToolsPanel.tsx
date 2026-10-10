@@ -35,6 +35,7 @@ import {unlockReadOnlyPdfFormFields} from './formUnlock';
 import {inspectPdfStructuralSafety,serializePdfPreflightJson} from './pdfPreflight';
 import {buildLocalPdfApiManual} from './pdfApiManual';
 import {addPdfVisualSignature} from './pdfVisualSignature';
+import PdfCertificateSigningPanel from './PdfCertificateSigningPanel';
 import {imposePdfBooklet,PDF_BOOKLET_MAX_INPUT_BYTES} from './pdfBooklet';
 import {convertJsonToPdf,JSON_TO_PDF_MAX_INPUT_BYTES} from './jsonToPdf';
 import {convertMarkdownToPdf,MARKDOWN_TO_PDF_MAX_INPUT_BYTES} from './markdownToPdf';
@@ -1347,6 +1348,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
        </button>
        <small>Redacted page content is omitted, not covered by a removable annotation. Inspect the resulting PDF carefully before distribution. Original workspace is untouched.</small>
      </details>}
+     {category==='sign'&&<PdfCertificateSigningPanel/>}
      {category==='sign'&&sourceBytes&&<details className="stirling-component-details" aria-label="Add a clearly labeled visual PDF signature">
       <summary>Place a visual signature mark (offline)</summary>
       <p>Draws a name stamp visibly onto the selected PDF page and supports Undo. This is only a graphical name mark; it does not authenticate identity, use a certificate, or cryptographically sign a PDF. Existing signed or certified PDFs are refused.</p>
