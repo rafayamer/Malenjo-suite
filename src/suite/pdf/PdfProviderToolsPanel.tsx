@@ -48,7 +48,8 @@ import {extractPdfImageScanPages} from './pdfScanExtraction';
 import {exportSearchablePdfFromLocalOcr,PDF_LOCAL_OCR_MAX_SOURCE_BYTES} from './pdfLocalOcr';
 import {getPaddleStatus} from '../scanner/ocr';
 import {parsePdfAutoRedactPatterns,redactPdfPagesByText,PDF_AUTO_REDACT_MAX_INPUT_BYTES} from './pdfAutoRedact';
-import {parseOfflinePdfPipeline,runOfflinePdfPipeline} from './pdfOfflinePipeline';
+import {parseOfflinePdfPipeline} from './pdfOfflinePipeline';
+import {handleLocalPdfPipelineData,LOCAL_PDF_PIPELINE_PROTOCOL} from './pdfPipelineHandler';
 import {convertPlainTextToPdf,TEXT_TO_PDF_MAX_INPUT_BYTES} from './plainTextToPdf';
 import {convertEmlToPdf,EML_TO_PDF_MAX_BYTES} from './emlToPdf';
 import {convertCbzToPdf,CBZ_TO_PDF_MAX_SOURCE_BYTES} from './cbzToPdf';
@@ -750,9 +751,12 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     setBusy(true);setError('');setNotice('');
     try{
       const steps=parseOfflinePdfPipeline(pipelineJson);
-      const result=await runOfflinePdfPipeline(revision,steps);
+      const result=await handleLocalPdfPipelineData({
+        protocol:LOCAL_PDF_PIPELINE_PROTOCOL,contentType:'application/pdf',
+        filename:providerFilename(sourceName),bytes:revision,planJson:pipelineJson,
+      });
       const applied=await onApplyPdf(
-        'Applied '+steps.length+' offline PDF page pipeline steps',result,revision,
+        'Applied '+result.stepsExecuted+' offline PDF page pipeline steps',result.bytes,revision,
       );
       if(!applied){
         throw new Error('Working PDF changed during pipeline; no stale result was applied.');
