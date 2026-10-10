@@ -37,6 +37,7 @@ import {inspectPdfStructuralSafety,serializePdfPreflightJson} from './pdfPreflig
 import {buildLocalPdfApiManual} from './pdfApiManual';
 import {createPdfLocalDeveloperGuide,type PdfLocalDeveloperGuide} from './pdfDeveloperGuides';
 import {addPdfVisualSignature} from './pdfVisualSignature';
+import {createUnsignedRasterPdfCopy} from './pdfUnsignedCopy';
 import PdfCertificateSigningPanel from './PdfCertificateSigningPanel';
 import {imposePdfBooklet,PDF_BOOKLET_MAX_INPUT_BYTES} from './pdfBooklet';
 import {convertJsonToPdf,JSON_TO_PDF_MAX_INPUT_BYTES} from './jsonToPdf';
@@ -968,6 +969,31 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }finally{setBusy(false);}
   }
 
+  async function saveUnsignedRasterCopy(){
+    if(!sourceBytes||busy)return;
+    if(!window.confirm(
+      'You are about to create a NEW PDF copy with ALL digital certificate signatures and certification evidence removed. Every page is rasterized: selectable text, forms, bookmarks, attachments and links are lost. Previously valid signatures will NOT remain valid or verifiable in the copy. The original signed PDF remains unchanged. Continue?'
+    ))return;
+    const revision=sourceBytes;
+    setBusy(true);setError('');setNotice('');
+    let loaded:Awaited<ReturnType<typeof loadPdfBytes>>|null=null;
+    try{
+      loaded=await loadPdfBytes(revision);
+      const output=await createUnsignedRasterPdfCopy(revision,loaded.document,{
+        onProgress:(done,total)=>setNotice('Creating unsigned raster page '+done+'/'+total+'…'),
+      });
+      if(activeSourceRef.current!==revision){
+        throw new Error('The working signed PDF changed; unsigned copy was not saved.');
+      }
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/pdf',bytes:Array.from(output.bytes),
+      },localExportStem(sourceName)+'-unsigned-raster');
+      setNotice(saved?'Saved UNSIGNED rasterized copy: '+saved+'. It no longer carries any valid certificate signature. Original untouched.':
+        'Unsigned copy export cancelled.');
+    }catch(reason){setError(reason instanceof Error?reason.message:String(reason));setNotice('');}
+    finally{await disposePdf(loaded);setBusy(false);}
+  }
+
   async function applyVisualSignature(){
     if(!sourceBytes||busy)return;
     const original=sourceBytes;
@@ -1428,6 +1454,13 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
        <small>Redacted page content is omitted, not covered by a removable annotation. Inspect the resulting PDF carefully before distribution. Original workspace is untouched.</small>
      </details>}
      {category==='sign'&&<PdfCertificateSigningPanel/>}
+     {category==='sign'&&sourceBytes&&<details className="stirling-component-details" aria-label="Remove certificate signature by rasterizing a separate PDF copy">
+       <summary>Create an unsigned raster PDF copy from signed PDF</summary>
+       <p>Explicitly discard digital signature and certification evidence from a COPY of the signed document. Every page is rendered into pixels and placed in a new PDF. The result is NOT signed, not incremental signature removal, and may lose selectable text, vector quality, links, bookmarks and forms. Refuses unsigned source documents.</p>
+       <button type="button" disabled={busy} onClick={()=>void saveUnsignedRasterCopy()}>
+         <FileOutput size={14}/>Export intentionally unsigned raster PDF copy
+       </button>
+     </details>}
      {category==='sign'&&sourceBytes&&<details className="stirling-component-details" aria-label="Add a clearly labeled visual PDF signature">
       <summary>Place a visual signature mark (offline)</summary>
       <p>Draws a name stamp visibly onto the selected PDF page and supports Undo. This is only a graphical name mark; it does not authenticate identity, use a certificate, or cryptographically sign a PDF. Existing signed or certified PDFs are refused.</p>
