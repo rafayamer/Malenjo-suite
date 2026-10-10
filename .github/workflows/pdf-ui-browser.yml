@@ -29,3 +29,6 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Launch MALENJO and verify PDF selection, Find, tab retention and export
         run: node scripts/pdf-ui-browser-smoke.mjs
+      - name: Report completed browser-acceptance result
+        if: always()
+        run: echo 'Browser PDF acceptance requires a real Chromium pass; green frontend unit tests are not sufficient.'

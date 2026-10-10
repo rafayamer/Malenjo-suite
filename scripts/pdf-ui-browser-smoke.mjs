@@ -24,7 +24,11 @@ async function main(){
     page.drawText('MALENJO BROWSER UI TEXT SELECT FIND '+i,{x:40,y:550,font,size:18});
   }
   const source=Buffer.from(await sourceDoc.save({useObjectStreams:false}));
-  server=spawn('npm',['run','dev:codespace'],{cwd:root,stdio:['ignore','pipe','pipe']});
+  // Spawn Vite directly so killing the child also closes its stdout/stderr.
+  // npm run dev:codespace spawns a shell which leaves Vite alive in CI.
+  server=spawn(process.execPath,[resolve(root,'node_modules/vite/bin/vite.js'),'--host','0.0.0.0'],{
+    cwd:root,stdio:['ignore','pipe','pipe'],
+  });
   server.stdout.on('data',buf=>process.stdout.write(buf));
   server.stderr.on('data',buf=>process.stderr.write(buf));
   await waitForServer();
@@ -34,16 +38,19 @@ async function main(){
   const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.goto(base,{waitUntil:'domcontentloaded'});
+  console.log('MALENJO loaded in Chromium; opening PDF via browser input');
   await page.locator('.workspace > input[type="file"]').setInputFiles({
     name:'browser-ui-acceptance.pdf',mimeType:'application/pdf',buffer:source,
   });
   const documentTab=page.locator('.document-tab-main').filter({hasText:'browser-ui-acceptance.pdf'});
   await documentTab.waitFor({timeout:30000});
+  console.log('MALENJO browser document tab opened');
   await page.waitForFunction(()=>
     Array.from(document.querySelectorAll('.pdf-text-layer span')).some(
       node=>node.textContent?.includes('MALENJO BROWSER UI TEXT SELECT FIND'),
     ),null,{timeout:30000});
   const span=page.locator('.pdf-text-layer span').filter({hasText:'MALENJO BROWSER UI TEXT SELECT FIND'}).first();
+  console.log('MALENJO real PDF.js selectable text spans rendered');
   const selected=await span.evaluate(node=>{
     const range=document.createRange(),selection=window.getSelection();
     range.selectNodeContents(node);
