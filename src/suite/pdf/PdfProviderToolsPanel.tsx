@@ -26,6 +26,7 @@ import { exportPdfStructuredJson } from './pdfToJson';
 import { exportPdfStructuredXml } from './pdfToXml';
 import {exportPdfTextFormat,type PdfTextFormat} from './pdfTextFormats';
 import {exportPdfCbz} from './pdfToCbz';
+import {exportPdfTextOnlySvgZip,PDF_TEXT_VECTOR_MAX_SOURCE_BYTES} from './pdfTextVector';
 import {exportPdfRasterPptx} from './pdfToPresentation';
 import {addPdfOutlineTreeEntry,deletePdfOutlineTreeEntry,listPdfOutlineTree,movePdfOutlineTreeEntry,renamePdfOutlineTreeEntry,type PdfOutlineTreeEntry} from './pdfOutlineTree';
 import {exportPdfOfficeText,inspectPdfTextDocx,inspectPdfTextOdt,type PdfOfficeTextFormat} from './pdfOfficeText';
@@ -795,6 +796,29 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     finally{await disposePdf(loaded);setBusy(false);}
   }
 
+  async function savePdfTextVectorSvg(){
+    if(!sourceBytes||busy)return;
+    const revision=sourceBytes;
+    setBusy(true);setError('');setNotice('');
+    let loaded:Awaited<ReturnType<typeof loadPdfBytes>>|null=null;
+    try{
+      if(revision.length<5||revision.length>PDF_TEXT_VECTOR_MAX_SOURCE_BYTES){
+        throw new Error('PDF to SVG text export requires a source PDF of at most 16 MB.');
+      }
+      loaded=await loadPdfBytes(revision);
+      const result=await exportPdfTextOnlySvgZip(loaded.document,{
+        onProgress:(done,total)=>setNotice('Exporting SVG text page '+done+'/'+total+'…'),
+      });
+      if(activeSourceRef.current!==revision)throw new Error('PDF changed during SVG export; stale output will not be saved.');
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/zip',bytes:Array.from(result.archive),
+      },localExportStem(sourceName)+'-text-svg');
+      setNotice(saved?'Saved '+result.pageCount+' text-only SVG pages as ZIP: '+saved:
+        'SVG archive save cancelled.');
+    }catch(reason){setError(reason instanceof Error?reason.message:String(reason));setNotice('');}
+    finally{await disposePdf(loaded);setBusy(false);}
+  }
+
   async function saveOfflinePageRedaction(){
     if(!sourceBytes||busy)return;
     let patterns:string[];
@@ -1301,7 +1325,14 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         <FileOutput size={14}/>Remove review annotations (offline)
       </button>
     </div>
-    {category==='convert'&&<details className="stirling-component-details" aria-label="Offline SVG vector to PDF conversion">
+    {category==='convert'&&sourceBytes&&<details className="stirling-component-details" aria-label="Offline PDF selectable text to SVG vector">
+       <summary>Export PDF selectable text as SVG vectors (offline)</summary>
+       <p>Export up to 10 text-only pages to genuine SVG text nodes inside a ZIP. Refuses pages with painted paths, images, complex glyph transforms, missing selectable text or unsupported layout instead of silently rasterizing. Fonts are replaced by native SVG sans-serif and may vary. This does not implement general PDF-to-EPS or full vector geometry conversion.</p>
+       <button type="button" disabled={busy} onClick={()=>void savePdfTextVectorSvg()}>
+         <FileOutput size={14}/>Export text-only SVG pages as ZIP
+       </button>
+     </details>}
+     {category==='convert'&&<details className="stirling-component-details" aria-label="Offline SVG vector to PDF conversion">
       <summary>Convert SVG vector shapes to PDF (offline)</summary>
       <p>Convert trusted vector primitives—paths, rectangles, circles, ellipses, and lines—to real PDF drawing operators. No network, scripts, images, CSS, nested groups, or external assets. Unsupported SVG is refused rather than rendered incompletely.</p>
       <label className="stirling-field"><span>SVG vector file</span>
