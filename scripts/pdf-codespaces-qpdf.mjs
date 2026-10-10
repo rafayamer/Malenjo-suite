@@ -36,22 +36,22 @@ if(process.platform!=='linux'||Number(process.versions.node.split('.')[0])<24){
   process.exit(2);
 }
 const qpdf='qpdf';
-function run(argumentsList,input){
+function run(argumentsList,input,cwd){
   const env={...process.env};
   delete env.MALENJO_QPDF_OWNER_PASSWORD;
   delete env.MALENJO_QPDF_USER_PASSWORD;
   const result=spawnSync(qpdf,argumentsList,{
-    input,env,encoding:'utf8',timeout:45000,maxBuffer:128*1024,
+    input,env,cwd,encoding:'utf8',timeout:45000,maxBuffer:128*1024,
     stdio:['pipe','pipe','pipe'],
   });
   if(result.error)throw new Error('Local qpdf executable is unavailable or timed out; install it in Codespaces.');
   return result;
 }
-function throughStdin(lines){
+function throughStdin(lines,cwd){
   for(const line of lines){
     if(/[\r\n\u0000]/.test(line))throw new Error('qpdf argument contains unsupported newline or NUL.');
   }
-  const result=run(['@-'],lines.join('\n')+'\n');
+  const result=run(['@-'],lines.join('\n')+'\n',cwd);
   if(result.status!==0)throw new Error('Local qpdf operation failed; source document remains unchanged.');
 }
 let stage='';
@@ -100,11 +100,11 @@ try{
   throughStdin([
     '--encrypt',user,owner,'256','--print=none','--modify=none',
     '--extract=n','--','source.pdf','protected.pdf',
-  ]);
+  ],stage);
   if(run(['--is-encrypted',protectedFile]).status!==0){
     throw new Error('qpdf did not generate an encrypted PDF.');
   }
-  throughStdin(['--password='+owner,'--decrypt','--','protected.pdf','verified-decrypted.pdf']);
+  throughStdin(['--password='+owner,'--decrypt','--','protected.pdf','verified-decrypted.pdf'],stage);
   const decrypted=Uint8Array.from(readFileSync(decryptedFile));
   const reopened=await PDFDocument.load(decrypted,{ignoreEncryption:false,updateMetadata:false});
   if(reopened.getPageCount()!==document.getPageCount()){
