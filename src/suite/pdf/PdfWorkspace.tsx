@@ -616,6 +616,19 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }
   }
 
+  async function removeSelectedPagesSafely():Promise<void>{
+    if(!sourceBytes||operationPages.length>=pageCount||mutating)return;
+    const label='Remove '+operationPages.length+' selected page'+(operationPages.length===1?'':'s')+'?';
+    if(!window.confirm(label+'\n\nOnly the MALENJO working copy changes. Your original PDF file stays untouched. You can Undo before exporting.'))return;
+    await mutateAction(
+      'Removed '+operationPages.length+' page(s) from the working copy.',
+      bytes=>operationPages.length===1
+        ?deletePdfPage(bytes,operationPages[0])
+        :deletePdfPages(bytes,operationPages),
+      Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length)),
+    );
+  }
+
   async function mutateAction(
     label:string,
     operation:(bytes:Uint8Array)=>Promise<Uint8Array>,
@@ -1836,7 +1849,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           detail:'Permanent working-copy page removal; Undo is available before export',
           enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,
           disabledReason:operationPages.length>=pageCount?'A PDF must retain at least one page.':!sourceBytes?'No PDF is loaded.':'Wait for the current PDF edit to finish.',
-          run:()=>mutateAction(`Deleted ${operationPages.length} selected page(s).`,bytes=>operationPages.length===1?deletePdfPage(bytes,operationPages[0]):deletePdfPages(bytes,operationPages),Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length))),
+          run:removeSelectedPagesSafely,
         },
         {
           id:'pdf-page-copy',
@@ -2063,7 +2076,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     ],
     organize:[
       {id:'turn-pages',label:'Rotate selected',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Permanently rotated ${operationPages.length} selected page(s) by 90°.`,bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),operationPages[0])},
-      {id:'remove-pages',label:`Delete ${operationPages.length} page${operationPages.length===1?'':'s'}`,enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length>=pageCount?'A PDF must retain at least one page.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Deleted ${operationPages.length} selected page(s).`,bytes=>operationPages.length===1?deletePdfPage(bytes,operationPages[0]):deletePdfPages(bytes,operationPages),Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length)))},
+      {id:'remove-pages',label:`Delete ${operationPages.length} page${operationPages.length===1?'':'s'}`,enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length>=pageCount?'A PDF must retain at least one page.':mutating?'Wait for the current PDF edit to finish.':undefined,run:removeSelectedPagesSafely},
       {id:'copy-page',label:'Duplicate page',enabled:!!sourceBytes&&!mutating&&operationPages.length===1,disabledReason:operationPages.length!==1?'Select exactly one page.':mutating?'Wait for the current PDF edit to finish.':!sourceBytes?'No PDF is loaded.':undefined,run:()=>mutateAction(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)},
       {id:'extract-pages',label:'Extract selected',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:extractSelected},
       {id:'split',label:'Split here',enabled:!!sourceBytes&&!mutating&&currentPage<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':currentPage>=pageCount?'Move before the final page to split the PDF.':mutating?'Wait for the current PDF edit to finish.':undefined,run:splitCurrent},
@@ -2282,6 +2295,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     />}
 
     {(notice || actionNotice) && <div className="pdf-notice">{notice || actionNotice}</div>}
+    {!!pdf&&!isDesktopRuntime()&&<div className="pdf-notice" role="note">
+      Browser preview: MALENJO does not delete or overwrite your original local PDF.
+      Edits remain in this document tab until you export a separate copy.
+      Browser tabs are temporary; export edits before reloading or closing Codespaces.
+    </div>
     {error && <div className="pdf-notice error">{error}</div>}
 
     {!pdf && <div className="pdf-empty">
@@ -2289,7 +2307,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       <h1>PDF Workspace</h1>
       <p>{loading
         ? 'Loading PDF with the local PDF.js renderer…'
-        : 'Open PDFs from MALENJO Files to keep several documents in tabs, or choose one here for a temporary workspace preview.'}</p>
+        : 'Choose a PDF to open it in its own MALENJO document tab, where you can view, find, edit and export safely.'}</p>
       <button className="primary-action" disabled={loading} onClick={() => fileInputRef.current?.click()}>
         <FileText size={17}/> {loading ? 'Loading…' : 'Choose PDF'}
       </button>
@@ -2902,11 +2920,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
         <div className="pdf-pane-title">Page tools</div>
         <div className="pdf-page-tools">
-          <button disabled={mutating||operationPages.length>=pageCount} onClick={()=>void mutate(
-            `Deleted ${operationPages.length} selected page(s).`,
-            bytes=>operationPages.length===1?deletePdfPage(bytes,operationPages[0]):deletePdfPages(bytes,operationPages),
-            Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length)),
-          )}>Delete selected</button>
+          <button disabled={mutating||operationPages.length>=pageCount} onClick={()=>void removeSelectedPagesSafely()}>Remove selected pages…</button>
           <button disabled={mutating||operationPages.length!==1} onClick={()=>void mutate(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)}>Duplicate</button>
           <button disabled={mutating||operationPages.length!==1||currentPage<=1} onClick={()=>void mutate('Moved page earlier.',bytes=>movePdfPage(bytes,currentPage,currentPage-1),currentPage-1)}>Move earlier</button>
           <button disabled={mutating||operationPages.length!==1||currentPage>=pageCount} onClick={()=>void mutate('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)}>Move later</button>
