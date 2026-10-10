@@ -148,6 +148,18 @@ export default function App() {
     else commandControllersRef.current.delete(sessionId);
   }
 
+  // Local browser files remain available in tabs when navigating, but have
+  // not been persisted to disk; warn before leaving with unsaved PDF edits.
+  useEffect(()=>{
+    if(!sessions.some(item=>item.dirty&&item.document.browserFile))return;
+    function warnBeforeUnload(event:BeforeUnloadEvent){
+      event.preventDefault();
+      event.returnValue='';
+    }
+    window.addEventListener('beforeunload',warnBeforeUnload);
+    return()=>window.removeEventListener('beforeunload',warnBeforeUnload);
+  },[sessions]);
+
   function closeSessions(sessionIds: string[]) {
     const remove = new Set(sessionIds);
     const targets = sessions.filter((session) => remove.has(session.id));
@@ -567,6 +579,7 @@ export default function App() {
                 active
                 notice={workspaceNotices.__open ?? ''}
                 onBackToFiles={()=>selectModule('files')}
+                onOpenBrowserPdf={(file)=>openBrowserFiles([file])}
                 onNavigateModule={(id)=>selectModule(id)}
               />
             : active === 'scanner'

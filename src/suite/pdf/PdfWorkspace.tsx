@@ -141,6 +141,7 @@ interface Props {
   active: boolean;
   notice: string;
   onBackToFiles(): void;
+  onOpenBrowserPdf?(file:File):void;
   onNavigateModule?(id:'ai'|'security'|'sign'|'scanner'|'automation'): void;
   onDirtyChange?(dirty:boolean): void;
   onSavingChange?(saving:boolean): void;
@@ -176,7 +177,7 @@ function PdfLeftPanelIcon({id}:{id:PdfLeftPanelId}) {
   return <ListChecks size={17}/>;
 }
 
-export default function PdfWorkspace({ session, active, notice, onBackToFiles, onNavigateModule, onDirtyChange, onSavingChange, registerCommands }: Props) {
+export default function PdfWorkspace({ session, active, notice, onBackToFiles, onOpenBrowserPdf, onNavigateModule, onDirtyChange, onSavingChange, registerCommands }: Props) {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -560,6 +561,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       return;
     }
 
+    // Browser preview opened from the empty PDF module used to be destroyed
+    // on navigation. Move the chosen file into a durable document tab.
+    if(!session&&onOpenBrowserPdf){
+      onOpenBrowserPdf(file);
+      return;
+    }
     const bytes = await file.arrayBuffer();
     await installPdf(bytes, file.name, file);
   }
@@ -2210,6 +2217,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             <button disabled={!pdf || currentPage >= pageCount} onClick={() => goToPage(currentPage + 1)} aria-label="Next page"><ChevronRight size={16}/></button>
           </div>
           <div className="pdf-toolbar-group">
+            <button disabled={!pdf} className={leftPanel==='search'&&!leftPanelCollapsed?'active':''}
+              onClick={()=>{
+                setLeftPanel('search');
+                setLeftPanelCollapsed(false);
+                window.requestAnimationFrame(()=>searchInputRef.current?.focus());
+              }} title="Find words in this PDF (Ctrl+F)" aria-label="Find words in PDF"><Search size={15}/> Find</button>
             <button disabled={!pdf} onClick={() => { setFitMode('custom'); setZoom((value) => stepPdfZoom(value, -1)); }} aria-label="Zoom out"><Minus size={16}/></button>
             <button className="pdf-zoom-label" disabled={!pdf} onClick={() => setFitMode((mode) => mode === 'width' ? 'page' : 'width')} aria-label={`Zoom mode: ${zoomLabel}`}>{zoomLabel}</button>
             <button disabled={!pdf} onClick={() => { setFitMode('custom'); setZoom((value) => stepPdfZoom(value, 1)); }} aria-label="Zoom in"><Plus size={16}/></button>
