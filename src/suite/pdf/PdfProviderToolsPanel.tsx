@@ -737,6 +737,44 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }finally{setBusy(false);}
   }
 
+  async function saveOfflinePageRedaction(){
+    if(!sourceBytes||busy)return;
+    let patterns:string[];
+    try{
+      patterns=parsePdfAutoRedactPatterns(redactionPhrases);
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+      return;
+    }
+    if(!window.confirm(
+      'Automatic redaction will BLACK OUT ENTIRE PAGES wherever a phrase matches and export a NEW PDF. Other pages will also be rasterized. Selectable text, links, forms, annotations, attachments and signatures are not preserved. You must inspect the result before sharing. The working PDF is unchanged. Continue?'
+    ))return;
+    const revision=sourceBytes;
+    setBusy(true);setError('');setNotice('');
+    let loaded:Awaited<ReturnType<typeof loadPdfBytes>>|null=null;
+    try{
+      if(revision.byteLength<5||revision.byteLength>PDF_AUTO_REDACT_MAX_INPUT_BYTES){
+        throw new Error('Automatic page redaction requires a PDF of at most 32 MB.');
+      }
+      loaded=await loadPdfBytes(revision);
+      const result=await redactPdfPagesByText(revision,loaded.document,patterns,{
+        onProgress:(done,total)=>setNotice('Redacting PDF page '+done+'/'+total+'…'),
+      });
+      if(activeSourceRef.current!==revision){
+        throw new Error('The working PDF changed during redaction; stale output was not saved.');
+      }
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/pdf',bytes:Array.from(result.bytes),
+      },localExportStem(sourceName)+'-page-redacted');
+      setNotice(saved?'Saved blacked-out pages '+result.redactedPages.join(', ')+' as PDF copy: '+saved:
+        'Redaction copy save cancelled. Working document unchanged.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));setNotice('');
+    }finally{
+      await disposePdf(loaded);setBusy(false);
+    }
+  }
+
   async function saveOfflineCbzPdf(){
     if(!cbzToPdfFile||busy)return;
     const file=cbzToPdfFile;
@@ -1276,7 +1314,20 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         <FileOutput size={14}/>Convert Markdown file to PDF (offline)
       </button>
     </details>}
-    {category==='sign'&&sourceBytes&&<details className="stirling-component-details" aria-label="Add a clearly labeled visual PDF signature">
+         {category==='protect'&&sourceBytes&&<details className="stirling-component-details" aria-label="Automatic whole-page text pattern redaction">
+       <summary>Auto-redact entire matching pages (offline)</summary>
+       <p>Enter up to 20 literal case-insensitive phrases, one per line. When any phrase occurs in a page's selectable text, the ENTIRE page is permanently replaced with opaque black in a separate PDF copy. Unmatched pages are rendered to images so original content streams and hidden layers are not copied. Every phrase must be found, and all pages must have selectable text. This is not word-level redaction. OCR scans, graphics-as-text and inaccurate text extraction require independent review.</p>
+       <label className="stirling-field"><span>Required literal phrases, one per line</span>
+         <textarea rows={4} maxLength={4096} value={redactionPhrases} spellCheck={false}
+           placeholder="Confidential account number"
+           onChange={event=>setRedactionPhrases(event.target.value)}/>
+       </label>
+       <button type="button" disabled={busy||!redactionPhrases.trim()} onClick={()=>void saveOfflinePageRedaction()}>
+         <FileOutput size={14}/>Export blacked-out matching pages as new PDF
+       </button>
+       <small>Redacted page content is omitted, not covered by a removable annotation. Inspect the resulting PDF carefully before distribution. Original workspace is untouched.</small>
+     </details>}
+     {category==='sign'&&sourceBytes&&<details className="stirling-component-details" aria-label="Add a clearly labeled visual PDF signature">
       <summary>Place a visual signature mark (offline)</summary>
       <p>Draws a name stamp visibly onto the selected PDF page and supports Undo. This is only a graphical name mark; it does not authenticate identity, use a certificate, or cryptographically sign a PDF. Existing signed or certified PDFs are refused.</p>
       <div className="stirling-fields">
