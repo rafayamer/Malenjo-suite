@@ -2,7 +2,7 @@ use serde::Serialize;
 use std::{
     env, fs,
     io::Read,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::{Child, Command, Stdio},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -63,17 +63,25 @@ pub fn pdfa_provider_status()->PdfaProviderStatus{
     }
 }
 fn verified_pdfa_2b(report:&str)->bool{
-    if !report.contains("<validationReport")||
-       !report.contains("isCompliant=\"true\"")||
-       report.contains("isCompliant=\"false\"")||
-       report.contains("failedToParse=\"1\"")||
-       report.contains("nonCompliant=\"1\"")||
-       report.contains("veraExceptions=\"1\""){
-        return false;
-    }
-    // Independent standards validation must identify a compliant report.
-    report.matches("isCompliant=\"true\"").count()==1
+    // Only accept a single positively validated PDF/A-2b document. A
+    // validator exit code of zero without a matching report is not proof.
+    // Require both the item and batch result to agree, including no
+    // parsing errors or skipped rules. Unknown report versions fail closed.
+    let lower=report.to_ascii_lowercase();
+    let count=lower.matches("<validationreport ").count();
+    count==1 &&
+    lower.contains("profilename=\"pdf/a-2b") &&
+    lower.contains("iscompliant=\"true\"") &&
+    !lower.contains("iscompliant=\"false\"") &&
+    lower.contains("failedrules=\"0\"") &&
+    lower.contains("failedchecks=\"0\"") &&
+    lower.contains("noncompliant=\"0\"") &&
+    lower.contains("failedtoparse=\"0\"") &&
+    lower.contains("veraexceptions=\"0\"") &&
+    lower.contains("outofmemory=\"0\"") &&
+    !lower.contains("encrypted=\"1\"")
 }
+
 struct Stage(PathBuf);
 impl Drop for Stage{
     fn drop(&mut self){let _=fs::remove_dir_all(&self.0);}
@@ -170,11 +178,12 @@ mod tests{
     #[test]
     fn rejects_false_or_missing_conformance_regardless_of_process_exit(){
         assert!(!verified_pdfa_2b("<validationReport isCompliant=\"false\"/>"));
+        assert!(!verified_pdfa_2b("<report><validationReport profileName=\"PDF/A-1b\" isCompliant=\"true\"/></report>"));
         assert!(!verified_pdfa_2b("<report><validationReports compliant=\"1\"/></report>"));
         assert!(!verified_pdfa_2b("<validationReport isCompliant=\"true\"/><validationReport isCompliant=\"false\"/>"));
     }
     #[test]
     fn accepts_one_true_independent_validation_result(){
-        assert!(verified_pdfa_2b("<report><validationReport isCompliant=\"true\"/></report>"));
+        assert!(verified_pdfa_2b("<report><validationReport profileName=\"PDF/A-2b validation profile\" isCompliant=\"true\"><details failedRules=\"0\" failedChecks=\"0\"/></validationReport><batchSummary failedToParse=\"0\" nonCompliant=\"0\" veraExceptions=\"0\" outOfMemory=\"0\"/></report>"));
     }
 }

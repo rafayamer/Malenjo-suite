@@ -4,7 +4,7 @@ use std::{
     env,
     fs::{self, OpenOptions},
     io::{Read, Write},
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::{Command, Stdio},
     sync::Mutex,
     thread,

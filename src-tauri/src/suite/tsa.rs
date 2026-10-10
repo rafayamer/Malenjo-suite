@@ -144,12 +144,9 @@ mod tests{
         assert!(validate_port_and_path(1024,"/").is_ok());
     }
     #[test]
-    fn rejects_privileged_ports_and URL injection(){
+    fn rejects_privileged_ports_and_url_injection(){
         for (port,path) in [(80,"/"),(8443,"http://evil"),(8443,"//.."),
-             (8443,"/x?redirect=https://evil"),(8443,"/has\nnewline")]{
-            if port==8443 && path=="//.."{
-                continue; // Dot components are separately refused below.
-            }
+             (8443,"/x?redirect=https://evil"),(8443,"/has\nnewline")] {
             assert!(validate_port_and_path(port,path).is_err());
         }
     }

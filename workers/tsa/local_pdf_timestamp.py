@@ -20,7 +20,7 @@ async def timestamp(source: Path, output: Path, trust_root: Path, port: int, tsa
     from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
     from pyhanko.pdf_utils.reader import PdfFileReader
     from pyhanko.sign.signers import PdfTimeStamper
-    from pyhanko.sign.timestamps import AIOHttpTimeStamper
+    from pyhanko.sign.timestamps.aiohttp_client import AIOHttpTimeStamper
     from pyhanko.sign.validation import async_validate_pdf_timestamp
     from pyhanko_certvalidator import ValidationContext
 
