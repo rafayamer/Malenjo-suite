@@ -64,7 +64,8 @@ fn validate_capture_url(raw: &str) -> Result<(Url, String), String> {
        host == "localhost" || host == "metadata.google.internal" {
         return Err("Local, private and special-use hostnames are refused.".into());
     }
-    Ok((url, host.to_owned()))
+    let owned_host = host.to_owned();
+    Ok((url, owned_host))
 }
 
 /// The only network-capable local PDF conversion helper. It is opt-in,
