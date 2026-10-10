@@ -10,3 +10,4 @@ pub mod support;
 pub mod stirling;
 pub mod url_capture;
 pub mod cbr;
+pub mod pdfa;

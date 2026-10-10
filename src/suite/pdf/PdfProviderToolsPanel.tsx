@@ -42,6 +42,7 @@ import PdfCertificateSigningPanel from './PdfCertificateSigningPanel';
 import PdfPermissionsPanel from './PdfPermissionsPanel';
 import PdfUrlCapturePanel from './PdfUrlCapturePanel';
 import PdfCbrPanel from './PdfCbrPanel';
+import PdfaPanel from './PdfaPanel';
 import {imposePdfBooklet,PDF_BOOKLET_MAX_INPUT_BYTES} from './pdfBooklet';
 import {convertJsonToPdf,JSON_TO_PDF_MAX_INPUT_BYTES} from './jsonToPdf';
 import {convertMarkdownToPdf,MARKDOWN_TO_PDF_MAX_INPUT_BYTES} from './markdownToPdf';
@@ -1366,6 +1367,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
        </button>
      </details>}
      {category==='convert'&&<PdfUrlCapturePanel provider={provider}/>}
+     {category==='convert'&&sourceBytes&&<PdfaPanel sourceBytes={sourceBytes} sourceName={sourceName} provider={provider}/>}
      {category==='convert'&&sourceBytes&&<PdfCbrPanel sourceBytes={sourceBytes} sourceName={sourceName} provider={provider}/>}
      {category==='convert'&&<details className="stirling-component-details" aria-label="Offline SVG vector to PDF conversion">
       <summary>Convert SVG vector shapes to PDF (offline)</summary>

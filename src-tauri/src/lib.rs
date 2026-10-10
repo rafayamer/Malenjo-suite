@@ -27,6 +27,7 @@ use suite::{
     support::write_support_bundle,
     url_capture::capture_public_https_html,
     cbr::{rar_cbr_status,rar_create_cbr_from_png_zip},
+    pdfa::{pdfa_provider_status,convert_validated_pdfa_2b},
     stirling::{
         stirling_core_components, stirling_core_openapi, stirling_core_request, stirling_core_start,
         stirling_core_status, stirling_core_stop,
@@ -115,7 +116,9 @@ pub fn run() {
             stirling_core_request,
             capture_public_https_html,
             rar_cbr_status,
-            rar_create_cbr_from_png_zip
+            rar_create_cbr_from_png_zip,
+            pdfa_provider_status,
+            convert_validated_pdfa_2b
         ])
         .build(tauri::generate_context!())
         .expect("error while building MALENJO Suite")
