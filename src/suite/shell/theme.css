@@ -681,3 +681,70 @@
 /* Viewer-only optional-content (OCG) visibility controls in the PDF rail. */
 .pdf-layer-visibility { display: flex; align-items: center; gap: 8px; min-height: 32px; overflow-wrap: anywhere; }
 .pdf-layer-visibility input[type='checkbox'] { flex: none; }
+
+
+/* PDF.js 6 selectable-text layer — scoped to the MALENJO page, not the entire UI.
+   Keep the text spans selectable but visually transparent over the canvas.
+   A real OCR/text PDF produces an I-beam; a bitmap-only page needs OCR. */
+.pdf-page-shell>.pdf-text-layer.textLayer{
+  position:absolute;
+  inset:0;
+  z-index:1;
+  width:100%;
+  height:100%;
+  overflow:clip;
+  font-size:calc(var(--total-scale-factor,1) * 1px);
+  line-height:1;
+  text-align:initial;
+  text-size-adjust:none;
+  transform-origin:0 0;
+  forced-color-adjust:none;
+  user-select:text;
+  -webkit-user-select:text;
+  pointer-events:auto;
+  cursor:text;
+}
+.pdf-page-shell>.pdf-text-layer.textLayer :is(span,br){
+  position:absolute;
+  color:transparent;
+  white-space:pre;
+  cursor:text;
+  user-select:text;
+  -webkit-user-select:text;
+  transform-origin:0 0;
+}
+.pdf-page-shell>.pdf-text-layer.textLayer span.markedContent{
+  top:0;
+  height:0;
+}
+.pdf-page-shell>.pdf-text-layer.textLayer ::selection{
+  background:rgba(48,139,242,.37);
+  color:transparent;
+}
+.pdf-page-shell>.pdf-text-layer.textLayer .pdf-text-match{
+  background:rgba(255,207,58,.54);
+  color:transparent;
+  border-radius:1px;
+  box-decoration-break:clone;
+  -webkit-box-decoration-break:clone;
+}
+.pdf-page-shell>.pdf-page-number{z-index:2}
+.pdf-page-shell>.pdf-text-layer.textLayer .endOfContent{
+  display:block;
+  position:absolute;
+  inset:100% 0 0;
+  z-index:-1;
+  user-select:none;
+  cursor:default;
+}
+.pdf-find input{font-size:12px;min-height:28px}
+.pdf-find>button{font-size:12px;min-height:32px}
+.pdf-search-results{max-height:45vh}
+.pdf-search-results button{font-size:12px;line-height:1.5;min-height:44px}
+.pdf-search-results b{font-size:12px}
+.pdf-search-results span{font-size:11px}
+.pdf-search-help,.pdf-search-status{font-size:11px;line-height:1.5;color:#9ec1d6;margin:8px 0}
+.pdf-search-status{color:#e9c777}
+@media print{
+  .pdf-page-shell>.pdf-text-layer.textLayer{display:none!important}
+}
