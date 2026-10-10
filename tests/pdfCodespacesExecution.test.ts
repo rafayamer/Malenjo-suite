@@ -1,7 +1,7 @@
 /* Real, on-disk Codespaces execution. No mocked PDF providers or outputs.
    Run npm run test:pdf-execution. This does not certify 90/90 parity. */
 import {beforeAll,afterAll,describe,expect,it} from 'vitest';
-import matrix from '../../../docs/pdf-stirling-parity-matrix.json';
+import matrix from '../docs/pdf-stirling-parity-matrix.json';
 import {PDFDocument,PDFName,StandardFonts} from 'pdf-lib';
 // PDF.js recommends its compatibility build for Node/Codespaces.
 import {getDocument} from 'pdfjs-dist/legacy/build/pdf.mjs';
@@ -9,39 +9,39 @@ import {unzipSync} from 'fflate';
 import {mkdirSync,mkdtempSync,readFileSync,writeFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {join,resolve} from 'node:path';
-import {convertMarkdownToPdf} from './markdownToPdf';
-import {convertHtmlToPdf} from './htmlToPdf';
-import {convertPlainTextToPdf} from './plainTextToPdf';
-import {convertJsonToPdf} from './jsonToPdf';
-import {convertEmlToPdf} from './emlToPdf';
-import {updatePdfBasicMetadata} from './pdfMetadataEdit';
-import {inspectPdfDocumentInfo} from './pdfInfo';
-import {fitPdfToPaper} from './pdfPaperResize';
-import {imposePdfBooklet} from './pdfBooklet';
-import {splitPdfByPageCount} from './splitByPageCount';
-import {addPdfOutlineTreeEntry} from './pdfOutlineTree';
-import {splitPdfByChapters} from './pdfChapterSplit';
-import {addPdfVisualSignature} from './pdfVisualSignature';
-import {runOfflinePdfPipeline,parseOfflinePdfPipeline} from './pdfOfflinePipeline';
-import {LOCAL_PDF_PIPELINE_PROTOCOL,handleLocalPdfPipelineData} from './pdfPipelineHandler';
-import {exportPdfStructuredJson} from './pdfToJson';
-import {exportPdfStructuredXml} from './pdfToXml';
-import {exportPdfEpub,inspectPdfEpubArchive} from './pdfToEpub';
+import {convertMarkdownToPdf} from '../src/suite/pdf/markdownToPdf';
+import {convertHtmlToPdf} from '../src/suite/pdf/htmlToPdf';
+import {convertPlainTextToPdf} from '../src/suite/pdf/plainTextToPdf';
+import {convertJsonToPdf} from '../src/suite/pdf/jsonToPdf';
+import {convertEmlToPdf} from '../src/suite/pdf/emlToPdf';
+import {updatePdfBasicMetadata} from '../src/suite/pdf/pdfMetadataEdit';
+import {inspectPdfDocumentInfo} from '../src/suite/pdf/pdfInfo';
+import {fitPdfToPaper} from '../src/suite/pdf/pdfPaperResize';
+import {imposePdfBooklet} from '../src/suite/pdf/pdfBooklet';
+import {splitPdfByPageCount} from '../src/suite/pdf/splitByPageCount';
+import {addPdfOutlineTreeEntry} from '../src/suite/pdf/pdfOutlineTree';
+import {splitPdfByChapters} from '../src/suite/pdf/pdfChapterSplit';
+import {addPdfVisualSignature} from '../src/suite/pdf/pdfVisualSignature';
+import {runOfflinePdfPipeline,parseOfflinePdfPipeline} from '../src/suite/pdf/pdfOfflinePipeline';
+import {LOCAL_PDF_PIPELINE_PROTOCOL,handleLocalPdfPipelineData} from '../src/suite/pdf/pdfPipelineHandler';
+import {exportPdfStructuredJson} from '../src/suite/pdf/pdfToJson';
+import {exportPdfStructuredXml} from '../src/suite/pdf/pdfToXml';
+import {exportPdfEpub,inspectPdfEpubArchive} from '../src/suite/pdf/pdfToEpub';
 import {
   appendPdf,deletePdfPages,movePdfPage,rotatePdfPagePermanent,
   extractPdfPages,addPdfTextOverlay,addPdfRectangleOverlay,
   addPdfTextField,fillPdfFormFields,flattenPdfForm,
   addPdfCommentAnnotation,attachFileToPdf,addPdfBatesNumbers,
   addPdfHeaderFooter,
-} from './editor';
-import {updatePdfExistingFieldProperties,deletePdfExistingFormField} from './formManagement';
-import {setPdfPageLabelRange,listPdfPageLabelRanges} from './pageLabels';
-import {removePdfReviewMarkup} from './pdfAnnotationCleanup';
-import {listPdfReviewAnnotations} from './review';
-import {inspectPdfStructuralSafety,serializePdfPreflightJson} from './pdfPreflight';
-import {proposePdfMetadataFilename} from './pdfAutoRename';
-import {exportPdfTextFormat} from './pdfTextFormats';
-import {exportPdfTextOnlySvgZip} from './pdfTextVector';
+} from '../src/suite/pdf/editor';
+import {updatePdfExistingFieldProperties,deletePdfExistingFormField} from '../src/suite/pdf/formManagement';
+import {setPdfPageLabelRange,listPdfPageLabelRanges} from '../src/suite/pdf/pageLabels';
+import {removePdfReviewMarkup} from '../src/suite/pdf/pdfAnnotationCleanup';
+import {listPdfReviewAnnotations} from '../src/suite/pdf/review';
+import {inspectPdfStructuralSafety,serializePdfPreflightJson} from '../src/suite/pdf/pdfPreflight';
+import {proposePdfMetadataFilename} from '../src/suite/pdf/pdfAutoRename';
+import {exportPdfTextFormat} from '../src/suite/pdf/pdfTextFormats';
+import {exportPdfTextOnlySvgZip} from '../src/suite/pdf/pdfTextVector';
 
 const enc=(value:string)=>new TextEncoder().encode(value);
 const dec=(value:Uint8Array)=>new TextDecoder('utf-8',{fatal:true}).decode(value);

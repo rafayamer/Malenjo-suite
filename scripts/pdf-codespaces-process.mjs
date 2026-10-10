@@ -31,7 +31,7 @@ for(const name of ['page','to']){
 }
 const entry=resolve(root,'node_modules/vitest/vitest.mjs');
 if(!existsSync(entry)){console.error('Install npm dependencies first.');process.exit(2);}
-const proc=spawnSync(process.execPath,[entry,'run','src/suite/pdf/pdfCodespacesProcess.test.ts'],{
+const proc=spawnSync(process.execPath,[entry,'run','tests/pdfCodespacesProcess.test.ts'],{
   cwd:root,stdio:'inherit',timeout:90000,
   env:{...process.env,MALENJO_PDF_SINGLE_COMMAND:JSON.stringify(args)},
 });

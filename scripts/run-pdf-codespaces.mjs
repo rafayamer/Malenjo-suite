@@ -20,7 +20,7 @@ if(!existsSync(vitest)){
 const out=resolve(root,'.build/pdf-codespaces-execution');
 mkdirSync(out,{recursive:true});
 console.log('Executing production PDF functions on real local files; evidence: '+out);
-const task=spawnSync(process.execPath,[vitest,'run','src/suite/pdf/pdfCodespacesExecution.test.ts'],{
+const task=spawnSync(process.execPath,[vitest,'run','tests/pdfCodespacesExecution.test.ts'],{
   cwd:root,stdio:'inherit',timeout:120000,
   env:{...process.env,MALENJO_PDF_EXECUTION:'1'},
 });
