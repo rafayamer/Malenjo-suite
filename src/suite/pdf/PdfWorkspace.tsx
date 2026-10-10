@@ -105,6 +105,7 @@ import {
   type PdfFitMode,
 } from './layout';
 import PdfPageCanvas from './PdfPageCanvas';
+import {extractPdfPageSearchText,findPdfTextMatches} from './pdfTextHighlights';
 import PdfThumbnail from './PdfThumbnail';
 import PdfProviderToolsPanel from './PdfProviderToolsPanel';
 import { defaultPdfToolProvider } from './defaultProvider';
@@ -179,6 +180,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const workspaceRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef=useRef<HTMLInputElement>(null);
+  const searchSequenceRef=useRef(0);
   const imagesInputRef = useRef<HTMLInputElement>(null);
   const comparisonInputRef = useRef<HTMLInputElement>(null);
   const appendInputRef = useRef<HTMLInputElement>(null);
@@ -239,7 +242,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [historyRevision, setHistoryRevision] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<Array<{page:number;excerpt:string}>>([]);
+  const [searchResults, setSearchResults] = useState<Array<{page:number;excerpt:string;matches:number}>>([]);
+  const [highlightQuery,setHighlightQuery]=useState('');
+  const [searchStatus,setSearchStatus]=useState('');
   const [leftPanel, setLeftPanel] = useState<PdfLeftPanelId>(DEFAULT_PDF_LEFT_PANEL);
   const [optionalLayers, setOptionalLayers] = useState<{
     document:PdfLoadResult['document'];
@@ -380,6 +385,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       const previousLoad = activeLoadRef.current;
       activeLoadRef.current = result;
       setPdf(result);
+      searchSequenceRef.current++;
+      setSearchResults([]);
+      setHighlightQuery('');
+      setSearchStatus('');
       comparisonAbortRef.current?.abort();
       setComparisonResult(null);
       currentPdfBytesRef.current=owned;
@@ -1327,35 +1336,66 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   }
 
   async function searchPdf(){
-    if(!pdf||!searchQuery.trim())return;
-    const needle=searchQuery.trim().toLocaleLowerCase();
+    if(!pdf)return;
+    const requested=searchQuery.trim();
+    if(!requested){
+      setSearchResults([]);
+      setHighlightQuery('');
+      setSearchStatus('Type a word or phrase, then select Find.');
+      return;
+    }
+    const revision=++searchSequenceRef.current;
+    const document=pdf.document;
     setSearching(true);
     setError('');
+    setSearchStatus('Searching selectable PDF text…');
     try{
-      const results:Array<{page:number;excerpt:string}>=[];
-      const count=Math.min(pdf.document.numPages,500);
-      for(let pageNumber=1;pageNumber<=count&&results.length<100;pageNumber+=1){
-        const page=await pdf.document.getPage(pageNumber);
+      const results:Array<{page:number;excerpt:string;matches:number}>=[];
+      const count=Math.min(document.numPages,500);
+      let total=0;
+      let textPages=0;
+      for(let pageNumber=1;pageNumber<=count;pageNumber++){
+        if(revision!==searchSequenceRef.current)return;
+        const page=await document.getPage(pageNumber);
         const content=await page.getTextContent();
-        const text=content.items
-          .map((item)=>'str' in item?String(item.str):'')
-          .join(' ')
-          .replace(/\s+/g,' ')
-          .trim();
-        const index=text.toLocaleLowerCase().indexOf(needle);
-        if(index>=0){
-          results.push({
-            page:pageNumber,
-            excerpt:text.slice(Math.max(0,index-70),Math.min(text.length,index+needle.length+120)),
-          });
+        const text=extractPdfPageSearchText(content.items);
+        if(text)textPages++;
+        const matches=findPdfTextMatches(text,requested,100);
+        if(matches.length){
+          total+=matches.length;
+          if(results.length<100){
+            const index=matches[0].start;
+            results.push({
+              page:pageNumber,
+              matches:matches.length,
+              excerpt:text.slice(Math.max(0,index-45),Math.min(text.length,index+requested.length+100)),
+            });
+          }
         }
       }
+      if(revision!==searchSequenceRef.current)return;
       setSearchResults(results);
-      setActionNotice(results.length?`Found ${results.length} matching page(s).`:'No matching PDF text was found.');
+      setHighlightQuery(requested);
+      const truncated=count<document.numPages||results.length>=100;
+      if(!textPages){
+        setSearchStatus('No selectable text was found. This PDF may be scanned; use OCR before searching.');
+      }else if(total===0){
+        setSearchStatus('No matching words found in selectable text.');
+      }else{
+        setSearchStatus(
+          String(total)+' match'+(total===1?'':'es')+' on '+
+          String(results.length)+' page'+(results.length===1?'':'s')+
+          (truncated?' (limited to first 500 pages/100 results)':'')+'.',
+        );
+        goToPage(results[0].page);
+      }
     }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
+      if(revision===searchSequenceRef.current){
+        setSearchStatus('PDF text search could not finish.');
+        setError(reason instanceof Error?reason.message:String(reason));
+      }
     }finally{
-      setSearching(false);
+      if(revision===searchSequenceRef.current)setSearching(false);
     }
   }
 
@@ -1890,6 +1930,23 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     return () => window.removeEventListener('keydown', onInspectorShortcut);
   }, [active]);
 
+  useEffect(()=>{
+    if(!active||!pdf)return;
+    function onFindShortcut(event:KeyboardEvent){
+      if(!(event.ctrlKey||event.metaKey)||event.altKey||event.shiftKey||
+         event.key.toLowerCase()!=='f')return;
+      event.preventDefault();
+      setLeftPanel('search');
+      setLeftPanelCollapsed(false);
+      window.requestAnimationFrame(()=>{
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      });
+    }
+    window.addEventListener('keydown',onFindShortcut);
+    return()=>window.removeEventListener('keydown',onFindShortcut);
+  },[active,pdf]);
+
   useEffect(() => {
     if (!active) return;
     function onTaskShortcut(event: KeyboardEvent) {
@@ -2283,10 +2340,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           </div>}
 
           {leftPanel==='search'&&<div className="pdf-left-panel-body">
-            <div className="pdf-find">
-              <div><Search size={14}/><input value={searchQuery} onChange={(event)=>setSearchQuery(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter')void searchPdf();}} placeholder="Search PDF text"/></div>
-              <button disabled={searching||!searchQuery.trim()} onClick={()=>void searchPdf()}>{searching?'Searching…':'Find'}</button>
-              {!!searchResults.length&&<div className="pdf-search-results">{searchResults.map((result)=><button key={result.page} onClick={()=>goToPage(result.page)}><b>Page {result.page}</b><span>{result.excerpt}</span></button>)}</div>}
+            <div className="pdf-find" role="search" aria-label="Find words inside PDF">
+              <div><Search size={14}/><input ref={searchInputRef} value={searchQuery} onChange={(event)=>{
+                setSearchQuery(event.target.value);
+                if(!event.target.value.trim()){setSearchResults([]);setHighlightQuery('');setSearchStatus('');}
+              }} onKeyDown={(event)=>{if(event.key==='Enter')void searchPdf();}} placeholder="Find words in this PDF…" aria-label="Find PDF text"/></div>
+              <button disabled={searching||!searchQuery.trim()} onClick={()=>void searchPdf()}>{searching?'Searching…':'Find in PDF'}</button>
+              <p className="pdf-search-help">Select or copy words directly on a PDF page. Press Ctrl+F to search. Scanned image pages need OCR.</p>
+              {searchStatus&&<p className="pdf-search-status" role="status">{searchStatus}</p>}
+              {!!searchResults.length&&<div className="pdf-search-results" aria-label="PDF text matches">{searchResults.map((result)=><button key={result.page} onClick={()=>goToPage(result.page)}><b>Page {result.page} · {result.matches} match{result.matches===1?'':'es'}</b><span>{result.excerpt}</span></button>)}</div>}
             </div>
           </div>}
 
@@ -2485,6 +2547,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               renderAllowed={forceRenderAll || schedule.allowed}
               eager={forceRenderAll || schedule.eager}
               domIdPrefix={domIdPrefix}
+              highlightQuery={highlightQuery}
               onVisible={onPageVisible}
               onRendered={onPageRendered}
             />;
