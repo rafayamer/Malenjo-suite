@@ -28,9 +28,13 @@ describe('PDF provider output safety before applying document changes',()=>{
       .toBe('apply-pdf');
   });
 
-  it('rejects failed HTTP responses and mislabeled HTML or empty PDF output',()=>{
+  it('rejects failures, partial-content responses and mislabeled or empty PDF output',()=>{
     expect(()=>classifyPdfProviderResult(response(pdfBytes,500),'/api/v1/general/merge-pdfs',responseIsPdf))
-      .toThrow(/unsuccessful response/i);
+      .toThrow(/complete successful response/i);
+    expect(()=>classifyPdfProviderResult(response(pdfBytes,206),'/api/v1/general/merge-pdfs',responseIsPdf))
+      .toThrow(/complete successful response/i);
+    expect(()=>classifyPdfProviderResult(response(pdfBytes,204),'/api/v1/general/merge-pdfs',responseIsPdf))
+      .toThrow(/complete successful response/i);
     expect(()=>classifyPdfProviderResult(response([],200),'/api/v1/general/merge-pdfs',responseIsPdf))
       .toThrow(/missing/i);
     expect(()=>classifyPdfProviderResult(response([60,104,116,109,108,62],200),'/api/v1/general/merge-pdfs',responseIsPdf))
@@ -48,6 +52,6 @@ describe('PDF provider output safety before applying document changes',()=>{
   it('enforces a finite bounded maximum for each provider result',()=>{
     expect(PDF_PROVIDER_MAX_OUTPUT_BYTES).toBe(512*1024*1024);
     expect(()=>classifyPdfProviderResult(response(pdfBytes,0),'/api/v1/general/merge-pdfs',responseIsPdf))
-      .toThrow(/unsuccessful response/i);
+      .toThrow(/complete successful response/i);
   });
 });
