@@ -4,7 +4,7 @@
 
 ## Decision
 
-**Full PDF parity release is blocked.** Exactly 90 handoff requirements are enumerated; **0 carry complete acceptance evidence**. There are 68 locally source-backed partial foundations/guides plus 18 source-audited provider-dispatch-only partial integrations (86 partial total), with 4 implementation-source-unaudited requirements. Nine newly source-mapped requirements have explicitly bounded local implementations or documentation only, not complete upstream parity. New page-level redaction and bookmark chapter splitting are bounded native feature subsets, not Windows-accepted upstream equivalence. The passing CI pipeline proves builds, tests and a subset of provider smoke routes, not the whole Windows installer + UI end-to-end matrix. The `tauri:release` command now fails closed until all 90 requirements have explicit acceptance evidence. Ordinary development builds remain possible.
+**Full PDF parity release is blocked.** Exactly 90 handoff requirements are enumerated; **0 carry complete acceptance evidence**. There are 72 locally source-backed bounded partial foundations/guides (including optional external-provider adapters) plus 18 source-audited provider-dispatch-only partial integrations: 90 source-mapped partial records, 0 implementation-source-unaudited. None has full offline Windows release acceptance evidence. Documentation-only rows and optional-provider adapters are NOT equivalent to fully implemented user-facing workflows. New page-level redaction and bookmark chapter splitting are bounded native feature subsets, not Windows-accepted upstream equivalence. The passing CI pipeline proves builds, tests and a subset of provider smoke routes, not the whole Windows installer + UI end-to-end matrix. The `tauri:release` command now fails closed until all 90 requirements have explicit acceptance evidence. Ordinary development builds remain possible.
 
 The review's two PNG defects have implementation-level fixes in `pngIntegrity.ts` with Adam7/filter/palette positive and negative tests. This is not enough to accept PDF-to-images or extract-images as end-to-end workflows without live output saved and reopened on Windows.
 
@@ -13,8 +13,8 @@ The review's two PNG defects have implementation-level fixes in `pngIntegrity.ts
 | Group | Requirements | Source-backed partial | Awaiting implementation audit |
 |---|---:|---:|---:|
 | page | 18 | 18 | 0 |
-| conversion | 24 | 21 | 3 |
-| security | 16 | 15 | 1 |
+| conversion | 24 | 24 | 0 |
+| security | 16 | 16 | 0 |
 | scan-extraction | 6 | 6 | 0 |
 | editing-analysis | 10 | 10 | 0 |
 | forms | 4 | 4 | 0 |
@@ -59,10 +59,10 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 | 31 | `pdf-to-json` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 32 | `pdf-to-rtf` | Native text-only partial | No matching execution proof | Partial; layout fidelity and Windows acceptance pending |
 | 33 | `pdf-to-cbz` | Native partial (rasterized) | No matching execution proof | Partial; full parity and Windows acceptance pending |
-| 34 | `pdf-to-cbr` | Frontend-only alias | No matching execution proof | Not audited; implementation and acceptance pending |
-| 35 | `pdf-to-pdfa` | Pinned API route only | No matching execution proof | Not audited; implementation and acceptance pending |
+| 34 | `pdf-to-cbr` | Native optional licensed RAR-based CBR partial | Native RAR magic and page-name guard tests; Windows RAR writer unverified | Partial; requires separately licensed binary and reopened CBR golden test |
+| 35 | `pdf-to-pdfa` | Native optional LibreOffice + independent veraPDF-2b guarded conversion partial | Validation report tests only; native PDF/A output unverified | Partial; compliant Windows conversion, license and output review pending |
 | 36 | `html-to-pdf` | Native HTML text-only PDF partial | No matching execution proof | Partial; CSS/images/typography and Windows acceptance pending |
-| 37 | `url-to-pdf` | Pinned API route only | No matching execution proof | Not audited; implementation and acceptance pending |
+| 37 | `url-to-pdf` | Native consent-only DNS-pinned public HTTPS restricted text-PDF partial | Host/IP refusal tests; network processing acceptance unverified | Partial; no full browser/layout/images/script rendering; reviewed security testing pending |
 | 38 | `markdown-to-pdf` | Native Markdown render partial | No matching execution proof | Partial; full Markdown fidelity and Windows acceptance pending |
 | 39 | `eml-to-pdf` | Native text/plain MIME partial | No matching execution proof | Partial; HTML, attachments, Windows reopen pending |
 | 40 | `cbz-to-pdf` | Native PNG/JPEG CBZ partial | No matching execution proof | Partial; full format parity and Windows acceptance pending |
@@ -78,7 +78,7 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 | 50 | `unlock-pdf-forms` | Native AcroForm flag partial | No matching execution proof | Partial; Windows accepted save/reopen pending |
 | 51 | `cert-sign` | Optional native pyHanko PKCS#12 signed-copy partial | Certificate/output verification pending | Partial; visible signatures/multi-signing/TSA not implemented |
 | 52 | `sign` | Native graphical mark partial | No matching execution proof | Partial; handwriting/cert signing and Windows acceptance pending |
-| 53 | `timestamp-pdf` | Pinned controller only | No matching execution proof | Not audited; implementation and acceptance pending |
+| 53 | `timestamp-pdf` | Optional pyHanko local-only RFC 3161 TSA with configured root partial | Endpoint-shape tests, no real TSA signature integration proof | Partial; local trusted time authority, chain verification golden cases and Windows output acceptance pending |
 | 54 | `remove-cert-sign` | Native separate unsigned raster PDF copy partial | Windows output unverified | Partial; signed content rasterized and signature validity discarded |
 | 55 | `validate-signature` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 56 | `verify-pdf` | Native read-only preflight partial | No matching execution proof | Partial; full feature semantics and Windows acceptance pending |
@@ -119,11 +119,11 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 
 The new bounded offline HTML, page-raster, scan extraction, page-pipeline, automatic whole-page redaction and chapter splitting workflows have source and automated test mappings. They are **partial** and require iterative user diagnosis, fidelity extensions, and later Windows validation; this inventory does not certify implementation completeness or release readiness.
 
-## Outstanding implementation-source investigations
+## Outstanding optional provider execution and full functional parity
 
-After this development batch, the four un-audited requirements are `pdf-to-cbr` (licensed RAR writer), `pdf-to-pdfa` (real PDF/A conversion with independent validator), `url-to-pdf` (network opt-in and SSRF-isolated page capture), and `timestamp-pdf` (trusted RFC 3161 TSA, optionally network-dependent). These must not be replaced with misleading CBZ, plain PDF, arbitrary web fetches or file modification timestamps.
+All 90 requirements now have a source-mapped partial audit record, **not 90 fully completed feature equivalents**. PDF-to-CBR needs a separately licensed RAR CLI; PDF/A-2b needs installed LibreOffice and real veraPDF conformance; URL-to-PDF deliberately accepts only opt-in public HTTPS responses with inert text-only HTML; and RFC 3161 timestamping needs an operator-managed local TSA, trust root and pyHanko. All four are bounded, conditional implementations and remain unverified for actual native Windows outputs. Feature parity is still blocked by functionality outside those subsets, provider licensing and full acceptance tests.
 
-The new certificate signing, OCR and permissions workflows are optional-provider development integrations; passing generic CI does not establish installed local provider availability, correct signed/encrypted outputs, or strict offline release approval.
+The certificate signing, OCR, permissions, RAR, PDF/A and local TSA workflows are optional-provider development integrations. Passing generic CI does not establish installed runtime availability, correct signed/encrypted/conformant artifacts, full Windows offline behavior, or release approval.
 
 ## Mandatory per-feature acceptance record
 

@@ -2100,26 +2100,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src-tauri/src/suite/cbr.rs",
+          "src/suite/pdf/PdfCbrPanel.tsx",
+          "src/suite/pdf/pdfToCbz.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Export PNG page images as genuine CBR",
+        "provider": "MALENJO native ZIP-to-RAR adapter using separately licensed local RAR binary",
+        "dependency": "User-configured MALENJO_RAR_BIN; proprietary RAR is NOT bundled",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "rar_create_cbr_from_png_zip"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src-tauri/src/suite/cbr.rs"
+        ],
+        "negativeTestIds": [
+          "src-tauri/src/suite/cbr.rs"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "20 pages, 16 MB PDF source, 32 MB ZIP/CBR budget; strict consecutive PNG ZIP members; user-installed RAR writer only; RAR4/5 signature and native RAR archive integrity test."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Partial: source-mapped real RAR writer path, but separately licensed local writer and Windows output verification are unavailable; no visual page fidelity/installer sign-off."
       ]
     },
     {
@@ -2152,25 +2162,34 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src-tauri/src/suite/pdfa.rs",
+          "src/suite/pdf/PdfaPanel.tsx",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Convert and verify PDF/A-2b copy",
+        "provider": "MALENJO native LibreOffice PDF/A-2b conversion guarded by veraPDF conformance result",
+        "dependency": "User-configured local LibreOffice and veraPDF CLI or JAR; NOT bundled/redistribution approved",
         "providerCatalogMatchKey": "/api/v1/convert/pdf/pdfa",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "convert_validated_pdfa_2b"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src-tauri/src/suite/pdfa.rs"
+        ],
+        "negativeTestIds": [
+          "src-tauri/src/suite/pdfa.rs"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "32 MB PDF source/output, 120 s conversion and 120 s validation, up to 2 MB report; only explicitly reported PDF/A-2b true and zero failed rules/checks accepted; separate output copy."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Partial: implementation uses optional unbundled converter+independent validator; no actual Windows PDF/A-2b golden outputs, page visual equivalence, transitive licensing or complete offline acceptance."
       ]
     },
     {
@@ -2263,25 +2282,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src-tauri/src/suite/url_capture.rs",
+          "src/suite/pdf/PdfUrlCapturePanel.tsx",
+          "src/suite/pdf/htmlToPdf.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Capture only permitted HTML text as PDF",
+        "provider": "MALENJO native DNS-pinned HTTPS-only fetch with inert PDF text converter",
+        "dependency": "Opt-in public HTTPS network and local PDF text renderer; NO headless browser",
         "providerCatalogMatchKey": "/api/v1/convert/url/pdf",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "capture_public_https_html"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src-tauri/src/suite/url_capture.rs"
+        ],
+        "negativeTestIds": [
+          "src-tauri/src/suite/url_capture.rs"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "HTTPS port 443 only, no credentials, proxies, redirects, IP literals or special-use DNS; DNS-vetted pinned public IPv4; 1 MB UTF-8 HTML, 20 s timeout; no resource/CSS/script/images; user consent."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Partial: network user opt-in only, handles restricted inert HTML headings/paragraphs/lists; does not render arbitrary webpages, web fonts, images, JS or browser-fidelity URL screenshots; SSRF and Windows UI require field tests."
       ]
     },
     {
@@ -3245,27 +3274,37 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src-tauri/src/suite/tsa.rs",
+          "workers/tsa/local_pdf_timestamp.py",
+          "src/suite/pdf/PdfLocalTimestampPanel.tsx",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Create and validate local RFC 3161 timestamp PDF",
+        "provider": "MALENJO optional local-only pyHanko RFC 3161 document timestamp with configured TSA root",
+        "dependency": "User-installed pyHanko/Python, separate trusted root and user-controlled loopback TSA at 127.0.0.1; NOT bundled",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "timestamp_pdf_local_tsa"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src-tauri/src/suite/tsa.rs"
+        ],
+        "negativeTestIds": [
+          "src-tauri/src/suite/tsa.rs"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "32 MB input/output, local 127.0.0.1 loopback port 1024–65535 only, restricted TSA path and user opt-in; 120 s worker cap; chain/digest verification required; no external public TSA."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
         "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
-        "RFC 3161 time stamp requires contacting a trusted remote TSA; not an offline-capable operation."
+        "RFC 3161 time stamp requires contacting a trusted remote TSA; not an offline-capable operation.",
+        "Partial: depends on user-managed local trusted TSA and offline local pyHanko models; no real RFC 3161 authority/certificate-chain golden tests, public TSA support, Windows output verification, or independent time-source assurance."
       ]
     },
     {
@@ -5543,8 +5582,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 86,
-    "unverifiedSourceCount": 4,
+    "localSourcePartialCount": 90,
+    "unverifiedSourceCount": 0,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
