@@ -98,15 +98,15 @@ async function main(){
   console.log('MALENJO PDF Workspace Choose PDF tab retention: PASS');
   // Return to the original PDF to verify edit/export without altering it.
   await documentTab.click();
-  await page.locator('.pdf-task-categories button').filter({hasText:'Organize'}).click();
-  await page.locator('.pdf-context-toolbar button').filter({hasText:/^Rotate selected$/}).click();
+  await page.locator('.document-session-panel.active .pdf-task-categories button').filter({hasText:'Organize'}).click();
+  await page.locator('.document-session-panel.active .pdf-context-toolbar button').filter({hasText:/^Rotate selected$/}).click();
   await page.waitForFunction(()=>
     Array.from(document.querySelectorAll('.pdf-notice')).some(
       node=>node.textContent?.includes('Permanently rotated'),
     ),null,{timeout:30000});
-  await page.locator('.pdf-task-categories button').filter({hasText:/^Home$/}).click();
+  await page.locator('.document-session-panel.active .pdf-task-categories button').filter({hasText:/^Home$/}).click();
   const pendingDownload=page.waitForEvent('download',{timeout:30000});
-  await page.locator('.pdf-context-toolbar button').filter({hasText:/^Export$/}).click();
+  await page.locator('.document-session-panel.active .pdf-context-toolbar button').filter({hasText:/^Export$/}).click();
   const download=await pendingDownload;
   const destination=join(mkdtempSync(join(tmpdir(),'malenjo-browser-pdf-')),'exported.pdf');
   await download.saveAs(destination);
