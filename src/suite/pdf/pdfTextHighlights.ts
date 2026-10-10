@@ -48,13 +48,14 @@ export function highlightPdfTextNodes(nodes:readonly HTMLSpanElement[],query:str
   return count;
 }
 /** PDF.js text items need space-aware concatenation for useful Find results. */
-export function extractPdfPageSearchText(
-  items:readonly {str?:unknown;hasEOL?:boolean}[],
-):string{
+export function extractPdfPageSearchText(items:readonly unknown[]):string{
   let result='';
-  for(const item of items){
+  for(const entry of items){
+    if(!entry||typeof entry!=='object')continue;
+    // PDF.js includes marked-content records without text fields.
+    const item=entry as {str?:unknown;hasEOL?:unknown};
     if(typeof item.str==='string')result+=item.str;
-    if(item.hasEOL)result+='\n';
+    if(item.hasEOL===true)result+='\n';
     else if(typeof item.str==='string'&&item.str&&!/\s$/.test(item.str))result+=' ';
   }
   return result.replace(/\s+/g,' ').trim();
