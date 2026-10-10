@@ -765,3 +765,38 @@
 @media print{
   .pdf-page-shell>.pdf-text-layer.textLayer{display:none!important}
 }
+
+
+/* Critical shell geometry: main.workspace previously had no flex layout,
+   so .document-session-stack flex:1 collapsed to zero height. Its absolutely
+   positioned PDF panel painted outside its hit-testing box, underneath the
+   DocumentTabs/main element; visible toolbar buttons could not be clicked. */
+.workspace{
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  height:100vh;
+  min-width:0;
+  min-height:0;
+  overflow-y:auto;
+}
+.workspace:has(>.document-session-stack:not(.parked)){
+  overflow:hidden;
+}
+.workspace>.topbar,.workspace>.document-tabs{
+  flex-shrink:0;
+}
+.workspace>.document-session-stack{
+  flex:1 1 auto;
+  min-height:0;
+  min-width:0;
+}
+.workspace>.document-session-stack>.document-session-panel.active{
+  height:100%;
+}
+.workspace>.document-session-stack>.document-session-panel>.pdf-workspace{
+  height:100%;
+}
+@media print{
+  .workspace{display:block!important;height:auto!important;overflow:visible!important}
+}
