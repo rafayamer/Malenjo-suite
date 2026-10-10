@@ -3,6 +3,11 @@ import {existsSync,mkdirSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
+const major=Number(process.versions.node.split('.')[0]);
+if(!Number.isInteger(major)||major<24){
+  console.error('PDF.js 6 uses Promise.try, which requires Node 24 or newer in Codespaces. Select Node 24 and rerun.');
+  process.exit(2);
+}
 if(process.platform!=='linux'){
   console.error('Run this Codespaces execution suite in Linux, or view its GitHub CI artifacts.');
   process.exit(2);

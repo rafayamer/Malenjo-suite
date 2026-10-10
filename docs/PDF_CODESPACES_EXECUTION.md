@@ -7,6 +7,7 @@ bytes back from disk, and reopens/parses all generated files.
 
 ## Run in an existing Linux GitHub Codespace
 
+    node --version      # must be Node 24 or newer (PDF.js 6 uses Promise.try)
     npm install --no-audit --no-fund
     npm run test:pdf-execution
 

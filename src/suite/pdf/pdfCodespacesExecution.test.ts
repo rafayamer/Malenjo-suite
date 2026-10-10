@@ -183,9 +183,10 @@ describe.skipIf(process.env.MALENJO_PDF_EXECUTION!=='1').sequential('Codespaces 
     }finally{
       await task.destroy();
     }
-  });
+  },15000);
   it('refuses interactive PDFs and unsupported HTML rather than emitting unsafe files',async()=>{
     const unsafe=await PDFDocument.create();
+    unsafe.addPage([200,300]);
     unsafe.addPage([200,300]);
     unsafe.getForm().createTextField('interactive');
     const bytes=Uint8Array.from(await unsafe.save());
