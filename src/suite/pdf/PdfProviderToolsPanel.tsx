@@ -41,6 +41,7 @@ import {convertMarkdownToPdf,MARKDOWN_TO_PDF_MAX_INPUT_BYTES} from './markdownTo
 import {convertHtmlToPdf,HTML_TO_PDF_MAX_INPUT_BYTES} from './htmlToPdf';
 import {exportPdfRasterEffect,PDF_RASTER_EFFECT_MAX_SOURCE_BYTES,type PdfRasterEffect} from './pdfRasterEffects';
 import {extractPdfImageScanPages} from './pdfScanExtraction';
+import {parsePdfAutoRedactPatterns,redactPdfPagesByText,PDF_AUTO_REDACT_MAX_INPUT_BYTES} from './pdfAutoRedact';
 import {parseOfflinePdfPipeline,runOfflinePdfPipeline} from './pdfOfflinePipeline';
 import {convertPlainTextToPdf,TEXT_TO_PDF_MAX_INPUT_BYTES} from './plainTextToPdf';
 import {convertEmlToPdf,EML_TO_PDF_MAX_BYTES} from './emlToPdf';
@@ -115,6 +116,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
   const [rasterEffect,setRasterEffect]=useState<PdfRasterEffect>('contrast');
   const [rasterContrast,setRasterContrast]=useState('1.4');
   const [pipelineJson,setPipelineJson]=useState('[{"action":"rotate","pages":[1],"angle":90}]');
+  const [redactionPhrases,setRedactionPhrases]=useState('');
   const [textToPdfFile,setTextToPdfFile]=useState<File|null>(null);
   const [emlToPdfFile,setEmlToPdfFile]=useState<File|null>(null);
   const [visualSigner,setVisualSigner]=useState('');
