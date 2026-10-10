@@ -17,8 +17,8 @@ export function classifyPdfProviderResult(
   operationPath:string,
   isPdf:(result:PdfProviderResponse)=>boolean,
 ):PdfProviderResultAction{
-  if(!Number.isInteger(response.status)||response.status<200||response.status>=300){
-    throw new Error('Local PDF provider returned an unsuccessful response ('+response.status+'). The working document was not changed.');
+  if(response.status!==200){
+    throw new Error('Local PDF provider did not return a complete successful response ('+response.status+'). The working document was not changed.');
   }
   if(!Array.isArray(response.bytes)||!response.bytes.length||
      response.bytes.length>PDF_PROVIDER_MAX_OUTPUT_BYTES){
