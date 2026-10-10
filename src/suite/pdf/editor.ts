@@ -136,6 +136,7 @@ export async function insertPdfAfter(bytes:Uint8Array,insertBytes:Uint8Array,aft
 
 export async function splitPdfAtPage(bytes:Uint8Array,pageNumber:number):Promise<[Uint8Array,Uint8Array]>{
   const source=await load(bytes);
+  if(source.catalog.has(PDFName.of('Perms')))throw new Error('Certified or usage-rights PDFs cannot be split because signing controls would be lost.');
   const pageCount=source.getPageCount();
   const splitIndex=requirePage(pageNumber,pageCount);
   if(splitIndex>=pageCount-1)throw new Error('Choose a split point before the last PDF page.');

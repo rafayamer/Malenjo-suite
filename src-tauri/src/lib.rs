@@ -21,10 +21,14 @@ use suite::{
     pdf::{read_pdf_document, write_pdf_copy, write_pdf_tool_output},
     security::{
         clamav_scan_document, clamav_status, clear_ephemeral_secret, list_audit_events,
-        pyhanko_sign_copy, pyhanko_status, pyhanko_validate_document, record_audit_event,
+        pyhanko_sign_copy, pyhanko_status, pyhanko_validate_document, qpdf_change_permissions_copy, record_audit_event,
         store_ephemeral_secret, SecurityState,
     },
     support::write_support_bundle,
+    url_capture::capture_public_https_html,
+    cbr::{rar_cbr_status,rar_create_cbr_from_png_zip},
+    pdfa::{pdfa_provider_status,convert_validated_pdfa_2b},
+    tsa::{local_tsa_status,timestamp_pdf_local_tsa},
     stirling::{
         stirling_core_components, stirling_core_openapi, stirling_core_request, stirling_core_start,
         stirling_core_status, stirling_core_stop,
@@ -83,6 +87,7 @@ pub fn run() {
             pyhanko_status,
             pyhanko_validate_document,
             pyhanko_sign_copy,
+            qpdf_change_permissions_copy,
             dms_list_records,
             dms_register_document,
             dms_snapshot_record,
@@ -109,8 +114,20 @@ pub fn run() {
             stirling_core_start,
             stirling_core_stop,
             stirling_core_openapi,
-            stirling_core_request
+            stirling_core_request,
+            capture_public_https_html,
+            rar_cbr_status,
+            rar_create_cbr_from_png_zip,
+            pdfa_provider_status,
+            convert_validated_pdfa_2b,
+            local_tsa_status,
+            timestamp_pdf_local_tsa
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running MALENJO Suite");
+        .build(tauri::generate_context!())
+        .expect("error while building MALENJO Suite")
+        .run(|_app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                suite::stirling::stop_owned_provider_on_exit();
+            }
+        });
 }

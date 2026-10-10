@@ -84,7 +84,7 @@ export default function DocumentTabs({
           >
             <FileText size={14}/>
             <span>{session.document.name}</span>
-            <i className={session.saving ? 'saving' : session.dirty ? 'dirty' : 'saved'} aria-label={session.saving ? 'Saving' : session.dirty ? 'Unsaved changes' : 'Saved'}/>
+            <i className={session.saving ? 'saving' : session.dirty ? 'dirty' : session.document.browserFile ? 'temporary' : 'saved'} aria-label={session.saving ? 'Saving' : session.dirty ? 'Unsaved changes' : session.document.browserFile ? 'Temporary browser document — export before refresh' : 'Saved'}/>
           </button>
           <button
             className="document-tab-menu-button"

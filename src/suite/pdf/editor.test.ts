@@ -66,6 +66,11 @@ describe('PDF mutation core',()=>{
     await expect(splitPdfAtPage(source,3)).rejects.toThrow(/before the last/i);
   });
 
+  it('refuses splitting PDFs with direct catalog certification permissions',async()=>{
+    const doc=await PDFDocument.load(await sample(3));
+    doc.catalog.set(PDFName.of('Perms'),doc.context.obj({DocMDP:{Type:PDFName.of('Sig')}}));
+    await expect(splitPdfAtPage(Uint8Array.from(await doc.save({useObjectStreams:false})),1)).rejects.toThrow(/Certified or usage-rights/);
+  });
   it('reorders nonadjacent PDF pages into the thumbnail drop position',async()=>{
     const original=await sample(4);
     const moved=await movePdfPage(original,4,2);

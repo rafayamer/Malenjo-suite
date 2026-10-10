@@ -11,8 +11,29 @@ describe('Windows PDF provider packaging contract',()=>{
       bundle:{resources:Record<string,string>};
     };
     expect(config.bundle.resources['../provider-packs/stirling-core/']).toBe('provider-packs/stirling-core/');
+    expect(config.bundle.resources['../runtime/java/']).toBe('runtime/java/');
     expect(config.bundle.resources['../provider-packs/qpdf/']).toBe('provider-packs/qpdf/');
     expect(config.bundle.resources['../provider-packs/tesseract/']).toBe('provider-packs/tesseract/');
+  });
+
+  it('requires checksum-pinned offline Temurin Java 25 runtime and its legal notices',()=>{
+    const builder=text('scripts/build-temurin-runtime-windows.ps1');
+    const runtime=text('src-tauri/src/suite/stirling.rs');
+    const workflow=text('.github/workflows/ci.yml');
+    const source=text('third_party/temurin/PROVENANCE.md');
+    expect(builder).toContain('25.0.4.1+1');
+    expect(builder).toContain('00c847d804f4a78e9f04f2683faf14fed898535b177b7fc704486cb0284e9283');
+    expect(builder).toContain('Get-FileHash');
+    expect(builder).toContain('legal');
+    expect(builder).toContain('java.base/LICENSE');
+    expect(builder).toContain('bin/java.exe');
+    expect(runtime).toContain('resource_dir.join("runtime/java/bin/java.exe")');
+    expect(runtime.indexOf('resource_dir.join("runtime/java/bin/java.exe")'))
+      .toBeLessThan(runtime.indexOf('env::var("MALENJO_JAVA_BIN")'));
+    expect(workflow).toContain('Build pinned Temurin runtime for fully offline PDF processing');
+    expect(workflow).toContain('(Resolve-Path "runtime/java/bin/java.exe").Path');
+    expect(source).toContain('GPLv2 with Classpath Exception');
+    expect(text('.gitignore')).toContain('runtime/java/');
   });
 
   it('keeps generated qpdf layout and native packaged lookup aligned',()=>{
