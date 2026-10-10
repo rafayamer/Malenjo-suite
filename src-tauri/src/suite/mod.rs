@@ -9,3 +9,4 @@ pub mod security;
 pub mod support;
 pub mod stirling;
 pub mod url_capture;
+pub mod cbr;
