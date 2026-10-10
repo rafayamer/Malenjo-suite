@@ -89,6 +89,15 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Run real PDF processing, save outputs and reopen on disk
         run: npm run test:pdf-execution
+      - name: Execute a user-file Codespaces CLI operation and reopen the PDF
+        shell: bash
+        run: |
+          input=$(find .build/pdf-codespaces-execution -type f -name source-four.pdf -print -quit)
+          if [ -z "$input" ]; then echo 'Real input PDF fixture missing'; exit 1; fi
+          directory=$(dirname "$input")
+          npm run pdf:execute -- --operation rotate-pdf --input "$input" --output "$directory/cli-rotated.pdf" --page 1
+          test -s "$directory/cli-rotated.pdf"
+          test -s "$directory/cli-rotated.pdf.execution.json"
       - name: Publish the real Codespaces PDF artifact manifest and outputs
         if: always()
         uses: actions/upload-artifact@v4

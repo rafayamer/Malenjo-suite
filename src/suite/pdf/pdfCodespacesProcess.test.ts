@@ -51,7 +51,7 @@ function validatedPages(value:string|undefined):number[]{
   return numbers;
 }
 function requiredPage(value:number|undefined):number{
-  if(!Number.isSafeInteger(value)||value!<=0)throw new Error('Use --page with a positive integer.');
+  if(!Number.isSafeInteger(value)||(value??0)<1)throw new Error('Use --page with a positive integer.');
   return value!;
 }
 function outputFor(operation:string):Kind{

@@ -37,3 +37,23 @@ folder watcher or SSO login.
 
 Do not mark any 90-row release acceptance status as complete based on this
 Codespaces subset. Windows installer work remains explicitly deferred.
+
+## Execute an operation on your own local PDF
+
+This is not limited to test fixtures. In the same Codespace, invoke:
+
+    npm run pdf:execute -- --operation rotate-pdf --input ./input.pdf --output ./rotated.pdf --page 1
+    npm run pdf:execute -- --operation remove-pages --input ./input.pdf --output ./trimmed.pdf --pages 2,4
+    npm run pdf:execute -- --operation pdf-to-json --input ./input.pdf --output ./extracted.json
+    npm run pdf:execute -- --operation split-by-size-or-count --input ./input.pdf --output ./parts.zip --page 2
+    npm run pdf:execute -- --help
+
+This CLI invokes the actual production PDF function and writes the result only
+after validating input and operation shape. It then REOPENS the PDF, ZIP, EPUB,
+JSON, XML or text output from disk, and writes a SHA-256 receipt next to it
+as <output>.execution.json. Existing output files are never overwritten.
+
+It does not enable optional native providers that need Tauri, licensed tools,
+OCR model files, or an RFC 3161 local authority. Run the help command for the
+supported subset. When the source file is a PDF, it must actually begin with
+the PDF header. Every operation preserves the input; it is a new-file workflow.
