@@ -40,6 +40,7 @@ import {addPdfVisualSignature} from './pdfVisualSignature';
 import {createUnsignedRasterPdfCopy} from './pdfUnsignedCopy';
 import PdfCertificateSigningPanel from './PdfCertificateSigningPanel';
 import PdfPermissionsPanel from './PdfPermissionsPanel';
+import PdfUrlCapturePanel from './PdfUrlCapturePanel';
 import {imposePdfBooklet,PDF_BOOKLET_MAX_INPUT_BYTES} from './pdfBooklet';
 import {convertJsonToPdf,JSON_TO_PDF_MAX_INPUT_BYTES} from './jsonToPdf';
 import {convertMarkdownToPdf,MARKDOWN_TO_PDF_MAX_INPUT_BYTES} from './markdownToPdf';
@@ -1363,6 +1364,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
          <FileOutput size={14}/>Export text-only SVG pages as ZIP
        </button>
      </details>}
+     {category==='convert'&&<PdfUrlCapturePanel provider={provider}/>}
      {category==='convert'&&<details className="stirling-component-details" aria-label="Offline SVG vector to PDF conversion">
       <summary>Convert SVG vector shapes to PDF (offline)</summary>
       <p>Convert trusted vector primitives—paths, rectangles, circles, ellipses, and lines—to real PDF drawing operators. No network, scripts, images, CSS, nested groups, or external assets. Unsupported SVG is refused rather than rendered incompletely.</p>
