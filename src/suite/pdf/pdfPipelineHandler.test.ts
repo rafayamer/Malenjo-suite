@@ -25,7 +25,7 @@ describe('MALENJO-owned typed offline PDF pipeline transport',()=>{
  });
  it('refuses path traversal, mixed MIME and missing protocol before mutation',async()=>{
    const bytes=await sample();
-   const packet={protocol:LOCAL_PDF_PIPELINE_PROTOCOL,contentType:'application/pdf' as const,
+   const packet={protocol:LOCAL_PDF_PIPELINE_PROTOCOL as typeof LOCAL_PDF_PIPELINE_PROTOCOL,contentType:'application/pdf' as const,
      filename:'document.pdf',bytes,planJson:'[{"action":"rotate","pages":[1],"angle":90}]'};
    await expect(handleLocalPdfPipelineData({...packet,filename:'../secret.pdf'})).rejects.toThrow(/safe/);
    await expect(handleLocalPdfPipelineData({...packet,filename:'folder\\secret.pdf'})).rejects.toThrow(/safe/);
