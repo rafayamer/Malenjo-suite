@@ -424,11 +424,15 @@ fn validate_output_path(path: &str) -> Result<PathBuf, String> {
     if !parent.is_dir() {
         return Err("Signing destination directory does not exist.".into());
     }
-    if candidate.exists() {
-        // Never overwrite a library source or another already-signed PDF.
-        // pyHanko may create a partial destination before failing; deleting
-        // that partial output must never delete a user's existing file.
-        return Err("Signing destination already exists. Choose a new PDF copy filename.".into());
+    match fs::symlink_metadata(&candidate) {
+        Ok(_) => {
+            // This also refuses dangling symlinks, not just existing files.
+            // A failed signing command may delete its newly created destination:
+            // it must never delete a pre-existing document or symlink.
+            return Err("Signing destination already exists. Choose a new PDF copy filename.".into());
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("Unable to inspect signing destination: {error}")),
     }
     if candidate.extension().and_then(|e| e.to_str())
         .is_none_or(|e| !e.eq_ignore_ascii_case("pdf")) {

@@ -7,7 +7,7 @@ export function eligiblePdfSigningDocuments(documents:readonly LibraryDocument[]
 }
 export function safePdfSigningCopyName(document:Pick<LibraryDocument,'name'>):string{
   const basename=document.name.replace(/\.pdf$/i,'');
-  const safe=basename.replace(/[^A-Za-z0-9._-]/g,'_').replace(/^\.+/,'')
+  const safe=basename.replace(/[^A-Za-z0-9._-]/g,'_').replace(/^[._-]+/,'')
     .slice(0,90).replace(/\.+$/,'')||'document';
   return safe+'-signed.pdf';
 }
