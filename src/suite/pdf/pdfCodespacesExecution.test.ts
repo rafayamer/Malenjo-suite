@@ -2,7 +2,8 @@
    Run npm run test:pdf-execution. This does not certify 90/90 parity. */
 import {beforeAll,afterAll,describe,expect,it} from 'vitest';
 import {PDFDocument,StandardFonts} from 'pdf-lib';
-import {getDocument} from 'pdfjs-dist';
+// PDF.js recommends its compatibility build for Node/Codespaces.
+import {getDocument} from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {unzipSync} from 'fflate';
 import {mkdirSync,mkdtempSync,readFileSync,writeFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
