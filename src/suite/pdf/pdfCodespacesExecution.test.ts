@@ -1,6 +1,7 @@
 /* Real, on-disk Codespaces execution. No mocked PDF providers or outputs.
    Run npm run test:pdf-execution. This does not certify 90/90 parity. */
 import {beforeAll,afterAll,describe,expect,it} from 'vitest';
+import matrix from '../../../docs/pdf-stirling-parity-matrix.json';
 import {PDFDocument,PDFName,StandardFonts} from 'pdf-lib';
 // PDF.js recommends its compatibility build for Node/Codespaces.
 import {getDocument} from 'pdfjs-dist/legacy/build/pdf.mjs';
@@ -98,12 +99,22 @@ describe.skipIf(process.env.MALENJO_PDF_EXECUTION!=='1').sequential('Codespaces 
   });
   afterAll(()=>{
     if(!directory)return;
+    const catalogIds=new Set(matrix.operations.map(row=>row.upstreamToolId));
+    const allExecuted=[...new Set(evidence.map(x=>x.operationId))];
+    const exactExecuted=allExecuted.filter(id=>catalogIds.has(id));
     const report={
-      schemaVersion:1,
+      schemaVersion:2,
+      catalogScope:{
+        catalogRequirements:matrix.catalogCount,
+        exactlyMatchedExecuted:exactExecuted.length,
+        executedCatalogIds:exactExecuted,
+        notExecutedCatalogIds:matrix.operations.map(row=>row.upstreamToolId).filter(id=>!exactExecuted.includes(id)),
+        internalOrNarrowerHelpers:allExecuted.filter(id=>!catalogIds.has(id)),
+      },
       scope:'Real Codespaces/Linux disk artifacts only; not Windows/Tauri/full Stirling parity',
       generatedUtc:new Date().toISOString(),
       inputSha256:hash(source),
-      executedOperationIds:[...new Set(evidence.map(x=>x.operationId))],
+      executedOperationIds:allExecuted,
       artifacts:evidence,
       notExecutedHere:[
         'Browser canvas rasterization, Stirling Java localhost routes, Tauri native dialogs',
@@ -218,11 +229,11 @@ describe.skipIf(process.env.MALENJO_PDF_EXECUTION!=='1').sequential('Codespaces 
   it('executes native PDF text overlays, stamps, page numbering and attachments',async()=>{
     await savedPdf('text-editor-pdf','text-overlay.pdf',
       await addPdfTextOverlay(source,{pageNumber:2,text:'Executed text overlay',x:0.1,y:0.2,size:14}),4);
-    await savedPdf('add-stamp','rectangle-stamp.pdf',
+    await savedPdf('native-rectangle-overlay','rectangle-stamp.pdf',
       await addPdfRectangleOverlay(source,{pageNumber:2,x:0.1,y:0.2,width:0.25,height:0.1}),4);
     await savedPdf('add-page-numbers','page-numbers.pdf',
       await addPdfBatesNumbers(source,{prefix:'PAGE-',digits:3,startNumber:10}),4);
-    await savedPdf('overlay-pdf','header-footer.pdf',
+    await savedPdf('native-header-footer','header-footer.pdf',
       await addPdfHeaderFooter(source,{header:'MALENJO Header',footer:'Codespaces verified'}),4);
     const withAttachment=await attachFileToPdf(source,{
       name:'execution-notes.txt',bytes:enc('Real attachment saved inside the PDF'),
@@ -269,7 +280,7 @@ describe.skipIf(process.env.MALENJO_PDF_EXECUTION!=='1').sequential('Codespaces 
     const labeled=await setPdfPageLabelRange(source,{
       startPage:1,style:'r',prefix:'Front-',startNumber:1,
     });
-    await savedPdf('add-page-numbers','page-labels.pdf',labeled,4);
+    await savedPdf('native-page-labels','page-labels.pdf',labeled,4);
     expect(await listPdfPageLabelRanges(labeled)).toMatchObject([
       {startPage:1,style:'r',prefix:'Front-',startNumber:1},
     ]);
@@ -279,7 +290,7 @@ describe.skipIf(process.env.MALENJO_PDF_EXECUTION!=='1').sequential('Codespaces 
     expect(JSON.parse(dec(persist('get-info-on-pdf','pdf-info.json',infoBytes,'source structural info JSON reread'))).pageCount).toBe(4);
     const report=await inspectPdfStructuralSafety(source);
     const bytes=serializePdfPreflightJson(report);
-    expect(dec(persist('verify-pdf','preflight.json',bytes,'source integrity preflight serialized on disk'))).toContain('pageCount');
+    expect(dec(persist('native-structure-preflight','preflight.json',bytes,'source integrity preflight serialized on disk'))).toContain('pageCount');
     const name=proposePdfMetadataFilename(info);
     expect(name).toMatch(/MALENJO/i);
     persist('auto-rename','proposed-filename.txt',enc(name),'generated from real source PDF metadata');
