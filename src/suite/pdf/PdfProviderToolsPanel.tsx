@@ -40,6 +40,7 @@ import {convertJsonToPdf,JSON_TO_PDF_MAX_INPUT_BYTES} from './jsonToPdf';
 import {convertMarkdownToPdf,MARKDOWN_TO_PDF_MAX_INPUT_BYTES} from './markdownToPdf';
 import {convertHtmlToPdf,HTML_TO_PDF_MAX_INPUT_BYTES} from './htmlToPdf';
 import {exportPdfRasterEffect,PDF_RASTER_EFFECT_MAX_SOURCE_BYTES,type PdfRasterEffect} from './pdfRasterEffects';
+import {extractPdfImageScanPages} from './pdfScanExtraction';
 import {convertPlainTextToPdf,TEXT_TO_PDF_MAX_INPUT_BYTES} from './plainTextToPdf';
 import {convertEmlToPdf,EML_TO_PDF_MAX_BYTES} from './emlToPdf';
 import {convertCbzToPdf,CBZ_TO_PDF_MAX_SOURCE_BYTES} from './cbzToPdf';
@@ -685,6 +686,34 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }
   }
 
+  async function saveOfflineExtractedScans(){
+    if(!sourceBytes||busy)return;
+    const revision=sourceBytes;
+    setBusy(true);setError('');setNotice('');
+    let loaded:Awaited<ReturnType<typeof loadPdfBytes>>|null=null;
+    try{
+      if(!revision.length||revision.byteLength>PDF_RASTER_EFFECT_MAX_SOURCE_BYTES){
+        throw new Error('Offline scan extraction requires a source PDF of at most 32 MB.');
+      }
+      loaded=await loadPdfBytes(revision);
+      const {archive,originalPages}=await extractPdfImageScanPages(loaded.document,{
+        onProgress:(done,total)=>setNotice('Extracting scan page '+done+'/'+total+'…'),
+      });
+      if(activeSourceRef.current!==revision){
+        throw new Error('Working PDF changed during scan extraction; stale output was not saved.');
+      }
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/zip',bytes:Array.from(archive),
+      },localExportStem(sourceName)+'-scan-pages');
+      setNotice(saved?'Saved '+originalPages.length+' scanned page images: '+saved:
+        'Scan-page export cancelled; original document unchanged.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));setNotice('');
+    }finally{
+      await disposePdf(loaded);setBusy(false);
+    }
+  }
+
   async function saveOfflineCbzPdf(){
     if(!cbzToPdfFile||busy)return;
     const file=cbzToPdfFile;
@@ -1292,7 +1321,14 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       </div>
       <small>Loaded {outlineItems.length} bookmarks. After applying an edit, refresh the list for updated PDF object references. Nested subtree deletion requires the explicit checkbox.</small>
     </details>}
-    {(category==='edit'||category==='scan')&&sourceBytes&&<details className="stirling-component-details" aria-label="Offline PDF contrast inversion and scanning effects">
+    {category==='scan'&&sourceBytes&&<details className="stirling-component-details" aria-label="Extract image-only scanned PDF pages">
+       <summary>Extract scanned PDF page images (offline)</summary>
+       <p>Detect pages with raster-image drawing operators and no selectable text, then export full rendered pages as PNG files in a ZIP. Filenames identify each original page. OCR-text-layer scans and individual embedded-image extraction are not covered by this conservative fallback.</p>
+       <button type="button" disabled={busy} onClick={()=>void saveOfflineExtractedScans()}>
+         <FileOutput size={14}/>Export image-only scan pages ZIP
+       </button>
+     </details>}
+     {(category==='edit'||category==='scan')&&sourceBytes&&<details className="stirling-component-details" aria-label="Offline PDF contrast inversion and scanning effects">
        <summary>PDF contrast, invert and scan appearance (offline)</summary>
        <p>Render up to 20 pages locally, transform page pixels, and export a separate PDF copy. Selectable text, vectors, form fields, links, annotations, bookmarks, attachments and cryptographic signatures are NOT preserved. The working document is not modified.</p>
        <div className="stirling-provider-actions">
