@@ -4,7 +4,7 @@
 
 ## Decision
 
-**Full PDF parity release is blocked.** Exactly 90 handoff requirements are enumerated; **0 carry complete acceptance evidence**. There are 59 native/source-backed partial foundations plus 18 source-audited provider-dispatch-only partial integrations (77 partial total), with 13 implementation-source-unaudited requirements. New page-level redaction and bookmark chapter splitting are bounded native feature subsets, not Windows-accepted upstream equivalence. The passing CI pipeline proves builds, tests and a subset of provider smoke routes, not the whole Windows installer + UI end-to-end matrix. The `tauri:release` command now fails closed until all 90 requirements have explicit acceptance evidence. Ordinary development builds remain possible.
+**Full PDF parity release is blocked.** Exactly 90 handoff requirements are enumerated; **0 carry complete acceptance evidence**. There are 68 locally source-backed partial foundations/guides plus 18 source-audited provider-dispatch-only partial integrations (86 partial total), with 4 implementation-source-unaudited requirements. Nine newly source-mapped requirements have explicitly bounded local implementations or documentation only, not complete upstream parity. New page-level redaction and bookmark chapter splitting are bounded native feature subsets, not Windows-accepted upstream equivalence. The passing CI pipeline proves builds, tests and a subset of provider smoke routes, not the whole Windows installer + UI end-to-end matrix. The `tauri:release` command now fails closed until all 90 requirements have explicit acceptance evidence. Ordinary development builds remain possible.
 
 The review's two PNG defects have implementation-level fixes in `pngIntegrity.ts` with Adam7/filter/palette positive and negative tests. This is not enough to accept PDF-to-images or extract-images as end-to-end workflows without live output saved and reopened on Windows.
 
@@ -13,12 +13,12 @@ The review's two PNG defects have implementation-level fixes in `pngIntegrity.ts
 | Group | Requirements | Source-backed partial | Awaiting implementation audit |
 |---|---:|---:|---:|
 | page | 18 | 18 | 0 |
-| conversion | 24 | 20 | 4 |
-| security | 16 | 12 | 4 |
-| scan-extraction | 6 | 5 | 1 |
+| conversion | 24 | 21 | 3 |
+| security | 16 | 15 | 1 |
+| scan-extraction | 6 | 6 | 0 |
 | editing-analysis | 10 | 10 | 0 |
 | forms | 4 | 4 | 0 |
-| automation-view-developer | 12 | 8 | 4 |
+| automation-view-developer | 12 | 12 | 0 |
 
 ## Audited requirement inventory
 
@@ -55,7 +55,7 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 | 27 | `pdf-to-markdown` | Native partial (text-only) | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 28 | `pdf-to-csv` | Native partial (text-only) | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 29 | `pdf-to-epub` | Native reflowable text partial | No matching execution proof | Partial; layout, graphics and Windows acceptance pending |
-| 30 | `pdf-to-vector` | Configuration only | No matching execution proof | Not audited; implementation and acceptance pending |
+| 30 | `pdf-to-vector` | Native text-only SVG ZIP partial | Native logic/test only | Partial; original graphical vectors and embedded fonts not supported |
 | 31 | `pdf-to-json` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 32 | `pdf-to-rtf` | Native text-only partial | No matching execution proof | Partial; layout fidelity and Windows acceptance pending |
 | 33 | `pdf-to-cbz` | Native partial (rasterized) | No matching execution proof | Partial; full parity and Windows acceptance pending |
@@ -70,16 +70,16 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 | 42 | `vector-to-pdf` | Native SVG vector-subset partial | No clean installed-Windows proof | Partial; arbitrary SVG and EPS parity and Windows acceptance pending |
 | 43 | `add-password` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
 | 44 | `remove-password` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
-| 45 | `change-permissions` | Frontend-only alias | No matching execution proof | Not audited; implementation and acceptance pending |
+| 45 | `change-permissions` | Native optional qpdf AES-256 permissions copy partial | Windows pack/operation output unverified | Partial; local qpdf runtime and cross-viewer enforcement pending |
 | 46 | `add-watermark` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 47 | `add-stamp` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
 | 48 | `sanitize-pdf` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
 | 49 | `flatten` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 50 | `unlock-pdf-forms` | Native AcroForm flag partial | No matching execution proof | Partial; Windows accepted save/reopen pending |
-| 51 | `cert-sign` | Pinned API route only | No matching execution proof | Not audited; implementation and acceptance pending |
+| 51 | `cert-sign` | Optional native pyHanko PKCS#12 signed-copy partial | Certificate/output verification pending | Partial; visible signatures/multi-signing/TSA not implemented |
 | 52 | `sign` | Native graphical mark partial | No matching execution proof | Partial; handwriting/cert signing and Windows acceptance pending |
 | 53 | `timestamp-pdf` | Pinned controller only | No matching execution proof | Not audited; implementation and acceptance pending |
-| 54 | `remove-cert-sign` | Pinned API route only | No matching execution proof | Not audited; implementation and acceptance pending |
+| 54 | `remove-cert-sign` | Native separate unsigned raster PDF copy partial | Windows output unverified | Partial; signed content rasterized and signature validity discarded |
 | 55 | `validate-signature` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 56 | `verify-pdf` | Native read-only preflight partial | No matching execution proof | Partial; full feature semantics and Windows acceptance pending |
 | 57 | `redact` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
@@ -89,7 +89,7 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 | 61 | `remove-image-pdf` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
 | 62 | `remove-annotations` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 63 | `remove-blanks` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
-| 64 | `ocr-pdf` | Pinned API route only | Route exercised (partial) | Not audited; implementation and acceptance pending |
+| 64 | `ocr-pdf` | Native optional PaddleOCR searchable-raster output partial | Pack/models and Windows OCR output unverified | Partial; no selectable text positioning, deskew or multilingual packages |
 | 65 | `text-editor-pdf` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 66 | `edit-table-of-contents` | Native nested /Outlines partial | No exact Windows execution proof | Partial; named destination editing and Windows acceptance pending |
 | 67 | `update-metadata` | Native partial | Route exercised (partial) | Partial; full parity and Windows acceptance pending |
@@ -112,12 +112,18 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 | 84 | `view-pdf` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 85 | `show-javascript` | Native read-only preflight partial | No matching execution proof | Partial; full feature semantics and Windows acceptance pending |
 | 86 | `dev-api-docs` | Live diagnostics partial | No matching execution proof | Partial; full developer reference and Windows acceptance pending |
-| 87 | `dev-folder-scanning-docs` | Frontend-only alias | No matching execution proof | Not audited; implementation and acceptance pending |
-| 88 | `dev-sso-guide-docs` | Frontend-only alias | No matching execution proof | Not audited; implementation and acceptance pending |
-| 89 | `dev-airgapped-docs` | Frontend-only alias | No matching execution proof | Not audited; implementation and acceptance pending |
-| 90 | `handleData` | Pinned controller only | No matching execution proof | Not audited; implementation and acceptance pending |
+| 87 | `dev-folder-scanning-docs` | Bundled Markdown guide; watcher not implemented | No execution proof | Partial documentation; real watched-folder service missing |
+| 88 | `dev-sso-guide-docs` | Bundled SSO scope guide; no enterprise SSO | No execution proof | Partial documentation; applicability needs explicit owner decision |
+| 89 | `dev-airgapped-docs` | Bundled offline-operation guide | Windows offline provider acceptance unverified | Partial documentation; installers/provider packs remain open |
+| 90 | `handleData` | Native typed in-process page-pipeline alternative | Stirling controller unavailable | Partial; accepts only local rotate/delete/move plans |
 
 The new bounded offline HTML, page-raster, scan extraction, page-pipeline, automatic whole-page redaction and chapter splitting workflows have source and automated test mappings. They are **partial** and require iterative user diagnosis, fidelity extensions, and later Windows validation; this inventory does not certify implementation completeness or release readiness.
+
+## Outstanding implementation-source investigations
+
+After this development batch, the four un-audited requirements are `pdf-to-cbr` (licensed RAR writer), `pdf-to-pdfa` (real PDF/A conversion with independent validator), `url-to-pdf` (network opt-in and SSRF-isolated page capture), and `timestamp-pdf` (trusted RFC 3161 TSA, optionally network-dependent). These must not be replaced with misleading CBZ, plain PDF, arbitrary web fetches or file modification timestamps.
+
+The new certificate signing, OCR and permissions workflows are optional-provider development integrations; passing generic CI does not establish installed local provider availability, correct signed/encrypted outputs, or strict offline release approval.
 
 ## Mandatory per-feature acceptance record
 

@@ -132,7 +132,7 @@ export async function exportSearchablePdfFromLocalOcr(
           size:1,font,opacity:0.01,
         });
       }
-      pages.push({page:number,text:prediction.text,confidence:prediction.confidence});
+      pages.push({page:number,text:prediction.text,confidence:prediction.confidence<=1?prediction.confidence*100:prediction.confidence});
       options.onProgress?.(number,total);
     }finally{
       canvas.width=0;canvas.height=0;

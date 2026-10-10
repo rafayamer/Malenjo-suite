@@ -1537,7 +1537,7 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     </details>}
     {category==='scan'&&sourceBytes&&<details className="stirling-component-details" aria-label="Offline searchable OCR PDF with local PaddleOCR">
        <summary>Convert scanned PDF pages to searchable PDF (optional local OCR)</summary>
-       <p>Render up to 10 pages and recognize English text with an already installed local PaddleOCR worker. Export a separate, rasterized PDF with small selectable/searchable text; glyph positions and non-ASCII fonts are not reconstructed. This operation does not download models or use browser OCR fallback. The original working PDF remains unchanged. Manual review is essential.</p>
+       <p>Render up to 10 pages and recognize English text with an already installed local PaddleOCR worker. Export a separate, rasterized PDF with small selectable/searchable text; glyph positions and non-ASCII fonts are not reconstructed. MALENJO uses no browser OCR fallback, but the installed PaddleOCR engine may need pre-cached model weights; clean air-gapped behavior is NOT yet verified. The original working PDF remains unchanged. Manual review is essential.</p>
        <button type="button" disabled={busy} onClick={()=>void saveLocalSearchableOcrPdf()}>
          <FileOutput size={14}/>Run local English OCR and export searchable PDF
        </button>

@@ -1839,28 +1839,37 @@
         ]
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfTextVector.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Export text-only SVG pages as ZIP",
+        "provider": "MALENJO native PDF.js selectable-text SVG exporter",
+        "dependency": "Bundled PDF.js and fflate",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "exportPdfTextOnlySvgZip"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfTextVector.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfTextVector.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "1–10 pages, up to 16 MB source/8 MB archive, max 5000 text fragments per page; refuses painted paths/images/complex transforms."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
         "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
         "Conversion grouped under Ghostscript, which is not bundled in default business-compatible Windows pack.",
-        "Upstream endpoint group declaration is not executable proof; no live OpenAPI path or Windows result has been verified."
+        "Upstream endpoint group declaration is not executable proof; no live OpenAPI path or Windows result has been verified.",
+        "Partial: SVG text elements only, native fonts may differ; no full PDF graphical vector/EPS conversion or Windows artifact acceptance."
       ]
     },
     {
@@ -2745,26 +2754,39 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src-tauri/src/suite/security.rs",
+          "src-tauri/src/lib.rs",
+          "src-tauri/src/suite/stirling.rs",
+          "src/suite/security/api.ts",
+          "src/suite/pdf/PdfPermissionsPanel.tsx",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Save new PDF with viewer permission flags",
+        "provider": "Optional reviewed local qpdf 12.x binary via native Tauri stdin @- encryption workflow",
+        "dependency": "qpdf Windows pack and owner/user passwords; pack not assumed installed",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "qpdf_change_permissions_copy"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src-tauri/src/suite/security.rs"
+        ],
+        "negativeTestIds": [
+          "src-tauri/src/suite/security.rs"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "32 MB saved library input/output, AES-256, owner password 10–128 characters, qpdf 60 s timeout; no existing destinations; rejects already encrypted PDFs and visible byte ranges."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Partial: qpdf installation, input signature/encryption edge cases, viewer-specific permission adherence and offline Windows output verification pending. Owner/user passwords are passed to qpdf via stdin."
       ]
     },
     {
@@ -3099,25 +3121,37 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src-tauri/src/suite/security.rs",
+          "src/suite/security/api.ts",
+          "src/suite/pdf/PdfCertificateSigningPanel.tsx",
+          "src/suite/pdf/pdfCertificateSigning.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Choose .p12/.pfx and sign a new PDF copy",
+        "provider": "Optional local pyHanko PKCS#12 signed-copy Tauri adapter",
+        "dependency": "Local Python/pyHanko and PKCS#12 identity, not bundled or release-accepted",
         "providerCatalogMatchKey": "/api/v1/security/cert-sign",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "pyhanko_sign_copy"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfCertificateSigning.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfCertificateSigning.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "Saved library PDF up to 32 MB exposed in UI; existing native signer has a 90 s timeout, one PKCS#12 signature, no output overwrite or network TSA."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Partial: optional dependency and credential lifecycle, independently validated signed-PDF output, incremental multi-signing, visible appearance and trusted timestamps are not implemented or accepted."
       ]
     },
     {
@@ -3264,25 +3298,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfUnsignedCopy.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src/suite/pdf/pdfRasterEffects.ts"
+        ],
+        "frontendCommand": "Export intentionally unsigned raster PDF copy",
+        "provider": "MALENJO PDF.js+pdf-lib signature-destructive raster copy",
+        "dependency": "Bundled pdf-lib/PDF.js and PNG integrity guard",
         "providerCatalogMatchKey": "/api/v1/security/remove-cert-sign",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "createUnsignedRasterPdfCopy"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfUnsignedCopy.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfUnsignedCopy.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "Up to 20 pages, max 32 MB PDF input/output; requires at least one detected certificate signature; discards all cryptographic validity and editable contents."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Partial: intentionally destroys all signature objects in separate raster output; not original-document incremental signature removal or preservation of PDF interactivity. Windows GUI acceptance remains open."
       ]
     },
     {
@@ -3867,25 +3911,36 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfLocalOcr.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx",
+          "src-tauri/src/suite/ocr.rs",
+          "workers/paddleocr/worker.py"
+        ],
+        "frontendCommand": "Run local English OCR and export searchable PDF",
+        "provider": "MALENJO optional desktop PaddleOCR worker and native PDF.js/pdf-lib searchable raster output",
+        "dependency": "Local Python/PaddleOCR and preinstalled weights, not guaranteed air-gapped",
         "providerCatalogMatchKey": "/api/v1/misc/ocr-pdf",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "exportSearchablePdfFromLocalOcr"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfLocalOcr.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfLocalOcr.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "Up to 10 pages, 8 MP per page, 32 MB input/output; English; 20,000 characters per page; optional local OCR pack; no browser OCR fallback."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Partial: OCR text is not aligned to glyph coordinates, non-ASCII escaped in hidden text layer; confidence and model availability have only injected-engine tests. Offline weight packaging, rotation, deskew, languages and native Windows OCR acceptance remain open."
       ]
     },
     {
@@ -5255,26 +5310,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfDeveloperGuides.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Folder automation guide",
+        "provider": "Bundled MALENJO Markdown documentation exporter",
+        "dependency": "No runtime provider (guide only)",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "createPdfLocalDeveloperGuide"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfDeveloperGuides.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfDeveloperGuides.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "24 KB bundled guide; explains user-invoked page pipeline and explicitly documents that watched-folder job service is NOT implemented."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Partial: documentation is available but a real watched-folder daemon, folder job scheduling/validation and offline Windows acceptance do not exist."
       ]
     },
     {
@@ -5307,26 +5371,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfDeveloperGuides.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "SSO scope guide",
+        "provider": "Bundled MALENJO Markdown SSO-scope documentation exporter",
+        "dependency": "No SSO provider enabled or required by the guide",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "createPdfLocalDeveloperGuide"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfDeveloperGuides.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfDeveloperGuides.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "24 KB bundled guide; no credential/network access. Describes missing enterprise SAML/OIDC deployment."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Partial: standalone SSO documentation exists, not an actual enterprise SSO service; explicit personal-offline not-applicable owner approval has not been given."
       ]
     },
     {
@@ -5359,26 +5432,35 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfDeveloperGuides.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Offline/air-gap guide",
+        "provider": "Bundled MALENJO offline-operation Markdown guide exporter",
+        "dependency": "No live connection required to read guide",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "createPdfLocalDeveloperGuide"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfDeveloperGuides.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfDeveloperGuides.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "24 KB local guide, covers provider installs, offline evidence, no external URLs, qpdf/Tesseract dependencies and PDF/A/TSA limitations."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing."
+        "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
+        "Partial: instructions implemented; not Windows-air-gapped installer validation or proof that all optional providers have compliant, packaged offline runtimes."
       ]
     },
     {
@@ -5411,27 +5493,37 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfPipelineHandler.ts",
+          "src/suite/pdf/pdfOfflinePipeline.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Apply page pipeline to working PDF",
+        "provider": "MALENJO native typed binary in-process PDF page-pipeline transport",
+        "dependency": "Bundled pdf-lib, not the disabled Stirling PipelineController",
         "providerCatalogMatchKey": null,
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "handleLocalPdfPipelineData"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfPipelineHandler.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfPipelineHandler.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "Strict malenjo.pdf.pipeline.v1 with PDF bytes, safe filename, application/pdf MIME, 32 MB cap, up to 20 rotate/delete/move steps, 200 pages."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
         "Not identified in pinned endpoint smoke-test list; audit whether frontend-only, composite, API route omitted from test list, or genuinely missing.",
-        "Pinned controller is explicitly excluded in STIRLING_PDF_TAURI_MODE; cannot call it locally without a separately reviewed replacement."
+        "Pinned controller is explicitly excluded in STIRLING_PDF_TAURI_MODE; cannot call it locally without a separately reviewed replacement.",
+        "Partial: alternate local binary transport, NOT the Stirling handleData endpoint, folder scanning service, or arbitrary batch graph. Provider-only route remains disabled."
       ]
     }
   ],
@@ -5451,8 +5543,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 77,
-    "unverifiedSourceCount": 13,
+    "localSourcePartialCount": 86,
+    "unverifiedSourceCount": 4,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
