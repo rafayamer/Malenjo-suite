@@ -920,32 +920,35 @@
           "src/suite/pdf/pdfTwentyWorkflows.ts",
           "src/suite/pdf/PdfProviderToolsPanel.tsx",
           "src/suite/pdf/stirlingCore.ts",
-          "src/suite/pdf/providerCapabilities.ts"
+          "src/suite/pdf/providerCapabilities.ts",
+          "src/suite/pdf/pdfChapterSplit.ts"
         ],
-        "frontendCommand": "20-operation PDF batch: Split chapters",
-        "provider": "MALENJO local Tauri OpenAPI-gated Stirling open-core route",
-        "dependency": "Pinned bundled Stirling open core/JVM; live provider capability and licensing checks",
+        "frontendCommand": "Export chapters as PDF ZIP (offline); existing provider selector remains",
+        "provider": "MALENJO native pdf-lib top-level bookmark splitter and optional Stirling provider selector",
+        "dependency": "Bundled pdf-lib and fflate; optional pinned Stirling open core",
         "providerCatalogMatchKey": "/api/v1/general/split-pdf-by-chapters",
         "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
-        "localEvidenceSymbol": "PDF_TWENTY_WORKFLOWS"
+        "localEvidenceSymbol": "splitPdfByChapters"
       },
       "evidence": {
         "functionalStatus": "partial",
         "windowsOffline": "unverified",
         "positiveTestIds": [
-          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts",
+          "src/suite/pdf/pdfChapterSplit.test.ts"
         ],
         "negativeTestIds": [
-          "src/suite/pdf/pdfTwentyWorkflows.test.ts"
+          "src/suite/pdf/pdfTwentyWorkflows.test.ts",
+          "src/suite/pdf/pdfChapterSplit.test.ts"
         ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": "UI aggregate upload cap 32 MB; native request/response cap 512 MB; 32 MB ZIP/128 MB extracted ZIP; active PDF mutation gated by workspace load. Endpoint-specific limits require audit."
+        "limits": "Native split: max 32 MB source/ZIP, 200 pages, 50 standalone chapters; explicit increasing top-level bookmark page destinations; refuse forms, signed PDFs, certifications, annotations and links. Existing provider selector has separate caps."
       },
       "remaining": [
         "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
-        "Provider-only integration evidence: this named POST path is mapped to the live OpenAPI selector and result validator, NOT an independently implemented processing algorithm. No operation-specific successful Windows output/reopen, parameter mapping, licensing closure or manual acceptance has been credited."
+        "Native partial: handles explicit, ordered top-level bookmark destinations only; no named or external destinations, non-contiguous sections, form/signature link preservation, or complete Windows GUI acceptance."
       ]
     },
     {
@@ -3492,25 +3495,34 @@
         "pinnedConfigurationGroups": []
       },
       "malenjo": {
-        "implementationPaths": [],
-        "frontendCommand": null,
-        "provider": null,
-        "dependency": null,
+        "implementationPaths": [
+          "src/suite/pdf/pdfAutoRedact.ts",
+          "src/suite/pdf/PdfProviderToolsPanel.tsx"
+        ],
+        "frontendCommand": "Export blacked-out matching pages as new PDF",
+        "provider": "MALENJO native PDF.js text detection and fresh pdf-lib page-level raster rebuild",
+        "dependency": "Bundled PDF.js, pdf-lib, PNG integrity guard",
         "providerCatalogMatchKey": "/api/v1/security/auto-redact",
-        "integrationContractPath": "src/suite/pdf/stirlingCore.ts"
+        "integrationContractPath": "src/suite/pdf/stirlingCore.ts",
+        "localEvidenceSymbol": "redactPdfPagesByText"
       },
       "evidence": {
-        "functionalStatus": null,
+        "functionalStatus": "partial",
         "windowsOffline": "unverified",
-        "positiveTestIds": [],
-        "negativeTestIds": [],
+        "positiveTestIds": [
+          "src/suite/pdf/pdfAutoRedact.test.ts"
+        ],
+        "negativeTestIds": [
+          "src/suite/pdf/pdfAutoRedact.test.ts"
+        ],
         "fixtures": [],
         "runtimeResultVerified": false,
         "exportReopenVerified": false,
-        "limits": null
+        "limits": "1–20 selectable-text pages, 32 MB input/output, 8 megapixels/page, 1–20 literal 120-character patterns; matching pages replaced entirely with black; output is separate raster-only copy; unsigned sources only."
       },
       "remaining": [
-        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying."
+        "Audit actual MALENJO main implementation, file-level upstream license, clean offline Windows provider execution and golden tests before classifying.",
+        "Native partial only: entire matching pages are removed. Upstream word/area-pattern redaction, OCR/image-only scans, manual visual acceptance and complete PDF semantics are not implemented. PDF.js selectable text detection may miss graphic-drawn glyphs. User must inspect result."
       ]
     },
     {
@@ -5439,8 +5451,8 @@
       "/api/v1/convert/ebook/pdf"
     ],
     "windowsOperationResults": "unverified",
-    "localSourcePartialCount": 76,
-    "unverifiedSourceCount": 14,
+    "localSourcePartialCount": 77,
+    "unverifiedSourceCount": 13,
     "frontendRouteMatchesOutsideTestedAPI": 22,
     "pendingFurtherUpstreamSourceClassification": 0,
     "pinnedControllerOnlyRouteMatches": 8,
