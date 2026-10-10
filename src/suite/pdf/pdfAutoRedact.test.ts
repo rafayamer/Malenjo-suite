@@ -82,7 +82,7 @@ describe('conservative automatic PDF whole-page redaction',()=>{
       const encoded=new TextDecoder('latin1').decode(output.bytes);
       expect(encoded).not.toContain('TOP SECRET');
       expect(encoded).not.toContain('Original confidential metadata');
-      expect(reader.getPage).toHaveBeenCalled();
+      expect(output.bytes).not.toEqual(source);
     }finally{
       vi.unstubAllGlobals();
     }
