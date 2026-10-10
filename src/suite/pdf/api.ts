@@ -14,8 +14,12 @@ export async function exportPdfBytes(name:string,bytes:Uint8Array):Promise<boole
     const anchor=document.createElement('a');
     anchor.href=url;
     anchor.download=name;
+    document.body.appendChild(anchor);
     anchor.click();
-    URL.revokeObjectURL(url);
+    anchor.remove();
+    // Browser downloads are asynchronous. Revoking immediately can cancel
+    // the download after the PDF preview was opened; keep it alive briefly.
+    window.setTimeout(()=>URL.revokeObjectURL(url),60_000);
     return true;
   }
 
@@ -42,7 +46,9 @@ export async function exportPdfPlainText(name:string,text:string):Promise<boolea
     anchor.href=url;
     anchor.download=name;
     anchor.click();
-    URL.revokeObjectURL(url);
+    // Browser downloads are asynchronous. Revoking immediately can cancel
+    // the download after the PDF preview was opened; keep it alive briefly.
+    window.setTimeout(()=>URL.revokeObjectURL(url),60_000);
     return true;
   }
 
@@ -74,7 +80,7 @@ export async function exportPdfEmbeddedAttachment(name:string,bytes:Uint8Array):
     anchor.download=safeName;
     anchor.rel='noopener';
     anchor.click();
-    window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+    window.setTimeout(()=>URL.revokeObjectURL(url),60_000);
     return true;
   }
 
@@ -103,7 +109,7 @@ export async function exportPdfPageImagesZip(name:string,bytes:Uint8Array):Promi
     anchor.href=url;
     anchor.download=name;
     anchor.click();
-    window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+    window.setTimeout(()=>URL.revokeObjectURL(url),60_000);
     return true;
   }
   const destination=await save({title:'Export PDF page images',defaultPath:name,filters:[{name:'ZIP archive',extensions:['zip']}]});
