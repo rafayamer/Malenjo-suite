@@ -39,6 +39,7 @@ import {createPdfLocalDeveloperGuide,type PdfLocalDeveloperGuide} from './pdfDev
 import {addPdfVisualSignature} from './pdfVisualSignature';
 import {createUnsignedRasterPdfCopy} from './pdfUnsignedCopy';
 import PdfCertificateSigningPanel from './PdfCertificateSigningPanel';
+import PdfPermissionsPanel from './PdfPermissionsPanel';
 import {imposePdfBooklet,PDF_BOOKLET_MAX_INPUT_BYTES} from './pdfBooklet';
 import {convertJsonToPdf,JSON_TO_PDF_MAX_INPUT_BYTES} from './jsonToPdf';
 import {convertMarkdownToPdf,MARKDOWN_TO_PDF_MAX_INPUT_BYTES} from './markdownToPdf';
@@ -1444,7 +1445,8 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
         <FileOutput size={14}/>Convert Markdown file to PDF (offline)
       </button>
     </details>}
-         {category==='protect'&&sourceBytes&&<details className="stirling-component-details" aria-label="Automatic whole-page text pattern redaction">
+         {category==='protect'&&<PdfPermissionsPanel provider={provider}/>}
+     {category==='protect'&&sourceBytes&&<details className="stirling-component-details" aria-label="Automatic whole-page text pattern redaction">
        <summary>Auto-redact entire matching pages (offline)</summary>
        <p>Enter up to 20 literal case-insensitive phrases, one per line. When any phrase occurs in a page's selectable text, the ENTIRE page is permanently replaced with opaque black in a separate PDF copy. Unmatched pages are rendered to images so original content streams and hidden layers are not copied. Every phrase must be found, and all pages must have selectable text. This is not word-level redaction. OCR scans, graphics-as-text and inaccurate text extraction require independent review.</p>
        <label className="stirling-field"><span>Required literal phrases, one per line</span>

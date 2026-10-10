@@ -14,6 +14,7 @@ use tauri::{AppHandle, Manager, State};
 use zeroize::Zeroizing;
 
 use super::library::resolve_library_document_path;
+use super::stirling::available_qpdf;
 
 const AUDIT_VERSION: u32 = 1;
 const MAX_AUDIT_EVENTS: usize = 250;
@@ -557,6 +558,187 @@ pub fn pyhanko_sign_copy(
             return Err("pyHanko signing timed out and was terminated.".into());
         }
         thread::sleep(Duration::from_millis(80));
+    }
+}
+
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QpdfPermissionOptions {
+    printing: String,
+    modification: String,
+    allow_copy: bool,
+    allow_annotate: bool,
+    allow_form_fill: bool,
+}
+
+/// qpdf @- sends all passwords and filenames over stdin, not the OS-visible
+/// command line. qpdf does not enforce reader permissions itself; viewers
+/// may ignore the generated permission bits.
+fn qpdf_permission_args(
+    user: &str,
+    owner: &str,
+    options: &QpdfPermissionOptions,
+    source: &str,
+    destination: &str,
+) -> Result<Vec<String>, String> {
+    if owner.len() < 10 || owner.len() > 128 ||
+       user.len() > 128 || (!user.is_empty() && user == owner) {
+        return Err("Use a distinct owner password of 10-128 characters; user password may be blank.".into());
+    }
+    if [owner, user, source, destination].iter().any(|s|
+        s.contains('\n') || s.contains('\r') || s.contains('\0')) {
+        return Err("PDF permission arguments cannot contain line breaks or NUL bytes.".into());
+    }
+    if !["none", "low", "full"].contains(&options.printing.as_str()) ||
+       !["none", "assembly", "form", "annotate", "all"].contains(&options.modification.as_str()) {
+        return Err("Unsupported qpdf permission choices.".into());
+    }
+    Ok(vec![
+        "--encrypt".into(),
+        format!("--user-password={user}"),
+        format!("--owner-password={owner}"),
+        "--bits=256".into(),
+        format!("--print={}", options.printing),
+        format!("--modify={}", options.modification),
+        format!("--extract={}", if options.allow_copy {"y"} else {"n"}),
+        format!("--annotate={}", if options.allow_annotate {"y"} else {"n"}),
+        format!("--form={}", if options.allow_form_fill {"y"} else {"n"}),
+        "--".into(),
+        source.into(),
+        destination.into(),
+    ])
+}
+
+#[tauri::command]
+pub fn qpdf_change_permissions_copy(
+    app: AppHandle,
+    state: State<'_, SecurityState>,
+    document_id: String,
+    user_secret_token: String,
+    owner_secret_token: String,
+    destination: String,
+    options: QpdfPermissionOptions,
+) -> Result<bool, String> {
+    let source = resolve_library_document_path(&app, &document_id)?;
+    let target = validate_output_path(&destination)?;
+    let original = fs::read(&source).map_err(|e| format!("Unable to read source PDF: {e}"))?;
+    if original.len() < 5 || original.len() > 32 * 1024 * 1024 || !original.starts_with(b"%PDF-") {
+        return Err("qpdf permissions require a real source PDF up to 32 MB.".into());
+    }
+    if original.windows(10).any(|part| part == b"/ByteRange") {
+        return Err("A signature byte-range was detected; changing PDF permissions can invalidate it.".into());
+    }
+    let (executable, _, version) = available_qpdf(&app)
+        .ok_or_else(|| "Approved local qpdf provider is not installed.".to_string())?;
+    if !version.split('.').next().and_then(|m| m.parse::<u32>().ok())
+        .is_some_and(|major| major >= 12) {
+        return Err("qpdf 12.x or newer is required for this operation.".into());
+    }
+    let preflight = Command::new(&executable)
+        .arg("--is-encrypted")
+        .arg(&source)
+        .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())
+        .status().map_err(|e| format!("Unable to inspect PDF encryption: {e}"))?;
+    match preflight.code() {
+        Some(2) => {}
+        Some(0) => return Err("Already-encrypted PDFs require a separate owner-authorized workflow.".into()),
+        _ => return Err("qpdf could not establish that the source PDF is unencrypted.".into()),
+    }
+    let (user, owner) = {
+        let mut secrets = state.secrets.lock()
+            .map_err(|_| "MALENJO secret store is unavailable.".to_string())?;
+        let user = secrets.remove(&user_secret_token)
+            .ok_or_else(|| "User password token is missing or expired.".to_string())?;
+        let owner = secrets.remove(&owner_secret_token)
+            .ok_or_else(|| "Owner password token is missing or expired.".to_string())?;
+        (user, owner)
+    };
+    let source_str = source.to_str().ok_or_else(|| "PDF source path is not Unicode.".to_string())?;
+    let target_str = target.to_str().ok_or_else(|| "PDF destination path is not Unicode.".to_string())?;
+    let args = qpdf_permission_args(&user, &owner, &options, source_str, target_str)?;
+    let payload = args.join("\n") + "\n";
+    let mut child = Command::new(executable)
+        .arg("@-").stdin(Stdio::piped())
+        .stdout(Stdio::null()).stderr(Stdio::null())
+        .spawn().map_err(|e| format!("Unable to launch local qpdf: {e}"))?;
+    let written = child.stdin.take().ok_or_else(|| "qpdf argument pipe did not open.".to_string())?
+        .write_all(payload.as_bytes());
+    if written.is_err() {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err("Unable to supply qpdf permission options securely.".into());
+    }
+    let started = Instant::now();
+    let completed = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status.success(),
+            Ok(None) if started.elapsed() < Duration::from_secs(60) =>
+                thread::sleep(Duration::from_millis(80)),
+            _ => {
+                let _ = child.kill(); let _ = child.wait();
+                break false;
+            }
+        }
+    };
+    if !completed {
+        let _ = fs::remove_file(&target);
+        let _ = append_audit(&app, "qpdf-permissions", "error", source.display().to_string(),
+            "Permission-copy operation failed; source unchanged.");
+        return Err("Local qpdf permission-copy failed or timed out; original PDF unchanged.".into());
+    }
+    let output = fs::read(&target)
+        .map_err(|e| format!("Unable to read qpdf permission output: {e}"))?;
+    if output.len() < 5 || output.len() > 32 * 1024 * 1024 ||
+       !output.starts_with(b"%PDF-") {
+        let _ = fs::remove_file(&target);
+        return Err("qpdf permission output was missing or invalid.".into());
+    }
+    let is_encrypted = Command::new(&target_executable(&app)?)
+        .arg("--is-encrypted").arg(&target)
+        .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())
+        .status().map_err(|e| format!("Cannot check encrypted qpdf output: {e}"))?;
+    if is_encrypted.code() != Some(0) {
+        let _ = fs::remove_file(&target);
+        return Err("qpdf did not write an encrypted permissions-controlled PDF.".into());
+    }
+    let _ = append_audit(&app, "qpdf-permissions", "info", source.display().to_string(),
+        "Created a separate AES-256 PDF copy with configured viewer permissions.");
+    Ok(true)
+}
+
+fn target_executable(app: &AppHandle) -> Result<String, String> {
+    available_qpdf(app).map(|(path, _, _)| path)
+        .ok_or_else(|| "Local qpdf provider stopped being available.".to_string())
+}
+
+#[cfg(test)]
+mod qpdf_permissions_tests {
+    use super::{qpdf_permission_args, QpdfPermissionOptions};
+    fn settings() -> QpdfPermissionOptions {
+        QpdfPermissionOptions {
+            printing: "none".into(), modification: "none".into(),
+            allow_copy:false, allow_annotate:false, allow_form_fill:false,
+        }
+    }
+    #[test]
+    fn arguments_use_encryption_permissions_and_not_shell_commands() {
+        let args = qpdf_permission_args("reader", "owner-password-123", &settings(),
+            "C:/docs/input.pdf", "C:/docs/output.pdf").expect("valid options");
+        assert_eq!(args[0], "--encrypt");
+        assert_eq!(args[3], "--bits=256");
+        assert!(args.contains(&"--print=none".to_string()));
+        assert!(args.contains(&"--extract=n".to_string()));
+        assert_eq!(args[9], "--");
+        assert_eq!(args.len(), 12);
+    }
+    #[test]
+    fn rejects_linebreak_injection_weak_owner_and_invalid_permission_enum() {
+        assert!(qpdf_permission_args("", "short", &settings(), "a.pdf","b.pdf").is_err());
+        assert!(qpdf_permission_args("evil\n--decrypt", "owner-password-123", &settings(),"a.pdf","b.pdf").is_err());
+        let mut invalid = settings();
+        invalid.modification = "shell".into();
+        assert!(qpdf_permission_args("", "owner-password-123", &invalid,"a.pdf","b.pdf").is_err());
     }
 }
 

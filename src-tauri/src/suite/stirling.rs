@@ -601,7 +601,7 @@ fn parse_qpdf_version(output: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-fn available_qpdf(app: &AppHandle) -> Option<(String, String, String)> {
+pub(super) fn available_qpdf(app: &AppHandle) -> Option<(String, String, String)> {
     for (candidate, source) in qpdf_candidates(app) {
         let output = Command::new(&candidate)
             .arg("--version")

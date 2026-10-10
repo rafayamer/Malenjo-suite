@@ -21,7 +21,7 @@ use suite::{
     pdf::{read_pdf_document, write_pdf_copy, write_pdf_tool_output},
     security::{
         clamav_scan_document, clamav_status, clear_ephemeral_secret, list_audit_events,
-        pyhanko_sign_copy, pyhanko_status, pyhanko_validate_document, record_audit_event,
+        pyhanko_sign_copy, pyhanko_status, pyhanko_validate_document, qpdf_change_permissions_copy, record_audit_event,
         store_ephemeral_secret, SecurityState,
     },
     support::write_support_bundle,
@@ -83,6 +83,7 @@ pub fn run() {
             pyhanko_status,
             pyhanko_validate_document,
             pyhanko_sign_copy,
+            qpdf_change_permissions_copy,
             dms_list_records,
             dms_register_document,
             dms_snapshot_record,

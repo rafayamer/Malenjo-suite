@@ -65,3 +65,45 @@ export async function signPdfCopy(documentId: string, defaultName: string, passp
     await invoke<boolean>('clear_ephemeral_secret', { token }).catch(() => false);
   }
 }
+
+export interface PdfPermissionSettings{
+  printing:'none'|'low'|'full';
+  modification:'none'|'assembly'|'form'|'annotate'|'all';
+  allowCopy:boolean;
+  allowAnnotate:boolean;
+  allowFormFill:boolean;
+}
+/** Encrypt a separate saved library document via reviewed local qpdf.
+ * Passwords go to one-shot Rust secret tokens and then qpdf stdin @-,
+ * never to a process-command-line argument. */
+export async function changePdfPermissionsCopy(
+  documentId:string,defaultName:string,
+  ownerPassword:string,userPassword:string,
+  options:PdfPermissionSettings,
+):Promise<boolean>{
+  if(!isTauri())throw new Error('PDF permission changes require the native desktop qpdf provider.');
+  if(ownerPassword.length<10||ownerPassword.length>128||
+     userPassword.length>128||
+     (userPassword.length>0&&ownerPassword===userPassword)||
+     /[\r\n\u0000]/.test(ownerPassword+userPassword)){
+    throw new Error('Use a 10–128-character owner password distinct from the optional user password; line breaks are forbidden.');
+  }
+  const destination=await save({
+    title:'Save separate permissions-protected PDF',
+    defaultPath:defaultName.replace(/\.pdf$/i,'-restricted.pdf'),
+    filters:[{name:'PDF',extensions:['pdf']}],
+  });
+  if(!destination)return false;
+  let userToken:string|null=null,ownerToken:string|null=null;
+  try{
+    userToken=await invoke<string>('store_ephemeral_secret',{secret:userPassword});
+    ownerToken=await invoke<string>('store_ephemeral_secret',{secret:ownerPassword});
+    return await invoke<boolean>('qpdf_change_permissions_copy',{
+      documentId,userSecretToken:userToken,ownerSecretToken:ownerToken,
+      destination,options,
+    });
+  }finally{
+    if(userToken)await invoke('clear_ephemeral_secret',{token:userToken}).catch(()=>false);
+    if(ownerToken)await invoke('clear_ephemeral_secret',{token:ownerToken}).catch(()=>false);
+  }
+}
