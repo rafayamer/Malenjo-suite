@@ -43,6 +43,8 @@ import {convertMarkdownToPdf,MARKDOWN_TO_PDF_MAX_INPUT_BYTES} from './markdownTo
 import {convertHtmlToPdf,HTML_TO_PDF_MAX_INPUT_BYTES} from './htmlToPdf';
 import {exportPdfRasterEffect,PDF_RASTER_EFFECT_MAX_SOURCE_BYTES,type PdfRasterEffect} from './pdfRasterEffects';
 import {extractPdfImageScanPages} from './pdfScanExtraction';
+import {exportSearchablePdfFromLocalOcr,PDF_LOCAL_OCR_MAX_SOURCE_BYTES} from './pdfLocalOcr';
+import {getPaddleStatus} from '../scanner/ocr';
 import {parsePdfAutoRedactPatterns,redactPdfPagesByText,PDF_AUTO_REDACT_MAX_INPUT_BYTES} from './pdfAutoRedact';
 import {parseOfflinePdfPipeline,runOfflinePdfPipeline} from './pdfOfflinePipeline';
 import {convertPlainTextToPdf,TEXT_TO_PDF_MAX_INPUT_BYTES} from './plainTextToPdf';
@@ -759,6 +761,40 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }finally{setBusy(false);}
   }
 
+  async function saveLocalSearchableOcrPdf(){
+    if(!sourceBytes||busy)return;
+    const revision=sourceBytes;
+    setBusy(true);setError('');setNotice('');
+    let loaded:Awaited<ReturnType<typeof loadPdfBytes>>|null=null;
+    try{
+      if(revision.length<5||revision.byteLength>PDF_LOCAL_OCR_MAX_SOURCE_BYTES){
+        throw new Error('PDF OCR input must be 32 MB or smaller.');
+      }
+      if(!isDesktopRuntime()){
+        throw new Error('Local PDF OCR requires the native desktop runtime.');
+      }
+      const status=await getPaddleStatus();
+      if(!status.available){
+        throw new Error('No approved local PaddleOCR pack is installed: '+status.message+
+          ' No network/browser OCR fallback is used.');
+      }
+      loaded=await loadPdfBytes(revision);
+      const result=await exportSearchablePdfFromLocalOcr(revision,loaded.document,{
+        onProgress:(done,total)=>setNotice('OCR PDF page '+done+'/'+total+'…'),
+      });
+      if(activeSourceRef.current!==revision){
+        throw new Error('Working PDF changed while OCR ran; stale output will not be saved.');
+      }
+      const saved=await provider.saveResponse({
+        status:200,contentType:'application/pdf',bytes:Array.from(result.bytes),
+      },localExportStem(sourceName)+'-searchable-ocr');
+      setNotice(saved?'Saved rasterized searchable OCR PDF ('+result.pages.length+
+        ' pages) to '+saved+'. Review accuracy and selectable text before sharing.':
+        'OCR PDF export cancelled.');
+    }catch(reason){setError(reason instanceof Error?reason.message:String(reason));setNotice('');}
+    finally{await disposePdf(loaded);setBusy(false);}
+  }
+
   async function saveOfflinePageRedaction(){
     if(!sourceBytes||busy)return;
     let patterns:string[];
@@ -1429,7 +1465,14 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
       </div>
       <small>Loaded {outlineItems.length} bookmarks. After applying an edit, refresh the list for updated PDF object references. Nested subtree deletion requires the explicit checkbox.</small>
     </details>}
-    {category==='scan'&&sourceBytes&&<details className="stirling-component-details" aria-label="Extract image-only scanned PDF pages">
+    {category==='scan'&&sourceBytes&&<details className="stirling-component-details" aria-label="Offline searchable OCR PDF with local PaddleOCR">
+       <summary>Convert scanned PDF pages to searchable PDF (optional local OCR)</summary>
+       <p>Render up to 10 pages and recognize English text with an already installed local PaddleOCR worker. Export a separate, rasterized PDF with small selectable/searchable text; glyph positions and non-ASCII fonts are not reconstructed. This operation does not download models or use browser OCR fallback. The original working PDF remains unchanged. Manual review is essential.</p>
+       <button type="button" disabled={busy} onClick={()=>void saveLocalSearchableOcrPdf()}>
+         <FileOutput size={14}/>Run local English OCR and export searchable PDF
+       </button>
+     </details>}
+     {category==='scan'&&sourceBytes&&<details className="stirling-component-details" aria-label="Extract image-only scanned PDF pages">
        <summary>Extract scanned PDF page images (offline)</summary>
        <p>Detect pages with raster-image drawing operators and no selectable text, then export full rendered pages as PNG files in a ZIP. Filenames identify each original page. OCR-text-layer scans and individual embedded-image extraction are not covered by this conservative fallback.</p>
        <button type="button" disabled={busy} onClick={()=>void saveOfflineExtractedScans()}>
