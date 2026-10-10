@@ -70,7 +70,7 @@ export function parseOfflinePdfPipeline(json:string):PdfOfflinePipelineStep[]{
 }
 
 function rejectInteractivePdf(pdf:PDFDocument):void{
-  for(const key of ['Perms','AcroForm','Outlines','Names','PageLabels','StructTreeRoot']){
+  for(const key of ['Perms','AcroForm','Outlines','Names','PageLabels','StructTreeRoot','Metadata','OpenAction','AA','AF']){
     if(pdf.catalog.get(PDFName.of(key))){
       throw new Error('PDF contains '+key+' document structures; page automation is refused to avoid breaking interactive data.');
     }
@@ -110,17 +110,23 @@ export async function runOfflinePdfPipeline(
   // Re-parse a serialization of the plan to reject untrusted direct callers,
   // excess keys, sparse page arrays or accidental mutation.
   const validated=parseOfflinePdfPipeline(JSON.stringify(steps));
+  // pdf-lib's in-place removePage()/insertPage(existingPage) can leave a stale
+  // page-tree/cache order in the written output. Model edits as an immutable
+  // ordered plan and copy source pages into one new document after validation.
+  const original=pdf.getPages();
+  const ordered=original.map((page,sourceIndex)=>({
+    sourceIndex,rotation:page.getRotation().angle,
+  }));
   for(const [index,step] of validated.entries()){
-    const count=pdf.getPageCount();
+    const count=ordered.length;
     const valid=(number:number)=>number>=1&&number<=count;
     if(step.action==='move'){
       if(!valid(step.from)||!valid(step.to)){
         throw new Error('Pipeline move step '+(index+1)+' refers to a missing page.');
       }
       if(step.from!==step.to){
-        const page=pdf.getPage(step.from-1);
-        pdf.removePage(step.from-1);
-        pdf.insertPage(step.to-1,page);
+        const [page]=ordered.splice(step.from-1,1);
+        ordered.splice(step.to-1,0,page);
       }
     }else{
       if(step.pages.some(page=>!valid(page))){
@@ -131,20 +137,39 @@ export async function runOfflinePdfPipeline(
           throw new Error('Pipeline cannot delete every PDF page.');
         }
         for(const page of [...step.pages].sort((a,b)=>b-a)){
-          pdf.removePage(page-1);
+          ordered.splice(page-1,1);
         }
       }else{
         for(const number of step.pages){
-          const page=pdf.getPage(number-1);
-          page.setRotation(degrees((page.getRotation().angle+step.angle)%360));
+          const target=ordered[number-1];
+          target.rotation=(target.rotation+step.angle)%360;
         }
       }
     }
   }
-  const expected=pdf.getPages().map(page=>({
-    width:page.getWidth(),height:page.getHeight(),rotation:page.getRotation().angle,
+  const output=await PDFDocument.create();
+  // Rebuild only after all input checks pass. Recopying pages removes any
+  // input document-level references that are deliberately refused below.
+  const copies=await output.copyPages(pdf,ordered.map(item=>item.sourceIndex));
+  for(let index=0;index<ordered.length;index++){
+    const page=output.addPage(copies[index]);
+    page.setRotation(degrees(ordered[index].rotation));
+  }
+  // Preserve basic document information, without asserting XMP or advanced
+  // catalog feature support.
+  const title=pdf.getTitle(),author=pdf.getAuthor(),subject=pdf.getSubject();
+  const creator=pdf.getCreator(),producer=pdf.getProducer();
+  if(title!==undefined)output.setTitle(title);
+  if(author!==undefined)output.setAuthor(author);
+  if(subject!==undefined)output.setSubject(subject);
+  if(creator!==undefined)output.setCreator(creator);
+  if(producer!==undefined)output.setProducer(producer);
+  const expected=ordered.map(item=>({
+    width:original[item.sourceIndex].getWidth(),
+    height:original[item.sourceIndex].getHeight(),
+    rotation:item.rotation,
   }));
-  const bytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+  const bytes=Uint8Array.from(await output.save({useObjectStreams:false}));
   if(bytes.byteLength>PDF_OFFLINE_PIPELINE_MAX_SOURCE_BYTES){
     throw new Error('Offline pipeline result exceeds the 32 MB limit.');
   }
