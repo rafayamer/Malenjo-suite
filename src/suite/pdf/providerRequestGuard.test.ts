@@ -17,6 +17,10 @@ describe('renderer-side safe provider request bounds',()=>{
     expect(()=>validatePdfUploadPlan([{name:'a.pdf',size:-1}])).toThrow(/nonnegative/);
     expect(()=>validatePdfUploadPlan([{name:'a.pdf',size:NaN}])).toThrow(/nonnegative/);
     expect(()=>validatePdfUploadPlan([{name:'x'.repeat(513),size:1}])).toThrow(/name/);
+    for(const name of ['../secret.pdf','folder/file.pdf','folder\\\\file.pdf','C:secret.pdf','..','report\\u0000.pdf','a\\n.pdf']){
+      expect(()=>validatePdfUploadPlan([{name,size:1}])).toThrow(/name/);
+    }
+    expect(()=>validatePdfUploadPlan([{name:'MALENJO résumé 你好.pdf',size:1}])).not.toThrow();
     expect(()=>validatePdfUploadPlan(Array.from({length:65},(_,i)=>({name:String(i),size:1})))).toThrow(/64/);
   });
   it('validates numeric and enumeration schema constraints',()=>{
