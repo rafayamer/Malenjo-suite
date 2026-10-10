@@ -4,7 +4,7 @@
 
 ## Decision
 
-**Full PDF parity release is blocked.** Exactly 90 handoff requirements are enumerated; **0 carry complete acceptance evidence**. There are 57 native/source-backed partial foundations plus 19 source-audited provider-dispatch-only partial integrations (76 partial total), with 14 implementation-source-unaudited requirements. The eight newly source-mapped native workflows remain partial: they are bounded feature subsets, not Windows-accepted upstream equivalence. The passing CI pipeline proves builds, tests and a subset of provider smoke routes, not the whole Windows installer + UI end-to-end matrix. The `tauri:release` command now fails closed until all 90 requirements have explicit acceptance evidence. Ordinary development builds remain possible.
+**Full PDF parity release is blocked.** Exactly 90 handoff requirements are enumerated; **0 carry complete acceptance evidence**. There are 59 native/source-backed partial foundations plus 18 source-audited provider-dispatch-only partial integrations (77 partial total), with 13 implementation-source-unaudited requirements. New page-level redaction and bookmark chapter splitting are bounded native feature subsets, not Windows-accepted upstream equivalence. The passing CI pipeline proves builds, tests and a subset of provider smoke routes, not the whole Windows installer + UI end-to-end matrix. The `tauri:release` command now fails closed until all 90 requirements have explicit acceptance evidence. Ordinary development builds remain possible.
 
 The review's two PNG defects have implementation-level fixes in `pngIntegrity.ts` with Adam7/filter/palette positive and negative tests. This is not enough to accept PDF-to-images or extract-images as end-to-end workflows without live output saved and reopened on Windows.
 
@@ -14,7 +14,7 @@ The review's two PNG defects have implementation-level fixes in `pngIntegrity.ts
 |---|---:|---:|---:|
 | page | 18 | 18 | 0 |
 | conversion | 24 | 20 | 4 |
-| security | 16 | 11 | 5 |
+| security | 16 | 12 | 4 |
 | scan-extraction | 6 | 5 | 1 |
 | editing-analysis | 10 | 10 | 0 |
 | forms | 4 | 4 | 0 |
@@ -40,7 +40,7 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 | 12 | `booklet-imposition` | Native vector spread partial | No matching execution proof | Partial; advanced printing and Windows acceptance pending |
 | 13 | `overlay-pdf` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
 | 14 | `split-pdf-by-sections` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
-| 15 | `split-pdf-by-chapters` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
+| 15 | `split-pdf-by-chapters` | Native bookmark-based chapter ZIP partial + provider selector | Native generated-PDF reopen tests; Windows GUI unverified | Partial; named destinations, interactive content and release acceptance pending |
 | 16 | `auto-split-pdf` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
 | 17 | `split-by-size-or-count` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 18 | `add-attachments` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
@@ -83,7 +83,7 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 | 55 | `validate-signature` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 56 | `verify-pdf` | Native read-only preflight partial | No matching execution proof | Partial; full feature semantics and Windows acceptance pending |
 | 57 | `redact` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
-| 58 | `auto-redact` | Pinned API route only | No matching execution proof | Not audited; implementation and acceptance pending |
+| 58 | `auto-redact` | Native entire-page text-match blackout partial | Native generated-PDF reopen tests; Windows GUI unverified | Partial; no word-level/OCR redaction or full release acceptance |
 | 59 | `extract-images` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
 | 60 | `extract-image-scans` | Native image-only page PNG ZIP partial | No matching execution proof | Partial; embedded image extraction and OCR-layer scan detection pending |
 | 61 | `remove-image-pdf` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
@@ -117,7 +117,7 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 | 89 | `dev-airgapped-docs` | Frontend-only alias | No matching execution proof | Not audited; implementation and acceptance pending |
 | 90 | `handleData` | Pinned controller only | No matching execution proof | Not audited; implementation and acceptance pending |
 
-The new bounded offline HTML, page-raster, scan extraction and page-pipeline workflows have source and automated test mappings. They are **partial** and require iterative user diagnosis, fidelity extensions, and later Windows validation; this inventory does not certify implementation completeness or release readiness.
+The new bounded offline HTML, page-raster, scan extraction, page-pipeline, automatic whole-page redaction and chapter splitting workflows have source and automated test mappings. They are **partial** and require iterative user diagnosis, fidelity extensions, and later Windows validation; this inventory does not certify implementation completeness or release readiness.
 
 ## Mandatory per-feature acceptance record
 
