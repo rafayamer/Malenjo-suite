@@ -1,6 +1,7 @@
-import {describe,expect,it} from 'vitest';
+import {describe,expect,it,vi} from 'vitest';
+import {unzipSync} from 'fflate';
 import {OPS} from 'pdfjs-dist';
-import {findPdfScanPageNumbers} from './pdfScanExtraction';
+import {findPdfScanPageNumbers,extractPdfImageScanPages} from './pdfScanExtraction';
 
 const imageOp=(OPS as Record<string,number>).paintImageXObject;
 function page(text:string,ops:number[]){
@@ -43,5 +44,37 @@ describe('image-only PDF scan page detection',()=>{
     controller.abort();
     await expect(findPdfScanPageNumbers(documentWithPages([page('',[imageOp])]),
       {signal:controller.signal})).rejects.toMatchObject({name:'AbortError'});
+  });
+});
+
+describe('scan export ZIP with actual PNG bytes',()=>{
+  it('saves only image-only PDF pages under their original source page numbers',async()=>{
+    // A known one-pixel PNG with corrected IDAT CRC (the common minimal
+    // fixture has a corrupt CRC and is intentionally NOT reused here).
+    const base64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=';
+    const png=Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
+    const canvas={
+      width:0,height:0,
+      getContext:()=>({}),
+      toBlob:(done:(value:Blob)=>void)=>{
+        const safe=new Uint8Array(new ArrayBuffer(png.byteLength));safe.set(png);
+        done(new Blob([safe],{type:'image/png'}));
+      },
+    };
+    vi.stubGlobal('document',{createElement:()=>canvas});
+    try{
+      const scanPage={
+        ...page('',[imageOp]),
+        getViewport:()=>({width:1,height:1}),
+        render:()=>({promise:Promise.resolve(),cancel:()=>{}}),
+      };
+      const mixed=documentWithPages([page('title',[]),scanPage,page('caption',[imageOp])]);
+      const result=await extractPdfImageScanPages(mixed);
+      expect(result.originalPages).toEqual([2]);
+      const files=unzipSync(result.archive);
+      expect(Object.keys(files)).toEqual(['scan-original-page-0002.png']);
+      expect(files['scan-original-page-0002.png']).toEqual(png);
+      expect(canvas.width).toBe(0);expect(canvas.height).toBe(0);
+    }finally{vi.unstubAllGlobals();}
   });
 });
