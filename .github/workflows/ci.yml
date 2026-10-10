@@ -26,7 +26,16 @@ jobs:
         run: npm install --no-audit --no-fund
       - run: npm run typecheck
       - run: npm test
+      - run: npm run test:pdf-release-gate
       - run: npm run build
+      - name: Publish PDF release-readiness evidence (does not bypass release gate)
+        shell: pwsh
+        run: node scripts/pdf-release-readiness.mjs --json > pdf-release-readiness.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-release-readiness
+          path: pdf-release-readiness.json
+          retention-days: 14
 
   rust:
     runs-on: windows-latest
@@ -75,6 +84,19 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
+      - name: Build pinned Temurin runtime for fully offline PDF processing
+        shell: pwsh
+        run: |
+          ./scripts/build-temurin-runtime-windows.ps1
+          $manifest = Get-Content 'runtime/java/malenjo-runtime-manifest.json' -Raw | ConvertFrom-Json
+          if ($manifest.version -ne '25.0.4.1+1' -or
+              $manifest.archiveSha256 -ne '00c847d804f4a78e9f04f2683faf14fed898535b177b7fc704486cb0284e9283') {
+            throw 'The Java runtime does not match the reviewed pinned Windows release.'
+          }
+          if (!(Test-Path 'runtime/java/legal/java.base/LICENSE') -or
+              !(Test-Path 'runtime/java/bin/java.exe')) {
+            throw 'The bundled runtime or its required GPL/ClassPath license text is missing.'
+          }
       - name: Build approved qpdf Windows provider pack
         shell: pwsh
         run: |
@@ -285,10 +307,17 @@ jobs:
             throw "Generated Stirling dependency-license report does not contain the embedded Office converter."
           }
           $null = $licenseText | ConvertFrom-Json
+      - name: Verify offline Windows installer bundle prerequisites
+        shell: pwsh
+        run: |
+          node scripts/verify-offline-runtime.mjs --windows
+          if ($LASTEXITCODE -ne 0) { throw 'Windows release package prerequisite check failed.' }
       - name: Smoke-test local Windows PDF provider
         shell: pwsh
         run: |
-          $java = (Get-Command java).Source
+          # Exercise the exact Java executable packaged into MALENJO, not
+          # the CI host's preinstalled Temurin. This is the offline delivery gate.
+          $java = (Resolve-Path "runtime/java/bin/java.exe").Path
           $curl = (Get-Command curl.exe).Source
           $jar = Resolve-Path "provider-packs/stirling-core/stirling-pdf.jar"
           $qpdf = Get-ChildItem "provider-packs/qpdf/runtime" -Recurse -File -Filter "qpdf.exe" | Select-Object -First 1
@@ -356,7 +385,79 @@ jobs:
             & $qpdf.FullName --check $fixture
             if ($LASTEXITCODE -ne 0) { throw "Generated PDF smoke fixture failed qpdf validation." }
 
+            # Positive end-to-end test of pinned Stirling's actual controller:
+            # send a real PDF, validate the rewritten bytes, and inspect the
+            # persisted metadata through a second independent parser (qpdf).
+            $metadataOut = Join-Path (Resolve-Path ".build/provider-smoke") "updated-metadata.pdf"
+            & $curl --fail --silent --show-error -o $metadataOut `
+              -F "fileInput=@$fixture;type=application/pdf" `
+              -F "title=MALENJO Offline Metadata Smoke" `
+              -F "author=MALENJO Runtime" `
+              -F "subject=Local PDF engine verification" `
+              -F "keywords=offline, metadata" `
+              "$providerBase/api/v1/misc/update-metadata"
+            if ($LASTEXITCODE -ne 0) { throw "Stirling update-metadata endpoint failed to process a real PDF." }
+            & $qpdf.FullName --check $metadataOut
+            if ($LASTEXITCODE -ne 0) { throw "Stirling updated-metadata output cannot be reopened by qpdf." }
+            $pages = (& $qpdf.FullName --show-npages $metadataOut | Out-String).Trim()
+            if ($LASTEXITCODE -ne 0 -or $pages -ne '1') {
+              throw "Stirling update-metadata changed or damaged the original page count."
+            }
+            $metaJson = (& $qpdf.FullName --json=1 --json-key=objects $metadataOut | Out-String)
+            if ($LASTEXITCODE -ne 0 -or
+                $metaJson -notmatch 'MALENJO Offline Metadata Smoke' -or
+                $metaJson -notmatch 'MALENJO Runtime') {
+              throw "Stirling update-metadata output does not persist the expected document metadata."
+            }
+
+            # Real merge/split round-trip using the pinned Windows Stirling core.
+            # These checks validate PDF page counts and actual ZIP members,
+            # not just HTTP status codes or a response content type.
+            $mergeOut = Join-Path (Resolve-Path ".build/provider-smoke") "merged-two-pages.pdf"
+            & $curl --fail --silent --show-error -o $mergeOut `
+              -F "fileInput=@$fixture;filename=first.pdf;type=application/pdf" `
+              -F "fileInput=@$fixture;filename=second.pdf;type=application/pdf" `
+              "$providerBase/api/v1/general/merge-pdfs"
+            if ($LASTEXITCODE -ne 0) { throw "Stirling merge-pdfs failed on two real documents." }
+            & $qpdf.FullName --check $mergeOut
+            if ($LASTEXITCODE -ne 0) { throw "Stirling merge-pdfs produced an invalid PDF." }
+            $mergedPageCount = (& $qpdf.FullName --show-npages $mergeOut | Out-String).Trim()
+            if ($LASTEXITCODE -ne 0 -or $mergedPageCount -ne '2') {
+              throw "Stirling merge-pdfs output has $mergedPageCount pages; expected 2."
+            }
+
+            $splitZip = Join-Path (Resolve-Path ".build/provider-smoke") "split-two-pages.zip"
+            & $curl --fail --silent --show-error -o $splitZip `
+              -F "fileInput=@$mergeOut;type=application/pdf" `
+              -F "pageNumbers=all" `
+              "$providerBase/api/v1/general/split-pages"
+            if ($LASTEXITCODE -ne 0) { throw "Stirling split-pages failed on a merged PDF." }
+
             Add-Type -AssemblyName System.IO.Compression.FileSystem
+            $splitDir = Join-Path (Resolve-Path ".build/provider-smoke") "split-pages"
+            New-Item -ItemType Directory -Force -Path $splitDir | Out-Null
+            $splitArchive = [System.IO.Compression.ZipFile]::OpenRead($splitZip)
+            try {
+              $pdfEntries = @($splitArchive.Entries | Where-Object { $_.FullName -match '\.pdf$' })
+              if ($pdfEntries.Count -ne 2 -or $splitArchive.Entries.Count -ne 2) {
+                throw "Split-pages did not return exactly two PDF documents."
+              }
+              $index = 0
+              foreach ($entry in $pdfEntries) {
+                $index++
+                $extracted = Join-Path $splitDir ("page-" + $index + ".pdf")
+                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $extracted)
+                & $qpdf.FullName --check $extracted
+                if ($LASTEXITCODE -ne 0) { throw "Split-pages member $index is not a valid PDF." }
+                $memberPages = (& $qpdf.FullName --show-npages $extracted | Out-String).Trim()
+                if ($LASTEXITCODE -ne 0 -or $memberPages -ne '1') {
+                  throw "Split-pages member $index contains $memberPages pages; expected 1."
+                }
+              }
+            } finally {
+              $splitArchive.Dispose()
+            }
+
             function Assert-ZipEntry([string]$Path, [string]$Entry) {
               $zip = [System.IO.Compression.ZipFile]::OpenRead($Path)
               try {
@@ -419,6 +520,84 @@ jobs:
               if ($xlsxText -notmatch [regex]::Escape($expectedCell)) {
                 throw "PDF-to-XLSX output did not preserve expected table value '$expectedCell'."
               }
+            }
+
+            # Three additional 20-batch routes: exercise real Windows
+            # Java/PDFBox output, reopen with qpdf and verify page count.
+            # Parameters are taken from the pinned upstream smoke fixture.
+            $scaleOut = Join-Path (Resolve-Path ".build/provider-smoke") "scaled-a4.pdf"
+            & $curl --fail --silent --show-error -o $scaleOut `
+              -F "fileInput=@$fixture;type=application/pdf" -F "pageSize=A4" `
+              "$providerBase/api/v1/general/scale-pages"
+            if ($LASTEXITCODE -ne 0) { throw "Scale-pages failed on the pinned smoke fixture." }
+
+            $layoutOut = Join-Path (Resolve-Path ".build/provider-smoke") "layout-n-up.pdf"
+            & $curl --fail --silent --show-error -o $layoutOut `
+              -F "fileInput=@$mergeOut;type=application/pdf" -F "pagesPerSheet=2" `
+              "$providerBase/api/v1/general/multi-page-layout"
+            if ($LASTEXITCODE -ne 0) { throw "Multi-page layout failed on the pinned smoke fixture." }
+
+            $cropOut = Join-Path (Resolve-Path ".build/provider-smoke") "cropped.pdf"
+            & $curl --fail --silent --show-error -o $cropOut `
+              -F "fileInput=@$fixture;type=application/pdf" -F "x=0" -F "y=0" -F "width=100" -F "height=100" `
+              "$providerBase/api/v1/general/crop"
+            if ($LASTEXITCODE -ne 0) { throw "Crop failed on the pinned smoke fixture." }
+
+            function Assert-TransformedPdf([string]$Document, [int]$ExpectedPages) {
+              & $qpdf.FullName --check $Document
+              if ($LASTEXITCODE -ne 0) { throw "Provider output cannot reopen in qpdf: $Document" }
+              $count = (& $qpdf.FullName --show-npages $Document | Out-String).Trim()
+              if ($LASTEXITCODE -ne 0 -or [int]$count -ne $ExpectedPages) {
+                throw "Unexpected transformed page count in $Document; expected $ExpectedPages, got $count"
+              }
+              $raw = (& $qpdf.FullName --json=1 --json-key=pages --json-key=objects $Document | Out-String)
+              if ($LASTEXITCODE -ne 0) { throw "Unable to inspect PDF page geometry in $Document" }
+              return ($raw | ConvertFrom-Json)
+            }
+            function First-PageBox($DocumentJson, [string]$DocumentPath, [string]$BoxName) {
+              # qpdf --json-key=objects does not guarantee that the page
+              # dictionaries are included; inspect the page reference directly.
+              $pageObj = [string]$DocumentJson.pages[0].object
+              if ([string]::IsNullOrWhiteSpace($pageObj)) {
+                throw "qpdf did not report a page object for $DocumentPath"
+              }
+              $objectRef = [regex]::Match($pageObj, '^\s*(\d+)\s+(\d+)\s+R\s*$')
+              if (-not $objectRef.Success) {
+                throw "Unexpected qpdf page reference '$pageObj' in $DocumentPath"
+              }
+              # qpdf JSON references are '3 0 R', but the CLI requires '3,0'.
+              $objectSpec = "$($objectRef.Groups[1].Value),$($objectRef.Groups[2].Value)"
+              $dictionary = (& $qpdf.FullName "--show-object=$objectSpec" $DocumentPath | Out-String)
+              if ($LASTEXITCODE -ne 0) {
+                throw "qpdf could not inspect page object $pageObj in $DocumentPath"
+              }
+              $pattern = [regex]::Escape($BoxName) + '\s*\[\s*([-+]?\d+(?:\.\d+)?)\s+([-+]?\d+(?:\.\d+)?)\s+([-+]?\d+(?:\.\d+)?)\s+([-+]?\d+(?:\.\d+)?)\s*\]'
+              $matched = [regex]::Match($dictionary, $pattern)
+              if (-not $matched.Success) { return $null }
+              return @(
+                [double]::Parse($matched.Groups[1].Value,[Globalization.CultureInfo]::InvariantCulture),
+                [double]::Parse($matched.Groups[2].Value,[Globalization.CultureInfo]::InvariantCulture),
+                [double]::Parse($matched.Groups[3].Value,[Globalization.CultureInfo]::InvariantCulture),
+                [double]::Parse($matched.Groups[4].Value,[Globalization.CultureInfo]::InvariantCulture)
+              )
+            }
+            $scaled = Assert-TransformedPdf $scaleOut 1
+            $scaledMedia = First-PageBox $scaled $scaleOut "/MediaBox"
+            if ($null -eq $scaledMedia -or
+                [Math]::Abs([double]$scaledMedia[2] - 595.28) -gt 2 -or
+                [Math]::Abs([double]$scaledMedia[3] - 841.89) -gt 2) {
+              throw "Scale-pages output did not change 200x200 fixture to A4"
+            }
+            $layout = Assert-TransformedPdf $layoutOut 1
+            # Two-page input must become one page, not be returned unchanged.
+            $null = First-PageBox $layout $layoutOut "/MediaBox"
+            $cropped = Assert-TransformedPdf $cropOut 1
+            $cropBox = First-PageBox $cropped $cropOut "/CropBox"
+            if ($null -eq $cropBox) { $cropBox = First-PageBox $cropped $cropOut "/MediaBox" }
+            if ($null -eq $cropBox -or
+                [Math]::Abs([double]$cropBox[2] - [double]$cropBox[0] - 100) -gt 1 -or
+                [Math]::Abs([double]$cropBox[3] - [double]$cropBox[1] - 100) -gt 1) {
+              throw "Crop output does not have the requested 100x100 visible page"
             }
 
             $repairOut = Join-Path (Resolve-Path ".build/provider-smoke") "repair.pdf"

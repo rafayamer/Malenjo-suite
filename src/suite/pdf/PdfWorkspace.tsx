@@ -25,6 +25,7 @@ import type { RegisterDocumentCommands } from '../commands/types';
 import { isDesktopRuntime } from '../files/api';
 import { exportPdfBytes, exportPdfPlainText, exportPdfEmbeddedAttachment, exportPdfPageImagesZip, readPdfDocumentBytes } from './api';
 import { exportPdfPagesAsPngZip } from './pageImageExport';
+import {finishPdfInstallCommit} from './pdfInstallCommit';
 import {
   comparePdfSelectableText, formatPdfTextComparison, type PdfTextComparison,
 } from './textCompare';
@@ -107,6 +108,7 @@ import PdfPageCanvas from './PdfPageCanvas';
 import PdfThumbnail from './PdfThumbnail';
 import PdfProviderToolsPanel from './PdfProviderToolsPanel';
 import { defaultPdfToolProvider } from './defaultProvider';
+import { ensurePdfProviderRunning } from './providerLifecycle';
 import type { PdfProviderToolCategory } from './backend';
 import { pdfViewPages, type PdfViewMode } from './viewMode';
 import { useScrollFps } from './useScrollFps';
@@ -185,6 +187,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const selectionAnchorRef = useRef<number | null>(null);
   const activeLoadRef = useRef<PdfLoadResult | null>(null);
   const requestIdRef = useRef(0);
+  // A replacement is reserved immediately at load start, before PDF.js has
+  // finished parsing. Async provider results must not overtake this request.
+  const replacementPendingRef=useRef(false);
+  const mutationPendingRef=useRef(false);
   const loadStartedRef = useRef(0);
   const firstPageReportedRef = useRef(false);
   const previewIdRef = useRef(`pdf-preview-${Math.random().toString(36).slice(2)}`);
@@ -196,6 +202,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
   const [pdf, setPdf] = useState<PdfLoadResult | null>(null);
   const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
+  // Updated at the same instant a new PDF is installed, before React renders.
+  // Provider operations must not apply a result from an older working copy.
+  const currentPdfBytesRef=useRef<Uint8Array|null>(null);
   const [sourceName, setSourceName] = useState('PDF Workspace');
   const [browserFile, setBrowserFile] = useState<File | null>(null);
   const [pageCount, setPageCount] = useState(0);
@@ -349,8 +358,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     name: string,
     file: File | null = null,
     preserveDirty = false,
+    onCommitted?:()=>void,
   ) => {
     const requestId = ++requestIdRef.current;
+    replacementPendingRef.current=true;
     setLoading(true);
     setError('');
     setActionNotice('');
@@ -371,6 +382,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setPdf(result);
       comparisonAbortRef.current?.abort();
       setComparisonResult(null);
+      currentPdfBytesRef.current=owned;
       setSourceBytes(owned);
       setBrowserFile(file);
       setSourceName(name);
@@ -390,13 +402,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         historyRef.current=createPdfHistory(owned,1);
         setHistoryRevision((value)=>value+1);
       }
-      // The new PDF is now active. A previous worker's teardown failure must
-      // not roll back a successful installation or leave a destroyed PDF active.
-      try {
-        await disposePdf(previousLoad);
-      } catch {
-        // Best-effort old-worker cleanup; retain the successfully loaded PDF.
-      }
+      finishPdfInstallCommit(onCommitted,()=>disposePdf(previousLoad));
       return true;
     } catch (reason) {
       if (requestId === requestIdRef.current) {
@@ -406,7 +412,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       }
       return false;
     } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
+      if(requestId===requestIdRef.current){
+        replacementPendingRef.current=false;
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -440,6 +449,19 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
     return () => { cancelled = true; };
   }, [installPdf, session?.id]);
+
+  // Render the PDF immediately; warm up the reviewed offline processor
+  // independently so no user-facing Start Provider step is required.
+  // In browser/Codespaces preview the native sidecar is unavailable and is
+  // deliberately never started.
+  const hasLoadedPdf=Boolean(sourceBytes);
+  useEffect(()=>{
+    if(!active||!hasLoadedPdf||!isDesktopRuntime())return;
+    void ensurePdfProviderRunning(defaultPdfToolProvider).catch(()=>{
+      // Keep the document reader usable. Provider panel shows actionable
+      // diagnostics if the optional processing engine cannot start.
+    });
+  },[active,hasLoadedPdf]);
 
   useEffect(() => () => {
     requestIdRef.current += 1;
@@ -538,28 +560,42 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     operation:(bytes:Uint8Array)=>Promise<Uint8Array>,
     preferredPage=currentPage,
   ):Promise<boolean>{
-    if(!sourceBytes||mutating)return false;
+    if(!sourceBytes||mutating||mutationPendingRef.current||
+      replacementPendingRef.current||currentPdfBytesRef.current!==sourceBytes)return false;
+    // Snapshot the replacement counter before awaiting any document processing.
+    // It changes at the START of installPdf, not only after PDF.js parsing.
+    const sourceRevision=requestIdRef.current;
+    mutationPendingRef.current=true;
     setMutating(true);
     setError('');
     try{
       const result=await operation(Uint8Array.from(sourceBytes));
+      if(currentPdfBytesRef.current!==sourceBytes||
+        requestIdRef.current!==sourceRevision||replacementPendingRef.current){
+        throw new Error('This PDF changed or began loading another version while the tool was running. The older result was not applied.');
+      }
       const targetPage=Math.max(1,preferredPage);
-      if (!await installPdf(result,sourceName,browserFile,true)) return false;
-      historyRef.current=historyRef.current
-        ? recordPdfHistory(historyRef.current,result,targetPage,label)
-        : recordPdfHistory(createPdfHistory(sourceBytes,currentPage),result,targetPage,label);
-      setHistoryRevision((value)=>value+1);
-      setCurrentPage(targetPage);
-      setSelectedPages(new Set([targetPage]));
-      selectionAnchorRef.current=targetPage;
-      setDirty(true);
-      onDirtyChange?.(true);
-      setActionNotice(label);
-      return true;
+      // The synchronous commit callback runs before installPdf returns and
+      // before any old-worker cleanup. Later failed loads cannot leave
+      // mutated PDF bytes visible without their corresponding undo entry.
+      const installed=await installPdf(result,sourceName,browserFile,true,()=>{
+        historyRef.current=historyRef.current
+          ? recordPdfHistory(historyRef.current,result,targetPage,label)
+          : recordPdfHistory(createPdfHistory(sourceBytes,currentPage),result,targetPage,label);
+        setHistoryRevision((value)=>value+1);
+        setCurrentPage(targetPage);
+        setSelectedPages(new Set([targetPage]));
+        selectionAnchorRef.current=targetPage;
+        setDirty(true);
+        onDirtyChange?.(true);
+        setActionNotice(label);
+      });
+      return installed;
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
       return false;
     }finally{
+      mutationPendingRef.current=false;
       setMutating(false);
     }
   }
@@ -595,74 +631,67 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     const files=Array.from(event.target.files??[]);
     event.target.value='';
     if(!files.length||!sourceBytes)return;
-    setMutating(true);
-    setError('');
-    try{
-      let result=Uint8Array.from(sourceBytes);
+    // Reuse the transactional edit lane so a slower multi-file append cannot
+    // overwrite a document load or another user edit that began later.
+    await mutate(`Appended ${files.length} PDF file(s).`,async(bytes)=>{
+      let result=bytes;
       for(const file of files){
         if(file.size>512*1024*1024)throw new Error(`${file.name} exceeds the 512 MB safety limit.`);
-        const merged=await appendPdf(result,new Uint8Array(await file.arrayBuffer()));
-        const owned=new Uint8Array(merged.byteLength);
-        owned.set(merged);
-        result=owned;
+        result=Uint8Array.from(await appendPdf(result,new Uint8Array(await file.arrayBuffer())));
       }
-      const label=`Appended ${files.length} PDF file(s).`;
-      if (!await installPdf(result,sourceName,browserFile,true)) return;
-      historyRef.current=historyRef.current
-        ? recordPdfHistory(historyRef.current,result,currentPage,label)
-        : recordPdfHistory(createPdfHistory(sourceBytes,currentPage),result,currentPage,label);
-      setHistoryRevision((value)=>value+1);
-      setDirty(true);
-      onDirtyChange?.(true);
-      setActionNotice(label);
-    }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
-    }finally{
-      setMutating(false);
-    }
+      return result;
+    },currentPage);
   }
 
   async function undoEdit(){
     const history=historyRef.current;
-    if(!history||mutating||!canUndoPdfHistory(history))return;
+    if(!history||mutating||mutationPendingRef.current||replacementPendingRef.current||
+      currentPdfBytesRef.current!==sourceBytes||!canUndoPdfHistory(history))return;
     const undoneLabel=history.entries[history.cursor]?.label??'PDF edit';
     const transition=undoPdfHistory(history);
     if(!transition.changed)return;
+    mutationPendingRef.current=true;
     setMutating(true);
     setError('');
     try{
-      if (!await installPdf(transition.entry.bytes,sourceName,browserFile,true)) return;
-      historyRef.current=transition.history;
-      setHistoryRevision((value)=>value+1);
-      setCurrentPage(transition.entry.page);
-      setDirty(transition.entry.dirty);
-      onDirtyChange?.(transition.entry.dirty);
-      setActionNotice(`Undid: ${undoneLabel}`);
+      await installPdf(transition.entry.bytes,sourceName,browserFile,true,()=>{
+        historyRef.current=transition.history;
+        setHistoryRevision((value)=>value+1);
+        setCurrentPage(transition.entry.page);
+        setDirty(transition.entry.dirty);
+        onDirtyChange?.(transition.entry.dirty);
+        setActionNotice(`Undid: ${undoneLabel}`);
+      });
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
+      mutationPendingRef.current=false;
       setMutating(false);
     }
   }
 
   async function redoEdit(){
     const history=historyRef.current;
-    if(!history||mutating||!canRedoPdfHistory(history))return;
+    if(!history||mutating||mutationPendingRef.current||replacementPendingRef.current||
+      currentPdfBytesRef.current!==sourceBytes||!canRedoPdfHistory(history))return;
     const transition=redoPdfHistory(history);
     if(!transition.changed)return;
+    mutationPendingRef.current=true;
     setMutating(true);
     setError('');
     try{
-      if (!await installPdf(transition.entry.bytes,sourceName,browserFile,true)) return;
-      historyRef.current=transition.history;
-      setHistoryRevision((value)=>value+1);
-      setCurrentPage(transition.entry.page);
-      setDirty(transition.entry.dirty);
-      onDirtyChange?.(transition.entry.dirty);
-      setActionNotice(`Redid: ${transition.entry.label}`);
+      await installPdf(transition.entry.bytes,sourceName,browserFile,true,()=>{
+        historyRef.current=transition.history;
+        setHistoryRevision((value)=>value+1);
+        setCurrentPage(transition.entry.page);
+        setDirty(transition.entry.dirty);
+        onDirtyChange?.(transition.entry.dirty);
+        setActionNotice(`Redid: ${transition.entry.label}`);
+      });
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
+      mutationPendingRef.current=false;
       setMutating(false);
     }
   }
@@ -2173,7 +2202,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       sourceBytes={sourceBytes}
       sourceName={sourceName}
       category={providerCategory}
-      onApplyPdf={(label,bytes)=>mutateAction(label,async()=>bytes,currentPage)}
+      onApplyPdf={(label,bytes,expectedSource)=>{
+        if(currentPdfBytesRef.current!==expectedSource||sourceBytes!==expectedSource||
+          replacementPendingRef.current||mutationPendingRef.current){
+          return false;
+        }
+        return mutate(label,async()=>bytes,currentPage);
+      }}
     />}
 
     {(notice || actionNotice) && <div className="pdf-notice">{notice || actionNotice}</div>}

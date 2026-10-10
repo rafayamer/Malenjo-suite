@@ -18,6 +18,7 @@ const STIRLING_BASE_URL: &str = "http://127.0.0.1:28970";
 const STIRLING_HEALTH_PATH: &str = "/api/v1/info/health";
 const STIRLING_OPENAPI_PATH: &str = "/v1/api-docs";
 const START_TIMEOUT: Duration = Duration::from_secs(75);
+const HEALTH_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
 const MAX_INPUT_BYTES: usize = 512 * 1024 * 1024;
 const MAX_OUTPUT_BYTES: usize = 512 * 1024 * 1024;
@@ -25,6 +26,28 @@ const MAX_OUTPUT_BYTES: usize = 512 * 1024 * 1024;
 struct OwnedStirlingProcess {
     child: Child,
     context_path: String,
+}
+
+impl Drop for OwnedStirlingProcess {
+    fn drop(&mut self) {
+        // Only terminate the JVM owned by this application, never a foreign port listener.
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+pub fn stop_owned_provider_on_exit() {
+    if let Ok(mut guard) = process_slot().lock() {
+        *guard = None;
+    }
+}
+
+// Native Tauri commands can arrive concurrently from multiple windows/tabs.
+// Serialize the complete spawn-and-health-check sequence, not only Child
+// assignment, so only one owned loopback Stirling process is ever launched.
+fn startup_lock() -> &'static tokio::sync::Mutex<()> {
+    static START: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+    START.get_or_init(|| tokio::sync::Mutex::new(()))
 }
 
 fn process_slot() -> &'static Mutex<Option<OwnedStirlingProcess>> {
@@ -83,13 +106,8 @@ pub struct StirlingResponse {
 fn java_candidates(app: &AppHandle) -> Vec<String> {
     let mut candidates = Vec::new();
 
-    if let Ok(value) = env::var("MALENJO_JAVA_BIN") {
-        let trimmed = value.trim();
-        if !trimmed.is_empty() {
-            candidates.push(trimmed.to_string());
-        }
-    }
-
+    // Production always prefers the exact runtime bundled in MALENJO,
+    // rather than silently selecting an unrelated system Java version.
     if let Ok(resource_dir) = app.path().resource_dir() {
         let bundled = if cfg!(windows) {
             resource_dir.join("runtime/java/bin/java.exe")
@@ -98,6 +116,15 @@ fn java_candidates(app: &AppHandle) -> Vec<String> {
         };
         if bundled.is_file() {
             candidates.push(bundled.to_string_lossy().to_string());
+        }
+    }
+
+    // Overrides remain useful for development and explicit diagnostics.
+    // They cannot shadow an installed, tested bundled release runtime.
+    if let Ok(value) = env::var("MALENJO_JAVA_BIN") {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            candidates.push(trimmed.to_string());
         }
     }
 
@@ -111,14 +138,25 @@ fn java_candidates(app: &AppHandle) -> Vec<String> {
     candidates
 }
 
+/// Only Java 25 is supported by MALENJO's pinned Stirling provider pack.
+fn java_major_version(output: &str) -> Option<u32> {
+    let line = output
+        .lines()
+        .find(|line| line.contains("version \""))?;
+    let version = line.split_once("version \"")?.1.split('"').next()?;
+    version.split('.').next()?.parse::<u32>().ok()
+}
+
 fn available_java(app: &AppHandle) -> Option<String> {
     java_candidates(app).into_iter().find(|candidate| {
-        Command::new(candidate)
-            .arg("-version")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .is_ok_and(|status| status.success())
+        let Ok(output) = Command::new(candidate).arg("-version").output() else {
+            return false;
+        };
+        if !output.status.success() {
+            return false;
+        }
+        let version = String::from_utf8_lossy(&output.stderr);
+        java_major_version(&version) == Some(25)
     })
 }
 
@@ -832,16 +870,24 @@ fn validate_api_path(base_url: &str, path: &str) -> Result<String, String> {
 }
 
 async fn health_payload(base_url: &str) -> Option<Value> {
-    let client = api_client().ok()?;
-    let response = client
-        .get(format!("{base_url}{STIRLING_HEALTH_PATH}"))
-        .send()
-        .await
-        .ok()?;
-    if !response.status().is_success() {
-        return None;
-    }
-    response.json::<Value>().await.ok()
+    // The ordinary PDF operation client permits 300-second requests.
+    // Startup and status probes must NOT inherit that timeout, especially
+    // while holding the process-start mutex across several document tabs.
+    tokio::time::timeout(HEALTH_PROBE_TIMEOUT, async {
+        let client = api_client().ok()?;
+        let response = client
+            .get(format!("{base_url}{STIRLING_HEALTH_PATH}"))
+            .send()
+            .await
+            .ok()?;
+        if !response.status().is_success() {
+            return None;
+        }
+        response.json::<Value>().await.ok()
+    })
+    .await
+    .ok()
+    .flatten()
 }
 
 async fn is_healthy(base_url: &str) -> bool {
@@ -1011,6 +1057,9 @@ pub async fn stirling_core_components(app: AppHandle) -> Vec<StirlingComponentSt
 
 #[tauri::command]
 pub async fn stirling_core_start(app: AppHandle) -> Result<StirlingCoreStatus, String> {
+    // Frontend deduplication is not enough: another desktop window or direct
+    // native command can request startup at the same instant.
+    let _starting = startup_lock().lock().await;
     if let Some(base_url) = owned_base_url() {
         let started = Instant::now();
         while started.elapsed() < START_TIMEOUT {
@@ -1022,7 +1071,10 @@ pub async fn stirling_core_start(app: AppHandle) -> Result<StirlingCoreStatus, S
             }
             tokio::time::sleep(Duration::from_millis(250)).await;
         }
-        return Err("The existing Stirling core process did not become healthy within 75 seconds.".into());
+        // A never-healthy owned JVM must not linger indefinitely and block
+        // the next automatic recovery attempt on its reserved loopback port.
+        let _ = stirling_core_stop().await;
+        return Err("The existing Stirling core process did not become healthy within 75 seconds; it was stopped so retry is possible.".into());
     }
 
     if stirling_port_in_use() {
@@ -1089,6 +1141,25 @@ pub async fn stirling_core_openapi(app: AppHandle) -> Result<Value, String> {
         .map_err(|error| format!("Local Stirling OpenAPI catalog returned invalid JSON: {error}"))
 }
 
+/// The local Java provider may return chunked responses without a known
+/// Content-Length. Enforce the limit before each copy, not after allocating the
+/// entire response. Keep error bodies much smaller than successful PDF output.
+fn append_bounded_response_chunk(
+    received: &mut Vec<u8>,
+    chunk: &[u8],
+    limit: usize,
+) -> Result<(), String> {
+    if received
+        .len()
+        .checked_add(chunk.len())
+        .is_none_or(|total| total > limit)
+    {
+        return Err("Local Stirling response exceeds the bounded output safety limit.".into());
+    }
+    received.extend_from_slice(chunk);
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn stirling_core_request(
     app: AppHandle,
@@ -1146,7 +1217,7 @@ pub async fn stirling_core_request(
         );
     }
 
-    let response = request
+    let mut response = request
         .send()
         .await
         .map_err(|error| format!("Local Stirling request failed: {error}"))?;
@@ -1167,12 +1238,21 @@ pub async fn stirling_core_request(
         return Err("Local Stirling response exceeds the 512 MB output safety limit.".into());
     }
 
-    let bytes = response
-        .bytes()
+    // Do not trust Content-Length: HTTP chunked responses often omit it.
+    // Error pages are capped at 64 KiB; successful operations at 512 MiB.
+    const MAX_HTTP_ERROR_BODY_BYTES: usize = 64 * 1024;
+    let limit = if (200..300).contains(&status) {
+        MAX_OUTPUT_BYTES
+    } else {
+        MAX_HTTP_ERROR_BODY_BYTES
+    };
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
         .await
-        .map_err(|error| format!("Unable to read local Stirling response: {error}"))?;
-    if bytes.len() > MAX_OUTPUT_BYTES {
-        return Err("Local Stirling response exceeds the 512 MB output safety limit.".into());
+        .map_err(|error| format!("Unable to stream local Stirling response: {error}"))?
+    {
+        append_bounded_response_chunk(&mut bytes, &chunk, limit)?;
     }
 
     if !(200..300).contains(&status) {
@@ -1185,20 +1265,33 @@ pub async fn stirling_core_request(
         status,
         content_type,
         content_disposition,
-        bytes: bytes.to_vec(),
+        bytes,
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        new_context_path, office_convert_pack_is_verified_against, parse_qpdf_version, reviewed_dependency_report_hash, reviewed_office_artifact_hash,
+        append_bounded_response_chunk, java_major_version, new_context_path, office_convert_pack_is_verified_against, parse_qpdf_version, reviewed_dependency_report_hash, reviewed_office_artifact_hash,
         parse_tesseract_version, set_reviewed_provider_path, sha256_file_hex, validate_api_path,
         MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, OFFICE_CONVERT_DEPENDENCIES_TEXT,
         OFFICE_CONVERT_LICENSE_TEXT, OFFICE_CONVERT_SOURCE_COMMIT, OFFICE_CONVERT_VERSION,
         STIRLING_BASE_URL, STIRLING_PIN, STIRLING_PORT,
     };
     use std::{path::PathBuf, process::Command};
+
+    #[test]
+    fn provider_stream_enforces_size_before_appending_untrusted_chunk() {
+        let mut data = vec![1u8, 2, 3];
+        append_bounded_response_chunk(&mut data, &[4, 5], 5).unwrap();
+        assert_eq!(data, [1, 2, 3, 4, 5]);
+        assert!(append_bounded_response_chunk(&mut data, &[6], 5).is_err());
+        assert_eq!(data, [1, 2, 3, 4, 5]);
+        assert!(append_bounded_response_chunk(&mut data, &[0u8; 100], 5).is_err());
+        assert_eq!(data.len(), 5);
+        assert!(append_bounded_response_chunk(&mut data, &[], 5).is_ok());
+        assert!(append_bounded_response_chunk(&mut data, &[0u8; 2], 0).is_err());
+    }
 
     #[test]
     fn stirling_proxy_accepts_only_local_v1_paths() {
@@ -1209,6 +1302,15 @@ mod tests {
         assert!(validate_api_path(STIRLING_BASE_URL, "https://example.com/api/v1/test").is_err());
         assert!(validate_api_path(STIRLING_BASE_URL, "/api/v1/../admin").is_err());
         assert!(validate_api_path(STIRLING_BASE_URL, "/v3/api-docs").is_err());
+    }
+
+    #[test]
+    fn stirling_requires_java_25_not_just_any_jvm_that_runs() {
+        assert_eq!(java_major_version("openjdk version \"25.0.4.1\" 2026-08-21"), Some(25));
+        assert_eq!(java_major_version("java version \"25\" 2025-09-16"), Some(25));
+        assert_eq!(java_major_version("openjdk version \"17.0.16\" 2025-07-15"), Some(17));
+        assert_eq!(java_major_version("openjdk version \"1.8.0_452\""), Some(1));
+        assert_eq!(java_major_version("unexpected output"), None);
     }
 
     #[test]

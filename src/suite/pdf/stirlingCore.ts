@@ -387,16 +387,22 @@ export async function runPdfProviderOperation(
 function extensionForContentType(contentType:string|undefined|null):string|undefined{
   const value=(contentType??'').toLowerCase();
   if(value.includes('application/pdf'))return 'pdf';
+  if(value.includes('application/epub+zip'))return 'epub';
+  if(value.includes('application/vnd.comicbook+zip')||value.includes('application/x-cbz'))return 'cbz';
+  if(value.includes('application/vnd.comicbook-rar')||value.includes('application/x-cbr'))return 'cbr';
   if(value.includes('application/zip'))return 'zip';
+  if(value.includes('image/svg+xml'))return 'svg';
   if(value.includes('image/png'))return 'png';
   if(value.includes('image/jpeg'))return 'jpg';
   if(value.includes('image/webp'))return 'webp';
   if(value.includes('image/tiff'))return 'tiff';
   if(value.includes('text/csv'))return 'csv';
   if(value.includes('application/json'))return 'json';
+  if(value.includes('application/xml')||value.includes('text/xml'))return 'xml';
   if(value.includes('text/html'))return 'html';
   if(value.includes('text/markdown'))return 'md';
   if(value.includes('text/plain'))return 'txt';
+  if(value.includes('application/vnd.oasis.opendocument.text'))return 'odt';
   if(value.includes('wordprocessingml'))return 'docx';
   if(value.includes('spreadsheetml'))return 'xlsx';
   if(value.includes('presentationml'))return 'pptx';
@@ -424,23 +430,50 @@ function extensionFromMagic(bytes:number[]):string|undefined{
   return undefined;
 }
 
-function outputFilename(response:PdfProviderResponse,fallbackBaseName:string):string{
+const PDF_TOOL_SAFE_OUTPUT_SUFFIXES=new Set([
+  'pdf','zip','png','jpg','jpeg','webp','tif','tiff','bmp',
+  'txt','csv','json','xml','html','md',
+  'doc','docx','odt','rtf','xls','xlsx','ods','ppt','pptx','odp',
+  'epub','cbz','cbr','svg','bin',
+]);
+
+export function proposedPdfToolFilename(response:PdfProviderResponse,fallbackBaseName:string):string{
   const disposition=filenameFromDisposition(response.contentDisposition);
-  if(disposition)return disposition;
+  const dispositionExtension=disposition?.split('.').at(-1)?.toLowerCase();
+  if(disposition&&dispositionExtension&&PDF_TOOL_SAFE_OUTPUT_SUFFIXES.has(dispositionExtension))return disposition;
   const extension=extensionForContentType(response.contentType)??extensionFromMagic(response.bytes)??'bin';
   return `${fallbackBaseName}.${extension}`;
 }
 
+/**
+ * Response MIME types are hints, not proof of document format. A provider
+ * may return an error page (or a zero-byte payload) labelled application/pdf.
+ * Requiring an actual header prevents blindly applying those bytes to the
+ * current working document. PDF viewers tolerate limited whitespace/BOM
+ * before the header, but not arbitrary embedded %PDF- text.
+ */
 export function responseIsPdf(response:PdfProviderResponse):boolean{
-  if((response.contentType??'').toLowerCase().includes('application/pdf'))return true;
-  return response.bytes.length>=5&&String.fromCharCode(...response.bytes.slice(0,5))==='%PDF-';
+  if(response.status<200||response.status>=300)return false;
+  const bytes=response.bytes;
+  const limit=Math.min(bytes.length,1024);
+  let i=0;
+  if(limit>=3&&bytes[0]===239&&bytes[1]===187&&bytes[2]===191)i=3;
+  for(;i<limit;i++){
+    const b=bytes[i];
+    if(b===37){
+      return i+5<=bytes.length&&bytes[i+1]===80&&bytes[i+2]===68&&
+        bytes[i+3]===70&&bytes[i+4]===45;
+    }
+    if(b!==0&&b!==9&&b!==10&&b!==12&&b!==13&&b!==32)return false;
+  }
+  return false;
 }
 
 export async function savePdfProviderResponse(
   response:PdfProviderResponse,
   fallbackBaseName='malenjo-pdf-tool-output',
 ):Promise<string|null>{
-  const proposed=outputFilename(response,fallbackBaseName);
+  const proposed=proposedPdfToolFilename(response,fallbackBaseName);
   const bytes=Uint8Array.from(response.bytes);
 
   if(!isTauri()){

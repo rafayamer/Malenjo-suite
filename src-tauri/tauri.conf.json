@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://127.0.0.1:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run build && npm run verify:offline-runtime",
     "frontendDist": "../dist"
   },
   "app": {
@@ -38,6 +38,7 @@
     "resources": {
       "../workers/paddleocr/worker.py": "workers/paddleocr/worker.py",
       "../provider-packs/stirling-core/": "provider-packs/stirling-core/",
+      "../runtime/java/": "runtime/java/",
       "../provider-packs/qpdf/": "provider-packs/qpdf/",
       "../provider-packs/tesseract/": "provider-packs/tesseract/"
     }
