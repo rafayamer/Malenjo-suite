@@ -151,7 +151,7 @@ export default function App() {
   // Local browser files remain available in tabs when navigating, but have
   // not been persisted to disk; warn before leaving with unsaved PDF edits.
   useEffect(()=>{
-    if(!sessions.some(item=>item.dirty&&item.document.browserFile))return;
+    if(!sessions.some(item=>!!item.document.browserFile))return;
     function warnBeforeUnload(event:BeforeUnloadEvent){
       event.preventDefault();
       event.returnValue='';
@@ -165,7 +165,10 @@ export default function App() {
     const targets = sessions.filter((session) => remove.has(session.id));
     if (!targets.length) return;
     const dirty = targets.filter((session) => session.dirty);
-    if (dirty.length && !window.confirm(`Close ${targets.length} tab(s)? ${dirty.length} contain unsaved edits that will be discarded.`)) return;
+    const temporary = targets.filter((session) => !!session.document.browserFile);
+    if ((dirty.length||temporary.length) && !window.confirm(
+      `Close ${targets.length} tab(s)? ${dirty.length} have unsaved changes; ${temporary.length} are temporary browser files. Original files are untouched, but temporary tabs are lost when closed.`
+    )) return;
 
     const remaining = sessions.filter((session) => !remove.has(session.id));
     setSessions(remaining);
@@ -193,7 +196,9 @@ export default function App() {
     const index = sessions.findIndex((session) => session.id === sessionId);
     if (index < 0) return;
     const target = sessions[index];
-    if (target.dirty && !window.confirm(`Close "${target.document.name}" without saving its current edits?`)) return;
+    if ((target.dirty||target.document.browserFile) && !window.confirm(
+      `Close "${target.document.name}"? ${target.dirty?'Unsaved edits will be lost. ':' '}This browser tab is temporary; your original local file remains untouched.`
+    )) return;
 
     const remaining = sessions.filter((session) => session.id !== sessionId);
     setSessions(remaining);
