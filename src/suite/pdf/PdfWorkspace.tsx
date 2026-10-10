@@ -2299,7 +2299,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       Browser preview: MALENJO does not delete or overwrite your original local PDF.
       Edits remain in this document tab until you export a separate copy.
       Browser tabs are temporary; export edits before reloading or closing Codespaces.
-    </div>
+    </div>}
     {error && <div className="pdf-notice error">{error}</div>}
 
     {!pdf && <div className="pdf-empty">
