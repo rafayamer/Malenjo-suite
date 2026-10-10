@@ -34,6 +34,7 @@ import {proposePdfMetadataFilename} from './pdfAutoRename';
 import {unlockReadOnlyPdfFormFields} from './formUnlock';
 import {inspectPdfStructuralSafety,serializePdfPreflightJson} from './pdfPreflight';
 import {buildLocalPdfApiManual} from './pdfApiManual';
+import {createPdfLocalDeveloperGuide,type PdfLocalDeveloperGuide} from './pdfDeveloperGuides';
 import {addPdfVisualSignature} from './pdfVisualSignature';
 import PdfCertificateSigningPanel from './PdfCertificateSigningPanel';
 import {imposePdfBooklet,PDF_BOOKLET_MAX_INPUT_BYTES} from './pdfBooklet';
@@ -1033,6 +1034,17 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
     }
   }
 
+  async function savePdfDeveloperGuide(kind:PdfLocalDeveloperGuide){
+    if(busy)return;
+    setBusy(true);setError('');setNotice('');
+    try{
+      const {filename,bytes}=createPdfLocalDeveloperGuide(kind);
+      const saved=await provider.saveResponse({status:200,contentType:'text/markdown',bytes:Array.from(bytes)},filename);
+      setNotice(saved?'Saved local PDF guide: '+saved:'Guide export cancelled.');
+    }catch(reason){setError(reason instanceof Error?reason.message:String(reason));}
+    finally{setBusy(false);}
+  }
+
   async function saveOfflineApiManual(){
     if(!status?.running||!catalogLoaded||busy)return;
     setBusy(true);setError('');setNotice('');
@@ -1518,6 +1530,15 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
           {component.available?<CheckCircle2 size={13}/>:<TriangleAlert size={13}/>}
           <span><b>{component.id}</b><small>{component.version??component.message}</small></span>
         </div>)}
+      </div>
+    </details>}
+    {(category==='automate'||category==='home')&&<details className="stirling-component-details" aria-label="PDF offline developer guides">
+      <summary>Developer guides: folder scanning, SSO scope, air-gap</summary>
+      <p>Download source-grounded documentation. These guides do not install a directory watcher or an SSO provider.</p>
+      <div className="stirling-provider-actions">
+        <button type="button" disabled={busy} onClick={()=>void savePdfDeveloperGuide('folder-scanning')}>Folder automation guide</button>
+        <button type="button" disabled={busy} onClick={()=>void savePdfDeveloperGuide('sso')}>SSO scope guide</button>
+        <button type="button" disabled={busy} onClick={()=>void savePdfDeveloperGuide('airgapped')}>Offline/air-gap guide</button>
       </div>
     </details>}
     <details className="stirling-component-details" aria-label="Stirling PDF parity inventory">
