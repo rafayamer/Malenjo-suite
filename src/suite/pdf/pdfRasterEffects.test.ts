@@ -91,7 +91,10 @@ describe('real PDF export from a mocked PDF.js render surface',()=>{
       }),
       toBlob:(callback:(blob:Blob)=>void)=>{
         if(!savedPixels)throw new Error('Pixels were not modified before PNG encoding.');
-        callback(new Blob([rasterPng(2,1,savedPixels)],{type:'image/png'}));
+        const encoded=rasterPng(2,1,savedPixels);
+        const copy=new Uint8Array(new ArrayBuffer(encoded.byteLength));
+        copy.set(encoded);
+        callback(new Blob([copy],{type:'image/png'}));
       },
     };
     vi.stubGlobal('document',{createElement:()=>canvas});
