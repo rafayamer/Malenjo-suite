@@ -21,7 +21,10 @@ export function validatePdfUploadPlan(
     if(!Number.isSafeInteger(input.size)||input.size<0){
       throw new Error('PDF upload file sizes must be finite nonnegative integers.');
     }
-    if(input.name.length>512||!input.name.trim()){
+    if(input.name.length>512||!input.name.trim()||
+       /[\\/\\\\\\u0000-\\u001f\\u007f]/.test(input.name)||
+       input.name==='.'||input.name==='..'||
+       /^[a-zA-Z]:/.test(input.name)){
       throw new Error('PDF upload file has an invalid name.');
     }
     total+=input.size;
