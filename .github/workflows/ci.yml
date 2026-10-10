@@ -75,6 +75,27 @@ jobs:
       - run: cargo test --manifest-path src-tauri/Cargo.toml --lib
 
 
+  pdf-execution-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install project PDF runtime dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run real PDF processing, save outputs and reopen on disk
+        run: npm run test:pdf-execution
+      - name: Publish the real Codespaces PDF artifact manifest and outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-codespaces-executed-artifacts
+          path: .build/pdf-codespaces-execution/run-*/
+          retention-days: 14
+          if-no-files-found: warn
+
   stirling-core-windows:
     runs-on: windows-latest
     timeout-minutes: 45

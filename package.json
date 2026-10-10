@@ -23,7 +23,8 @@
     "ai:codespace:check": "bash scripts/check-codespace-ai.sh",
     "ai:codespace:setup": "bash scripts/setup-codespace-ai.sh runtime",
     "ai:codespace:setup:model": "bash scripts/setup-codespace-ai.sh model",
-    "ai:models:validate": "python3 scripts/validate-ai-model-manifest.py"
+    "ai:models:validate": "python3 scripts/validate-ai-model-manifest.py",
+    "test:pdf-execution": "node scripts/run-pdf-codespaces.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.1",
