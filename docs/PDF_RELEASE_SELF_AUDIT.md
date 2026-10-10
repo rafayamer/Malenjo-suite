@@ -4,7 +4,7 @@
 
 ## Decision
 
-**Full PDF parity release is blocked.** Exactly 90 handoff requirements are enumerated; **0 carry complete acceptance evidence**. There are 49 native/source-backed partial foundations plus 19 source-audited provider-dispatch-only partial integrations (68 partial total), with 22 implementation-source-unaudited requirements. The passing CI pipeline proves builds, tests and a subset of provider smoke routes, not the whole Windows installer + UI end-to-end matrix. The `tauri:release` command now fails closed until all 90 requirements have explicit acceptance evidence. Ordinary development builds remain possible.
+**Full PDF parity release is blocked.** Exactly 90 handoff requirements are enumerated; **0 carry complete acceptance evidence**. There are 57 native/source-backed partial foundations plus 19 source-audited provider-dispatch-only partial integrations (76 partial total), with 14 implementation-source-unaudited requirements. The eight newly source-mapped native workflows remain partial: they are bounded feature subsets, not Windows-accepted upstream equivalence. The passing CI pipeline proves builds, tests and a subset of provider smoke routes, not the whole Windows installer + UI end-to-end matrix. The `tauri:release` command now fails closed until all 90 requirements have explicit acceptance evidence. Ordinary development builds remain possible.
 
 The review's two PNG defects have implementation-level fixes in `pngIntegrity.ts` with Adam7/filter/palette positive and negative tests. This is not enough to accept PDF-to-images or extract-images as end-to-end workflows without live output saved and reopened on Windows.
 
@@ -13,12 +13,12 @@ The review's two PNG defects have implementation-level fixes in `pngIntegrity.ts
 | Group | Requirements | Source-backed partial | Awaiting implementation audit |
 |---|---:|---:|---:|
 | page | 18 | 18 | 0 |
-| conversion | 24 | 19 | 5 |
+| conversion | 24 | 20 | 4 |
 | security | 16 | 11 | 5 |
-| scan-extraction | 6 | 4 | 2 |
-| editing-analysis | 10 | 7 | 3 |
+| scan-extraction | 6 | 5 | 1 |
+| editing-analysis | 10 | 10 | 0 |
 | forms | 4 | 4 | 0 |
-| automation-view-developer | 12 | 5 | 7 |
+| automation-view-developer | 12 | 8 | 4 |
 
 ## Audited requirement inventory
 
@@ -61,7 +61,7 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 | 33 | `pdf-to-cbz` | Native partial (rasterized) | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 34 | `pdf-to-cbr` | Frontend-only alias | No matching execution proof | Not audited; implementation and acceptance pending |
 | 35 | `pdf-to-pdfa` | Pinned API route only | No matching execution proof | Not audited; implementation and acceptance pending |
-| 36 | `html-to-pdf` | Pinned API route only | No matching execution proof | Not audited; implementation and acceptance pending |
+| 36 | `html-to-pdf` | Native HTML text-only PDF partial | No matching execution proof | Partial; CSS/images/typography and Windows acceptance pending |
 | 37 | `url-to-pdf` | Pinned API route only | No matching execution proof | Not audited; implementation and acceptance pending |
 | 38 | `markdown-to-pdf` | Native Markdown render partial | No matching execution proof | Partial; full Markdown fidelity and Windows acceptance pending |
 | 39 | `eml-to-pdf` | Native text/plain MIME partial | No matching execution proof | Partial; HTML, attachments, Windows reopen pending |
@@ -85,7 +85,7 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 | 57 | `redact` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 58 | `auto-redact` | Pinned API route only | No matching execution proof | Not audited; implementation and acceptance pending |
 | 59 | `extract-images` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
-| 60 | `extract-image-scans` | Pinned API route only | No matching execution proof | Not audited; implementation and acceptance pending |
+| 60 | `extract-image-scans` | Native image-only page PNG ZIP partial | No matching execution proof | Partial; embedded image extraction and OCR-layer scan detection pending |
 | 61 | `remove-image-pdf` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
 | 62 | `remove-annotations` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 63 | `remove-blanks` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
@@ -95,19 +95,19 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 | 67 | `update-metadata` | Native partial | Route exercised (partial) | Partial; full parity and Windows acceptance pending |
 | 68 | `get-info-on-pdf` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 69 | `compare` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
-| 70 | `adjust-contrast` | Frontend-only alias | No matching execution proof | Not audited; implementation and acceptance pending |
-| 71 | `replace-invert-pdf` | Pinned API route only | Route exercised (partial) | Not audited; implementation and acceptance pending |
-| 72 | `scanner-effect` | Pinned controller only | Route exercised (partial) | Not audited; implementation and acceptance pending |
+| 70 | `adjust-contrast` | Native page-raster contrast partial | No matching execution proof | Partial; no preview or content-preserving adjustments |
+| 71 | `replace-invert-pdf` | Native page-raster inversion partial | Route exercised (partial) | Partial; no color-profile/vector preserving inversion |
+| 72 | `scanner-effect` | Native grayscale scan-look partial | Route exercised (partial) | Partial; deskew/noise presets and Windows acceptance pending |
 | 73 | `repair` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
 | 74 | `add-image` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
 | 75 | `fields` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 76 | `fill` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 77 | `modify-fields` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 78 | `delete-fields` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
-| 79 | `multi-tool` | Frontend-only alias | No matching execution proof | Not audited; implementation and acceptance pending |
+| 79 | `multi-tool` | Native JSON page multi-tool partial | No matching execution proof | Partial; rotate/delete/move only, no general multi-tool |
 | 80 | `compress-pdf` | Provider-dispatch partial | Route known; operation-specific result unverified | Partial source wiring; real Windows processing and release acceptance pending |
-| 81 | `automate` | Frontend-only alias | No matching execution proof | Not audited; implementation and acceptance pending |
-| 82 | `pipeline` | Frontend-only alias | No matching execution proof | Not audited; implementation and acceptance pending |
+| 81 | `automate` | Native one-shot page automation partial | No matching execution proof | Partial; no scheduling/folder watch/trigger workflow |
+| 82 | `pipeline` | Native JSON page pipeline partial | No matching execution proof | Partial; only rotate/delete/move, no general Stirling pipeline |
 | 83 | `auto-rename` | Native metadata-title partial | No matching execution proof | Partial; content-aware rename and Windows acceptance pending |
 | 84 | `view-pdf` | Native partial | No matching execution proof | Partial; full parity and Windows acceptance pending |
 | 85 | `show-javascript` | Native read-only preflight partial | No matching execution proof | Partial; full feature semantics and Windows acceptance pending |
@@ -116,6 +116,8 @@ Classification is grounded in the existing pinned manifest: **native partial** m
 | 88 | `dev-sso-guide-docs` | Frontend-only alias | No matching execution proof | Not audited; implementation and acceptance pending |
 | 89 | `dev-airgapped-docs` | Frontend-only alias | No matching execution proof | Not audited; implementation and acceptance pending |
 | 90 | `handleData` | Pinned controller only | No matching execution proof | Not audited; implementation and acceptance pending |
+
+The new bounded offline HTML, page-raster, scan extraction and page-pipeline workflows have source and automated test mappings. They are **partial** and require iterative user diagnosis, fidelity extensions, and later Windows validation; this inventory does not certify implementation completeness or release readiness.
 
 ## Mandatory per-feature acceptance record
 
