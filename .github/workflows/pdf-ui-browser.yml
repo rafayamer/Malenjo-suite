@@ -29,6 +29,14 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Launch MALENJO and verify PDF selection, Find, tab retention and export
         run: node scripts/pdf-ui-browser-smoke.mjs
+      - name: Upload screenshot when PDF UI acceptance fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-ui-browser-failure
+          path: .build/pdf-ui-browser/failure.png
+          retention-days: 7
+          if-no-files-found: warn
       - name: Report completed browser-acceptance result
         if: always()
         run: echo 'Browser PDF acceptance requires a real Chromium pass; green frontend unit tests are not sufficient.'

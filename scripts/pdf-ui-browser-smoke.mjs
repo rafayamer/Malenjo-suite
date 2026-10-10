@@ -1,13 +1,13 @@
 /* Real Chromium user-interface smoke: no mocked PDF rendering or downloads. */
 import {spawn} from 'node:child_process';
-import {mkdtempSync,readFileSync} from 'node:fs';
+import {mkdtempSync,readFileSync,mkdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {PDFDocument,StandardFonts} from 'pdf-lib';
 import {chromium} from 'playwright';
 const root=resolve(import.meta.dirname,'..');
 const base='http://127.0.0.1:1420';
-let server,browser;
+let server,browser,acceptancePage;
 function requireEvidence(ok,message){if(!ok)throw Error('PDF browser acceptance failure: '+message);}
 async function waitForServer(){
   for(let i=0;i<90;i++){
@@ -35,6 +35,7 @@ async function main(){
   browser=await chromium.launch({headless:true,args:['--no-sandbox']});
   const context=await browser.newContext({viewport:{width:1440,height:900},acceptDownloads:true});
   const page=await context.newPage();
+  acceptancePage=page;
   const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.goto(base,{waitUntil:'domcontentloaded'});
@@ -105,6 +106,16 @@ async function main(){
 }
 try{await main();}
 catch(error){
+  if(acceptancePage){
+    try{
+      const path=resolve(root,'.build/pdf-ui-browser/failure.png');
+      mkdirSync(resolve(root,'.build/pdf-ui-browser'),{recursive:true});
+      await acceptancePage.screenshot({path,fullPage:true,timeout:10000});
+      console.error('MALENJO browser screenshot on failure: '+path);
+    }catch(reason){
+      console.error('Could not capture failing browser screenshot:',String(reason));
+    }
+  }
   console.error(error instanceof Error?error.stack:String(error));
   process.exitCode=1;
 }finally{
