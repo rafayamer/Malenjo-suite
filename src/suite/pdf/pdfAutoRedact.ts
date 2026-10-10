@@ -162,6 +162,7 @@ export async function redactPdfPagesByText(
   result.setCreator('MALENJO offline page-level redaction');
   result.setTitle('Redacted PDF copy');
   let pngTotal=0;
+  const outputDimensions:Array<{width:number;height:number}>=[];
   for(let number=1;number<=count;number++){
     cancelled(options.signal);
     const page=await reader.getPage(number);
@@ -173,6 +174,7 @@ export async function redactPdfPagesByText(
        viewport.width>14400||viewport.height>14400){
       throw new Error('PDF page exceeds the 8-megapixel or page-geometry redaction limit.');
     }
+    outputDimensions.push({width:viewport.width,height:viewport.height});
     if(matchedPages.has(number)){
       // No text/image data from this page is copied, rendered or embedded.
       const blank=result.addPage([viewport.width,viewport.height]);
@@ -213,8 +215,9 @@ export async function redactPdfPagesByText(
   }
   const reopened=await PDFDocument.load(bytes,{updateMetadata:false});
   if(reopened.getPageCount()!==count||
-     reopened.getPages().some((p,i)=>Math.abs(p.getWidth()-inspected.getPage(i).getWidth())>2&&
-       Math.abs(p.getHeight()-inspected.getPage(i).getHeight())>2)){
+     reopened.getPages().some((p,i)=>
+       Math.abs(p.getWidth()-outputDimensions[i].width)>0.01||
+       Math.abs(p.getHeight()-outputDimensions[i].height)>0.01)){
     throw new Error('Redacted output PDF failed a page-count or size reopen check.');
   }
   cancelled(options.signal);
