@@ -22,7 +22,7 @@ export function validatePdfUploadPlan(
       throw new Error('PDF upload file sizes must be finite nonnegative integers.');
     }
     if(input.name.length>512||!input.name.trim()||
-       /[\\/\\\\\\u0000-\\u001f\\u007f]/.test(input.name)||
+       /[\/\\\u0000-\u001f\u007f]/.test(input.name)||
        input.name==='.'||input.name==='..'||
        /^[a-zA-Z]:/.test(input.name)){
       throw new Error('PDF upload file has an invalid name.');
