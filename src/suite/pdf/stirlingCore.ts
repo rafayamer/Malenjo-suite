@@ -482,8 +482,11 @@ export async function savePdfProviderResponse(
     const anchor=document.createElement('a');
     anchor.href=url;
     anchor.download=proposed;
+    document.body.appendChild(anchor);
     anchor.click();
-    URL.revokeObjectURL(url);
+    anchor.remove();
+    // Let the browser finish its asynchronous download before revocation.
+    window.setTimeout(()=>URL.revokeObjectURL(url),60_000);
     return proposed;
   }
 
