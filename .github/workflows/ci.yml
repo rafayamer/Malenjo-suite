@@ -85,6 +85,11 @@ jobs:
           node-version: '24'
       - name: Use npm 11, matching the passing Windows frontend job
         run: npm install --global npm@11 --no-audit --no-fund
+      - name: Install optional real qpdf CLI for Codespaces permission execution
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qpdf
+          qpdf --version
       - name: Install project PDF runtime dependencies
         run: npm install --no-audit --no-fund
       - name: Run real PDF processing, save outputs and reopen on disk
@@ -98,6 +103,19 @@ jobs:
           npm run pdf:execute -- --operation rotate-pdf --input "$input" --output "$directory/cli-rotated.pdf" --page 1
           test -s "$directory/cli-rotated.pdf"
           test -s "$directory/cli-rotated.pdf.execution.json"
+      - name: Execute genuine qpdf AES-256 encryption and reopen decrypted result
+        shell: bash
+        env:
+          MALENJO_QPDF_OWNER_PASSWORD: codespaces-ci-owner-password-2026
+          MALENJO_QPDF_USER_PASSWORD: codespaces-ci-reader-password
+        run: |
+          input=$(find .build/pdf-codespaces-execution -type f -name source-four.pdf -print -quit)
+          if [ -z "$input" ]; then echo 'PDF input fixture missing'; exit 1; fi
+          directory=$(dirname "$input")
+          npm run pdf:qpdf -- --input "$input" --output "$directory/cli-restricted.pdf"
+          test -s "$directory/cli-restricted.pdf"
+          test -s "$directory/cli-restricted.pdf.execution.json"
+          qpdf --is-encrypted "$directory/cli-restricted.pdf"
       - name: Publish the real Codespaces PDF artifact manifest and outputs
         if: always()
         uses: actions/upload-artifact@v4

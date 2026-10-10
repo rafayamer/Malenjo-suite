@@ -57,3 +57,29 @@ It does not enable optional native providers that need Tauri, licensed tools,
 OCR model files, or an RFC 3161 local authority. Run the help command for the
 supported subset. When the source file is a PDF, it must actually begin with
 the PDF header. Every operation preserves the input; it is a new-file workflow.
+
+## Execute real optional qpdf AES-256 permissions in Codespaces
+
+Install the local distribution qpdf binary if it is not already installed:
+
+    sudo apt-get update
+    sudo apt-get install -y --no-install-recommends qpdf
+
+Set MALENJO_QPDF_OWNER_PASSWORD (10–128 printable ASCII characters) and,
+optionally, MALENJO_QPDF_USER_PASSWORD as your private Codespaces environment
+secrets. Do not type real passwords in a command-line argument or commit them
+to the repository. Then run:
+
+    npm run pdf:qpdf -- --input ./original.pdf --output ./restricted.pdf
+
+This command refuses signed or encrypted input, will not overwrite your source
+or destination, uses only local qpdf subprocesses and qpdf @- stdin options
+to avoid passing secrets through the process command line. It verifies that
+the output is encrypted, decrypts an isolated temporary copy with the owner
+password, reopens it and compares page count before exposing the encrypted
+copy. The .execution.json receipt contains NO passwords.
+
+The Linux CI integration installs qpdf using the runner distro repository
+and uses disposable fixture passwords. This verifies that qpdf can actually
+process a PDF in Codespaces. It does not substitute for the separately
+reviewed Windows qpdf pack or desktop Tauri UI acceptance.
