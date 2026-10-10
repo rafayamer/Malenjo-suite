@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { PDFDocumentProxy } from 'pdfjs-dist';
+import { TextLayer, type PDFDocumentProxy } from 'pdfjs-dist';
+import {highlightPdfTextNodes} from './pdfTextHighlights';
 import type { PdfOptionalContentConfig } from './optionalLayers';
 import { effectivePdfScale, type PdfFitMode } from './layout';
 
@@ -17,6 +18,7 @@ interface Props {
   renderAllowed: boolean;
   eager: boolean;
   domIdPrefix: string;
+  highlightQuery?: string;
   onVisible(pageNumber: number): void;
   onRendered(pageNumber: number): void;
 }
@@ -35,11 +37,15 @@ export default function PdfPageCanvas({
   renderAllowed,
   eager,
   domIdPrefix,
+  highlightQuery='',
   onVisible,
   onRendered,
 }: Props) {
   const shellRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const textLayerRef=useRef<HTMLDivElement>(null);
+  const textDivsRef=useRef<HTMLSpanElement[]>([]);
+  const [textRevision,setTextRevision]=useState(0);
   const [visible, setVisible] = useState(pageNumber === 1);
   const [baseSize, setBaseSize] = useState({ width: 612, height: 792 });
   const [failed, setFailed] = useState('');
@@ -94,6 +100,10 @@ export default function PdfPageCanvas({
 
     let cancelled = false;
     let renderTask: ReturnType<Awaited<ReturnType<PDFDocumentProxy['getPage']>>['render']> | null = null;
+    let textLayer:TextLayer|null=null;
+    const textContainer=textLayerRef.current;
+    textDivsRef.current=[];
+    if(textContainer)textContainer.replaceChildren();
 
     void (async () => {
       try {
@@ -123,7 +133,28 @@ export default function PdfPageCanvas({
         });
 
         await renderTask.promise;
-        if (!cancelled) onRendered(pageNumber);
+        if(cancelled)return;
+        onRendered(pageNumber);
+        // PDF.js canvas pixels cannot be selected. Its official TextLayer
+        // overlays real, invisible and selectable text spans on the exact
+        // same viewport, including zoom and rotation.
+        if(textContainer){
+          const textContent=await page.getTextContent();
+          if(cancelled)return;
+          textContainer.style.setProperty('--scale-factor',String(viewport.scale));
+          textContainer.style.setProperty('--total-scale-factor',String(viewport.scale));
+          textLayer=new TextLayer({
+            textContentSource:textContent,
+            container:textContainer,
+            viewport,
+          });
+          await textLayer.render();
+          if(cancelled)return;
+          textDivsRef.current=textLayer.textDivs.filter(
+            (node):node is HTMLSpanElement=>node instanceof HTMLSpanElement,
+          );
+          setTextRevision(revision=>revision+1);
+        }
       } catch (error) {
         if (!cancelled && (error as { name?: string }).name !== 'RenderingCancelledException') {
           setFailed(error instanceof Error ? error.message : String(error));
@@ -134,8 +165,17 @@ export default function PdfPageCanvas({
     return () => {
       cancelled = true;
       renderTask?.cancel();
+      textLayer?.cancel();
+      if(textContainer)textContainer.replaceChildren();
+      textDivsRef.current=[];
     };
   }, [document, eager, forceRender, onRendered, pageNumber, renderAllowed, rotation, scale, visible, optionalContentConfig, layerRevision]);
+
+  useEffect(()=>{
+    // Highlight only selectable text. A scanned/image-only PDF needs OCR and
+    // must never pretend its painted pixels are searchable.
+    highlightPdfTextNodes(textDivsRef.current,highlightQuery);
+  },[highlightQuery,textRevision]);
 
   return <div
     ref={shellRef}
@@ -144,6 +184,8 @@ export default function PdfPageCanvas({
     style={{ minWidth: placeholder.width, minHeight: placeholder.height }}
   >
     <canvas ref={canvasRef} aria-label={`PDF page ${pageNumber}`}/>
+    <div ref={textLayerRef} className="pdf-text-layer textLayer"
+      aria-label={`Selectable text on PDF page ${pageNumber}`}/> 
     {failed && <div className="pdf-page-error">Page {pageNumber}: {failed}</div>}
     <span className="pdf-page-number">{pageNumber}</span>
   </div>;
