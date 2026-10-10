@@ -1,7 +1,7 @@
 /* Real, on-disk Codespaces execution. No mocked PDF providers or outputs.
    Run npm run test:pdf-execution. This does not certify 90/90 parity. */
 import {beforeAll,afterAll,describe,expect,it} from 'vitest';
-import {PDFDocument,StandardFonts} from 'pdf-lib';
+import {PDFDocument,PDFName,StandardFonts} from 'pdf-lib';
 // PDF.js recommends its compatibility build for Node/Codespaces.
 import {getDocument} from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {unzipSync} from 'fflate';
@@ -26,6 +26,21 @@ import {LOCAL_PDF_PIPELINE_PROTOCOL,handleLocalPdfPipelineData} from './pdfPipel
 import {exportPdfStructuredJson} from './pdfToJson';
 import {exportPdfStructuredXml} from './pdfToXml';
 import {exportPdfEpub,inspectPdfEpubArchive} from './pdfToEpub';
+import {
+  appendPdf,deletePdfPages,movePdfPage,rotatePdfPagePermanent,
+  extractPdfPages,addPdfTextOverlay,addPdfRectangleOverlay,
+  addPdfTextField,fillPdfFormFields,flattenPdfForm,
+  addPdfCommentAnnotation,attachFileToPdf,addPdfBatesNumbers,
+  addPdfHeaderFooter,
+} from './editor';
+import {updatePdfExistingFieldProperties,deletePdfExistingFormField} from './formManagement';
+import {setPdfPageLabelRange,listPdfPageLabelRanges} from './pageLabels';
+import {removePdfReviewMarkup} from './pdfAnnotationCleanup';
+import {listPdfReviewAnnotations} from './review';
+import {inspectPdfStructuralSafety,serializePdfPreflightJson} from './pdfPreflight';
+import {proposePdfMetadataFilename} from './pdfAutoRename';
+import {exportPdfTextFormat} from './pdfTextFormats';
+import {exportPdfTextOnlySvgZip} from './pdfTextVector';
 
 const enc=(value:string)=>new TextEncoder().encode(value);
 const dec=(value:Uint8Array)=>new TextDecoder('utf-8',{fatal:true}).decode(value);
@@ -181,6 +196,112 @@ describe.skipIf(process.env.MALENJO_PDF_EXECUTION!=='1').sequential('Codespaces 
       const epub=await exportPdfEpub(pdf,info);
       const fromDisk=persist('pdf-to-epub','text.epub',epub,'saved EPUB reopened and structural navigation checked');
       expect(inspectPdfEpubArchive(fromDisk)).toMatchObject({pageLinks:2,hasText:true});
+    }finally{
+      await task.destroy();
+    }
+  },15000);
+
+  it('runs and reopens five fundamental page-editing workflows',async()=>{
+    const plan=[
+      ['merge-pdfs','merged.pdf',()=>appendPdf(source,smallSource),6],
+      ['remove-pages','removed.pdf',()=>deletePdfPages(source,[1,4]),2],
+      ['rearrange-pages','moved.pdf',()=>movePdfPage(source,4,1),4],
+      ['rotate-pdf','rotated.pdf',()=>rotatePdfPagePermanent(source,2),4],
+      ['extract-pages','extracted.pdf',()=>extractPdfPages(source,[2,4]),2],
+    ] as const;
+    for(const [id,name,work,pages] of plan){
+      const reopened=await savedPdf(id,name,await work(),pages);
+      if(id==='rotate-pdf')expect(reopened.getPage(1).getRotation().angle).toBe(90);
+      if(id==='rearrange-pages')expect(reopened.getPage(0).getWidth()).toBe(440);
+    }
+  });
+  it('executes native PDF text overlays, stamps, page numbering and attachments',async()=>{
+    await savedPdf('text-editor-pdf','text-overlay.pdf',
+      await addPdfTextOverlay(source,{pageNumber:2,text:'Executed text overlay',x:0.1,y:0.2,size:14}),4);
+    await savedPdf('add-stamp','rectangle-stamp.pdf',
+      await addPdfRectangleOverlay(source,{pageNumber:2,x:0.1,y:0.2,width:0.25,height:0.1}),4);
+    await savedPdf('add-page-numbers','page-numbers.pdf',
+      await addPdfBatesNumbers(source,{prefix:'PAGE-',digits:3,startNumber:10}),4);
+    await savedPdf('overlay-pdf','header-footer.pdf',
+      await addPdfHeaderFooter(source,{header:'MALENJO Header',footer:'Codespaces verified'}),4);
+    const withAttachment=await attachFileToPdf(source,{
+      name:'execution-notes.txt',bytes:enc('Real attachment saved inside the PDF'),
+      mimeType:'text/plain',
+    });
+    const actual=await savedPdf('add-attachments','attachments.pdf',withAttachment,4);
+    expect(actual.catalog.get(PDFName.of('Names'))).toBeDefined();
+  });
+  it('creates, fills, modifies, deletes and flattens real AcroForm fields',async()=>{
+    const created=await addPdfTextField(source,{
+      name:'customer',pageNumber:1,x:0.2,y:0.4,width:0.4,height:0.07,
+      defaultValue:'Alice',
+    });
+    const first=await savedPdf('fields','created-field.pdf',created,4);
+    expect(first.getForm().getTextField('customer').getText()).toBe('Alice');
+    const filled=await fillPdfFormFields(created,[{name:'customer',value:'Codespaces'}]);
+    const second=await savedPdf('fill','filled-field.pdf',filled,4);
+    expect(second.getForm().getTextField('customer').getText()).toBe('Codespaces');
+    const modified=await updatePdfExistingFieldProperties(filled,{
+      name:'customer',required:true,readOnly:true,
+    });
+    const third=await savedPdf('modify-fields','readonly-field.pdf',modified,4);
+    expect(third.getForm().getTextField('customer').isReadOnly()).toBe(true);
+    const removed=await deletePdfExistingFormField(modified,'customer');
+    const fourth=await savedPdf('delete-fields','deleted-field.pdf',removed,4);
+    expect(fourth.getForm().getFieldMaybe('customer')).toBeUndefined();
+    const flattened=await flattenPdfForm(filled);
+    const fifth=await savedPdf('flatten','flattened-field.pdf',flattened,4);
+    expect(fifth.getForm().getFields()).toHaveLength(0);
+  });
+  it('adds a comment, verifies the annotation and removes review markup',async()=>{
+    const commented=await addPdfCommentAnnotation(source,{
+      pageNumber:1,text:'Codespaces note',author:'QA',
+      x:0.2,y:0.2,
+    });
+    expect((await listPdfReviewAnnotations(commented)).length).toBeGreaterThan(0);
+    await savedPdf('native-review-annotation','comment-annotation.pdf',commented,4);
+    const cleared=await removePdfReviewMarkup(commented);
+    expect(cleared.removed).toBeGreaterThan(0);
+    const reopened=await savedPdf('remove-annotations','removed-annotations.pdf',cleared.bytes,4);
+    expect((await listPdfReviewAnnotations(Uint8Array.from(await reopened.save())))).toHaveLength(0);
+  });
+  it('sets native page labels, runs info, safety preflight and metadata filename proposal',async()=>{
+    const labeled=await setPdfPageLabelRange(source,{
+      startPage:1,style:'r',prefix:'Front-',startNumber:1,
+    });
+    await savedPdf('add-page-numbers','page-labels.pdf',labeled,4);
+    expect(await listPdfPageLabelRanges(labeled)).toMatchObject([
+      {startPage:1,style:'r',prefix:'Front-',startNumber:1},
+    ]);
+    const info=await inspectPdfDocumentInfo(source);
+    expect(info.pageCount).toBe(4);
+    const infoBytes=enc(JSON.stringify(info,null,2));
+    expect(JSON.parse(dec(persist('get-info-on-pdf','pdf-info.json',infoBytes,'source structural info JSON reread'))).pageCount).toBe(4);
+    const report=await inspectPdfStructuralSafety(source);
+    const bytes=serializePdfPreflightJson(report);
+    expect(dec(persist('verify-pdf','preflight.json',bytes,'source integrity preflight serialized on disk'))).toContain('pageCount');
+    const name=proposePdfMetadataFilename(info);
+    expect(name).toMatch(/MALENJO/i);
+    persist('auto-rename','proposed-filename.txt',enc(name),'generated from real source PDF metadata');
+  });
+  it('executes real PDF.js text-to-Markdown, HTML, CSV and SVG output',async()=>{
+    const info=await inspectPdfDocumentInfo(smallSource);
+    const task=getDocument({data:Uint8Array.from(smallSource),useSystemFonts:true,disableFontFace:true});
+    try{
+      const pdf=await task.promise;
+      for(const format of ['markdown','html','csv'] as const){
+        const result=await exportPdfTextFormat(pdf,info,format);
+        const file='extracted-text.'+(format==='markdown'?'md':format);
+        const disk=persist('pdf-to-'+format,file,result,
+          'real PDF.js text extraction to '+format+' saved and reread');
+        expect(dec(disk)).toContain('MALENJO EXECUTION PAGE');
+      }
+      const result=await exportPdfTextOnlySvgZip(pdf);
+      const saved=persist('pdf-to-vector','page-text-svg.zip',result.archive,
+        'real PDF.js glyph transforms encoded as SVG and ZIP reopened');
+      const members=unzipSync(saved);
+      expect(Object.keys(members)).toEqual(['page-0001.svg','page-0002.svg']);
+      expect(dec(members['page-0001.svg'])).toContain('<text ');
     }finally{
       await task.destroy();
     }
