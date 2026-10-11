@@ -47,6 +47,7 @@ fn replace_document_file(new_file: &Path, destination: &Path) -> std::io::Result
 /// It is fail-closed after a crash: an orphaned lock requires explicit
 /// inspection/removal, never automatic deletion of somebody else's lock.
 /// External non-cooperating editors are protected by the separate digest checks.
+#[derive(Debug)]
 struct DocumentSaveLock {
     path: PathBuf,
     nonce: String,
