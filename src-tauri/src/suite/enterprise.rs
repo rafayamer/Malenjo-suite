@@ -1546,6 +1546,34 @@ pub fn inspect_local_backup(path: String) -> Result<BackupInspection, String> {
 }
 
 
+/// A verified backup can change or partially copy AFTER inspection. Before
+/// touching live state, independently check every staged byte and require
+/// exactly the same inventory as the sealed backup manifest.
+fn verify_restore_stage(backup: &Path, stage: &Path) -> Result<(), String> {
+    let manifest=validate_backup_root(backup)?;
+    let expected:HashSet<String>=manifest.files.iter().map(|file|file.path.clone()).collect();
+    if expected.len()!=manifest.files.len() {
+        return Err("Restore stage manifest contains duplicate file entries.".into());
+    }
+    let mut staged=Vec::new();
+    collect_backup_files(stage,stage,&mut staged)?;
+    let observed:HashSet<String>=staged.iter().map(|file|file.path.clone()).collect();
+    if observed.len()!=staged.len() || observed!=expected {
+        return Err("Restore staging file inventory differs from the verified backup.".into());
+    }
+    let mut manifest_hashes=std::collections::HashMap::new();
+    for file in &manifest.files {
+        manifest_hashes.insert(file.path.as_str(),(&file.sha256,file.size_bytes));
+    }
+    for file in staged {
+        match manifest_hashes.get(file.path.as_str()) {
+            Some((hash,size)) if *hash==&file.sha256 && *size==file.size_bytes => {}
+            _ =>return Err(format!("Restore staging bytes changed or were truncated: {}",file.path)),
+        }
+    }
+    Ok(())
+}
+
 const RESTORE_JOURNAL_VERSION: u32 = 1;
 const RESTORE_DOMAINS: [&str; 3] = ["enterprise", "security", "library"];
 
@@ -1661,6 +1689,7 @@ fn restore_state_with_recovery(app_data: &Path, backup: &Path) -> Result<PathBuf
     for name in ["enterprise", "security", "library"] {
         copy_dir_recursive(&backup.join("state").join(name), &stage.join(name))?;
     }
+    verify_restore_stage(backup,&stage)?;
 
     let prior_root = app_data.join(format!("restore-prior-{nonce}"));
     fs::create_dir(&prior_root)
@@ -1781,7 +1810,7 @@ pub fn kopia_restore_snapshot(
 #[cfg(test)]
 mod tests {
     use super::{
-        collect_backup_files, copy_live_library_for_backup, inspect_backup, restore_state_with_recovery, recover_pending_restore, snapshot_linked_documents, recover_linked_document_copies, RestoreJournal, RESTORE_JOURNAL_VERSION, retention_candidates,
+        collect_backup_files, copy_live_library_for_backup, inspect_backup, restore_state_with_recovery, recover_pending_restore, verify_restore_stage, snapshot_linked_documents, recover_linked_document_copies, RestoreJournal, RESTORE_JOURNAL_VERSION, retention_candidates,
         reserve_backup_root, role_permissions, supported_backup_domain, validate_home_payload, BackupManifest, DmsIndex, DmsRecord, DmsVersion, BACKUP_VERSION,
     };
     use std::{fs, time::{SystemTime, UNIX_EPOCH}};
@@ -1901,6 +1930,30 @@ mod tests {
         let _=restore_state_with_recovery(&app,&backup)
             .expect("restore without failpoint should succeed");
         panic!("Abrupt-restore failpoint was not reached");
+    }
+
+    #[test]
+    fn tampered_restore_stage_is_rejected_before_live_state_can_be_replaced() {
+        let root=temp_root("stage-verify-integrity");
+        let backup=create_test_backup(&root);
+        let stage=root.join("stage");
+        fs::create_dir_all(&stage).unwrap();
+        super::copy_dir_recursive(&backup.join("state/enterprise"),&stage.join("enterprise")).unwrap();
+        verify_restore_stage(&backup,&stage).unwrap();
+        fs::write(stage.join("enterprise/new.txt"),b"changed after verified source copy").unwrap();
+        assert!(verify_restore_stage(&backup,&stage).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn missing_staged_file_is_rejected_without_installing_anything() {
+        let root=temp_root("stage-verify-missing");
+        let backup=create_test_backup(&root);
+        let stage=root.join("stage");
+        fs::create_dir_all(stage.join("enterprise")).unwrap();
+        let error=verify_restore_stage(&backup,&stage).unwrap_err();
+        assert!(error.contains("inventory"));
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
