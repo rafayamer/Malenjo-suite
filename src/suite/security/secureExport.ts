@@ -17,6 +17,15 @@ export function validateRedaction(rect: RedactionRect): boolean {
     && rect.height > 0;
 }
 
+export function assertValidRedactionPlan(redactions: readonly RedactionRect[], pageCount: number): void {
+  if (redactions.length > 500) throw new Error('CDR supports no more than 500 redaction rectangles.');
+  redactions.forEach((rect, index) => {
+    if (!validateRedaction(rect) || rect.page > pageCount) {
+      throw new Error(`Invalid redaction rectangle #${index + 1}: enter a valid page and in-page coordinates. No PDF was exported.`);
+    }
+  });
+}
+
 async function canvasPng(canvas: HTMLCanvasElement): Promise<Uint8Array> {
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Unable to encode sanitized PDF page.')), 'image/png');
@@ -37,6 +46,7 @@ export async function destructivePdfCdr(
   }
 
   try {
+    assertValidRedactionPlan(options.redactions ?? [], input.document.numPages);
     for (let pageNumber = 1; pageNumber <= input.document.numPages; pageNumber += 1) {
       const page = await input.document.getPage(pageNumber);
       const base = page.getViewport({ scale: 1 });
@@ -51,7 +61,7 @@ export async function destructivePdfCdr(
       await page.render({ canvas, canvasContext: context, viewport }).promise;
 
       for (const rect of options.redactions ?? []) {
-        if (rect.page !== pageNumber || !validateRedaction(rect)) continue;
+        if (rect.page !== pageNumber) continue;
         context.fillStyle = '#000';
         context.fillRect(
           rect.x * canvas.width,

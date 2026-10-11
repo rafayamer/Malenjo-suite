@@ -77,6 +77,8 @@ export default function PdfPageCanvas({
       if (cancelled) return;
       const viewport = page.getViewport({ scale: 1, rotation });
       setBaseSize({ width: viewport.width, height: viewport.height });
+    }).catch((reason) => {
+      if (!cancelled) setFailed(reason instanceof Error ? reason.message : String(reason));
     });
     return () => { cancelled = true; };
   }, [document, eager, forceRender, pageNumber, renderAllowed, rotation, visible]);

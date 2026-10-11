@@ -151,7 +151,7 @@ export default function App() {
   // Local browser files remain available in tabs when navigating, but have
   // not been persisted to disk; warn before leaving with unsaved PDF edits.
   useEffect(()=>{
-    if(!sessions.some(item=>!!item.document.browserFile))return;
+    if(!sessions.some(item=>item.dirty))return;
     function warnBeforeUnload(event:BeforeUnloadEvent){
       event.preventDefault();
       event.returnValue='';

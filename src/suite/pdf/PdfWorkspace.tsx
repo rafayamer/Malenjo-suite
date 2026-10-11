@@ -437,6 +437,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
     if (document.browserFile) {
       const file = document.browserFile;
+      if (file.size === 0 || file.size > 32 * 1024 * 1024) {
+        setError('Browser PDF must be nonempty and no larger than 32 MB.');
+        return;
+      }
       void file.arrayBuffer()
         .then((bytes) => {
           if (!cancelled) return installPdf(bytes, document.name, file);
@@ -556,8 +560,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     event.target.value = '';
     if (!file) return;
 
-    if (file.size > 512 * 1024 * 1024) {
-      setError('The selected PDF exceeds the 512 MB safety limit.');
+    if (file.size === 0 || file.size > 32 * 1024 * 1024) {
+      setError('Browser PDF must be nonempty and no larger than 32 MB.');
       return;
     }
 
@@ -1627,8 +1631,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       const bytes=await extractPdfPages(sourceBytes,pages);
       const base=sourceName.replace(/\.pdf$/i,'')||'MALENJO-document';
       const label=pages.length===1?`page-${pages[0]}`:`pages-${pages[0]}-${pages[pages.length-1]}`;
-      await exportPdfBytes(`${base}-${label}.pdf`,bytes);
-      setActionNotice(`Extracted ${pages.length} selected page(s) as a new PDF.`);
+      const saved = await exportPdfBytes(`${base}-${label}.pdf`,bytes);
+      if(saved) setActionNotice(`Extracted ${pages.length} selected page(s) as a new PDF.`);
+      else setActionNotice('Page extraction cancelled. No output was saved.');
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
@@ -1642,9 +1647,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     try{
       const [left,right]=await splitPdfAtPage(sourceBytes,currentPage);
       const base=sourceName.replace(/\.pdf$/i,'')||'MALENJO-document';
-      await exportPdfBytes(`${base}-part-1.pdf`,left);
-      await exportPdfBytes(`${base}-part-2.pdf`,right);
-      setActionNotice(`Split after page ${currentPage} and exported two PDFs.`);
+      const firstSaved = await exportPdfBytes(`${base}-part-1.pdf`,left);
+      if(!firstSaved){
+        setActionNotice('PDF split cancelled before saving its first part.');
+        return;
+      }
+      const secondSaved = await exportPdfBytes(`${base}-part-2.pdf`,right);
+      setActionNotice(secondSaved
+        ? `Split after page ${currentPage} and exported two PDFs.`
+        : 'PDF split only partially saved: part 1 was exported, part 2 was cancelled.');
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{

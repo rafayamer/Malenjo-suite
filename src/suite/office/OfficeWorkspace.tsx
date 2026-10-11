@@ -55,6 +55,7 @@ export default function OfficeWorkspace({ kind, session, active, onBackToFiles, 
   const [historyRevision, setHistoryRevision] = useState(0);
 
   const expectedExtension = kindMeta[kind].extension;
+  const MAX_BROWSER_OFFICE_BYTES = 32 * 1024 * 1024;
 
   useEffect(() => {
     setOriginal(null);
@@ -72,7 +73,9 @@ export default function OfficeWorkspace({ kind, session, active, onBackToFiles, 
     let cancelled = false;
     setLoading(true);
     const load = document.browserFile
-      ? document.browserFile.arrayBuffer()
+      ? document.browserFile.size > MAX_BROWSER_OFFICE_BYTES || document.browserFile.size === 0
+        ? Promise.reject(new Error('Browser Office documents must be 1 byte to 32 MB before loading.'))
+        : document.browserFile.arrayBuffer()
       : isDesktopRuntime()
         ? readOfficeDocument(document.id)
         : Promise.reject(new Error('This document has no browser source or native library source.'));
@@ -136,6 +139,10 @@ export default function OfficeWorkspace({ kind, session, active, onBackToFiles, 
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+    if (file.size === 0 || file.size > MAX_BROWSER_OFFICE_BYTES) {
+      setError('Browser Office documents must be 1 byte to 32 MB before loading.');
+      return;
+    }
 
     setLoading(true);
     setError('');
