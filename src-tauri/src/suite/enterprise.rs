@@ -1129,6 +1129,98 @@ pub fn inspect_local_backup(path: String) -> Result<BackupInspection, String> {
     inspect_backup(&PathBuf::from(path))
 }
 
+
+const RESTORE_JOURNAL_VERSION: u32 = 1;
+const RESTORE_DOMAINS: [&str; 3] = ["enterprise", "security", "library"];
+
+#[derive(Debug, Serialize, Deserialize)]
+struct RestoreJournal {
+    version: u32,
+    nonce: String,
+    original_domains: Vec<String>,
+    restored_domains: Vec<String>,
+}
+
+fn restore_marker(app_data: &Path) -> PathBuf {
+    app_data.join(".malenjo-restore-pending.json")
+}
+
+fn sync_restore_directory(path: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    File::open(path)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|error| format!("Unable to sync restore directory: {error}"))?;
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
+/// The marker is committed BEFORE the first live-directory rename. On
+/// restart we always roll back an interrupted install, rather than exposing a
+/// mixture of previous enterprise, security and library state.
+pub(crate) fn recover_pending_restore(app_data: &Path) -> Result<bool, String> {
+    let marker = restore_marker(app_data);
+    let meta = match fs::symlink_metadata(&marker) {
+        Ok(meta) => meta,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(format!("Unable to inspect restore journal: {error}")),
+    };
+    if meta.file_type().is_symlink() || !meta.is_file() || meta.len() > 8192 {
+        return Err("Restore journal is not a bounded regular file; manual recovery required.".into());
+    }
+    let journal: RestoreJournal = serde_json::from_slice(
+        &fs::read(&marker).map_err(|error| format!("Unable to read restore journal: {error}"))?
+    ).map_err(|error| format!("Restore journal is invalid; manual recovery required: {error}"))?;
+    if journal.version != RESTORE_JOURNAL_VERSION ||
+       journal.nonce.is_empty() || journal.nonce.len() > 39 ||
+       !journal.nonce.bytes().all(|byte| byte.is_ascii_digit()) ||
+       journal.original_domains.iter().any(|name| !RESTORE_DOMAINS.contains(&name.as_str())) ||
+       journal.restored_domains.iter().any(|name| !RESTORE_DOMAINS.contains(&name.as_str())) {
+        return Err("Restore journal contains unsupported fields; refuse unsafe recovery.".into());
+    }
+    let prior = app_data.join(format!("restore-prior-{}", journal.nonce));
+    let quarantine = app_data.join(format!("restore-aborted-{}", journal.nonce));
+    // A directory may already exist if power was lost halfway through an
+    // earlier recovery attempt. Such attempts are intentionally idempotent.
+    fs::create_dir_all(&quarantine)
+        .map_err(|error| format!("Unable to create restore quarantine: {error}"))?;
+    for name in RESTORE_DOMAINS.into_iter().rev() {
+        if !journal.restored_domains.iter().any(|domain| domain == name) { continue; }
+        let live = app_data.join(name);
+        let prior_file = prior.join(name);
+        if prior_file.exists() {
+            if live.exists() {
+                let discarded = quarantine.join(name);
+                // No overwrite or truncation; preserve the partially installed
+                // restored state for inspection even on rollback.
+                if discarded.exists() {
+                    return Err(format!("Restore recovery conflict at {}; manual recovery required.", discarded.display()));
+                }
+                fs::rename(&live, &discarded)
+                    .map_err(|error| format!("Unable to quarantine incomplete {name} restore: {error}"))?;
+            }
+            fs::rename(&prior_file, &live)
+                .map_err(|error| format!("Unable to recover previous {name} state: {error}"))?;
+        } else if journal.original_domains.iter().any(|domain| domain == name) {
+            if !live.exists() {
+                return Err(format!("Previous {name} state is missing during recovery; inspect {}.", prior.display()));
+            }
+        } else if live.exists() {
+            let discarded = quarantine.join(name);
+            if discarded.exists() {
+                return Err(format!("Restore quarantine collision: {}", discarded.display()));
+            }
+            fs::rename(&live, &discarded)
+                .map_err(|error| format!("Unable to quarantine newly installed {name}: {error}"))?;
+        }
+    }
+    sync_restore_directory(app_data)?;
+    fs::remove_file(&marker)
+        .map_err(|error| format!("Unable to clear completed rollback journal: {error}"))?;
+    sync_restore_directory(app_data)?;
+    Ok(true)
+}
+
 /// Restore each root with rollback directories rather than deleting active
 /// enterprise/security state before the replacement is ready. A failed rename
 /// rolls back earlier successful swaps; the independent recovery copy remains.
@@ -1155,47 +1247,46 @@ fn restore_state_with_recovery(app_data: &Path, backup: &Path) -> Result<PathBuf
     }
 
     let prior_root = app_data.join(format!("restore-prior-{nonce}"));
-    fs::create_dir_all(&prior_root)
-        .map_err(|error| format!("Unable to allocate restore rollback: {error}"))?;
-    let mut installed = Vec::<&str>::new();
-    let mut prior = Vec::<&str>::new();
+    fs::create_dir(&prior_root)
+        .map_err(|error| format!("Unable to reserve restore rollback: {error}"))?;
+    let restored_domains: Vec<String> = RESTORE_DOMAINS.iter()
+        .filter(|name| stage.join(name).exists()).map(|name| name.to_string()).collect();
+    let original_domains: Vec<String> = RESTORE_DOMAINS.iter()
+        .filter(|name| app_data.join(name).exists()).map(|name| name.to_string()).collect();
+    let marker = restore_marker(app_data);
+    if marker.exists() {
+        return Err("Another interrupted restore requires recovery before continuing.".into());
+    }
+    let journal = RestoreJournal {
+        version: RESTORE_JOURNAL_VERSION, nonce: nonce.to_string(),
+        original_domains, restored_domains: restored_domains.clone(),
+    };
+    atomic_write(&marker, &serde_json::to_vec(&journal)
+        .map_err(|error| format!("Unable to serialize restore journal: {error}"))?)?;
+    sync_restore_directory(app_data)?;
     let result = (|| -> Result<(), String> {
-        for name in ["enterprise", "security", "library"] {
-            // If a backup omitted a domain, it cannot mean "delete that domain."
-            if !stage.join(name).exists() { continue; }
+        for name in &restored_domains {
             let target = app_data.join(name);
             if target.exists() {
                 fs::rename(&target, prior_root.join(name))
                     .map_err(|error| format!("Unable to retain live {name} state: {error}"))?;
-                prior.push(name);
             }
             fs::rename(stage.join(name), &target)
                 .map_err(|error| format!("Unable to install restored {name} state: {error}"))?;
-            installed.push(name);
         }
+        sync_restore_directory(app_data)?;
         Ok(())
     })();
-
     if let Err(error) = result {
-        for name in installed.into_iter().rev() {
-            // Only remove newly installed roots. The old roots remain in
-            // prior_root until rollback has completed.
-            let _ = fs::rename(app_data.join(name), stage.join(name));
-        }
-        let mut failed = Vec::new();
-        for name in prior.into_iter().rev() {
-            if let Err(rollback_error) = fs::rename(prior_root.join(name), app_data.join(name)) {
-                failed.push(format!("{name}: {rollback_error}"));
-            }
-        }
-        let _ = fs::remove_dir_all(&stage);
-        return Err(format!(
-            "{error}; prior state retained at {}; recovery at {}; rollback failures: {}",
-            prior_root.display(), recovery.display(),
-            if failed.is_empty() { "none".into() } else { failed.join("; ") }
-        ));
+        let rollback = recover_pending_restore(app_data);
+        return Err(format!("{error}; recovery at {}; automatic rollback: {:?}",
+            recovery.display(), rollback));
     }
-    // A recovery snapshot exists independently of this final cleanup.
+    // Recovery copy remains independent of the active state. The journal must
+    // not be cleared until all three installed directories are durable.
+    fs::remove_file(&marker)
+        .map_err(|error| format!("Restore was installed, but cleanup requires intervention: {error}"))?;
+    sync_restore_directory(app_data)?;
     let _ = fs::remove_dir_all(&prior_root);
     let _ = fs::remove_dir_all(&stage);
     Ok(recovery)
@@ -1210,6 +1301,7 @@ pub fn restore_local_backup(
     let backup = PathBuf::from(backup_path);
     let app_data = app.path().app_data_dir()
         .map_err(|error| format!("Unable to resolve app data directory: {error}"))?;
+    recover_pending_restore(&app_data)?;
     let recovery = restore_state_with_recovery(&app_data, &backup)?;
     append_audit(
         &app,
@@ -1267,7 +1359,7 @@ pub fn kopia_restore_snapshot(
 #[cfg(test)]
 mod tests {
     use super::{
-        collect_backup_files, inspect_backup, restore_state_with_recovery, retention_candidates,
+        collect_backup_files, inspect_backup, restore_state_with_recovery, recover_pending_restore, RestoreJournal, RESTORE_JOURNAL_VERSION, retention_candidates,
         reserve_backup_root, role_permissions, supported_backup_domain, validate_home_payload, BackupManifest, DmsIndex, DmsRecord, DmsVersion, BACKUP_VERSION,
     };
     use std::{fs, time::{SystemTime, UNIX_EPOCH}};
@@ -1374,6 +1466,50 @@ mod tests {
         assert_eq!(fs::read(recovery.join("library/index.json")).unwrap(),b"old index");
         assert_eq!(fs::read(recovery.join("library/home-state-v1.json")).unwrap(),b"old home");
         let _=fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn interrupted_multi_root_install_recovers_prior_state_without_overwriting_sources() {
+        let root=temp_root("restore-power-loss");
+        fs::create_dir_all(&root).unwrap();
+        let prior=root.join("restore-prior-1122");
+        fs::create_dir_all(prior.join("enterprise")).unwrap();
+        fs::write(prior.join("enterprise/old.txt"), b"previous enterprise").unwrap();
+        fs::create_dir_all(root.join("enterprise")).unwrap();
+        fs::write(root.join("enterprise/new.txt"), b"incomplete new enterprise").unwrap();
+        fs::create_dir_all(root.join("security")).unwrap();
+        fs::write(root.join("security/old.txt"), b"original security").unwrap();
+        let journal=RestoreJournal {
+            version:RESTORE_JOURNAL_VERSION, nonce:"1122".into(),
+            original_domains:vec!["enterprise".into(),"security".into()],
+            restored_domains:vec!["enterprise".into(),"security".into()],
+        };
+        fs::write(root.join(".malenjo-restore-pending.json"),
+            serde_json::to_vec(&journal).unwrap()).unwrap();
+        assert!(recover_pending_restore(&root).unwrap());
+        assert_eq!(fs::read(root.join("enterprise/old.txt")).unwrap(),b"previous enterprise");
+        assert_eq!(fs::read(root.join("security/old.txt")).unwrap(),b"original security");
+        assert_eq!(fs::read(root.join("restore-aborted-1122/enterprise/new.txt")).unwrap(),b"incomplete new enterprise");
+        assert!(!root.join(".malenjo-restore-pending.json").exists());
+        assert!(!recover_pending_restore(&root).unwrap());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn invalid_recovery_journal_fails_closed_without_touching_live_state() {
+        let root=temp_root("restore-journal-injection");
+        fs::create_dir_all(root.join("enterprise")).unwrap();
+        fs::write(root.join("enterprise/safe.txt"),b"unchanged").unwrap();
+        let journal=RestoreJournal {
+            version:RESTORE_JOURNAL_VERSION, nonce:"../unsafe".into(),
+            original_domains:vec!["enterprise".into()],
+            restored_domains:vec!["enterprise".into()],
+        };
+        fs::write(root.join(".malenjo-restore-pending.json"),
+            serde_json::to_vec(&journal).unwrap()).unwrap();
+        assert!(recover_pending_restore(&root).is_err());
+        assert_eq!(fs::read(root.join("enterprise/safe.txt")).unwrap(),b"unchanged");
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
