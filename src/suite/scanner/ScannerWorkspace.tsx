@@ -61,6 +61,10 @@ export default function ScannerWorkspace({ mode, onBackToFiles }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const mountedRef = useRef(true);
+  const cameraRequestRef = useRef(0);
+  const reservedImportsRef = useRef(0);
+  const pageCountRef = useRef(0);
 
   const [pages, setPages] = useState<ScanPage[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -78,8 +82,13 @@ export default function ScannerWorkspace({ mode, onBackToFiles }: Props) {
   const selectedIndex = selected ? pages.findIndex((page) => page.id === selected.id) : -1;
 
   useEffect(() => {
-    void getPaddleStatus().then(setPaddleStatus).catch(() => undefined);
+    mountedRef.current = true;
+    void getPaddleStatus().then((status) => {
+      if (mountedRef.current) setPaddleStatus(status);
+    }).catch(() => undefined);
     return () => {
+      mountedRef.current = false;
+      cameraRequestRef.current++;
       streamRef.current?.getTracks().forEach((track) => track.stop());
       void cancelActiveOcr();
     };
@@ -92,11 +101,12 @@ export default function ScannerWorkspace({ mode, onBackToFiles }: Props) {
   async function addFiles(files: FileList | File[]) {
     setError('');
     const incoming = Array.from(files);
-    if (pages.length + incoming.length > MAX_SCAN_PAGES) {
+    if (pageCountRef.current + reservedImportsRef.current + incoming.length > MAX_SCAN_PAGES) {
       setError(`A scan session is limited to ${MAX_SCAN_PAGES} pages.`);
       return;
     }
 
+    reservedImportsRef.current += incoming.length;
     const additions: ScanPage[] = [];
     for (const file of incoming) {
       if (file.size > 25 * 1024 * 1024) {
@@ -130,7 +140,13 @@ export default function ScannerWorkspace({ mode, onBackToFiles }: Props) {
       }
     }
 
+    reservedImportsRef.current -= incoming.length;
+    if (!mountedRef.current) {
+      additions.forEach((page) => URL.revokeObjectURL(page.sourceUrl));
+      return;
+    }
     if (additions.length) {
+      pageCountRef.current += additions.length;
       setPages((current) => [...current, ...additions]);
       setSelectedId((current) => current ?? additions[0].id);
       setMessage(`Added ${additions.length} scan page(s).`);
@@ -139,11 +155,16 @@ export default function ScannerWorkspace({ mode, onBackToFiles }: Props) {
 
   async function startCamera() {
     setError('');
+    const request = ++cameraRequestRef.current;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: false,
       });
+      if (!mountedRef.current || request !== cameraRequestRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
       setCameraOpen(true);
       window.setTimeout(() => {
@@ -158,6 +179,7 @@ export default function ScannerWorkspace({ mode, onBackToFiles }: Props) {
   }
 
   function stopCamera() {
+    cameraRequestRef.current++;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     setCameraOpen(false);
@@ -213,6 +235,7 @@ export default function ScannerWorkspace({ mode, onBackToFiles }: Props) {
   function removeSelected() {
     if (!selected) return;
     URL.revokeObjectURL(selected.sourceUrl);
+    pageCountRef.current = Math.max(0, pageCountRef.current - 1);
     const next = pages.filter((page) => page.id !== selected.id);
     setPages(next);
     setSelectedId(next[Math.min(selectedIndex, next.length - 1)]?.id ?? null);
@@ -274,6 +297,10 @@ export default function ScannerWorkspace({ mode, onBackToFiles }: Props) {
 
   async function exportSearchablePdf() {
     if (!pages.length) return;
+    if (pages.some((page) => !page.ocr?.text.trim())) {
+      setError('Run OCR on every page before exporting a fully searchable PDF.');
+      return;
+    }
     setOcrStatus('Building searchable PDF');
     try {
       const output = [];
@@ -408,7 +435,7 @@ export default function ScannerWorkspace({ mode, onBackToFiles }: Props) {
 
         <section className="scan-export">
           <button disabled={!pages.some((page) => page.ocr)} onClick={downloadText}><FileText size={15}/> Export text</button>
-          <button disabled={!pages.length} onClick={() => void exportSearchablePdf()}><FileText size={15}/> Searchable PDF</button>
+          <button disabled={!pages.length || pages.some((page) => !page.ocr?.text.trim())} onClick={() => void exportSearchablePdf()}><FileText size={15}/> Searchable PDF</button>
         </section>
       </aside>
     </div>
