@@ -108,6 +108,7 @@ export default function HomeWorkspace({
   const desktop=isDesktopRuntime();
   const [documents,setDocuments]=useState<LibraryDocument[]>([]);
   const [state,setState]=useState<HomeStateV1>(()=>loadHomeState());
+  const [homeHydrated,setHomeHydrated]=useState(()=>!desktop);
   const [query,setQuery]=useState('');
   const [filter,setFilter]=useState<HomeFileFilter>('all');
   const [loading,setLoading]=useState(true);
@@ -139,13 +140,17 @@ export default function HomeWorkspace({
     if(!desktop)return;
     let cancelled=false;
     void loadNativeHomeState().then((restored)=>{
-      if(!cancelled)setState(restored);
+      if(!cancelled){setState(restored);setHomeHydrated(true);}
     }).catch((error)=>{
-      if(!cancelled)setNotice('Could not restore Home preferences: '+(error instanceof Error?error.message:String(error)));
+      if(!cancelled){
+        setNotice('Could not restore Home preferences: '+(error instanceof Error?error.message:String(error)));
+        // Do not run migration/pruning when the authoritative native file
+        // exists but cannot be read; refuse unsafe fallback writes.
+      }
     });
     return()=>{cancelled=true;};
   },[desktop]);
-  useEffect(()=>{void loadDocuments();},[loadDocuments,sessions.length]);
+  useEffect(()=>{if(homeHydrated)void loadDocuments();},[homeHydrated,loadDocuments,sessions.length]);
 
   const searched=useMemo(()=>{
     const terms=query.trim().toLowerCase().split(/\s+/).filter(Boolean);
