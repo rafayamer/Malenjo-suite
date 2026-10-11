@@ -140,6 +140,78 @@ async function main(){
     requireEvidence(errors.length===0,'Office browser exception: '+errors.join(' | '));
     console.log('PHASE3 Office edit/navigation/export/reopen: '+item.module+' PASS (synthetic fixture only)');
   }
+  // Real multi-sheet XLSX workflow: relationship order, visible tabs, two
+  // different edits, hidden worksheet isolation, export and independent reopen.
+  const multiSheetParts={
+    'xl/workbook.xml':'<workbook><sheets><sheet name="Private" state="veryHidden" r:id="rId3"/><sheet name="Budget" r:id="rId9"/><sheet name="Forecast" r:id="rId2"/></sheets></workbook>',
+    'xl/_rels/workbook.xml.rels':'<Relationships><Relationship Id="rId3" Target="worksheets/sheet8.xml"/><Relationship Id="rId9" Target="worksheets/sheet7.xml"/><Relationship Id="rId2" Target="worksheets/sheet2.xml"/></Relationships>',
+    'xl/worksheets/sheet8.xml':'<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Secret unchanged</t></is></c></row></sheetData></worksheet>',
+    'xl/worksheets/sheet7.xml':'<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Budget original</t></is></c><c r="B1"><f>1+2</f><v>3</v></c></row></sheetData></worksheet>',
+    'xl/worksheets/sheet2.xml':'<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Forecast original</t></is></c></row></sheetData></worksheet>',
+    'custom/preserved.xml':'<keep>round trip</keep>',
+  };
+  const multiSheetSource=Buffer.from(zipSync(Object.fromEntries(
+    Object.entries(multiSheetParts).map(([name,value])=>[name,strToU8(value)]))));
+  await page.locator('.sidebar nav .nav-item').filter({hasText:'Spreadsheet'}).first().click();
+  await page.locator('main.workspace > .office-workspace input[type="file"]').first()
+    .setInputFiles({name:'multi-worksheet.xlsx',
+      mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buffer:multiSheetSource});
+  const multiTab=page.locator('.document-tab-main').filter({hasText:'multi-worksheet.xlsx'});
+  await multiTab.waitFor({timeout:30000});
+  const workbookUi=page.locator('.document-session-panel.active');
+  await workbookUi.getByRole('tab',{name:'Budget'}).waitFor({timeout:30000});
+  requireEvidence(await workbookUi.getByRole('tab',{name:'Private'}).count()===0,
+    'Hidden Excel worksheet was exposed as an editable tab');
+  requireEvidence(await workbookUi.getByRole('tab',{name:'Budget'}).getAttribute('aria-selected')==='true',
+    'First visible workbook tab was not selected in relationship order');
+  await workbookUi.getByRole('textbox',{name:'Cell A1'}).fill('Budget browser edited');
+  await workbookUi.getByRole('tab',{name:'Forecast'}).click();
+  requireEvidence(await workbookUi.getByRole('textbox',{name:'Cell A1'}).inputValue()==='Forecast original',
+    'Spreadsheet tab showed another worksheet contents');
+  await workbookUi.getByRole('textbox',{name:'Cell A1'}).fill('Forecast browser edited');
+  await workbookUi.getByRole('tab',{name:'Budget'}).click();
+  requireEvidence(await workbookUi.getByRole('textbox',{name:'Cell A1'}).inputValue()==='Budget browser edited',
+    'Spreadsheet lost previous worksheet edits when switching tabs');
+  await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
+  await multiTab.click();
+  requireEvidence(await workbookUi.getByRole('textbox',{name:'Cell A1'}).inputValue()==='Budget browser edited',
+    'Spreadsheet lost multi-sheet editing state after workspace navigation');
+  const multiDownload=page.waitForEvent('download',{timeout:30000});
+  await workbookUi.getByRole('button',{name:'Export copy'}).click();
+  const multiExport=await multiDownload;
+  const multiDest=join(mkdtempSync(join(tmpdir(),'malenjo-multisheet-acceptance-')),'roundtrip.xlsx');
+  await multiExport.saveAs(multiDest);
+  const multiFiles=unzipSync(readFileSync(multiDest));
+  requireEvidence(strFromU8(multiFiles['xl/worksheets/sheet7.xml']).includes('Budget browser edited'),
+    'Edited Budget worksheet was not present in exported XLSX');
+  requireEvidence(strFromU8(multiFiles['xl/worksheets/sheet2.xml']).includes('Forecast browser edited'),
+    'Edited Forecast worksheet was not present in exported XLSX');
+  requireEvidence(strFromU8(multiFiles['xl/worksheets/sheet7.xml']).includes('<f>1+2</f>'),
+    'Unedited formula was damaged during XLSX export');
+  requireEvidence(strFromU8(multiFiles['xl/worksheets/sheet8.xml'])===multiSheetParts['xl/worksheets/sheet8.xml'],
+    'Hidden worksheet bytes were altered during XLSX edit');
+  requireEvidence(strFromU8(multiFiles['custom/preserved.xml'])===multiSheetParts['custom/preserved.xml'],
+    'Unrelated OOXML package part was altered during multi-sheet export');
+  requireEvidence(strFromU8(unzipSync(multiSheetSource)['xl/worksheets/sheet7.xml']).includes('Budget original'),
+    'Original imported multi-sheet file was modified');
+  await page.locator('.sidebar nav .nav-item').filter({hasText:'Spreadsheet'}).first().click();
+  await page.locator('main.workspace > .office-workspace input[type="file"]').first()
+    .setInputFiles({name:'multi-worksheet-export-reopened.xlsx',
+      mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buffer:readFileSync(multiDest)});
+  const reopenedTab=page.locator('.document-tab-main').filter({hasText:'multi-worksheet-export-reopened.xlsx'});
+  await reopenedTab.waitFor({timeout:30000});
+  const reopenedUi=page.locator('.document-session-panel.active');
+  await reopenedUi.getByRole('tab',{name:'Budget'}).waitFor({timeout:30000});
+  requireEvidence(await reopenedUi.getByRole('textbox',{name:'Cell A1'}).inputValue()==='Budget browser edited',
+    'Reopened exported multi-sheet workbook lost first worksheet edit');
+  await reopenedUi.getByRole('tab',{name:'Forecast'}).click();
+  requireEvidence(await reopenedUi.getByRole('textbox',{name:'Cell A1'}).inputValue()==='Forecast browser edited',
+    'Reopened exported multi-sheet workbook lost second worksheet edit');
+  requireEvidence(errors.length===0,'Multi-sheet browser exception: '+errors.join(' | '));
+  console.log('PHASE3 XLSX multi-tab UI/edit/export/independent ZIP inspection/reimport: PASS (synthetic fixture)');
+
   await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
   console.log('MALENJO loaded in Chromium; opening PDF via browser input');
   await page.locator('.workspace > input[type="file"]').setInputFiles({
