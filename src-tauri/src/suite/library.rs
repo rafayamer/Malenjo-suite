@@ -241,31 +241,73 @@ fn load_index(app: &AppHandle) -> Result<LibraryIndex, String> {
     }
 }
 
-fn save_index(app: &AppHandle, index: &LibraryIndex) -> Result<(), String> {
-    let path = index_path(app)?;
-    let temp = path.with_extension("json.tmp");
-    let bytes = serde_json::to_vec_pretty(index)
-        .map_err(|error| format!("Unable to serialize MALENJO library index: {error}"))?;
-
-    fs::write(&temp, bytes)
-        .map_err(|error| format!("Unable to write MALENJO library index: {error}"))?;
-
-    if path.exists() {
-        let backup = path.with_extension("json.bak");
-        fs::copy(&path, &backup)
-            .map_err(|error| format!("Unable to create MALENJO library index backup: {error}"))?;
+/// Publish library index and its prior-version recovery copy using synced,
+/// same-directory files. Never delete a live index as a rename fallback.
+/// A successful call guarantees a complete readable index; a failure before
+/// replacement leaves the previous index untouched.
+fn save_index_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+    let nonce=staging_nonce();
+    let stage=path.with_extension(format!("json-{}-{nonce}.tmp",std::process::id()));
+    let mut file=fs::OpenOptions::new().write(true).create_new(true).open(&stage)
+        .map_err(|error| format!("Unable to stage library index: {error}"))?;
+    let written=(||->std::io::Result<()>{
+        file.write_all(bytes)?;
+        file.sync_all()
+    })();
+    drop(file);
+    if let Err(error)=written {
+        let _=fs::remove_file(&stage);
+        return Err(format!("Unable to safely stage library index: {error}"));
     }
-
-    if fs::rename(&temp, &path).is_err() {
-        if path.exists() {
-            fs::remove_file(&path)
-                .map_err(|error| format!("Unable to replace MALENJO library index: {error}"))?;
+    // Make a verified recovery copy before changing the primary. The backup
+    // must itself be published transactionally; otherwise a failed write
+    // would destroy the sole working rollback candidate.
+    if let Ok(meta)=fs::symlink_metadata(path) {
+        if meta.file_type().is_symlink() || !meta.is_file() {
+            let _=fs::remove_file(&stage);
+            return Err("Library index destination is not a regular file.".into());
         }
-        fs::rename(&temp, &path)
-            .map_err(|error| format!("Unable to finalize MALENJO library index: {error}"))?;
+        let backup=path.with_extension("json.bak");
+        let backup_stage=path.with_extension(format!("bak-{}-{nonce}.tmp",std::process::id()));
+        let copied=(||->std::io::Result<()>{
+            let mut input=fs::File::open(path)?;
+            let mut output=fs::OpenOptions::new().create_new(true).write(true).open(&backup_stage)?;
+            std::io::copy(&mut input,&mut output)?;
+            output.sync_all()
+        })();
+        if let Err(error)=copied {
+            let _=fs::remove_file(&backup_stage);
+            let _=fs::remove_file(&stage);
+            return Err(format!("Unable to prepare library index recovery: {error}"));
+        }
+        let backup_result=if backup.exists() {
+            replace_document_file(&backup_stage,&backup)
+        } else {
+            fs::rename(&backup_stage,&backup)
+        };
+        if let Err(error)=backup_result {
+            let _=fs::remove_file(&backup_stage);
+            let _=fs::remove_file(&stage);
+            return Err(format!("Unable to publish library index recovery: {error}"));
+        }
+        if let Err(error)=replace_document_file(&stage,path) {
+            let _=fs::remove_file(&stage);
+            return Err(format!("Unable to replace library index atomically: {error}"));
+        }
+    } else {
+        if let Err(error)=fs::rename(&stage,path) {
+            let _=fs::remove_file(&stage);
+            return Err(format!("Unable to create library index: {error}"));
+        }
     }
-
     Ok(())
+}
+
+fn save_index(app: &AppHandle, index: &LibraryIndex) -> Result<(), String> {
+    let bytes=serde_json::to_vec_pretty(index)
+        .map_err(|error| format!("Unable to serialize MALENJO library index: {error}"))?;
+    save_index_file(&index_path(app)?,&bytes)
 }
 
 fn validate_requested_path(path: &str) -> Result<(), String> {
@@ -763,7 +805,7 @@ pub fn discard_staged_document(app: AppHandle, staging_token: String) -> Result<
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_extension, classify_signature, destination_path, fnv1a64, install_staged_document, parse_index, save_as_new_file, validate_requested_path, validate_staging_token};
+    use super::{classify_extension, classify_signature, destination_path, fnv1a64, install_staged_document, parse_index, save_as_new_file, save_index_file, validate_requested_path, validate_staging_token};
     use std::{fs, path::PathBuf, sync::{Arc, Barrier}, thread, time::{SystemTime, UNIX_EPOCH}};
 
     #[test]
@@ -788,6 +830,44 @@ mod tests {
         assert_eq!(fs::read(&original).expect("source intact"), b"unaltered");
         assert_eq!(fs::read_dir(&folder).expect("no leftovers").count(), 1);
         fs::remove_dir_all(folder).expect("cleanup");
+    }
+
+    #[test]
+    fn library_index_atomic_save_retains_previous_verified_version() {
+        let root=test_directory("index-atomic");
+        let path=root.join("index.json");
+        let first=br#"{"version":1,"documents":[]}"#;
+        let second=br#"{"version":1,"documents":[{"id":"d","path":"C:/example.pdf","added_ms":1,"last_opened_ms":null}]}"#;
+        save_index_file(&path,first).expect("create library index");
+        save_index_file(&path,second).expect("replace library index");
+        assert_eq!(fs::read(&path).unwrap(),second);
+        assert_eq!(fs::read(root.join("index.json.bak")).unwrap(),first);
+        assert!(parse_index(&fs::read(&path).unwrap()).is_ok());
+        assert!(parse_index(&fs::read(root.join("index.json.bak")).unwrap()).is_ok());
+        assert_eq!(fs::read_dir(&root).unwrap().count(),2);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn library_index_rejects_non_file_destination_without_removing_it() {
+        let root=test_directory("index-directory");
+        let path=root.join("index.json");
+        fs::create_dir(&path).unwrap();
+        assert!(save_index_file(&path,b"replacement").is_err());
+        assert!(path.is_dir());
+        assert_eq!(fs::read_dir(&root).unwrap().count(),1);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn library_index_rejects_failed_staging_without_destroying_existing_bytes() {
+        let root=test_directory("index-closed");
+        let path=root.join("index.json");
+        fs::write(&path,b"original").unwrap();
+        // Nonexistent parent makes staging fail before the live index is touched.
+        assert!(save_index_file(&root.join("missing").join("index.json"),b"new").is_err());
+        assert_eq!(fs::read(&path).unwrap(),b"original");
+        fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]
