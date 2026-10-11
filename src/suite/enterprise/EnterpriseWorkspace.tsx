@@ -141,6 +141,7 @@ function BackupPanel(){
   const [inspection,setInspection]=useState<BackupInspection|null>(null);
   const [backupPath,setBackupPath]=useState('');
   const [linkedCopies,setLinkedCopies]=useState<Array<{documentId:string;originalName:string;restoredPath:string;sizeBytes:number}>>([]);
+  const [restartRequired,setRestartRequired]=useState(false);
   const [busy,setBusy]=useState(false);const[error,setError]=useState('');const[notice,setNotice]=useState('');
   useEffect(()=>{void kopiaStatus().then(setKopia).catch(()=>setKopia(null));},[]);
   async function create(){
@@ -150,7 +151,19 @@ function BackupPanel(){
     setBusy(true);setError('');setInspection(null);setLinkedCopies([]);try{const result=await inspectBackupWithPicker();if(result){setBackupPath(result.path);setInspection(result.inspection);setNotice(!result.inspection.valid?'Backup failed integrity validation.':result.inspection.linkedDocumentsComplete?`Backup verified, including ${result.inspection.linkedDocumentCount} indexed document copies.`:'App-state backup integrity verified, but this legacy backup does not include independently recoverable document copies.');}}catch(reason){setError(String(reason));}finally{setBusy(false);}
   }
   async function restore(){
-    if(!backupPath)return;setBusy(true);setError('');try{await restoreBackup(backupPath);setNotice('Verified app-state restore complete. Original user documents were not overwritten; archived copies can be recovered separately.');}catch(reason){setError(String(reason));}finally{setBusy(false);}
+    if(!backupPath||!inspection?.valid||restartRequired)return;
+    if(!window.confirm(
+      'RESTORE MALENJO APPLICATION STATE?\\n\\n' +
+      'Close or save all open documents before proceeding. This replaces native Library, Home, Enterprise and Security state, but will not overwrite external user documents.\\n\\n' +
+      'You MUST close and relaunch MALENJO after this operation to avoid stale sessions. Continue?'
+    ))return;
+    setBusy(true);setError('');
+    try{
+      await restoreBackup(backupPath);
+      setRestartRequired(true);
+      setNotice('Application state restored. CLOSE AND RELAUNCH MALENJO before using the workspace. Other open tabs may contain stale in-memory state. External documents were not overwritten.');
+    }catch(reason){setError(String(reason));}
+    finally{setBusy(false);}
   }
   async function restoreExternalCopies(){
     if(!backupPath||!inspection?.valid)return;
@@ -169,23 +182,29 @@ function BackupPanel(){
   async function snapshotKopia(){
     setBusy(true);setError('');try{await kopiaSnapshot();setNotice('Kopia snapshot command completed.');}catch(reason){setError(String(reason));}finally{setBusy(false);}
   }
-  return <><Message error={error} notice={notice}/><div className="enterprise-grid">
+  return <><Message error={error} notice={notice}/>
+    {restartRequired&&<div className="security-warning" role="alert">
+      MALENJO APPLICATION RESTART REQUIRED: the restored native state must be reloaded.
+      Close the application completely and relaunch before editing, saving or opening documents.
+      Existing external user document files remain untouched.
+    </div>}
+    <div className="enterprise-grid">
     <section className="enterprise-card"><h2><HardDrive size={18}/> Offline backup</h2>
       <p>Creates a verified backup of enterprise, security, library/Home state and independent copies of available indexed user documents. Missing or changing linked files cause backup creation to fail, never to report incomplete data as verified.</p>
       <div className="enterprise-actions">
-        <button disabled={busy||!enterpriseNative()} onClick={()=>void create()}>Create verified backup</button>
-        <button disabled={busy||!enterpriseNative()} onClick={()=>void inspect()}>Inspect backup</button>
+        <button disabled={busy||restartRequired||!enterpriseNative()} onClick={()=>void create()}>Create verified backup</button>
+        <button disabled={busy||restartRequired||!enterpriseNative()} onClick={()=>void inspect()}>Inspect backup</button>
       </div>
       {inspection&&<div className={inspection.valid?'backup-status ready':'backup-status'}>
         <b>{!inspection.valid?'INVALID':inspection.linkedDocumentsComplete?'COMPLETE DOCUMENT BACKUP':'APP STATE ONLY'}</b>
         <span>{inspection.fileCount} files · {inspection.totalBytes} bytes · {inspection.linkedDocumentCount} document copies</span>
         {inspection.errors.map(e=><small key={e}>{e}</small>)}
       </div>}
-      <button disabled={!inspection?.valid||!backupPath||busy} onClick={()=>void restore()}>
+      <button disabled={!inspection?.valid||!backupPath||busy||restartRequired} onClick={()=>void restore()}>
         Restore app state from verified backup
       </button>
       <p>Backups contain independent copies of your documents <strong>without encryption</strong>. Store them in a trusted, access-controlled location. Existing user documents are never overwritten; recovered bytes go into a separate folder you choose.</p>
-      <button disabled={!inspection?.valid||!inspection.linkedDocumentsComplete||!backupPath||busy} onClick={()=>void restoreExternalCopies()}>
+      <button disabled={!inspection?.valid||!inspection.linkedDocumentsComplete||!backupPath||busy||restartRequired} onClick={()=>void restoreExternalCopies()}>
         Recover linked document copies safely
       </button>
       {linkedCopies.length>0&&<div className="backup-status ready" role="status">
