@@ -1191,6 +1191,52 @@ fn copy_dir_recursive(source: &Path, destination: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Rebuilding a backup must not recursively copy a previous restored
+/// archive into the new backup before generating the current verified archive.
+fn copy_live_library_for_backup(source: &Path, destination: &Path) -> Result<(), String> {
+    let metadata=match fs::symlink_metadata(source) {
+        Ok(meta)=>meta,
+        Err(error) if error.kind()==std::io::ErrorKind::NotFound=>return Ok(()),
+        Err(error)=>return Err(format!("Unable to inspect live library directory: {error}")),
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err("Live library directory must be a real directory.".into());
+    }
+    fs::create_dir_all(destination)
+        .map_err(|error|format!("Unable to stage library state: {error}"))?;
+    for entry in fs::read_dir(source).map_err(|error|format!("Unable to list library state: {error}"))? {
+        let entry=entry.map_err(|error|format!("Unable to read library entry: {error}"))?;
+        let name=entry.file_name();
+        let input=entry.path();
+        if name=="linked-archive-v1" {
+            let metadata=fs::symlink_metadata(&input)
+                .map_err(|error|format!("Unable to inspect previous linked archive: {error}"))?;
+            if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                return Err("Previous linked-document archive is not a safe directory.".into());
+            }
+            // The new copy will be reconstructed from the live indexed user
+            // files, so inherited recovered archive copies are intentionally
+            // not part of the next backup's state snapshot.
+            continue;
+        }
+        let output=destination.join(&name);
+        let metadata=fs::symlink_metadata(&input)
+            .map_err(|error|format!("Unable to inspect library state: {error}"))?;
+        if metadata.file_type().is_symlink() {
+            return Err("Backup refuses a symbolic link in live library state.".into());
+        }
+        if metadata.is_dir() {
+            copy_dir_recursive(&input,&output)?;
+        } else if metadata.is_file() {
+            fs::copy(&input,&output)
+                .map_err(|error|format!("Unable to copy live library state: {error}"))?;
+        } else {
+            return Err("Backup refuses special files in live library state.".into());
+        }
+    }
+    Ok(())
+}
+
 fn collect_backup_files(root: &Path, current: &Path, files: &mut Vec<BackupFile>) -> Result<(), String> {
     if !current.exists() {
         return Ok(());
@@ -1379,7 +1425,7 @@ pub fn create_local_backup(
             .map_err(|error| format!("Unable to create new backup state: {error}"))?;
         copy_dir_recursive(&app_data.join("enterprise"), &state.join("enterprise"))?;
         copy_dir_recursive(&app_data.join("security"), &state.join("security"))?;
-        copy_dir_recursive(&app_data.join("library"), &state.join("library"))?;
+        copy_live_library_for_backup(&app_data.join("library"), &state.join("library"))?;
         snapshot_linked_documents(&state)?;
 
         let mut files = Vec::new();
@@ -1653,7 +1699,7 @@ pub fn kopia_restore_snapshot(
 #[cfg(test)]
 mod tests {
     use super::{
-        collect_backup_files, inspect_backup, restore_state_with_recovery, recover_pending_restore, snapshot_linked_documents, recover_linked_document_copies, RestoreJournal, RESTORE_JOURNAL_VERSION, retention_candidates,
+        collect_backup_files, copy_live_library_for_backup, inspect_backup, restore_state_with_recovery, recover_pending_restore, snapshot_linked_documents, recover_linked_document_copies, RestoreJournal, RESTORE_JOURNAL_VERSION, retention_candidates,
         reserve_backup_root, role_permissions, supported_backup_domain, validate_home_payload, BackupManifest, DmsIndex, DmsRecord, DmsVersion, BACKUP_VERSION,
     };
     use std::{fs, time::{SystemTime, UNIX_EPOCH}};
@@ -1803,6 +1849,22 @@ mod tests {
             serde_json::to_vec(&journal).unwrap()).unwrap();
         assert!(recover_pending_restore(&root).is_err());
         assert_eq!(fs::read(root.join("enterprise/safe.txt")).unwrap(),b"unchanged");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn backup_does_not_recopy_old_linked_archives_before_new_snapshot() {
+        let root=temp_root("archive-not-recursive");
+        let previous=root.join("live-library");
+        fs::create_dir_all(previous.join("linked-archive-v1")).unwrap();
+        fs::write(previous.join("linked-archive-v1/old.bin"),b"obsolete huge snapshot").unwrap();
+        fs::write(previous.join("index.json"),b"{}").unwrap();
+        let state=root.join("backup-library");
+        copy_live_library_for_backup(&previous,&state).unwrap();
+        assert_eq!(fs::read(state.join("index.json")).unwrap(),b"{}");
+        assert!(!state.join("linked-archive-v1").exists());
+        assert_eq!(fs::read(previous.join("linked-archive-v1/old.bin")).unwrap(),
+            b"obsolete huge snapshot");
         fs::remove_dir_all(root).unwrap();
     }
 
