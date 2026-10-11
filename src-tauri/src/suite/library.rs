@@ -263,14 +263,39 @@ fn save_index_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
     // Make a verified recovery copy before changing the primary. The backup
     // must itself be published transactionally; otherwise a failed write
     // would destroy the sole working rollback candidate.
-    if let Ok(meta)=fs::symlink_metadata(path) {
+    let current=match fs::symlink_metadata(path) {
+        Ok(meta)=>Some(meta),
+        Err(error) if error.kind()==std::io::ErrorKind::NotFound=>None,
+        Err(error)=>{
+            let _=fs::remove_file(&stage);
+            return Err(format!("Unable to inspect the previous library index: {error}"));
+        }
+    };
+    if let Some(meta)=current {
         if meta.file_type().is_symlink() || !meta.is_file() {
             let _=fs::remove_file(&stage);
             return Err("Library index destination is not a regular file.".into());
         }
         let backup=path.with_extension("json.bak");
         let backup_stage=path.with_extension(format!("bak-{}-{nonce}.tmp",std::process::id()));
+        // The existing index can be corrupt, with valid recovery in .bak.
+        // Never overwrite that valid recovery with corrupt bytes.
+        let existing=fs::read(path)
+            .map_err(|error| format!("Unable to inspect current index before replacement: {error}"))?;
+        let existing_valid=parse_index(&existing).is_ok();
+        if !existing_valid && !backup.exists() {
+            let _=fs::remove_file(&stage);
+            return Err("Current library index is invalid and there is no verified recovery; refusing replacement.".into());
+        }
+        if !existing_valid {
+            // Retain the pre-existing recovery file unchanged.
+            if parse_index(&fs::read(&backup).map_err(|e|format!("Unable to read library recovery: {e}"))?).is_err() {
+                let _=fs::remove_file(&stage);
+                return Err("Primary and recovery library indexes are both invalid; refusing replacement.".into());
+            }
+        }
         let copied=(||->std::io::Result<()>{
+            if !existing_valid { return Ok(()); }
             let mut input=fs::File::open(path)?;
             let mut output=fs::OpenOptions::new().create_new(true).write(true).open(&backup_stage)?;
             std::io::copy(&mut input,&mut output)?;
@@ -281,15 +306,17 @@ fn save_index_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
             let _=fs::remove_file(&stage);
             return Err(format!("Unable to prepare library index recovery: {error}"));
         }
-        let backup_result=if backup.exists() {
-            replace_document_file(&backup_stage,&backup)
-        } else {
-            fs::rename(&backup_stage,&backup)
-        };
-        if let Err(error)=backup_result {
-            let _=fs::remove_file(&backup_stage);
-            let _=fs::remove_file(&stage);
-            return Err(format!("Unable to publish library index recovery: {error}"));
+        if existing_valid {
+            let backup_result=if backup.exists() {
+                replace_document_file(&backup_stage,&backup)
+            } else {
+                fs::rename(&backup_stage,&backup)
+            };
+            if let Err(error)=backup_result {
+                let _=fs::remove_file(&backup_stage);
+                let _=fs::remove_file(&stage);
+                return Err(format!("Unable to publish library index recovery: {error}"));
+            }
         }
         if let Err(error)=replace_document_file(&stage,path) {
             let _=fs::remove_file(&stage);
@@ -845,6 +872,20 @@ mod tests {
         assert!(parse_index(&fs::read(&path).unwrap()).is_ok());
         assert!(parse_index(&fs::read(root.join("index.json.bak")).unwrap()).is_ok());
         assert_eq!(fs::read_dir(&root).unwrap().count(),2);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn recovered_corrupt_primary_does_not_poison_good_backup() {
+        let root=test_directory("good-recovery");
+        let path=root.join("index.json");
+        let good=br#"{"version":1,"documents":[]}"#;
+        let repaired=br#"{"version":1,"documents":[{"id":"d","path":"C:/a.pdf","added_ms":1,"last_opened_ms":null}]}"#;
+        fs::write(&path,b"not valid JSON").unwrap();
+        fs::write(root.join("index.json.bak"),good).unwrap();
+        save_index_file(&path,repaired).expect("repair primary without poisoning recovery");
+        assert_eq!(fs::read(&path).unwrap(),repaired);
+        assert_eq!(fs::read(root.join("index.json.bak")).unwrap(),good);
         fs::remove_dir_all(root).expect("cleanup");
     }
 
