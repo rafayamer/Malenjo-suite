@@ -1,16 +1,22 @@
-import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { PDFDocument, StandardFonts, type PDFFont } from 'pdf-lib';
 
 export interface SearchablePdfPage {
   image: Blob;
   text: string;
 }
 
-function searchableAscii(value: string): string {
-  return value
-    .replace(/[^\x20-\x7E\n]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 20_000);
+function searchableText(value: string, font: PDFFont): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  // Never claim that text is searchable after silently discarding OCR glyphs
+  // or truncating it. Helvetica supports WinAnsi but not every Unicode script.
+  if (normalized.length > 20_000)
+    throw new Error('OCR page exceeds the 20,000-character searchable-PDF limit; text was not truncated or exported.');
+  try {
+    font.encodeText(normalized);
+  } catch {
+    throw new Error('OCR text contains characters unsupported by the PDF font. Export UTF-8 text instead; multilingual searchable PDF requires an embedded Unicode font.');
+  }
+  return normalized;
 }
 
 export async function buildSearchablePdf(pages: SearchablePdfPage[]): Promise<Uint8Array> {
@@ -32,7 +38,7 @@ export async function buildSearchablePdf(pages: SearchablePdfPage[]): Promise<Ui
     const page = document.addPage([width, height]);
     page.drawImage(embedded, { x: 0, y: 0, width, height });
 
-    const text = searchableAscii(item.text);
+    const text = searchableText(item.text, font);
     if (text) {
       const chunks = text.match(/.{1,500}/g) ?? [];
       chunks.forEach((chunk, index) => {
@@ -60,6 +66,12 @@ export function downloadBytes(bytes: Uint8Array, name: string, type: string): vo
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = name;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  document.body.appendChild(anchor);
+  try {
+    anchor.click();
+  } finally {
+    anchor.remove();
+    // Immediate revocation races the browser download reader.
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
 }
