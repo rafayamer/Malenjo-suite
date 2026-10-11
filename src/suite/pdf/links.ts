@@ -1,5 +1,5 @@
 import {
-  PDFArray,PDFDict,PDFDocument,PDFHexString,PDFName,PDFRef,PDFString,
+  PDFArray,PDFDict,PDFDocument,PDFHexString,PDFName,PDFNumber,PDFRef,PDFString,
 } from 'pdf-lib';
 
 export type PdfLinkTarget =
@@ -11,6 +11,8 @@ export interface PdfLinkAnnotation {
   ref:string|null;
   kind:'page'|'https'|'unsupported';
   destination:string;
+  /** Valid link /Rect in PDF page coordinates, for an opt-in on-page hit target. */
+  rectangle?:readonly [number,number,number,number];
 }
 export interface PdfLinkRectangle {
   pageNumber:number;x:number;y:number;width:number;height:number;
@@ -239,6 +241,17 @@ function assignTarget(pdf:PDFDocument,dict:PDFDict,target:PdfLinkTarget):void{
   }
 }
 
+function safeLinkRectangle(pdf:PDFDocument,dict:PDFDict):readonly [number,number,number,number]|undefined{
+  try{
+    const rect=dict.lookup(PDFName.of('Rect'),PDFArray);
+    if(rect.size()!==4)return;
+    const values=Array.from({length:4},(_,index)=>rect.lookup(index,PDFNumber).asNumber());
+    if(values.some(value=>!Number.isFinite(value)||Math.abs(value)>100_000)||
+      values[2]<=values[0]||values[3]<=values[1])return;
+    return values as [number,number,number,number];
+  }catch{return;}
+}
+
 export async function listPdfLinkAnnotations(bytes:Uint8Array):Promise<PdfLinkAnnotation[]>{
   const pdf=await load(bytes);
   if(pdf.getPageCount()>MAX_PAGES)throw new Error('PDF link inventory supports at most 2,000 pages.');
@@ -259,6 +272,7 @@ export async function listPdfLinkAnnotations(bytes:Uint8Array):Promise<PdfLinkAn
       found.push({
         pageNumber,index,ref:ref instanceof PDFRef?ref.toString():null,
         ...destination(pdf,dict,uriBudget),
+        rectangle:safeLinkRectangle(pdf,dict),
       });
     }
   }
