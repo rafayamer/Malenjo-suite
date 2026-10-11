@@ -1165,8 +1165,13 @@ pub fn restore_linked_document_copies(
 }
 
 fn copy_dir_recursive(source: &Path, destination: &Path) -> Result<(), String> {
-    if !source.exists() {
-        return Ok(());
+    let source_metadata=match fs::symlink_metadata(source) {
+        Ok(metadata)=>metadata,
+        Err(error) if error.kind()==std::io::ErrorKind::NotFound=>return Ok(()),
+        Err(error)=>return Err(format!("Unable to inspect backup source root: {error}")),
+    };
+    if source_metadata.file_type().is_symlink() || !source_metadata.is_dir() {
+        return Err(format!("Backup source root is not a real directory: {}",source.display()));
     }
     fs::create_dir_all(destination)
         .map_err(|error| format!("Unable to create backup directory: {error}"))?;
@@ -1186,6 +1191,8 @@ fn copy_dir_recursive(source: &Path, destination: &Path) -> Result<(), String> {
         } else if metadata.is_file() {
             fs::copy(&source_path, &destination_path)
                 .map_err(|error| format!("Unable to copy backup file: {error}"))?;
+        } else {
+            return Err(format!("Backup refuses non-regular special file: {}",source_path.display()));
         }
     }
     Ok(())
@@ -1258,6 +1265,8 @@ fn collect_backup_files(root: &Path, current: &Path, files: &mut Vec<BackupFile>
                 .replace('\\', "/");
             let (sha256, size_bytes) = sha256_file(&path)?;
             files.push(BackupFile { path:relative, sha256, size_bytes });
+        } else {
+            return Err(format!("Backup contains unsupported special file: {}",path.display()));
         }
     }
     Ok(())
