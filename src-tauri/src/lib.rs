@@ -7,7 +7,7 @@ use suite::{
         automation_run_local, automation_save_workflow, create_local_backup,
         dms_apply_retention, dms_list_records, dms_register_document,
         dms_retention_preview, dms_snapshot_record, dms_update_retention,
-        inspect_local_backup, kopia_restore_snapshot, kopia_snapshot_app_state,
+        inspect_local_backup, read_native_home_state, write_native_home_state, kopia_restore_snapshot, kopia_snapshot_app_state,
         kopia_status, restore_local_backup, temporal_start_workflow, temporal_status,
     },
     library::{
@@ -103,6 +103,8 @@ pub fn run() {
             temporal_status,
             temporal_start_workflow,
             create_local_backup,
+            read_native_home_state,
+            write_native_home_state,
             inspect_local_backup,
             restore_local_backup,
             kopia_status,
