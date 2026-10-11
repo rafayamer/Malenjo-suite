@@ -1637,6 +1637,12 @@ fn restore_state_with_recovery(app_data: &Path, backup: &Path) -> Result<PathBuf
             }
             fs::rename(stage.join(name), &target)
                 .map_err(|error| format!("Unable to install restored {name} state: {error}"))?;
+            #[cfg(test)]
+            if std::env::var("MALENJO_TEST_ABRUPT_RESTORE_EXIT").as_deref() == Ok(name.as_str()) {
+                // Test-only failpoint: terminate WITHOUT cleanup or destructors
+                // to exercise startup journal recovery across process boundaries.
+                std::process::exit(77);
+            }
         }
         sync_restore_directory(app_data)?;
         Ok(())
@@ -1830,6 +1836,64 @@ mod tests {
         assert_eq!(fs::read(recovery.join("library/index.json")).unwrap(),b"old index");
         assert_eq!(fs::read(recovery.join("library/home-state-v1.json")).unwrap(),b"old home");
         let _=fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn crash_restore_subprocess() {
+        let root=match std::env::var_os("MALENJO_RESTORE_SUBPROCESS_ROOT") {
+            Some(value)=>std::path::PathBuf::from(value),
+            None=>return,
+        };
+        let app=root.join("app");
+        let backup=root.join("backup");
+        let _=restore_state_with_recovery(&app,&backup)
+            .expect("restore without failpoint should succeed");
+        panic!("Abrupt-restore failpoint was not reached");
+    }
+
+    #[test]
+    fn real_subprocess_termination_recovers_all_original_domains() {
+        let root=temp_root("abrupt-process-restore");
+        let live=root.join("app");
+        for domain in ["enterprise","security","library"] {
+            fs::create_dir_all(live.join(domain)).unwrap();
+            fs::write(live.join(domain).join("old.txt"),
+                format!("{domain}-original").as_bytes()).unwrap();
+        }
+        let backup=create_test_backup(&root);
+        for domain in ["security","library"] {
+            fs::create_dir_all(backup.join("state").join(domain)).unwrap();
+            fs::write(backup.join("state").join(domain).join("new.txt"),
+                format!("{domain}-restored").as_bytes()).unwrap();
+        }
+        let mut files=Vec::new();
+        collect_backup_files(&backup.join("state"),&backup.join("state"),&mut files).unwrap();
+        fs::write(backup.join("manifest-v1.json"),
+            serde_json::to_vec_pretty(&BackupManifest{
+                version:BACKUP_VERSION, created_ms:1, files
+            }).unwrap()).unwrap();
+        let child=std::process::Command::new(std::env::current_exe().unwrap())
+            .arg("--exact")
+            .arg("suite::enterprise::tests::crash_restore_subprocess")
+            .arg("--nocapture")
+            .env("MALENJO_RESTORE_SUBPROCESS_ROOT",&root)
+            .env("MALENJO_TEST_ABRUPT_RESTORE_EXIT","enterprise")
+            .status().expect("spawn isolated restore process");
+        assert_eq!(child.code(),Some(77),"child must terminate at the actual restore checkpoint");
+        assert!(live.join(".malenjo-restore-pending.json").exists());
+        assert!(recover_pending_restore(&live).unwrap());
+        for domain in ["enterprise","security","library"] {
+            assert_eq!(fs::read(live.join(domain).join("old.txt")).unwrap(),
+                format!("{domain}-original").as_bytes());
+        }
+        let aborted=fs::read_dir(&live).unwrap().filter_map(Result::ok)
+            .map(|entry|entry.path())
+            .find(|path|path.file_name().and_then(|value|value.to_str())
+                .is_some_and(|name|name.starts_with("restore-aborted-")))
+            .expect("aborted restore quarantine exists");
+        assert_eq!(fs::read(aborted.join("enterprise/new.txt")).unwrap(),b"new-state");
+        assert!(!recover_pending_restore(&live).unwrap());
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
