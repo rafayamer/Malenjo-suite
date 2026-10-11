@@ -1,5 +1,7 @@
 mod suite;
 
+use tauri::Manager;
+
 use suite::{
     ai::{cancel_local_ai, local_ai_chat, local_ai_status},
     enterprise::{
@@ -55,6 +57,14 @@ pub fn run() {
     tauri::Builder::default()
         .manage(SecurityState::default())
         .plugin(tauri_plugin_dialog::init())
+        // Recover an interrupted multi-domain swap before any window can
+        // read enterprise, library or security state.
+        .setup(|app| {
+            let app_data = app.path().app_data_dir()?;
+            suite::enterprise::recover_pending_restore(&app_data)
+                .map_err(std::io::Error::other)?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             system_status,
             local_service_catalog,
