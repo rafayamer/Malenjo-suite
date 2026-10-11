@@ -65,8 +65,9 @@ describe('PDF history',()=>{
   it('keeps a single oversized current entry instead of losing history state',()=>{
     let history=createPdfHistory(bytes(1),1,{maxEntries:3,maxBytes:2});
     history=recordPdfHistory(history,bytes(7,7,7,7),1,'Large edit');
-    expect(history.entries).toHaveLength(1);
-    expect(history.totalBytes).toBe(4);
-    expect(canUndoPdfHistory(history)).toBe(false);
+    expect(history.entries).toHaveLength(2);
+    expect(history.totalBytes).toBe(5);
+    expect(canUndoPdfHistory(history)).toBe(true);
+    expect(undoPdfHistory(history).entry.bytes).toEqual(bytes(1));
   });
 });

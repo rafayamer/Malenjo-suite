@@ -110,11 +110,26 @@ export default function DocumentTabs({
             title="Close"
             onClick={() => onClose(session.id)}
           ><X size={13}/></button>
-          {open && menu && <div className="document-tab-menu" role="menu" style={{left:menu.left,top:menu.top}}>
-            <button onClick={() => { setMenu(null); onClose(session.id); }}>Close</button>
-            <button disabled={sessions.length <= 1} onClick={() => { setMenu(null); onCloseOthers(session.id); }}>Close others</button>
-            <button disabled={index === sessions.length - 1} onClick={() => { setMenu(null); onCloseRight(session.id); }}>Close tabs to right</button>
-            <button onClick={() => { setMenu(null); onCloseAll(); }}>Close all</button>
+          {open && menu && <div className="document-tab-menu" role="menu" aria-label={`Tab actions for ${session.document.name}`} style={{left:menu.left,top:menu.top}} onKeyDown={(event)=>{
+            if(event.key==='Escape'){
+              event.preventDefault();
+              setMenu(null);
+              event.currentTarget.parentElement?.querySelector<HTMLButtonElement>('.document-tab-menu-button')?.focus();
+            }else if(event.key==='ArrowDown'||event.key==='ArrowUp'){
+              event.preventDefault();
+              const items=Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+              if(!items.length)return;
+              const index=items.indexOf(document.activeElement as HTMLButtonElement);
+              const direction=event.key==='ArrowDown'?1:-1;
+              items[(index+direction+items.length)%items.length]?.focus();
+            }else if(event.key==='Tab'){
+              setMenu(null);
+            }
+          }}>
+            <button role="menuitem" autoFocus onClick={() => { setMenu(null); onClose(session.id); }}>Close</button>
+            <button role="menuitem" disabled={sessions.length <= 1} onClick={() => { setMenu(null); onCloseOthers(session.id); }}>Close others</button>
+            <button role="menuitem" disabled={index === sessions.length - 1} onClick={() => { setMenu(null); onCloseRight(session.id); }}>Close tabs to right</button>
+            <button role="menuitem" onClick={() => { setMenu(null); onCloseAll(); }}>Close all</button>
           </div>}
         </div>;
       })}

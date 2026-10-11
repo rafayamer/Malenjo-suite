@@ -92,7 +92,7 @@ export function recordPdfHistory(
   let retainedBytes = total(retained);
 
   while (
-    retained.length > 1
+    retained.length > 2
     && (retained.length > history.maxEntries || retainedBytes > history.maxBytes)
   ) {
     retainedBytes -= retained[0].bytes.byteLength;
