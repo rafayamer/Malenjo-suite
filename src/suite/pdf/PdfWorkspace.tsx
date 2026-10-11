@@ -542,10 +542,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const selectedPageNumbers=Array.from(selectedPages)
     .filter(page=>page>=1&&page<=pageCount)
     .sort((a,b)=>a-b);
-  // A stale default selection (typically page 1) must not silently apply
-  // operations to a different page than the one currently being viewed.
-  const operationPages=selectedPageNumbers.length > 1 || selectedPageNumbers[0] === currentPage
-    ? selectedPageNumbers : [currentPage];
+  // Explicit thumbnail selection is authoritative for "selected page"
+  // operations, even after the user scrolls or searches to another page.
+  const operationPages=selectedPageNumbers.length?selectedPageNumbers:[currentPage];
 
 
   const onPageRendered = useCallback((page: number) => {
