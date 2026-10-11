@@ -254,9 +254,11 @@ fn make_document_id(path: &Path) -> String {
 fn classify_extension(extension: &str) -> &'static str {
     match extension {
         "pdf" => "pdf",
-        "doc" | "docx" | "odt" | "rtf" => "docx",
-        "xls" | "xlsx" | "xlsm" | "csv" | "ods" => "xlsx",
-        "ppt" | "pptx" | "odp" => "pptx",
+        "docx" => "docx",
+        "xlsx" => "xlsx",
+        "pptx" => "pptx",
+        // Legacy binary / non-OOXML formats are library entries, not files
+        // the current OOXML-only editor can safely open or reserialize.
         "png" | "jpg" | "jpeg" | "tif" | "tiff" | "bmp" | "gif" | "webp" | "heic" => "image",
         "dxf" | "dwg" => "cad",
         "dcm" | "dicom" => "dicom",
@@ -708,6 +710,9 @@ mod tests {
         assert_eq!(classify_extension("docx"), "docx");
         assert_eq!(classify_extension("xlsx"), "xlsx");
         assert_eq!(classify_extension("pptx"), "pptx");
+        for unsupported in ["doc", "xls", "ppt", "odt", "ods", "odp", "rtf", "csv", "xlsm"] {
+            assert_eq!(classify_extension(unsupported), "other");
+        }
         assert_eq!(classify_extension("dxf"), "cad");
         assert_eq!(classify_extension("dcm"), "dicom");
         assert_eq!(classify_extension("unknown"), "other");

@@ -70,6 +70,39 @@ pub fn read_office_document(app: AppHandle, document_id: String) -> Result<Respo
     Ok(Response::new(bytes))
 }
 
+/// Publish an Office export only under a NEW filename. Never remove the
+/// destination as a fallback: Save Copy must not be able to destroy an original.
+fn write_office_new_copy(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let parent = path.parent().ok_or("Office export destination has no parent directory.")?;
+    let temp = parent.join(format!(
+        ".malenjo-office-{}-{:x}.tmp",
+        std::process::id(),
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default().as_nanos()
+    ));
+    let mut staged = fs::OpenOptions::new().create_new(true).write(true).open(&temp)
+        .map_err(|error| format!("Unable to stage Office export: {error}"))?;
+    let result = (|| -> std::io::Result<()> {
+        use std::io::Write;
+        staged.write_all(bytes)?;
+        staged.sync_all()?;
+        Ok(())
+    })();
+    drop(staged);
+    if let Err(error) = result {
+        let _ = fs::remove_file(&temp);
+        return Err(format!("Unable to stage Office export: {error}"));
+    }
+    let committed = fs::hard_link(&temp, path);
+    if let Err(error) = committed {
+        let _ = fs::remove_file(&temp);
+        return Err(format!("Office export destination must not exist and must support safe copy creation: {error}"));
+    }
+    fs::remove_file(&temp)
+        .map_err(|error| format!("Office export saved, but temporary staged link could not be removed: {error}"))?;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn write_office_copy(destination: String, bytes: Vec<u8>) -> Result<bool, String> {
     if bytes.is_empty() {
@@ -83,23 +116,14 @@ pub fn write_office_copy(destination: String, bytes: Vec<u8>) -> Result<bool, St
     }
 
     let path = validate_destination(&destination)?;
-    let temp = path.with_extension("malenjo-office.tmp");
-    fs::write(&temp, &bytes)
-        .map_err(|error| format!("Unable to write Office export: {error}"))?;
-
-    if path.exists() {
-        fs::remove_file(&path)
-            .map_err(|error| format!("Unable to replace Office export: {error}"))?;
-    }
-    fs::rename(&temp, &path)
-        .map_err(|error| format!("Unable to finalize Office export: {error}"))?;
+    write_office_new_copy(&path, &bytes)?;
 
     Ok(true)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_destination, validate_ooxml, MAX_OFFICE_BYTES};
+    use super::{validate_destination, validate_ooxml, write_office_new_copy, MAX_OFFICE_BYTES};
     use std::{fs, time::{SystemTime, UNIX_EPOCH}};
 
     fn temp_path(name: &str) -> std::path::PathBuf {
@@ -129,6 +153,23 @@ mod tests {
     #[test]
     fn office_payload_is_bounded() {
         assert_eq!(MAX_OFFICE_BYTES, 256 * 1024 * 1024);
+    }
+
+    #[test]
+    fn copy_rejects_existing_file_and_preserves_bytes() {
+        let path = temp_path("existing-copy.docx");
+        fs::write(&path, b"existing").expect("write existing destination");
+        assert!(write_office_new_copy(&path, b"PK\x03\x04updated").is_err());
+        assert_eq!(fs::read(&path).expect("read original"), b"existing");
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn copy_creates_new_complete_office_file() {
+        let path = temp_path("new-copy.docx");
+        write_office_new_copy(&path, b"PK\x03\x04payload").expect("write copy");
+        assert_eq!(fs::read(&path).expect("read new copy"), b"PK\x03\x04payload");
+        let _ = fs::remove_file(path);
     }
 
     #[test]
