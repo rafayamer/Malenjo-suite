@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {PDFDocument,PDFName,degrees} from 'pdf-lib';
+import {PDFDocument,PDFName,PDFNumber,degrees} from 'pdf-lib';
 import {
   planPdfBooklet,imposePdfBooklet,
   PDF_BOOKLET_MAX_INPUT_BYTES,PDF_BOOKLET_MAX_PAGES,
@@ -60,6 +60,13 @@ describe('offline saddle-stitched PDF booklet',()=>{
     wrong.addPage([7500,300]);
     await expect(imposePdfBooklet(Uint8Array.from(await wrong.save())))
       .rejects.toThrow(/dimensions/);
+  });
+  it('refuses nondefault UserUnit rather than silently rescaling printed pages',async()=>{
+    const pdf=await PDFDocument.create();
+    const page=pdf.addPage([200,300]);
+    page.node.set(PDFName.of('UserUnit'),PDFNumber.of(2));
+    await expect(imposePdfBooklet(Uint8Array.from(await pdf.save())))
+      .rejects.toThrow(/UserUnit/);
   });
   it('enforces page/input bounds and malformed PDF refusal',async()=>{
     expect(()=>planPdfBooklet(0)).toThrow(/1–200/);

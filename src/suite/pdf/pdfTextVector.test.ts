@@ -38,6 +38,18 @@ describe('strict SVG selectable-text export',()=>{
     .toThrow(/Malformed/);
   expect(()=>buildPdfTextOnlySvg(100,100,[])).toThrow(/no safely exportable/);
  });
+ it('refuses rotated page metadata rather than silently forcing zero rotation',async()=>{
+  const rotated={
+    numPages:1,
+    getPage:async()=>({
+      rotate:90,
+      getOperatorList:async()=>({fnArray:[]}),
+      getTextContent:async()=>({items:[{str:'a',transform:[12,0,0,12,10,10]}]}),
+      getViewport:()=>({width:300,height:400}),
+    }),
+  } as never;
+  await expect(exportPdfTextOnlySvgZip(rotated)).rejects.toThrow(/Rotated PDF pages/);
+ });
  it('rejects excess pages and honors cancellation',async()=>{
   await expect(exportPdfTextOnlySvgZip({numPages:11,getPage:async()=>{throw Error('unexpected');}} as never))
     .rejects.toThrow(/1 to 10/);
