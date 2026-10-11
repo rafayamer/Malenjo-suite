@@ -27,6 +27,16 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:pdf-release-gate
+      - name: Validate full 22-module / 90-PDF Phase 3 inventory
+        run: node --test scripts/phase3-functional-audit.check.mjs
+      - name: Publish Phase 3 evidence (partial is NOT release acceptance)
+        shell: pwsh
+        run: node scripts/phase3-functional-audit.mjs --json > phase3-functional-audit.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase3-functional-inventory
+          path: phase3-functional-audit.json
+          retention-days: 14
       - run: npm run build
       - name: Publish PDF release-readiness evidence (does not bypass release gate)
         shell: pwsh

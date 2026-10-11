@@ -27,7 +27,7 @@ jobs:
           npm install --no-save --no-audit --no-fund playwright
       - name: Install Chromium for real browser interaction
         run: npx playwright install --with-deps chromium
-      - name: Launch MALENJO and verify PDF selection, Find, tab retention and export
+      - name: Launch all 22 workspaces and verify real PDF workflows in Chromium
         run: node scripts/pdf-ui-browser-smoke.mjs
       - name: Upload screenshot when PDF UI acceptance fails
         if: failure()

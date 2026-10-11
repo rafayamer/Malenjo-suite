@@ -39,6 +39,27 @@ async function main(){
   const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.goto(base,{waitUntil:'domcontentloaded'});
+  // Phase 3: exercise every real navigation surface, not only the PDF tab.
+  // This proves shell launchability, not the underlying domain workflows.
+  const modulesText=readFileSync(resolve(root,'src/suite/modules/registry.ts'),'utf8');
+  const moduleNames=Array.from(modulesText.matchAll(/\{\s*id:'[^']+',\s*name:'([^']+)'/g),match=>match[1]);
+  requireEvidence(moduleNames.length===22&&new Set(moduleNames).size===22,
+    'not all 22 source-defined workspaces are available for browser verification');
+  for(const name of moduleNames){
+    const entry=page.locator('.sidebar nav .nav-item').filter({hasText:name}).first();
+    await entry.click({timeout:15000});
+    await page.waitForFunction(expected=>
+      document.querySelector('.sidebar nav .nav-item.active')?.getAttribute('aria-label')===expected,
+      name,{timeout:15000});
+    const content=(await page.locator('main.workspace').innerText()).trim();
+    requireEvidence(content.length>15,
+      'Workspace '+name+' has no usable page or clear capability status');
+    requireEvidence(errors.length===0,
+      'Unhandled error after navigating to '+name+': '+errors.join(' | '));
+    console.log('PHASE3 module launch/navigation: '+name+' PASS (shell only)');
+  }
+  console.log('PHASE3 22/22 module shell-navigation smoke: PASS (not module functionality sign-off)');
+  await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
   console.log('MALENJO loaded in Chromium; opening PDF via browser input');
   await page.locator('.workspace > input[type="file"]').setInputFiles({
     name:'browser-ui-acceptance.pdf',mimeType:'application/pdf',buffer:source,
