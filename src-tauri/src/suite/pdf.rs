@@ -134,6 +134,54 @@ fn write_export_with_recovery(path: &Path, bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+/// Export a PDF *copy* only at a new name. A hard link to a fully synced
+/// sibling staging file commits the output without ever replacing an existing
+/// path (including a symlink or an alias of the open source document).
+///
+/// In particular, do not reuse write_export_with_recovery here: that routine
+/// intentionally replaces existing paths for the separate provider-output API.
+fn write_new_pdf_copy(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    if path.exists() {
+        return Err("PDF copy destination already exists. Choose a new filename; the existing file was not changed.".into());
+    }
+
+    let sequence = PDF_SAVE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let tag = format!("{}-{}", std::process::id(), sequence);
+    let temp = path.with_extension(format!("malenjo-copy-stage-{tag}.tmp"));
+
+    let staged = (|| -> std::io::Result<()> {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        Ok(())
+    })();
+    if let Err(error) = staged {
+        let _ = fs::remove_file(&temp);
+        return Err(format!("Unable to stage PDF copy: {error}"));
+    }
+
+    // hard_link fails with AlreadyExists rather than replacing the destination,
+    // even if another process creates it after the preflight path check.
+    if let Err(error) = fs::hard_link(&temp, path) {
+        let _ = fs::remove_file(&temp);
+        if error.kind() == std::io::ErrorKind::AlreadyExists {
+            return Err("PDF copy destination already exists. Choose a new filename; the existing file was not changed.".into());
+        }
+        return Err(format!("Unable to commit PDF copy without overwriting an existing file: {error}"));
+    }
+
+    if let Err(error) = fs::remove_file(&temp) {
+        return Err(format!(
+            "PDF copy was created at {}, but the temporary staging file {} could not be removed ({error}).",
+            path.display(), temp.display()
+        ));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn write_pdf_copy(destination: String, bytes: Vec<u8>) -> Result<bool, String> {
     if bytes.len() < 5 || &bytes[..5] != b"%PDF-" {
@@ -144,7 +192,7 @@ pub fn write_pdf_copy(destination: String, bytes: Vec<u8>) -> Result<bool, Strin
     }
 
     let path = validate_destination(&destination)?;
-    write_export_with_recovery(&path, &bytes)?;
+    write_new_pdf_copy(&path, &bytes)?;
 
     Ok(true)
 }
@@ -189,7 +237,7 @@ pub fn write_pdf_tool_output(destination: String, bytes: Vec<u8>) -> Result<bool
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_destination, validate_pdf_file, validate_tool_output_destination, write_export_with_recovery, MAX_PDF_BYTES, MAX_PDF_TOOL_OUTPUT_BYTES};
+    use super::{validate_destination, validate_pdf_file, validate_tool_output_destination, write_export_with_recovery, write_new_pdf_copy, MAX_PDF_BYTES, MAX_PDF_TOOL_OUTPUT_BYTES};
     use std::{fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
 
     fn temp_path(name: &str) -> PathBuf {
@@ -224,6 +272,48 @@ mod tests {
     #[test]
     fn destination_requires_existing_parent() {
         assert!(validate_destination("").is_err());
+    }
+
+    #[test]
+    fn pdf_copy_creates_a_new_file_without_overwriting() {
+        let path = temp_path("distinct-copy.pdf");
+        let bytes = b"%PDF-1.7\ncopy\n%%EOF\n";
+        write_new_pdf_copy(&path, bytes).expect("create new PDF copy");
+        assert_eq!(fs::read(&path).expect("read copy"), bytes);
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn pdf_copy_refuses_to_replace_source_document() {
+        let source = temp_path("original.pdf");
+        let original = b"%PDF-1.7\noriginal\n%%EOF\n";
+        fs::write(&source, original).expect("create source");
+        assert!(write_new_pdf_copy(&source, b"%PDF-1.7\nmodified\n%%EOF\n").is_err());
+        assert_eq!(fs::read(&source).expect("source intact"), original);
+        let _ = fs::remove_file(source);
+    }
+
+    #[test]
+    fn pdf_copy_refuses_hard_link_alias_of_source() {
+        let source = temp_path("alias-source.pdf");
+        let alias = temp_path("alias-target.pdf");
+        let original = b"%PDF-1.7\noriginal\n%%EOF\n";
+        fs::write(&source, original).expect("create source");
+        fs::hard_link(&source, &alias).expect("create same-inode destination");
+        assert!(write_new_pdf_copy(&alias, b"%PDF-1.7\nmodified\n%%EOF\n").is_err());
+        assert_eq!(fs::read(&source).expect("source intact"), original);
+        assert_eq!(fs::read(&alias).expect("alias intact"), original);
+        let _ = fs::remove_file(alias);
+        let _ = fs::remove_file(source);
+    }
+
+    #[test]
+    fn pdf_copy_refuses_directory_destination_without_removal() {
+        let path = temp_path("copy-dir.pdf");
+        fs::create_dir(&path).expect("create directory");
+        assert!(write_new_pdf_copy(&path, b"%PDF-1.7\ncopy\n%%EOF\n").is_err());
+        assert!(path.is_dir());
+        let _ = fs::remove_dir(path);
     }
 
     #[test]
