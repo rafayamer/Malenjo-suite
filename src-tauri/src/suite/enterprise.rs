@@ -1115,7 +1115,13 @@ fn recover_linked_document_copies(backup: &Path, destination: &Path) -> Result<V
                 let _=fs::remove_file(&temp);
                 return Err(format!("Unable to stage complete linked document: {error}"));
             }
-            let (hash,size)=sha256_file(&temp)?;
+            let (hash,size)=match sha256_file(&temp) {
+                Ok(result)=>result,
+                Err(error)=>{
+                    let _=fs::remove_file(&temp);
+                    return Err(format!("Unable to verify staged recovered document: {error}"));
+                }
+            };
             if hash!=document.sha256 || size!=document.size_bytes {
                 let _=fs::remove_file(&temp);
                 return Err("Restored file bytes differ from verified backup.".into());
@@ -1394,7 +1400,16 @@ fn reserve_backup_root(destination: &Path) -> Result<PathBuf, String> {
         let sequence=BACKUP_DIRECTORY_SEQUENCE.fetch_add(1,Ordering::Relaxed);
         let name=format!("MALENJO-backup-{}-{}-{sequence}",now_ms(),std::process::id());
         let path=destination.join(name);
-        match fs::create_dir(&path) {
+        #[cfg(unix)]
+        let created = {
+            use std::os::unix::fs::DirBuilderExt;
+            let mut builder=fs::DirBuilder::new();
+            builder.mode(0o700);
+            builder.create(&path)
+        };
+        #[cfg(not(unix))]
+        let created=fs::create_dir(&path);
+        match created {
             Ok(()) => return Ok(path),
             Err(error) if error.kind()==std::io::ErrorKind::AlreadyExists => continue,
             Err(error) => return Err(format!("Unable to reserve new backup folder: {error}")),
