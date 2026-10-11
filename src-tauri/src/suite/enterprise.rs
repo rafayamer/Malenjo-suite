@@ -1361,31 +1361,60 @@ pub fn create_local_backup(
         return Err("Backup destination must be an existing non-symbolic-link directory.".into());
     }
 
-    let backup = reserve_backup_root(&destination)?;
-    let state = backup.join("state");
-    fs::create_dir(&state)
-        .map_err(|error| format!("Unable to create new backup state: {error}"))?;
     let app_data = app.path().app_data_dir()
         .map_err(|error| format!("Unable to resolve app data directory: {error}"))?;
-    copy_dir_recursive(&app_data.join("enterprise"), &state.join("enterprise"))?;
-    copy_dir_recursive(&app_data.join("security"), &state.join("security"))?;
-    copy_dir_recursive(&app_data.join("library"), &state.join("library"))?;
-    snapshot_linked_documents(&state)?;
-
-    let mut files = Vec::new();
-    collect_backup_files(&state, &state, &mut files)?;
-    let manifest = BackupManifest { version:BACKUP_VERSION, created_ms:now_ms(), files };
-    let bytes = serde_json::to_vec_pretty(&manifest)
-        .map_err(|error| format!("Unable to serialize backup manifest: {error}"))?;
-    fs::write(backup.join("manifest-v1.json"), bytes)
-        .map_err(|error| format!("Unable to write backup manifest: {error}"))?;
-
-    let inspection = inspect_backup(&backup)?;
-    if !inspection.valid {
-        let _ = fs::remove_dir_all(&backup);
-        return Err(format!("Backup verification failed: {}", inspection.errors.join("; ")));
+    let canonical_destination=fs::canonicalize(&destination)
+        .map_err(|error| format!("Unable to resolve backup destination: {error}"))?;
+    let canonical_app_data=fs::canonicalize(&app_data)
+        .map_err(|error| format!("Unable to resolve live app-data root: {error}"))?;
+    // Never copy a freshly created backup *into itself* by placing the target
+    // anywhere below the active app-data tree.
+    if canonical_destination.starts_with(&canonical_app_data) {
+        return Err("Backup destination must be outside MALENJO app-data to prevent recursive snapshotting.".into());
     }
-    append_audit(&app, "backup-create", "info", "Backup/DR", format!("Created {} verified file(s).", inspection.file_count))?;
+    let backup = reserve_backup_root(&destination)?;
+    let build = (|| -> Result<BackupInspection, String> {
+        let state = backup.join("state");
+        fs::create_dir(&state)
+            .map_err(|error| format!("Unable to create new backup state: {error}"))?;
+        copy_dir_recursive(&app_data.join("enterprise"), &state.join("enterprise"))?;
+        copy_dir_recursive(&app_data.join("security"), &state.join("security"))?;
+        copy_dir_recursive(&app_data.join("library"), &state.join("library"))?;
+        snapshot_linked_documents(&state)?;
+
+        let mut files = Vec::new();
+        collect_backup_files(&state, &state, &mut files)?;
+        let manifest = BackupManifest { version:BACKUP_VERSION, created_ms:now_ms(), files };
+        let bytes = serde_json::to_vec_pretty(&manifest)
+            .map_err(|error| format!("Unable to serialize backup manifest: {error}"))?;
+        let mut output=fs::OpenOptions::new().write(true).create_new(true)
+            .open(backup.join("manifest-v1.json"))
+            .map_err(|error| format!("Unable to write backup manifest: {error}"))?;
+        use std::io::Write;
+        output.write_all(&bytes).and_then(|_|output.sync_all())
+            .map_err(|error| format!("Unable to sync backup manifest: {error}"))?;
+        drop(output);
+        let inspection = inspect_backup(&backup)?;
+        if !inspection.valid {
+            return Err(format!("Backup integrity check failed: {}", inspection.errors.join("; ")));
+        }
+        Ok(inspection)
+    })();
+    let inspection=match build {
+        Ok(result)=>result,
+        Err(error)=>{
+            // Remove only this freshly reserved backup; it was never marked
+            // verified. Never delete any preexisting backup or user file.
+            let cleanup=fs::remove_dir_all(&backup);
+            return Err(match cleanup {
+                Ok(())=>format!("Backup creation failed; incomplete copy removed: {error}"),
+                Err(extra)=>format!("Backup creation failed: {error}; partial output at {} could not be removed: {extra}",backup.display()),
+            });
+        }
+    };
+    append_audit(&app, "backup-create", "info", "Backup/DR",
+        format!("Created {} verified file(s) at {}.",inspection.file_count,backup.display()))
+        .map_err(|error| format!("Verified backup exists at {}, but the audit event failed: {error}",backup.display()))?;
     Ok(backup.to_string_lossy().into_owned())
 }
 
