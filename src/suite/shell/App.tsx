@@ -50,6 +50,7 @@ export default function App() {
   const [workspaceNotices, setWorkspaceNotices] = useState<Record<string,string>>({});
   const [paletteDocuments, setPaletteDocuments] = useState<LibraryDocument[]>([]);
   const commandControllersRef = useRef(new Map<string, DocumentCommandController>());
+  const commandPaletteOpenerRef = useRef<HTMLElement | null>(null);
   const browserOpenInputRef = useRef<HTMLInputElement>(null);
   const module = modules.find((item) => item.id === active) ?? modules[0];
   const groups = useMemo(() => ['Core','Create','Intelligence','Enterprise','System'] as const, []);
@@ -311,7 +312,7 @@ export default function App() {
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
-        setCommandOpen(true);
+        openCommandPalette();
         return;
       }
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'w') {
@@ -337,9 +338,19 @@ export default function App() {
     openBrowserFiles(files);
   }
 
+  function openCommandPalette() {
+    if (!commandOpen) commandPaletteOpenerRef.current = document.activeElement as HTMLElement | null;
+    setCommandOpen(true);
+  }
+
   function closeCommandPalette() {
     setCommandOpen(false);
     setQuery('');
+    const opener = commandPaletteOpenerRef.current;
+    commandPaletteOpenerRef.current = null;
+    window.requestAnimationFrame(() => {
+      if (opener?.isConnected) opener.focus();
+    });
   }
 
   const activeDocumentCommands = activeSession
@@ -529,7 +540,7 @@ export default function App() {
         }}
       />
       <header className="topbar">
-        <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);setCommandOpen(true);}} placeholder="Search files, tools and commands"/><kbd>Ctrl K</kbd></div>
+        <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);openCommandPalette();}} placeholder="Search files, tools and commands"/><kbd>Ctrl K</kbd></div>
         <div className="topbar-actions">
           <button className="command" onClick={()=>void openDocumentsFromPicker()}><FolderOpen size={17}/> Open</button>
           <button className="command" onClick={()=>setCommandOpen(true)}><Command size={17}/> Commands</button>
@@ -574,7 +585,7 @@ export default function App() {
             onActivateSession={activateSession}
             onOpenDocument={openFromLibrary}
             onOpenDocuments={()=>void openDocumentsFromPicker()}
-            onOpenCommandPalette={()=>{setQuery('');setCommandOpen(true);}}
+            onOpenCommandPalette={()=>{setQuery('');openCommandPalette();}}
           />
         : active === 'files'
           ? <FileLibrary onOpen={openFromLibrary}/>

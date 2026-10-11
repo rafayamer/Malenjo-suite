@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Command, FileText, Search, SlidersHorizontal, X } from 'lucide-react';
 import { filterCommandPaletteItems, type CommandPaletteSearchItem } from './commandPaletteModel';
 
@@ -16,6 +16,7 @@ interface Props {
 
 export default function CommandPalette({ open, query, items, onQueryChange, onClose }: Props) {
   const [selected, setSelected] = useState(0);
+  const dialogRef = useRef<HTMLElement>(null);
   const filtered = useMemo(() => filterCommandPaletteItems(items, query), [items, query]);
 
   useEffect(() => { setSelected(0); }, [query, open]);
@@ -23,7 +24,21 @@ export default function CommandPalette({ open, query, items, onQueryChange, onCl
   useEffect(() => {
     if (!open) return;
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
+      if (event.key === 'Tab') {
+        const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
+          'input:not([disabled]),button:not([disabled]),[tabindex]:not([tabindex="-1"])'
+        ) ?? []);
+        if (focusable.length) {
+          const first = focusable[0], last = focusable[focusable.length - 1];
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+          }
+        }
+      } else if (event.key === 'Escape') {
         event.preventDefault();
         onClose();
       } else if (event.key === 'ArrowDown') {
@@ -47,7 +62,7 @@ export default function CommandPalette({ open, query, items, onQueryChange, onCl
   if (!open) return null;
 
   return <div className="command-palette-backdrop" onMouseDown={onClose}>
-    <section className="command-palette" role="dialog" aria-modal="true" aria-label="MALENJO command palette" onMouseDown={(event)=>event.stopPropagation()}>
+    <section ref={dialogRef} className="command-palette" role="dialog" aria-modal="true" aria-label="MALENJO command palette" onMouseDown={(event)=>event.stopPropagation()}>
       <div className="command-palette-search">
         <Search size={17}/>
         <input

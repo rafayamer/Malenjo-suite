@@ -35,7 +35,7 @@ export async function buildSearchablePdf(pages: SearchablePdfPage[]): Promise<Ui
     const text = searchableAscii(item.text);
     if (text) {
       const chunks = text.match(/.{1,500}/g) ?? [];
-      chunks.slice(0, 30).forEach((chunk, index) => {
+      chunks.forEach((chunk, index) => {
         page.drawText(chunk, {
           x: 2,
           y: Math.min(height - 2, 2 + index),
