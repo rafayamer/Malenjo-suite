@@ -236,7 +236,7 @@ describe('OOXML fidelity adapters', () => {
       'xl/_rels/workbook.xml.rels': '<Relationships><Relationship Id="rId1" Target="../../outside.xml"/></Relationships>',
       'xl/worksheets/sheet1.xml': '<worksheet/>',
     });
-    expect(() => parseXlsx(unsafe)).toThrow(/unsafe/);
+    expect(() => parseXlsx(unsafe)).toThrow(/escapes package root|unsafe/);
     const noVisible = zip({
       'xl/workbook.xml': '<workbook><sheets><sheet name="Secrets" state="veryHidden" r:id="rId1"/></sheets></workbook>',
       'xl/_rels/workbook.xml.rels': '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
