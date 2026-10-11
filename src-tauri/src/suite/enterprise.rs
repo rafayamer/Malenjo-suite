@@ -912,7 +912,9 @@ fn copy_dir_recursive(source: &Path, destination: &Path) -> Result<(), String> {
         let metadata = fs::symlink_metadata(&source_path)
             .map_err(|error| format!("Unable to inspect backup file: {error}"))?;
         if metadata.file_type().is_symlink() {
-            continue;
+            // Silently skipping a linked source creates a "verified" backup
+            // that was never a complete representation of live state.
+            return Err(format!("Backup source contains a symbolic link: {}", source_path.display()));
         }
         if metadata.is_dir() {
             copy_dir_recursive(&source_path, &destination_path)?;
@@ -964,9 +966,23 @@ fn validate_backup_root(path: &Path) -> Result<BackupManifest, String> {
 
 fn inspect_backup(path: &Path) -> Result<BackupInspection, String> {
     let manifest = validate_backup_root(path)?;
+    let state = path.join("state");
+    let state_metadata=fs::symlink_metadata(&state)
+        .map_err(|error| format!("Backup is missing its state directory: {error}"))?;
+    if state_metadata.file_type().is_symlink() || !state_metadata.is_dir() {
+        return Err("Backup state root must be a non-symbolic-link directory.".into());
+    }
     let mut errors = Vec::new();
     let mut total_bytes = 0u64;
+    let mut expected_paths=HashSet::new();
+    if manifest.files.len()>100_000 {
+        return Err("Backup manifest exceeds the 100,000 file safety budget.".into());
+    }
     for entry in &manifest.files {
+        if !expected_paths.insert(entry.path.clone()) {
+            errors.push(format!("Duplicate backup manifest path: {}",entry.path));
+            continue;
+        }
         let relative = safe_relative(&entry.path)?;
         let file = path.join("state").join(&relative);
         // Reject symlinked entries and ancestors; never verify one file
@@ -1004,6 +1020,19 @@ fn inspect_backup(path: &Path) -> Result<BackupInspection, String> {
                 }
             }
             Err(error) => errors.push(format!("{}: {}", entry.path, error)),
+        }
+    }
+    // A manifest may be internally consistent yet omit extra files from
+    // state. Restoring unlisted content would introduce unverified data.
+    // Enumerate the *actual* state tree and require exact inventory parity.
+    let mut actual=Vec::new();
+    collect_backup_files(&state,&state,&mut actual)?;
+    if actual.len()>100_000 {
+        errors.push("Backup contains more than 100,000 files.".into());
+    }
+    for file in actual {
+        if !expected_paths.contains(&file.path) {
+            errors.push(format!("Unlisted file in backup state: {}",file.path));
         }
     }
     Ok(BackupInspection {
@@ -1318,6 +1347,42 @@ mod tests {
         assert_eq!(fs::read(app_data.join("enterprise").join("new.txt")).expect("new state"), b"new-state");
         assert_eq!(fs::read(recovery.join("enterprise").join("old.txt")).expect("recovery state"), b"old-state");
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn backup_rejects_unlisted_state_files_before_restore() {
+        let root=temp_root("unlisted");
+        let backup=create_test_backup(&root);
+        fs::write(backup.join("state/enterprise/extra.txt"),b"injected").unwrap();
+        let result=inspect_backup(&backup).unwrap();
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|error|error.contains("Unlisted file")));
+        let _=fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn backup_rejects_duplicate_manifest_entries() {
+        let root=temp_root("duplicates");
+        let backup=create_test_backup(&root);
+        let path=backup.join("manifest-v1.json");
+        let mut manifest:BackupManifest=serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        manifest.files.push(manifest.files[0].clone());
+        fs::write(&path,serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+        let result=inspect_backup(&backup).unwrap();
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|error|error.contains("Duplicate")));
+        let _=fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn backup_rejects_symlinks_in_manifest_or_unlisted_tree() {
+        use std::os::unix::fs::symlink;
+        let root=temp_root("symlinks");
+        let backup=create_test_backup(&root);
+        symlink("/etc/hosts",backup.join("state/enterprise/linked.txt")).unwrap();
+        assert!(inspect_backup(&backup).is_err());
+        let _=fs::remove_dir_all(root);
     }
 
     #[test]
