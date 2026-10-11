@@ -111,18 +111,43 @@ export function parseDocx(bytes: Uint8Array): DocxModel {
   };
 }
 
+/** Update paragraph text without flattening DOCX body, tables, styles,
+ * drawings, bookmarks, section properties, comments, or relationships.
+ *
+ * This editor cannot safely create/delete whole rich paragraphs or redistribute
+ * text among mixed styled runs. Refuse those unsupported edits explicitly.
+ */
 export function writeDocx(bytes: Uint8Array, paragraphs: string[]): Uint8Array {
   const files = packageFiles(bytes);
   const xml = xmlText(files, 'word/document.xml');
-  const section = xml.match(/<w:sectPr\b[\s\S]*?<\/w:sectPr>/)?.[0] ?? '';
-  const body = paragraphs.map((paragraph) =>
-    `<w:p><w:r><w:t xml:space="preserve">${escapeXml(paragraph)}</w:t></w:r></w:p>`,
-  ).join('');
-  const next = xml.replace(
-    /<w:body\b[^>]*>[\s\S]*?<\/w:body>/,
-    `<w:body>${body}${section}</w:body>`,
-  );
-  if (next === xml) throw new Error('DOCX document body could not be located.');
+  const matches = Array.from(xml.matchAll(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g));
+  if (matches.length !== paragraphs.length) {
+    throw new Error('This DOCX editor cannot safely add/remove rich paragraphs; original file unchanged.');
+  }
+  let index = 0;
+  const next = xml.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g, (paragraphXml) => {
+    const requested = paragraphs[index++];
+    const original = textRuns(paragraphXml, 'w:t').join('');
+    if (original === requested) return paragraphXml;
+    // Rich structures must not be modified by flattening them into plain text.
+    if (/<w:(?:hyperlink|fldChar|instrText|drawing|object|footnoteReference|endnoteReference|commentRangeStart|sdt)\b/.test(paragraphXml)) {
+      throw new Error('Editing a paragraph with rich DOCX objects requires a rich-text editor; source preserved.');
+    }
+    const runs = Array.from(paragraphXml.matchAll(/<w:t\b[^>]*>[\s\S]*?<\/w:t>/g));
+    if (!runs.length) {
+      throw new Error('Adding text to a DOCX paragraph without a text run is not supported without structural changes.');
+    }
+    // Exact text replacement within existing run skeleton. Intentionally
+    // preserve paragraph properties, run properties, and adjacent objects.
+    let runIndex = 0;
+    return paragraphXml.replace(/<w:t\b[^>]*>[\s\S]*?<\/w:t>/g, () => {
+      const replacement = runIndex++ === 0 ? escapeXml(requested) : '';
+      return '<w:t xml:space="preserve">' + replacement + '</w:t>';
+    });
+  });
+  if (next === xml && paragraphs.some((p,i)=>p!==textRuns(matches[i][0], 'w:t').join(''))) {
+    throw new Error('No DOCX paragraph changes were committed.');
+  }
   return replaceFile(files, 'word/document.xml', next);
 }
 
@@ -304,9 +329,40 @@ export function writeXlsx(bytes: Uint8Array, model: XlsxModel): Uint8Array {
 }
 
 function slidePaths(files: Unzipped): string[] {
-  return Object.keys(files)
-    .filter((path) => /^ppt\/slides\/slide\d+\.xml$/i.test(path))
-    .sort((a, b) => Number(a.match(/slide(\d+)/i)?.[1] ?? 0) - Number(b.match(/slide(\d+)/i)?.[1] ?? 0));
+  const presentation = xmlText(files, 'ppt/presentation.xml');
+  const order = Array.from(presentation.matchAll(/<p:sldId\b([^>]*)\/?>/g))
+    .map((match) => xmlAttribute(match[1], 'r:id'))
+    .filter((id): id is string => Boolean(id));
+  if (order.length) {
+    const rels = xmlText(files, 'ppt/_rels/presentation.xml.rels');
+    const relationships = new Map(Array.from(rels.matchAll(/<Relationship\b([^>]*)\/?>/g))
+      .map((match) => [xmlAttribute(match[1], 'Id'), xmlAttribute(match[1], 'Target')]));
+    const used = new Set<string>();
+    return order.map((id) => {
+      const target = relationships.get(id);
+      if (!target || target.includes('\\') || /^(?:[a-z]+:|\/\/)/i.test(target))
+        throw new Error('PowerPoint slide relationship is invalid or missing.');
+      const segments = target.startsWith('/') ? [] : ['ppt'];
+      for (const segment of target.replace(/^\//,'').split('/')) {
+        if(segment==='..'){
+          if (!segments.length) throw new Error('PowerPoint slide path escapes package root.');
+          segments.pop();
+        } else if(segment!=='.' && segment) segments.push(segment);
+      }
+      const path = segments.join('/');
+      if (!/^ppt\/slides\/slide\d+\.xml$/i.test(path) || !files[path] || used.has(path))
+        throw new Error('PowerPoint slide relationship is missing, duplicated or unsafe.');
+      used.add(path);
+      return path;
+    });
+  }
+  // One-slide minimal fixtures can omit presentation relationship metadata.
+  // Multi-slide presentations without the ordering table must not be silently
+  // rendered in filename order.
+  const paths = Object.keys(files).filter(path=>/^ppt\/slides\/slide\d+\.xml$/i.test(path));
+  if (paths.length > 1)
+    throw new Error('PowerPoint multi-slide package lacks canonical slide order.');
+  return paths;
 }
 
 export function parsePptx(bytes: Uint8Array): PptxModel {
