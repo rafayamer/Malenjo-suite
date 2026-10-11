@@ -504,9 +504,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     return () => observer.disconnect();
   }, [pdf]);
 
-  const goToPage = useCallback((requested: number) => {
+  const goToPage = useCallback((requested: number, preserveSelection = false) => {
     const page = clampPdfPage(requested, pageCount);
     setCurrentPage(page);
+    // Deliberate page navigation updates a single-page selection. Multi-page
+    // selections remain intact, and thumbnail selection manages itself.
+    if(!preserveSelection){
+      setSelectedPages((selected)=> selected.size<=1 ? new Set([page]) : selected);
+      selectionAnchorRef.current=page;
+    }
     document.getElementById(`${domIdPrefix}-page-${page}`)?.scrollIntoView({
       behavior: 'smooth',
       block: 'start',
@@ -518,7 +524,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   }, []);
 
   function selectThumbnail(page:number,additive:boolean,range:boolean){
-    goToPage(page);
+    goToPage(page,true);
     setSelectedPages((current)=>{
       const anchor=selectionAnchorRef.current;
       if(range&&anchor){
@@ -2259,6 +2265,19 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             <button disabled={!pdf || currentPage >= pageCount} onClick={() => goToPage(currentPage + 1)} aria-label="Next page"><ChevronRight size={16}/></button>
           </div>
           <div className="pdf-toolbar-group">
+            <span aria-label={`Pages selected for editing: ${selectedPageNumbers.join(', ')||'none'}`}
+              title={`Edits target selected page(s): ${selectedPageNumbers.join(', ')||'none'}`}>
+              Edit: {selectedPageNumbers.length>3
+                ? selectedPageNumbers.length+' pages'
+                : selectedPageNumbers.join(', ')||'none'}
+            </span>
+            <button disabled={!pdf||selectedPageNumbers.length===1&&selectedPageNumbers[0]===currentPage}
+              aria-label="Select current viewed page for editing"
+              title="Switch editing selection to the page you are viewing"
+              onClick={()=>{
+                selectionAnchorRef.current=currentPage;
+                setSelectedPages(new Set([currentPage]));
+              }}>Select viewed</button>
             <button disabled={!pdf} className={leftPanel==='search'&&!leftPanelCollapsed?'active':''}
               onClick={()=>{
                 setLeftPanel('search');
