@@ -922,7 +922,7 @@ fn inspect_backup(path: &Path) -> Result<BackupInspection, String> {
     let mut total_bytes = 0u64;
     for entry in &manifest.files {
         let relative = safe_relative(&entry.path)?;
-        let file = path.join("state").join(relative);
+        let file = path.join("state").join(&relative);
         // Reject symlinked entries and ancestors; never verify one file
         // then restore a different filesystem view.
         let mut cursor = path.join("state");
