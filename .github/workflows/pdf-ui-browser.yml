@@ -1,0 +1,42 @@
+name: PDF browser acceptance
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pdf-browser-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pdf-ui-browser-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Use npm 11
+        run: npm install --global npm@11 --no-audit --no-fund
+      - name: Install frontend and uncommitted test-only Playwright
+        run: |
+          npm install --no-audit --no-fund
+          npm install --no-save --no-audit --no-fund playwright
+      - name: Install Chromium for real browser interaction
+        run: npx playwright install --with-deps chromium
+      - name: Launch MALENJO and verify PDF selection, Find, tab retention and export
+        run: node scripts/pdf-ui-browser-smoke.mjs
+      - name: Upload screenshot when PDF UI acceptance fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-ui-browser-failure
+          path: .build/pdf-ui-browser/failure.png
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Report completed browser-acceptance result
+        if: always()
+        run: echo 'Browser PDF acceptance requires a real Chromium pass; green frontend unit tests are not sufficient.'

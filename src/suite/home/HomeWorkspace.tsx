@@ -16,7 +16,7 @@ import {
   sortRecentDocuments, toggleStarredDocument,
   type HomeFileFilter, type HomePinnedLocation, type HomeStateV1,
 } from './model';
-import { loadHomeState, saveHomeState } from './storage';
+import { loadHomeState, loadNativeHomeState, saveHomeState, saveNativeHomeState } from './storage';
 import {
   OfficeActionCard, OfficeContextMenu, OfficeRecentCard,
   OfficeSearchInput, OfficeSegmentedFilter,
@@ -96,6 +96,9 @@ function saveState(next:HomeStateV1,setState:(state:HomeStateV1)=>void,setNotice
   setState(next);
   const result=saveHomeState(next);
   if(!result.ok&&result.error)setNotice(result.error);
+  void saveNativeHomeState(next).catch((error)=>{
+    setNotice('Home state is not backed up: '+(error instanceof Error?error.message:String(error)));
+  });
 }
 
 export default function HomeWorkspace({
@@ -105,6 +108,7 @@ export default function HomeWorkspace({
   const desktop=isDesktopRuntime();
   const [documents,setDocuments]=useState<LibraryDocument[]>([]);
   const [state,setState]=useState<HomeStateV1>(()=>loadHomeState());
+  const [homeHydrated,setHomeHydrated]=useState(()=>!desktop);
   const [query,setQuery]=useState('');
   const [filter,setFilter]=useState<HomeFileFilter>('all');
   const [loading,setLoading]=useState(true);
@@ -119,7 +123,10 @@ export default function HomeWorkspace({
       setDocuments(next);
       setState((current)=>{
         const pruned=pruneMissingStarredDocuments(current,next);
-        if(pruned!==current)saveHomeState(pruned);
+        if(pruned!==current) {
+          saveHomeState(pruned);
+          void saveNativeHomeState(pruned).catch(()=>setNotice('Home preferences could not be saved for backup.'));
+        }
         return pruned;
       });
       setNotice('');
@@ -129,7 +136,21 @@ export default function HomeWorkspace({
     }finally{setLoading(false);}
   },[desktop]);
 
-  useEffect(()=>{void loadDocuments();},[loadDocuments,sessions.length]);
+  useEffect(()=>{
+    if(!desktop)return;
+    let cancelled=false;
+    void loadNativeHomeState().then((restored)=>{
+      if(!cancelled){setState(restored);setHomeHydrated(true);}
+    }).catch((error)=>{
+      if(!cancelled){
+        setNotice('Could not restore Home preferences: '+(error instanceof Error?error.message:String(error)));
+        // Do not run migration/pruning when the authoritative native file
+        // exists but cannot be read; refuse unsafe fallback writes.
+      }
+    });
+    return()=>{cancelled=true;};
+  },[desktop]);
+  useEffect(()=>{if(homeHydrated)void loadDocuments();},[homeHydrated,loadDocuments,sessions.length]);
 
   const searched=useMemo(()=>{
     const terms=query.trim().toLowerCase().split(/\s+/).filter(Boolean);

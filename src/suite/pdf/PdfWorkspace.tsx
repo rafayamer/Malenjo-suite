@@ -25,6 +25,7 @@ import type { RegisterDocumentCommands } from '../commands/types';
 import { isDesktopRuntime } from '../files/api';
 import { exportPdfBytes, exportPdfPlainText, exportPdfEmbeddedAttachment, exportPdfPageImagesZip, readPdfDocumentBytes } from './api';
 import { exportPdfPagesAsPngZip } from './pageImageExport';
+import {finishPdfInstallCommit} from './pdfInstallCommit';
 import {
   comparePdfSelectableText, formatPdfTextComparison, type PdfTextComparison,
 } from './textCompare';
@@ -104,9 +105,11 @@ import {
   type PdfFitMode,
 } from './layout';
 import PdfPageCanvas from './PdfPageCanvas';
+import {extractPdfPageSearchText,findPdfTextMatches} from './pdfTextHighlights';
 import PdfThumbnail from './PdfThumbnail';
 import PdfProviderToolsPanel from './PdfProviderToolsPanel';
 import { defaultPdfToolProvider } from './defaultProvider';
+import { ensurePdfProviderRunning } from './providerLifecycle';
 import type { PdfProviderToolCategory } from './backend';
 import { pdfViewPages, type PdfViewMode } from './viewMode';
 import { useScrollFps } from './useScrollFps';
@@ -138,6 +141,7 @@ interface Props {
   active: boolean;
   notice: string;
   onBackToFiles(): void;
+  onOpenBrowserPdf?(file:File):void;
   onNavigateModule?(id:'ai'|'security'|'sign'|'scanner'|'automation'): void;
   onDirtyChange?(dirty:boolean): void;
   onSavingChange?(saving:boolean): void;
@@ -173,10 +177,12 @@ function PdfLeftPanelIcon({id}:{id:PdfLeftPanelId}) {
   return <ListChecks size={17}/>;
 }
 
-export default function PdfWorkspace({ session, active, notice, onBackToFiles, onNavigateModule, onDirtyChange, onSavingChange, registerCommands }: Props) {
+export default function PdfWorkspace({ session, active, notice, onBackToFiles, onOpenBrowserPdf, onNavigateModule, onDirtyChange, onSavingChange, registerCommands }: Props) {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef=useRef<HTMLInputElement>(null);
+  const searchSequenceRef=useRef(0);
   const imagesInputRef = useRef<HTMLInputElement>(null);
   const comparisonInputRef = useRef<HTMLInputElement>(null);
   const appendInputRef = useRef<HTMLInputElement>(null);
@@ -185,6 +191,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const selectionAnchorRef = useRef<number | null>(null);
   const activeLoadRef = useRef<PdfLoadResult | null>(null);
   const requestIdRef = useRef(0);
+  // A replacement is reserved immediately at load start, before PDF.js has
+  // finished parsing. Async provider results must not overtake this request.
+  const replacementPendingRef=useRef(false);
+  const mutationPendingRef=useRef(false);
   const loadStartedRef = useRef(0);
   const firstPageReportedRef = useRef(false);
   const previewIdRef = useRef(`pdf-preview-${Math.random().toString(36).slice(2)}`);
@@ -196,6 +206,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
   const [pdf, setPdf] = useState<PdfLoadResult | null>(null);
   const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
+  // Updated at the same instant a new PDF is installed, before React renders.
+  // Provider operations must not apply a result from an older working copy.
+  const currentPdfBytesRef=useRef<Uint8Array|null>(null);
   const [sourceName, setSourceName] = useState('PDF Workspace');
   const [browserFile, setBrowserFile] = useState<File | null>(null);
   const [pageCount, setPageCount] = useState(0);
@@ -230,7 +243,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [historyRevision, setHistoryRevision] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<Array<{page:number;excerpt:string}>>([]);
+  const [searchResults, setSearchResults] = useState<Array<{page:number;excerpt:string;matches:number}>>([]);
+  const [highlightQuery,setHighlightQuery]=useState('');
+  const [searchStatus,setSearchStatus]=useState('');
   const [leftPanel, setLeftPanel] = useState<PdfLeftPanelId>(DEFAULT_PDF_LEFT_PANEL);
   const [optionalLayers, setOptionalLayers] = useState<{
     document:PdfLoadResult['document'];
@@ -349,8 +364,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     name: string,
     file: File | null = null,
     preserveDirty = false,
+    onCommitted?:()=>void,
   ) => {
     const requestId = ++requestIdRef.current;
+    replacementPendingRef.current=true;
     setLoading(true);
     setError('');
     setActionNotice('');
@@ -369,34 +386,36 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       const previousLoad = activeLoadRef.current;
       activeLoadRef.current = result;
       setPdf(result);
+      searchSequenceRef.current++;
+      setSearching(false);
+      setSearchResults([]);
+      setHighlightQuery('');
+      setSearchStatus('');
       comparisonAbortRef.current?.abort();
       setComparisonResult(null);
+      currentPdfBytesRef.current=owned;
       setSourceBytes(owned);
       setBrowserFile(file);
       setSourceName(name);
       setPageCount(result.document.numPages);
       setRenderedPages(new Set());
-      setCurrentPage(1);
+      if(!preserveDirty) setCurrentPage(1);
       if(!preserveDirty){
         setSelectedPages(new Set([1]));
         selectionAnchorRef.current=1;
       }
-      setFitMode('width');
-      setZoom(1);
-      setRotation(0);
+      if(!preserveDirty){
+        setFitMode('width');
+        setZoom(1);
+        setRotation(0);
+      }
       setForceRenderAll(false);
       if(!preserveDirty){
         setDirty(false);
         historyRef.current=createPdfHistory(owned,1);
         setHistoryRevision((value)=>value+1);
       }
-      // The new PDF is now active. A previous worker's teardown failure must
-      // not roll back a successful installation or leave a destroyed PDF active.
-      try {
-        await disposePdf(previousLoad);
-      } catch {
-        // Best-effort old-worker cleanup; retain the successfully loaded PDF.
-      }
+      finishPdfInstallCommit(onCommitted,()=>disposePdf(previousLoad));
       return true;
     } catch (reason) {
       if (requestId === requestIdRef.current) {
@@ -406,7 +425,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       }
       return false;
     } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
+      if(requestId===requestIdRef.current){
+        replacementPendingRef.current=false;
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -418,6 +440,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
     if (document.browserFile) {
       const file = document.browserFile;
+      if (file.size === 0 || file.size > 32 * 1024 * 1024) {
+        setError('Browser PDF must be nonempty and no larger than 32 MB.');
+        return;
+      }
       void file.arrayBuffer()
         .then((bytes) => {
           if (!cancelled) return installPdf(bytes, document.name, file);
@@ -440,6 +466,19 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
     return () => { cancelled = true; };
   }, [installPdf, session?.id]);
+
+  // Render the PDF immediately; warm up the reviewed offline processor
+  // independently so no user-facing Start Provider step is required.
+  // In browser/Codespaces preview the native sidecar is unavailable and is
+  // deliberately never started.
+  const hasLoadedPdf=Boolean(sourceBytes);
+  useEffect(()=>{
+    if(!active||!hasLoadedPdf||!isDesktopRuntime())return;
+    void ensurePdfProviderRunning(defaultPdfToolProvider).catch(()=>{
+      // Keep the document reader usable. Provider panel shows actionable
+      // diagnostics if the optional processing engine cannot start.
+    });
+  },[active,hasLoadedPdf]);
 
   useEffect(() => () => {
     requestIdRef.current += 1;
@@ -465,9 +504,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     return () => observer.disconnect();
   }, [pdf]);
 
-  const goToPage = useCallback((requested: number) => {
+  const goToPage = useCallback((requested: number, preserveSelection = false) => {
     const page = clampPdfPage(requested, pageCount);
     setCurrentPage(page);
+    // Deliberate page navigation updates a single-page selection. Multi-page
+    // selections remain intact, and thumbnail selection manages itself.
+    if(!preserveSelection){
+      setSelectedPages((selected)=> selected.size<=1 ? new Set([page]) : selected);
+      selectionAnchorRef.current=page;
+    }
     document.getElementById(`${domIdPrefix}-page-${page}`)?.scrollIntoView({
       behavior: 'smooth',
       block: 'start',
@@ -479,7 +524,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   }, []);
 
   function selectThumbnail(page:number,additive:boolean,range:boolean){
-    goToPage(page);
+    goToPage(page,true);
     setSelectedPages((current)=>{
       const anchor=selectionAnchorRef.current;
       if(range&&anchor){
@@ -503,6 +548,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const selectedPageNumbers=Array.from(selectedPages)
     .filter(page=>page>=1&&page<=pageCount)
     .sort((a,b)=>a-b);
+  // Explicit thumbnail selection is authoritative for "selected page"
+  // operations, even after the user scrolls or searches to another page.
   const operationPages=selectedPageNumbers.length?selectedPageNumbers:[currentPage];
 
 
@@ -524,11 +571,17 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     event.target.value = '';
     if (!file) return;
 
-    if (file.size > 512 * 1024 * 1024) {
-      setError('The selected PDF exceeds the 512 MB safety limit.');
+    if (file.size === 0 || file.size > 32 * 1024 * 1024) {
+      setError('Browser PDF must be nonempty and no larger than 32 MB.');
       return;
     }
 
+    // Browser preview opened from the empty PDF module used to be destroyed
+    // on navigation. Move the chosen file into a durable document tab.
+    if(!session&&onOpenBrowserPdf){
+      onOpenBrowserPdf(file);
+      return;
+    }
     const bytes = await file.arrayBuffer();
     await installPdf(bytes, file.name, file);
   }
@@ -538,30 +591,57 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     operation:(bytes:Uint8Array)=>Promise<Uint8Array>,
     preferredPage=currentPage,
   ):Promise<boolean>{
-    if(!sourceBytes||mutating)return false;
+    if(!sourceBytes||mutating||mutationPendingRef.current||
+      replacementPendingRef.current||currentPdfBytesRef.current!==sourceBytes)return false;
+    // Snapshot the replacement counter before awaiting any document processing.
+    // It changes at the START of installPdf, not only after PDF.js parsing.
+    const sourceRevision=requestIdRef.current;
+    mutationPendingRef.current=true;
     setMutating(true);
     setError('');
     try{
       const result=await operation(Uint8Array.from(sourceBytes));
+      if(currentPdfBytesRef.current!==sourceBytes||
+        requestIdRef.current!==sourceRevision||replacementPendingRef.current){
+        throw new Error('This PDF changed or began loading another version while the tool was running. The older result was not applied.');
+      }
       const targetPage=Math.max(1,preferredPage);
-      if (!await installPdf(result,sourceName,browserFile,true)) return false;
-      historyRef.current=historyRef.current
-        ? recordPdfHistory(historyRef.current,result,targetPage,label)
-        : recordPdfHistory(createPdfHistory(sourceBytes,currentPage),result,targetPage,label);
-      setHistoryRevision((value)=>value+1);
-      setCurrentPage(targetPage);
-      setSelectedPages(new Set([targetPage]));
-      selectionAnchorRef.current=targetPage;
-      setDirty(true);
-      onDirtyChange?.(true);
-      setActionNotice(label);
-      return true;
+      // The synchronous commit callback runs before installPdf returns and
+      // before any old-worker cleanup. Later failed loads cannot leave
+      // mutated PDF bytes visible without their corresponding undo entry.
+      const installed=await installPdf(result,sourceName,browserFile,true,()=>{
+        historyRef.current=historyRef.current
+          ? recordPdfHistory(historyRef.current,result,targetPage,label)
+          : recordPdfHistory(createPdfHistory(sourceBytes,currentPage),result,targetPage,label);
+        setHistoryRevision((value)=>value+1);
+        setCurrentPage(targetPage);
+        setSelectedPages(new Set([targetPage]));
+        selectionAnchorRef.current=targetPage;
+        setDirty(true);
+        onDirtyChange?.(true);
+        setActionNotice(label);
+      });
+      return installed;
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
       return false;
     }finally{
+      mutationPendingRef.current=false;
       setMutating(false);
     }
+  }
+
+  async function removeSelectedPagesSafely():Promise<void>{
+    if(!sourceBytes||operationPages.length>=pageCount||mutating)return;
+    const label='Remove '+operationPages.length+' selected page'+(operationPages.length===1?'':'s')+'?';
+    if(!window.confirm(label+'\n\nOnly the MALENJO working copy changes. Your original PDF file stays untouched. You can Undo before exporting.'))return;
+    await mutateAction(
+      'Removed '+operationPages.length+' page(s) from the working copy.',
+      bytes=>operationPages.length===1
+        ?deletePdfPage(bytes,operationPages[0])
+        :deletePdfPages(bytes,operationPages),
+      Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length)),
+    );
   }
 
   async function mutateAction(
@@ -582,7 +662,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       async(bytes)=>{
         let result=bytes;
         for(const file of ordered){
-          if(file.size>512*1024*1024)throw new Error(`${file.name} exceeds the 512 MB safety limit.`);
+          if(file.size>32*1024*1024)throw new Error(`${file.name} exceeds the 32 MB interactive PDF budget.`);
           result=await insertPdfAfter(result,new Uint8Array(await file.arrayBuffer()),currentPage);
         }
         return result;
@@ -595,74 +675,67 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     const files=Array.from(event.target.files??[]);
     event.target.value='';
     if(!files.length||!sourceBytes)return;
-    setMutating(true);
-    setError('');
-    try{
-      let result=Uint8Array.from(sourceBytes);
+    // Reuse the transactional edit lane so a slower multi-file append cannot
+    // overwrite a document load or another user edit that began later.
+    await mutate(`Appended ${files.length} PDF file(s).`,async(bytes)=>{
+      let result=bytes;
       for(const file of files){
-        if(file.size>512*1024*1024)throw new Error(`${file.name} exceeds the 512 MB safety limit.`);
-        const merged=await appendPdf(result,new Uint8Array(await file.arrayBuffer()));
-        const owned=new Uint8Array(merged.byteLength);
-        owned.set(merged);
-        result=owned;
+        if(file.size>32*1024*1024)throw new Error(`${file.name} exceeds the 32 MB interactive PDF budget.`);
+        result=Uint8Array.from(await appendPdf(result,new Uint8Array(await file.arrayBuffer())));
       }
-      const label=`Appended ${files.length} PDF file(s).`;
-      if (!await installPdf(result,sourceName,browserFile,true)) return;
-      historyRef.current=historyRef.current
-        ? recordPdfHistory(historyRef.current,result,currentPage,label)
-        : recordPdfHistory(createPdfHistory(sourceBytes,currentPage),result,currentPage,label);
-      setHistoryRevision((value)=>value+1);
-      setDirty(true);
-      onDirtyChange?.(true);
-      setActionNotice(label);
-    }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
-    }finally{
-      setMutating(false);
-    }
+      return result;
+    },currentPage);
   }
 
   async function undoEdit(){
     const history=historyRef.current;
-    if(!history||mutating||!canUndoPdfHistory(history))return;
+    if(!history||mutating||mutationPendingRef.current||replacementPendingRef.current||
+      currentPdfBytesRef.current!==sourceBytes||!canUndoPdfHistory(history))return;
     const undoneLabel=history.entries[history.cursor]?.label??'PDF edit';
     const transition=undoPdfHistory(history);
     if(!transition.changed)return;
+    mutationPendingRef.current=true;
     setMutating(true);
     setError('');
     try{
-      if (!await installPdf(transition.entry.bytes,sourceName,browserFile,true)) return;
-      historyRef.current=transition.history;
-      setHistoryRevision((value)=>value+1);
-      setCurrentPage(transition.entry.page);
-      setDirty(transition.entry.dirty);
-      onDirtyChange?.(transition.entry.dirty);
-      setActionNotice(`Undid: ${undoneLabel}`);
+      await installPdf(transition.entry.bytes,sourceName,browserFile,true,()=>{
+        historyRef.current=transition.history;
+        setHistoryRevision((value)=>value+1);
+        setCurrentPage(transition.entry.page);
+        setDirty(transition.entry.dirty);
+        onDirtyChange?.(transition.entry.dirty);
+        setActionNotice(`Undid: ${undoneLabel}`);
+      });
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
+      mutationPendingRef.current=false;
       setMutating(false);
     }
   }
 
   async function redoEdit(){
     const history=historyRef.current;
-    if(!history||mutating||!canRedoPdfHistory(history))return;
+    if(!history||mutating||mutationPendingRef.current||replacementPendingRef.current||
+      currentPdfBytesRef.current!==sourceBytes||!canRedoPdfHistory(history))return;
     const transition=redoPdfHistory(history);
     if(!transition.changed)return;
+    mutationPendingRef.current=true;
     setMutating(true);
     setError('');
     try{
-      if (!await installPdf(transition.entry.bytes,sourceName,browserFile,true)) return;
-      historyRef.current=transition.history;
-      setHistoryRevision((value)=>value+1);
-      setCurrentPage(transition.entry.page);
-      setDirty(transition.entry.dirty);
-      onDirtyChange?.(transition.entry.dirty);
-      setActionNotice(`Redid: ${transition.entry.label}`);
+      await installPdf(transition.entry.bytes,sourceName,browserFile,true,()=>{
+        historyRef.current=transition.history;
+        setHistoryRevision((value)=>value+1);
+        setCurrentPage(transition.entry.page);
+        setDirty(transition.entry.dirty);
+        onDirtyChange?.(transition.entry.dirty);
+        setActionNotice(`Redid: ${transition.entry.label}`);
+      });
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
+      mutationPendingRef.current=false;
       setMutating(false);
     }
   }
@@ -674,7 +747,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       const target=event.target as HTMLElement|null;
       if(target?.closest('input,textarea,[contenteditable="true"]'))return;
       const key=event.key.toLowerCase();
-      if(key==='z'&&!event.shiftKey){
+      if(key==='s'&&!event.shiftKey){
+        event.preventDefault();
+        void exportCurrent();
+      }else if(key==='z'&&!event.shiftKey){
         event.preventDefault();
         void undoEdit();
       }else if((key==='z'&&event.shiftKey)||key==='y'){
@@ -684,7 +760,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     };
     window.addEventListener('keydown',onKeyDown);
     return()=>window.removeEventListener('keydown',onKeyDown);
-  },[active,historyRevision,mutating]);
+  },[active,historyRevision,mutating,sourceBytes,dirty,sourceName]);
 
 
   useEffect(()=>{
@@ -971,6 +1047,27 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       bytes=>deletePdfLinkAnnotation(bytes,item),item.pageNumber,
     );
     if(deleted)setLinkEdit(null);
+  }
+
+  function activatePdfLink(link:PdfLinkAnnotation){
+    if(link.kind==='page'){
+      const target=Number(link.destination);
+      if(Number.isSafeInteger(target)&&target>=1&&target<=pageCount)goToPage(target);
+      else setError('The link target page is unavailable.');
+      return;
+    }
+    if(link.kind==='https'){
+      try{
+        const target=new URL(link.destination);
+        if(target.protocol!=='https:'||target.username||target.password)
+          throw new Error('Imported PDF link is not a safe HTTPS URL.');
+        if(window.confirm('This link opens an external website outside MALENJO. Continue?\n'+target.href)){
+          window.open(target.href,'_blank','noopener,noreferrer');
+        }
+      }catch(reason){
+        setError(reason instanceof Error?reason.message:String(reason));
+      }
+    }
   }
 
   async function openBookmark(entry:PdfOutlineEntry){
@@ -1298,35 +1395,68 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   }
 
   async function searchPdf(){
-    if(!pdf||!searchQuery.trim())return;
-    const needle=searchQuery.trim().toLocaleLowerCase();
+    if(!pdf)return;
+    const requested=searchQuery.trim();
+    if(!requested){
+      searchSequenceRef.current++;
+      setSearching(false);
+      setSearchResults([]);
+      setHighlightQuery('');
+      setSearchStatus('Type a word or phrase, then select Find.');
+      return;
+    }
+    const revision=++searchSequenceRef.current;
+    const document=pdf.document;
     setSearching(true);
     setError('');
+    setSearchStatus('Searching selectable PDF text…');
     try{
-      const results:Array<{page:number;excerpt:string}>=[];
-      const count=Math.min(pdf.document.numPages,500);
-      for(let pageNumber=1;pageNumber<=count&&results.length<100;pageNumber+=1){
-        const page=await pdf.document.getPage(pageNumber);
+      const results:Array<{page:number;excerpt:string;matches:number}>=[];
+      const count=Math.min(document.numPages,500);
+      let total=0;
+      let textPages=0;
+      for(let pageNumber=1;pageNumber<=count;pageNumber++){
+        if(revision!==searchSequenceRef.current)return;
+        const page=await document.getPage(pageNumber);
         const content=await page.getTextContent();
-        const text=content.items
-          .map((item)=>'str' in item?String(item.str):'')
-          .join(' ')
-          .replace(/\s+/g,' ')
-          .trim();
-        const index=text.toLocaleLowerCase().indexOf(needle);
-        if(index>=0){
-          results.push({
-            page:pageNumber,
-            excerpt:text.slice(Math.max(0,index-70),Math.min(text.length,index+needle.length+120)),
-          });
+        const text=extractPdfPageSearchText(content.items);
+        if(text)textPages++;
+        const matches=findPdfTextMatches(text,requested,100);
+        if(matches.length){
+          total+=matches.length;
+          if(results.length<100){
+            const index=matches[0].start;
+            results.push({
+              page:pageNumber,
+              matches:matches.length,
+              excerpt:text.slice(Math.max(0,index-45),Math.min(text.length,index+requested.length+100)),
+            });
+          }
         }
       }
+      if(revision!==searchSequenceRef.current)return;
       setSearchResults(results);
-      setActionNotice(results.length?`Found ${results.length} matching page(s).`:'No matching PDF text was found.');
+      setHighlightQuery(requested);
+      const truncated=count<document.numPages||results.length>=100;
+      if(!textPages){
+        setSearchStatus('No selectable text was found. This PDF may be scanned; use OCR before searching.');
+      }else if(total===0){
+        setSearchStatus('No matching words found in selectable text.');
+      }else{
+        setSearchStatus(
+          String(total)+' match'+(total===1?'':'es')+' on '+
+          String(results.length)+' page'+(results.length===1?'':'s')+
+          (truncated?' (limited to first 500 pages/100 results)':'')+'.',
+        );
+        goToPage(results[0].page);
+      }
     }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
+      if(revision===searchSequenceRef.current){
+        setSearchStatus('PDF text search could not finish.');
+        setError(reason instanceof Error?reason.message:String(reason));
+      }
     }finally{
-      setSearching(false);
+      if(revision===searchSequenceRef.current)setSearching(false);
     }
   }
 
@@ -1522,7 +1652,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     try{
       const name=dirty?editedName(sourceName):editedName(sourceName,'copy');
       const saved=await exportPdfBytes(name,sourceBytes);
-      if(saved)setActionNotice(dirty?'Exported the edited PDF as a new file.':'Exported a PDF copy.');
+      if(saved)setActionNotice(dirty
+        ? 'Edited PDF exported as a separate copy. The source working session remains unsaved; use the exported copy or continue editing.'
+        : 'PDF copy exported. The original document remains unchanged.');
+      else setActionNotice('PDF export cancelled. No new file was saved.');
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
@@ -1538,8 +1671,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       const bytes=await extractPdfPages(sourceBytes,pages);
       const base=sourceName.replace(/\.pdf$/i,'')||'MALENJO-document';
       const label=pages.length===1?`page-${pages[0]}`:`pages-${pages[0]}-${pages[pages.length-1]}`;
-      await exportPdfBytes(`${base}-${label}.pdf`,bytes);
-      setActionNotice(`Extracted ${pages.length} selected page(s) as a new PDF.`);
+      const saved = await exportPdfBytes(`${base}-${label}.pdf`,bytes);
+      if(saved) setActionNotice(`Extracted ${pages.length} selected page(s) as a new PDF.`);
+      else setActionNotice('Page extraction cancelled. No output was saved.');
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
@@ -1553,9 +1687,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     try{
       const [left,right]=await splitPdfAtPage(sourceBytes,currentPage);
       const base=sourceName.replace(/\.pdf$/i,'')||'MALENJO-document';
-      await exportPdfBytes(`${base}-part-1.pdf`,left);
-      await exportPdfBytes(`${base}-part-2.pdf`,right);
-      setActionNotice(`Split after page ${currentPage} and exported two PDFs.`);
+      const firstSaved = await exportPdfBytes(`${base}-part-1.pdf`,left);
+      if(!firstSaved){
+        setActionNotice('PDF split cancelled before saving its first part.');
+        return;
+      }
+      const secondSaved = await exportPdfBytes(`${base}-part-2.pdf`,right);
+      setActionNotice(secondSaved
+        ? `Split after page ${currentPage} and exported two PDFs.`
+        : 'PDF split only partially saved: part 1 was exported, part 2 was cancelled.');
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
@@ -1564,14 +1704,19 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   }
 
   function printDocument() {
-    if (!pdf) return;
-    setForceRenderAll(true);
-    setActionNotice('Preparing all PDF pages for printing…');
-    const delay = Math.min(2500, 700 + pageCount * 15);
-    window.setTimeout(() => {
-      setActionNotice('');
-      window.print();
-    }, delay);
+    if (!pdf || !sourceBytes) return;
+    // Print the complete PDF bytes, not just lazily mounted page canvases.
+    const copy = Uint8Array.from(sourceBytes);
+    const url = URL.createObjectURL(new Blob([copy.buffer],{type:'application/pdf'}));
+    const viewer = window.open(url, '_blank');
+    if (!viewer) {
+      URL.revokeObjectURL(url);
+      setError('Print preview was blocked. Allow the full PDF viewer window.');
+      return;
+    }
+    viewer.opener = null;
+    setActionNotice('Opened the entire PDF in a separate viewer. Use its Print command to print all pages.');
+    window.setTimeout(() => URL.revokeObjectURL(url), 5 * 60_000);
   }
 
 
@@ -1760,7 +1905,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           detail:'Permanent working-copy page removal; Undo is available before export',
           enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,
           disabledReason:operationPages.length>=pageCount?'A PDF must retain at least one page.':!sourceBytes?'No PDF is loaded.':'Wait for the current PDF edit to finish.',
-          run:()=>mutateAction(`Deleted ${operationPages.length} selected page(s).`,bytes=>operationPages.length===1?deletePdfPage(bytes,operationPages[0]):deletePdfPages(bytes,operationPages),Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length))),
+          run:removeSelectedPagesSafely,
         },
         {
           id:'pdf-page-copy',
@@ -1860,6 +2005,23 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     window.addEventListener('keydown', onInspectorShortcut);
     return () => window.removeEventListener('keydown', onInspectorShortcut);
   }, [active]);
+
+  useEffect(()=>{
+    if(!active||!pdf)return;
+    function onFindShortcut(event:KeyboardEvent){
+      if(!(event.ctrlKey||event.metaKey)||event.altKey||event.shiftKey||
+         event.key.toLowerCase()!=='f')return;
+      event.preventDefault();
+      setLeftPanel('search');
+      setLeftPanelCollapsed(false);
+      window.requestAnimationFrame(()=>{
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      });
+    }
+    window.addEventListener('keydown',onFindShortcut);
+    return()=>window.removeEventListener('keydown',onFindShortcut);
+  },[active,pdf]);
 
   useEffect(() => {
     if (!active) return;
@@ -1970,7 +2132,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     ],
     organize:[
       {id:'turn-pages',label:'Rotate selected',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Permanently rotated ${operationPages.length} selected page(s) by 90°.`,bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),operationPages[0])},
-      {id:'remove-pages',label:`Delete ${operationPages.length} page${operationPages.length===1?'':'s'}`,enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length>=pageCount?'A PDF must retain at least one page.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Deleted ${operationPages.length} selected page(s).`,bytes=>operationPages.length===1?deletePdfPage(bytes,operationPages[0]):deletePdfPages(bytes,operationPages),Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length)))},
+      {id:'remove-pages',label:`Delete ${operationPages.length} page${operationPages.length===1?'':'s'}`,enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length>=pageCount?'A PDF must retain at least one page.':mutating?'Wait for the current PDF edit to finish.':undefined,run:removeSelectedPagesSafely},
       {id:'copy-page',label:'Duplicate page',enabled:!!sourceBytes&&!mutating&&operationPages.length===1,disabledReason:operationPages.length!==1?'Select exactly one page.':mutating?'Wait for the current PDF edit to finish.':!sourceBytes?'No PDF is loaded.':undefined,run:()=>mutateAction(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)},
       {id:'extract-pages',label:'Extract selected',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:extractSelected},
       {id:'split',label:'Split here',enabled:!!sourceBytes&&!mutating&&currentPage<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':currentPage>=pageCount?'Move before the final page to split the PDF.':mutating?'Wait for the current PDF edit to finish.':undefined,run:splitCurrent},
@@ -2124,6 +2286,25 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             <button disabled={!pdf || currentPage >= pageCount} onClick={() => goToPage(currentPage + 1)} aria-label="Next page"><ChevronRight size={16}/></button>
           </div>
           <div className="pdf-toolbar-group">
+            <span aria-label={`Pages selected for editing: ${selectedPageNumbers.join(', ')||'none'}`}
+              title={`Edits target selected page(s): ${selectedPageNumbers.join(', ')||'none'}`}>
+              Edit: {selectedPageNumbers.length>3
+                ? selectedPageNumbers.length+' pages'
+                : selectedPageNumbers.join(', ')||'none'}
+            </span>
+            <button disabled={!pdf||selectedPageNumbers.length===1&&selectedPageNumbers[0]===currentPage}
+              aria-label="Select current viewed page for editing"
+              title="Switch editing selection to the page you are viewing"
+              onClick={()=>{
+                selectionAnchorRef.current=currentPage;
+                setSelectedPages(new Set([currentPage]));
+              }}>Select viewed</button>
+            <button disabled={!pdf} className={leftPanel==='search'&&!leftPanelCollapsed?'active':''}
+              onClick={()=>{
+                setLeftPanel('search');
+                setLeftPanelCollapsed(false);
+                window.requestAnimationFrame(()=>searchInputRef.current?.focus());
+              }} title="Find words in this PDF (Ctrl+F)" aria-label="Find words in PDF"><Search size={15}/> Find</button>
             <button disabled={!pdf} onClick={() => { setFitMode('custom'); setZoom((value) => stepPdfZoom(value, -1)); }} aria-label="Zoom out"><Minus size={16}/></button>
             <button className="pdf-zoom-label" disabled={!pdf} onClick={() => setFitMode((mode) => mode === 'width' ? 'page' : 'width')} aria-label={`Zoom mode: ${zoomLabel}`}>{zoomLabel}</button>
             <button disabled={!pdf} onClick={() => { setFitMode('custom'); setZoom((value) => stepPdfZoom(value, 1)); }} aria-label="Zoom in"><Plus size={16}/></button>
@@ -2173,10 +2354,21 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       sourceBytes={sourceBytes}
       sourceName={sourceName}
       category={providerCategory}
-      onApplyPdf={(label,bytes)=>mutateAction(label,async()=>bytes,currentPage)}
+      onApplyPdf={(label,bytes,expectedSource)=>{
+        if(currentPdfBytesRef.current!==expectedSource||sourceBytes!==expectedSource||
+          replacementPendingRef.current||mutationPendingRef.current){
+          return false;
+        }
+        return mutate(label,async()=>bytes,currentPage);
+      }}
     />}
 
     {(notice || actionNotice) && <div className="pdf-notice">{notice || actionNotice}</div>}
+    {!!pdf&&!isDesktopRuntime()&&<div className="pdf-notice" role="note">
+      Browser preview: MALENJO does not delete or overwrite your original local PDF.
+      Edits remain in this document tab until you export a separate copy.
+      Browser tabs are temporary; export edits before reloading or closing Codespaces.
+    </div>}
     {error && <div className="pdf-notice error">{error}</div>}
 
     {!pdf && <div className="pdf-empty">
@@ -2184,7 +2376,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       <h1>PDF Workspace</h1>
       <p>{loading
         ? 'Loading PDF with the local PDF.js renderer…'
-        : 'Open PDFs from MALENJO Files to keep several documents in tabs, or choose one here for a temporary workspace preview.'}</p>
+        : 'Choose a PDF to open it in its own MALENJO document tab, where you can view, find, edit and export safely.'}</p>
       <button className="primary-action" disabled={loading} onClick={() => fileInputRef.current?.click()}>
         <FileText size={17}/> {loading ? 'Loading…' : 'Choose PDF'}
       </button>
@@ -2233,7 +2425,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                   logicalLabel={logicalPageLabels[page-1]}
                   active={page === currentPage}
                   selected={selectedPages.has(page)}
-                  renderAllowed={thumbnailsRenderAllowed}
+                  renderAllowed={active&&thumbnailsRenderAllowed}
                   onSelect={selectThumbnail}
                   dragScope={domIdPrefix}
                   pageCount={pageCount}
@@ -2248,10 +2440,19 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           </div>}
 
           {leftPanel==='search'&&<div className="pdf-left-panel-body">
-            <div className="pdf-find">
-              <div><Search size={14}/><input value={searchQuery} onChange={(event)=>setSearchQuery(event.target.value)} onKeyDown={(event)=>{if(event.key==='Enter')void searchPdf();}} placeholder="Search PDF text"/></div>
-              <button disabled={searching||!searchQuery.trim()} onClick={()=>void searchPdf()}>{searching?'Searching…':'Find'}</button>
-              {!!searchResults.length&&<div className="pdf-search-results">{searchResults.map((result)=><button key={result.page} onClick={()=>goToPage(result.page)}><b>Page {result.page}</b><span>{result.excerpt}</span></button>)}</div>}
+            <div className="pdf-find" role="search" aria-label="Find words inside PDF">
+              <div><Search size={14}/><input ref={searchInputRef} value={searchQuery} onChange={(event)=>{
+                searchSequenceRef.current++;
+                setSearching(false);
+                setSearchQuery(event.target.value);
+                setSearchResults([]);
+                setHighlightQuery('');
+                setSearchStatus('');
+              }} onKeyDown={(event)=>{if(event.key==='Enter')void searchPdf();}} placeholder="Find words in this PDF…" aria-label="Find PDF text"/></div>
+              <button disabled={searching||!searchQuery.trim()} onClick={()=>void searchPdf()}>{searching?'Searching…':'Find in PDF'}</button>
+              <p className="pdf-search-help">Select or copy words directly on a PDF page. Press Ctrl+F to search. Scanned image pages need OCR.</p>
+              {searchStatus&&<p className="pdf-search-status" role="status">{searchStatus}</p>}
+              {!!searchResults.length&&<div className="pdf-search-results" aria-label="PDF text matches">{searchResults.map((result)=><button key={result.page} onClick={()=>goToPage(result.page)}><b>Page {result.page} · {result.matches} match{result.matches===1?'':'es'}</b><span>{result.excerpt}</span></button>)}</div>}
             </div>
           </div>}
 
@@ -2446,10 +2647,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               rotation={rotation}
               availableWidth={viewport.width}
               availableHeight={viewport.height}
-              forceRender={forceRenderAll}
-              renderAllowed={forceRenderAll || schedule.allowed}
-              eager={forceRenderAll || schedule.eager}
+              forceRender={active&&forceRenderAll}
+              renderAllowed={active&&(forceRenderAll || schedule.allowed)}
+              eager={active&&(forceRenderAll || schedule.eager)}
               domIdPrefix={domIdPrefix}
+              highlightQuery={highlightQuery}
+              links={pdfLinks}
+              onActivateLink={activatePdfLink}
               onVisible={onPageVisible}
               onRendered={onPageRendered}
             />;
@@ -2791,11 +2995,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
         <div className="pdf-pane-title">Page tools</div>
         <div className="pdf-page-tools">
-          <button disabled={mutating||operationPages.length>=pageCount} onClick={()=>void mutate(
-            `Deleted ${operationPages.length} selected page(s).`,
-            bytes=>operationPages.length===1?deletePdfPage(bytes,operationPages[0]):deletePdfPages(bytes,operationPages),
-            Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length)),
-          )}>Delete selected</button>
+          <button disabled={mutating||operationPages.length>=pageCount} onClick={()=>void removeSelectedPagesSafely()}>Remove selected pages…</button>
           <button disabled={mutating||operationPages.length!==1} onClick={()=>void mutate(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)}>Duplicate</button>
           <button disabled={mutating||operationPages.length!==1||currentPage<=1} onClick={()=>void mutate('Moved page earlier.',bytes=>movePdfPage(bytes,currentPage,currentPage-1),currentPage-1)}>Move earlier</button>
           <button disabled={mutating||operationPages.length!==1||currentPage>=pageCount} onClick={()=>void mutate('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)}>Move later</button>

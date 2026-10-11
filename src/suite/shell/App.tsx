@@ -50,6 +50,7 @@ export default function App() {
   const [workspaceNotices, setWorkspaceNotices] = useState<Record<string,string>>({});
   const [paletteDocuments, setPaletteDocuments] = useState<LibraryDocument[]>([]);
   const commandControllersRef = useRef(new Map<string, DocumentCommandController>());
+  const commandPaletteOpenerRef = useRef<HTMLElement | null>(null);
   const browserOpenInputRef = useRef<HTMLInputElement>(null);
   const module = modules.find((item) => item.id === active) ?? modules[0];
   const groups = useMemo(() => ['Core','Create','Intelligence','Enterprise','System'] as const, []);
@@ -148,12 +149,27 @@ export default function App() {
     else commandControllersRef.current.delete(sessionId);
   }
 
+  // Local browser files remain available in tabs when navigating, but have
+  // not been persisted to disk; warn before leaving with unsaved PDF edits.
+  useEffect(()=>{
+    if(!sessions.some(item=>item.dirty))return;
+    function warnBeforeUnload(event:BeforeUnloadEvent){
+      event.preventDefault();
+      event.returnValue='';
+    }
+    window.addEventListener('beforeunload',warnBeforeUnload);
+    return()=>window.removeEventListener('beforeunload',warnBeforeUnload);
+  },[sessions]);
+
   function closeSessions(sessionIds: string[]) {
     const remove = new Set(sessionIds);
     const targets = sessions.filter((session) => remove.has(session.id));
     if (!targets.length) return;
     const dirty = targets.filter((session) => session.dirty);
-    if (dirty.length && !window.confirm(`Close ${targets.length} tab(s)? ${dirty.length} contain unsaved edits that will be discarded.`)) return;
+    const temporary = targets.filter((session) => !!session.document.browserFile);
+    if ((dirty.length||temporary.length) && !window.confirm(
+      `Close ${targets.length} tab(s)? ${dirty.length} have unsaved changes; ${temporary.length} are temporary browser files. Original files are untouched, but temporary tabs are lost when closed.`
+    )) return;
 
     const remaining = sessions.filter((session) => !remove.has(session.id));
     setSessions(remaining);
@@ -181,7 +197,9 @@ export default function App() {
     const index = sessions.findIndex((session) => session.id === sessionId);
     if (index < 0) return;
     const target = sessions[index];
-    if (target.dirty && !window.confirm(`Close "${target.document.name}" without saving its current edits?`)) return;
+    if ((target.dirty||target.document.browserFile) && !window.confirm(
+      `Close "${target.document.name}"? ${target.dirty?'Unsaved edits will be lost. ':' '}This browser tab is temporary; your original local file remains untouched.`
+    )) return;
 
     const remaining = sessions.filter((session) => session.id !== sessionId);
     setSessions(remaining);
@@ -294,7 +312,7 @@ export default function App() {
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
-        setCommandOpen(true);
+        openCommandPalette();
         return;
       }
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'w') {
@@ -320,9 +338,19 @@ export default function App() {
     openBrowserFiles(files);
   }
 
+  function openCommandPalette() {
+    if (!commandOpen) commandPaletteOpenerRef.current = document.activeElement as HTMLElement | null;
+    setCommandOpen(true);
+  }
+
   function closeCommandPalette() {
     setCommandOpen(false);
     setQuery('');
+    const opener = commandPaletteOpenerRef.current;
+    commandPaletteOpenerRef.current = null;
+    window.requestAnimationFrame(() => {
+      if (opener?.isConnected) opener.focus();
+    });
   }
 
   const activeDocumentCommands = activeSession
@@ -512,7 +540,7 @@ export default function App() {
         }}
       />
       <header className="topbar">
-        <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);setCommandOpen(true);}} placeholder="Search files, tools and commands"/><kbd>Ctrl K</kbd></div>
+        <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);openCommandPalette();}} placeholder="Search files, tools and commands"/><kbd>Ctrl K</kbd></div>
         <div className="topbar-actions">
           <button className="command" onClick={()=>void openDocumentsFromPicker()}><FolderOpen size={17}/> Open</button>
           <button className="command" onClick={()=>setCommandOpen(true)}><Command size={17}/> Commands</button>
@@ -546,6 +574,7 @@ export default function App() {
           className={session.id === activeSessionId ? 'document-session-panel active' : 'document-session-panel'}
           key={session.id}
           aria-hidden={session.id !== activeSessionId}
+          inert={session.id !== activeSessionId}
         >{renderDocumentWorkspace(session)}</section>)}
       </div>}
 
@@ -557,7 +586,7 @@ export default function App() {
             onActivateSession={activateSession}
             onOpenDocument={openFromLibrary}
             onOpenDocuments={()=>void openDocumentsFromPicker()}
-            onOpenCommandPalette={()=>{setQuery('');setCommandOpen(true);}}
+            onOpenCommandPalette={()=>{setQuery('');openCommandPalette();}}
           />
         : active === 'files'
           ? <FileLibrary onOpen={openFromLibrary}/>
@@ -567,6 +596,7 @@ export default function App() {
                 active
                 notice={workspaceNotices.__open ?? ''}
                 onBackToFiles={()=>selectModule('files')}
+                onOpenBrowserPdf={(file)=>openBrowserFiles([file])}
                 onNavigateModule={(id)=>selectModule(id)}
               />
             : active === 'scanner'

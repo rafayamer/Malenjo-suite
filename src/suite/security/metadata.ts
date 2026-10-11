@@ -118,7 +118,23 @@ export async function sanitizeMetadata(
       else next = next.replace(/<\/cp:coreProperties>/i, `${replacement}</cp:coreProperties>`);
     }
 
+    // Removing the custom-properties part without updating package
+    // relationships and content types leaves an invalid OOXML package.
     delete files['docProps/custom.xml'];
+    if (files['_rels/.rels']) {
+      const relationships = strFromU8(files['_rels/.rels']).replace(
+        /<Relationship\b[^>]*\/>/g,
+        (entry) => /Type="[^"]*\/custom-properties"/i.test(entry) ? '' : entry,
+      );
+      files['_rels/.rels'] = strToU8(relationships);
+    }
+    if (files['[Content_Types].xml']) {
+      const types = strFromU8(files['[Content_Types].xml']).replace(
+        /<Override\b[^>]*\/>/g,
+        (entry) => /PartName="\/docProps\/custom\.xml"/i.test(entry) ? '' : entry,
+      );
+      files['[Content_Types].xml'] = strToU8(types);
+    }
     files['docProps/core.xml'] = strToU8(next);
     if (files['docProps/app.xml']) {
       files['docProps/app.xml'] = strToU8(strFromU8(files['docProps/app.xml']).replace(

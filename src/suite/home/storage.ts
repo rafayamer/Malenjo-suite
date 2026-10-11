@@ -1,3 +1,4 @@
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import {
   HOME_STORAGE_KEY,
   defaultHomeState,
@@ -43,4 +44,25 @@ export function saveHomeState(
       error:`Unable to persist Home state: ${reason instanceof Error ? reason.message : String(reason)}`,
     };
   }
+}
+
+
+/** Desktop Home preferences belong to app-data and participate in backup.
+ * Browser localStorage is retained as a migration/fallback cache only. */
+export async function loadNativeHomeState():Promise<HomeStateV1>{
+  const browser=loadHomeState();
+  if(!isTauri())return browser;
+  const native=await invoke<string|null>('read_native_home_state');
+  if(native){
+    const restored=sanitizeHomeState(JSON.parse(native));
+    saveHomeState(restored);
+    return restored;
+  }
+  await invoke<void>('write_native_home_state',{content:JSON.stringify(browser)});
+  return browser;
+}
+
+export async function saveNativeHomeState(state:HomeStateV1):Promise<void>{
+  if(!isTauri())return;
+  await invoke<void>('write_native_home_state',{content:JSON.stringify(sanitizeHomeState(state))});
 }

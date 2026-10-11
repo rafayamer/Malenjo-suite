@@ -18,6 +18,8 @@ function downloadBytes(bytes: Uint8Array, name: string, type='application/octet-
 
 export default function SecurityWorkspace({ onBackToFiles }:{ onBackToFiles():void }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileSelectionRef = useRef(0);
+  const MAX_SECURITY_FILE_BYTES = 32 * 1024 * 1024;
   const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null);
   const [fileName, setFileName] = useState('');
   const [watermark, setWatermark] = useState('CONFIDENTIAL');
@@ -31,7 +33,10 @@ export default function SecurityWorkspace({ onBackToFiles }:{ onBackToFiles():vo
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
-  useEffect(()=>{ void refreshNative(); },[]);
+  useEffect(()=>{
+    void refreshNative();
+    return () => { fileSelectionRef.current += 1; };
+  },[]);
 
   async function refreshNative() {
     const [docs, events] = await Promise.all([
@@ -48,11 +53,26 @@ export default function SecurityWorkspace({ onBackToFiles }:{ onBackToFiles():vo
     const file = event.target.files?.[0];
     event.target.value='';
     if(!file) return;
-    setFileBytes(new Uint8Array(await file.arrayBuffer()));
-    setFileName(file.name);
+    const request = ++fileSelectionRef.current;
+    setFileBytes(null);
+    setFileName('');
     setRedactions([]);
-    setNotice(`Loaded ${file.name} for local security export operations.`);
-    setError('');
+    setNotice('');
+    if(file.size === 0 || file.size > MAX_SECURITY_FILE_BYTES){
+      setError('Security Center accepts nonempty files up to 32 MB for safe browser processing.');
+      return;
+    }
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      if(request !== fileSelectionRef.current) return;
+      setFileBytes(bytes);
+      setFileName(file.name);
+      setNotice(`Loaded ${file.name} for local security export operations.`);
+      setError('');
+    } catch(reason) {
+      if(request === fileSelectionRef.current)
+        setError(reason instanceof Error ? reason.message : String(reason));
+    }
   }
 
   function addRedaction() {

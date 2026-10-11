@@ -1,14 +1,75 @@
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{
     fs,
     io::Read,
     path::{Path, PathBuf},
+    sync::{Mutex, OnceLock},
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Manager};
 
 const INDEX_VERSION: u32 = 1;
-const STAGING_VERSION: u32 = 1;
+const STAGING_VERSION: u32 = 2;
+
+/// Serialize library index mutations within a desktop process. Each mutating
+/// command holds the lock across load, mutation and durable write.
+fn library_mutation_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
+#[cfg(windows)]
+fn replace_document_file(new_file: &Path, destination: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use std::ptr;
+    #[link(name = "Kernel32")]
+    extern "system" {
+        fn ReplaceFileW(replaced: *const u16, replacement: *const u16,
+            backup: *const u16, flags: u32, excluded: *mut std::ffi::c_void,
+            reserved: *mut std::ffi::c_void) -> i32;
+    }
+    let old: Vec<u16> = destination.as_os_str().encode_wide().chain(Some(0)).collect();
+    let new: Vec<u16> = new_file.as_os_str().encode_wide().chain(Some(0)).collect();
+    let status = unsafe {
+        ReplaceFileW(old.as_ptr(), new.as_ptr(), ptr::null(), 0,
+            ptr::null_mut(), ptr::null_mut())
+    };
+    if status == 0 { Err(std::io::Error::last_os_error()) } else { Ok(()) }
+}
+
+#[cfg(not(windows))]
+fn replace_document_file(new_file: &Path, destination: &Path) -> std::io::Result<()> {
+    fs::rename(new_file, destination)
+}
+
+/// Copy to an exclusively created staging file *beside* the original; replace
+/// the original only after the new file is complete and synced. On replacement
+/// failure the old source file is unchanged.
+fn install_staged_document(stage: &Path, source: &Path, nonce: u128) -> Result<(), String> {
+    let parent = source.parent().ok_or("Source document has no parent folder.")?;
+    let sibling = parent.join(format!(
+        ".malenjo-install-{}-{nonce:x}.tmp", std::process::id()
+    ));
+    let mut output = fs::OpenOptions::new().write(true).create_new(true).open(&sibling)
+        .map_err(|error| format!("Unable to stage new document beside source: {error}"))?;
+    let copied = (|| -> std::io::Result<()> {
+        let mut input = fs::File::open(stage)?;
+        std::io::copy(&mut input, &mut output)?;
+        output.sync_all()?;
+        Ok(())
+    })();
+    drop(output);
+    if let Err(error) = copied {
+        let _ = fs::remove_file(&sibling);
+        return Err(format!("Unable to prepare complete source replacement: {error}"));
+    }
+    if let Err(error) = replace_document_file(&sibling, source) {
+        let _ = fs::remove_file(&sibling);
+        return Err(format!("Unable to install document without overwriting it in place: {error}"));
+    }
+    Ok(())
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -77,6 +138,7 @@ struct StagingManifest {
     document_id: String,
     source_size: u64,
     source_modified_ms: u64,
+    source_sha256: String,
 }
 
 fn now_ms() -> u64 {
@@ -92,6 +154,37 @@ fn staging_nonce() -> u128 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos()
+}
+
+/// Compare file contents rather than trusting only length and mtime, both of
+/// which can remain unchanged after external writes or mtime restoration.
+fn hash_source_file(path: &Path) -> Result<String, String> {
+    use std::fmt::Write;
+    let mut input=fs::File::open(path)
+        .map_err(|error| format!("Unable to hash original source document: {error}"))?;
+    let mut hasher=Sha256::new();
+    let mut buffer=[0u8;64*1024];
+    loop {
+        let read=input.read(&mut buffer)
+            .map_err(|error| format!("Unable to hash original source document: {error}"))?;
+        if read==0 { break; }
+        hasher.update(&buffer[..read]);
+    }
+    let digest=hasher.finalize();
+    let mut encoded=String::with_capacity(64);
+    for byte in digest { write!(&mut encoded,"{byte:02x}").expect("hex formatting"); }
+    Ok(encoded)
+}
+
+fn ensure_unmodified_source(source: &Path, manifest: &StagingManifest) -> Result<(), String> {
+    let current=fs::metadata(source)
+        .map_err(|error| format!("Unable to inspect source before save: {error}"))?;
+    if current.len()!=manifest.source_size ||
+       modified_ms(&current)!=manifest.source_modified_ms ||
+       hash_source_file(source)?!=manifest.source_sha256 {
+        return Err("The source document changed outside MALENJO after editing began. Reopen or Save As to preserve the newer changes.".into());
+    }
+    Ok(())
 }
 
 fn modified_ms(metadata: &fs::Metadata) -> u64 {
@@ -181,31 +274,100 @@ fn load_index(app: &AppHandle) -> Result<LibraryIndex, String> {
     }
 }
 
-fn save_index(app: &AppHandle, index: &LibraryIndex) -> Result<(), String> {
-    let path = index_path(app)?;
-    let temp = path.with_extension("json.tmp");
-    let bytes = serde_json::to_vec_pretty(index)
-        .map_err(|error| format!("Unable to serialize MALENJO library index: {error}"))?;
-
-    fs::write(&temp, bytes)
-        .map_err(|error| format!("Unable to write MALENJO library index: {error}"))?;
-
-    if path.exists() {
-        let backup = path.with_extension("json.bak");
-        fs::copy(&path, &backup)
-            .map_err(|error| format!("Unable to create MALENJO library index backup: {error}"))?;
+/// Publish library index and its prior-version recovery copy using synced,
+/// same-directory files. Never delete a live index as a rename fallback.
+/// A successful call guarantees a complete readable index; a failure before
+/// replacement leaves the previous index untouched.
+fn save_index_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+    let nonce=staging_nonce();
+    let stage=path.with_extension(format!("json-{}-{nonce}.tmp",std::process::id()));
+    let mut file=fs::OpenOptions::new().write(true).create_new(true).open(&stage)
+        .map_err(|error| format!("Unable to stage library index: {error}"))?;
+    let written=(||->std::io::Result<()>{
+        file.write_all(bytes)?;
+        file.sync_all()
+    })();
+    drop(file);
+    if let Err(error)=written {
+        let _=fs::remove_file(&stage);
+        return Err(format!("Unable to safely stage library index: {error}"));
     }
-
-    if fs::rename(&temp, &path).is_err() {
-        if path.exists() {
-            fs::remove_file(&path)
-                .map_err(|error| format!("Unable to replace MALENJO library index: {error}"))?;
+    // Make a verified recovery copy before changing the primary. The backup
+    // must itself be published transactionally; otherwise a failed write
+    // would destroy the sole working rollback candidate.
+    let current=match fs::symlink_metadata(path) {
+        Ok(meta)=>Some(meta),
+        Err(error) if error.kind()==std::io::ErrorKind::NotFound=>None,
+        Err(error)=>{
+            let _=fs::remove_file(&stage);
+            return Err(format!("Unable to inspect the previous library index: {error}"));
         }
-        fs::rename(&temp, &path)
-            .map_err(|error| format!("Unable to finalize MALENJO library index: {error}"))?;
+    };
+    if let Some(meta)=current {
+        if meta.file_type().is_symlink() || !meta.is_file() {
+            let _=fs::remove_file(&stage);
+            return Err("Library index destination is not a regular file.".into());
+        }
+        let backup=path.with_extension("json.bak");
+        let backup_stage=path.with_extension(format!("bak-{}-{nonce}.tmp",std::process::id()));
+        // The existing index can be corrupt, with valid recovery in .bak.
+        // Never overwrite that valid recovery with corrupt bytes.
+        let existing=fs::read(path)
+            .map_err(|error| format!("Unable to inspect current index before replacement: {error}"))?;
+        let existing_valid=parse_index(&existing).is_ok();
+        if !existing_valid && !backup.exists() {
+            let _=fs::remove_file(&stage);
+            return Err("Current library index is invalid and there is no verified recovery; refusing replacement.".into());
+        }
+        if !existing_valid {
+            // Retain the pre-existing recovery file unchanged.
+            if parse_index(&fs::read(&backup).map_err(|e|format!("Unable to read library recovery: {e}"))?).is_err() {
+                let _=fs::remove_file(&stage);
+                return Err("Primary and recovery library indexes are both invalid; refusing replacement.".into());
+            }
+        }
+        let copied=(||->std::io::Result<()>{
+            if !existing_valid { return Ok(()); }
+            let mut input=fs::File::open(path)?;
+            let mut output=fs::OpenOptions::new().create_new(true).write(true).open(&backup_stage)?;
+            std::io::copy(&mut input,&mut output)?;
+            output.sync_all()
+        })();
+        if let Err(error)=copied {
+            let _=fs::remove_file(&backup_stage);
+            let _=fs::remove_file(&stage);
+            return Err(format!("Unable to prepare library index recovery: {error}"));
+        }
+        if existing_valid {
+            let backup_result=if backup.exists() {
+                replace_document_file(&backup_stage,&backup)
+            } else {
+                fs::rename(&backup_stage,&backup)
+            };
+            if let Err(error)=backup_result {
+                let _=fs::remove_file(&backup_stage);
+                let _=fs::remove_file(&stage);
+                return Err(format!("Unable to publish library index recovery: {error}"));
+            }
+        }
+        if let Err(error)=replace_document_file(&stage,path) {
+            let _=fs::remove_file(&stage);
+            return Err(format!("Unable to replace library index atomically: {error}"));
+        }
+    } else {
+        if let Err(error)=fs::rename(&stage,path) {
+            let _=fs::remove_file(&stage);
+            return Err(format!("Unable to create library index: {error}"));
+        }
     }
-
     Ok(())
+}
+
+fn save_index(app: &AppHandle, index: &LibraryIndex) -> Result<(), String> {
+    let bytes=serde_json::to_vec_pretty(index)
+        .map_err(|error| format!("Unable to serialize MALENJO library index: {error}"))?;
+    save_index_file(&index_path(app)?,&bytes)
 }
 
 fn validate_requested_path(path: &str) -> Result<(), String> {
@@ -254,9 +416,11 @@ fn make_document_id(path: &Path) -> String {
 fn classify_extension(extension: &str) -> &'static str {
     match extension {
         "pdf" => "pdf",
-        "doc" | "docx" | "odt" | "rtf" => "docx",
-        "xls" | "xlsx" | "xlsm" | "csv" | "ods" => "xlsx",
-        "ppt" | "pptx" | "odp" => "pptx",
+        "docx" => "docx",
+        "xlsx" => "xlsx",
+        "pptx" => "pptx",
+        // Legacy binary / non-OOXML formats are library entries, not files
+        // the current OOXML-only editor can safely open or reserialize.
         "png" | "jpg" | "jpeg" | "tif" | "tiff" | "bmp" | "gif" | "webp" | "heic" => "image",
         "dxf" | "dwg" => "cad",
         "dcm" | "dicom" => "dicom",
@@ -371,6 +535,8 @@ pub fn list_library_documents(app: AppHandle) -> Result<Vec<LibraryDocument>, St
 
 #[tauri::command]
 pub fn add_library_documents(app: AppHandle, paths: Vec<String>) -> Result<ImportResult, String> {
+    let _index_guard = library_mutation_lock().lock()
+        .map_err(|_| "Library mutation lock is poisoned.".to_string())?;
     let mut index = load_index(&app)?;
     let mut documents = Vec::new();
     let mut errors = Vec::new();
@@ -406,6 +572,8 @@ pub fn add_library_documents(app: AppHandle, paths: Vec<String>) -> Result<Impor
 
 #[tauri::command]
 pub fn open_library_document(app: AppHandle, document_id: String) -> Result<LibraryDocument, String> {
+    let _index_guard = library_mutation_lock().lock()
+        .map_err(|_| "Library mutation lock is poisoned.".to_string())?;
     let mut index = load_index(&app)?;
     let document = {
         let entry = find_entry_mut(&mut index, &document_id)?;
@@ -426,6 +594,8 @@ pub fn refresh_library_document(app: AppHandle, document_id: String) -> Result<L
 
 #[tauri::command]
 pub fn remove_library_document(app: AppHandle, document_id: String) -> Result<bool, String> {
+    let _index_guard = library_mutation_lock().lock()
+        .map_err(|_| "Library mutation lock is poisoned.".to_string())?;
     let mut index = load_index(&app)?;
     let previous_len = index.documents.len();
     index.documents.retain(|entry| entry.id != document_id);
@@ -439,15 +609,14 @@ pub fn remove_library_document(app: AppHandle, document_id: String) -> Result<bo
 fn destination_path(destination: &str) -> Result<PathBuf, String> {
     validate_requested_path(destination)?;
     let path = PathBuf::from(destination);
-    if path.exists() {
-        let metadata = fs::symlink_metadata(&path)
-            .map_err(|error| format!("Unable to inspect Save As destination: {error}"))?;
-        if metadata.file_type().is_symlink() {
-            return Err("Save As refuses to overwrite a symbolic-link destination.".into());
+    // A Save As *copy* may never replace a file, directory, hard-link alias,
+    // or dangling symbolic link; reject even when Path::exists() is false.
+    match fs::symlink_metadata(&path) {
+        Ok(_) => {
+            return Err("Save As destination already exists. Choose a new filename; existing files are never replaced.".into());
         }
-        if !metadata.is_file() {
-            return Err("Save As destination is not a regular file.".into());
-        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("Unable to inspect Save As destination: {error}")),
     }
     let parent = path
         .parent()
@@ -458,12 +627,69 @@ fn destination_path(destination: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+/// Copy an indexed source document into a *new* destination without writing
+/// a single byte to an existing user file. Stage and sync the copy beside the
+/// destination, then atomically create its directory entry via hard-link.
+/// hard_link fails with AlreadyExists even if another process wins a race
+/// after destination_path() checked that the target did not exist.
+fn save_as_new_file(source: &Path, destination: &Path) -> Result<(), String> {
+    match fs::symlink_metadata(destination) {
+        Ok(_) => return Err("Save As destination already exists; no files were changed.".into()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("Unable to inspect Save As destination: {error}")),
+    }
+
+    let parent = destination.parent()
+        .ok_or_else(|| "Save As destination has no parent folder.".to_string())?;
+    let stage = parent.join(format!(
+        ".malenjo-saveas-{}-{:x}.tmp", std::process::id(), staging_nonce()
+    ));
+
+    // create_new makes concurrent stage-name collisions fail closed. Never
+    // remove the stage if it was not successfully created by this operation.
+    let mut output = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&stage)
+        .map_err(|error| format!("Unable to stage Save As copy: {error}"))?;
+
+    let copied = (|| -> std::io::Result<()> {
+        let mut input = fs::File::open(source)?;
+        std::io::copy(&mut input, &mut output)?;
+        output.sync_all()?;
+        Ok(())
+    })();
+    drop(output);
+    if let Err(error) = copied {
+        let _ = fs::remove_file(&stage);
+        return Err(format!("Unable to stage complete Save As copy: {error}"));
+    }
+
+    if let Err(error) = fs::hard_link(&stage, destination) {
+        let _ = fs::remove_file(&stage);
+        if error.kind() == std::io::ErrorKind::AlreadyExists {
+            return Err("Save As destination was created by another operation. No existing file was changed.".into());
+        }
+        return Err(format!("Unable to finalize Save As without overwriting a destination: {error}"));
+    }
+
+    if let Err(error) = fs::remove_file(&stage) {
+        return Err(format!(
+            "Save As copy was created at {}, but could not clean up temporary file {} ({error}).",
+            destination.display(), stage.display()
+        ));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn save_as_library_document(
     app: AppHandle,
     document_id: String,
     destination: String,
 ) -> Result<LibraryDocument, String> {
+    let _index_guard = library_mutation_lock().lock()
+        .map_err(|_| "Library mutation lock is poisoned.".to_string())?;
     let mut index = load_index(&app)?;
     let source_entry = find_entry(&index, &document_id)?.clone();
     let source = canonical_user_file(&source_entry.path)?;
@@ -475,8 +701,7 @@ pub fn save_as_library_document(
         return Err("Save As destination must be different from the source file.".into());
     }
 
-    fs::copy(&source, &destination)
-        .map_err(|error| format!("Unable to save document copy: {error}"))?;
+    save_as_new_file(&source, &destination)?;
 
     let destination_text = destination.to_string_lossy();
     let canonical_destination = canonical_user_file(destination_text.as_ref())?;
@@ -518,11 +743,27 @@ pub fn stage_library_document(app: AppHandle, document_id: String) -> Result<Sta
     fs::copy(&source, &stage)
         .map_err(|error| format!("Unable to create MALENJO edit staging copy: {error}"))?;
 
+    // The working copy must match the source at staging time. Refuse a torn
+    // snapshot if another editor changes bytes during the copy.
+    let copied_hash=hash_source_file(&stage)?;
+    let current_hash=hash_source_file(&source)?;
+    if copied_hash!=current_hash {
+        let _=fs::remove_file(&stage);
+        return Err("Document changed during edit staging; reopen the source before editing.".into());
+    }
+    let current_metadata=fs::metadata(&source)
+        .map_err(|error| format!("Unable to inspect staged source document: {error}"))?;
+    if current_metadata.len()!=source_metadata.len() ||
+       modified_ms(&current_metadata)!=modified_ms(&source_metadata) {
+        let _=fs::remove_file(&stage);
+        return Err("Document changed while staging; the incomplete copy was discarded.".into());
+    }
     let manifest = StagingManifest {
         version: STAGING_VERSION,
         document_id: document_id.clone(),
-        source_size: source_metadata.len(),
-        source_modified_ms: modified_ms(&source_metadata),
+        source_size: current_metadata.len(),
+        source_modified_ms: modified_ms(&current_metadata),
+        source_sha256: current_hash,
     };
     let manifest_bytes = serde_json::to_vec_pretty(&manifest)
         .map_err(|error| format!("Unable to serialize MALENJO staging manifest: {error}"))?;
@@ -545,6 +786,8 @@ pub fn commit_staged_document(
     document_id: String,
     staging_token: String,
 ) -> Result<LibraryDocument, String> {
+    let _index_guard = library_mutation_lock().lock()
+        .map_err(|_| "Library mutation lock is poisoned.".to_string())?;
     validate_staging_token(&staging_token)?;
     if !staging_token.starts_with(&format!("{}-", document_id)) {
         return Err("Staging token does not belong to this document.".into());
@@ -569,16 +812,7 @@ pub fn commit_staged_document(
     let mut index = load_index(&app)?;
     let entry = find_entry_mut(&mut index, &document_id)?;
     let source = canonical_user_file(&entry.path)?;
-    let current_metadata = fs::metadata(&source)
-        .map_err(|error| format!("Unable to inspect source document before save: {error}"))?;
-    if current_metadata.len() != manifest.source_size
-        || modified_ms(&current_metadata) != manifest.source_modified_ms
-    {
-        return Err(
-            "The source document changed outside MALENJO after editing began. Reopen or Save As to avoid overwriting newer changes."
-                .into(),
-        );
-    }
+    ensure_unmodified_source(&source, &manifest)?;
 
     let backup = staging_dir(&app)?.join(format!("{staging_token}-backup"));
 
@@ -590,26 +824,18 @@ pub fn commit_staged_document(
     fs::copy(&source, &backup)
         .map_err(|error| format!("Unable to create MALENJO save backup: {error}"))?;
 
-    let write_result = fs::copy(&stage, &source)
-        .map_err(|error| format!("Unable to commit document save: {error}"));
+    // The original stays intact until a same-folder, completely synced
+    // replacement is installed. No in-place truncation or restore-by-copy.
+    install_staged_document(&stage, &source, staging_nonce())?;
 
-    if let Err(error) = write_result {
-        let _ = fs::copy(&backup, &source);
-        let _ = fs::remove_file(&backup);
-        return Err(error);
-    }
-
-    if let Ok(file) = fs::OpenOptions::new().read(true).open(&source) {
-        let _ = file.sync_all();
-    }
-
-    let _ = fs::remove_file(&backup);
-    let _ = fs::remove_file(&stage);
-    let _ = fs::remove_file(&manifest_path);
+    // Keep recovery material until the replacement and index update complete.
 
     entry.last_opened_ms = Some(now_ms());
     let document = public_document(entry);
     save_index(&app, &index)?;
+    let _ = fs::remove_file(&backup);
+    let _ = fs::remove_file(&stage);
+    let _ = fs::remove_file(&manifest_path);
     Ok(document)
 }
 
@@ -646,7 +872,122 @@ pub fn discard_staged_document(app: AppHandle, staging_token: String) -> Result<
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_extension, classify_signature, fnv1a64, parse_index, validate_requested_path, validate_staging_token};
+    use super::{classify_extension, classify_signature, destination_path, ensure_unmodified_source, fnv1a64, hash_source_file, install_staged_document, modified_ms, parse_index, save_as_new_file, save_index_file, StagingManifest, STAGING_VERSION, validate_requested_path, validate_staging_token};
+    use std::{fs, path::PathBuf, sync::{Arc, Barrier}, thread, time::{SystemTime, UNIX_EPOCH}};
+
+    #[test]
+    fn staged_save_rejects_same_size_externally_changed_document() {
+        let directory=test_directory("staged-hash-conflict");
+        let source=directory.join("original.pdf");
+        fs::write(&source,b"AAAA").unwrap();
+        let original_hash=hash_source_file(&source).unwrap();
+        fs::write(&source,b"BBBB").unwrap();
+        let metadata=fs::metadata(&source).unwrap();
+        let manifest=StagingManifest {
+            version:STAGING_VERSION,
+            document_id:"test".into(),
+            source_size:4,
+            // Simulates an external editor that preserves/resets the mtime.
+            source_modified_ms:modified_ms(&metadata),
+            source_sha256:original_hash,
+        };
+        assert!(ensure_unmodified_source(&source,&manifest).is_err());
+        assert_eq!(fs::read(&source).unwrap(),b"BBBB");
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn staged_save_accepts_unchanged_content() {
+        let directory=test_directory("staged-unmodified");
+        let source=directory.join("original.pdf");
+        fs::write(&source,b"unchanged").unwrap();
+        let meta=fs::metadata(&source).unwrap();
+        let manifest=StagingManifest {
+            version:STAGING_VERSION,
+            document_id:"test".into(),
+            source_size:meta.len(),
+            source_modified_ms:modified_ms(&meta),
+            source_sha256:hash_source_file(&source).unwrap(),
+        };
+        ensure_unmodified_source(&source,&manifest).unwrap();
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn staged_save_commits_only_complete_bytes() {
+        let folder = test_directory("staged-success");
+        let original = folder.join("user.pdf");
+        let stage = folder.join("edited.bin");
+        fs::write(&original, b"unaltered").expect("source");
+        fs::write(&stage, b"complete edited PDF bytes").expect("stage");
+        install_staged_document(&stage, &original, 23).expect("transactional replace");
+        assert_eq!(fs::read(&original).expect("updated"), b"complete edited PDF bytes");
+        assert_eq!(fs::read(&stage).expect("stage preserved"), b"complete edited PDF bytes");
+        fs::remove_dir_all(folder).expect("cleanup");
+    }
+
+    #[test]
+    fn failed_staged_save_preserves_original_bytes() {
+        let folder = test_directory("staged-failure");
+        let original = folder.join("user.pdf");
+        fs::write(&original, b"unaltered").expect("source");
+        assert!(install_staged_document(&folder.join("missing"), &original, 24).is_err());
+        assert_eq!(fs::read(&original).expect("source intact"), b"unaltered");
+        assert_eq!(fs::read_dir(&folder).expect("no leftovers").count(), 1);
+        fs::remove_dir_all(folder).expect("cleanup");
+    }
+
+    #[test]
+    fn library_index_atomic_save_retains_previous_verified_version() {
+        let root=test_directory("index-atomic");
+        let path=root.join("index.json");
+        let first=br#"{"version":1,"documents":[]}"#;
+        let second=br#"{"version":1,"documents":[{"id":"d","path":"C:/example.pdf","added_ms":1,"last_opened_ms":null}]}"#;
+        save_index_file(&path,first).expect("create library index");
+        save_index_file(&path,second).expect("replace library index");
+        assert_eq!(fs::read(&path).unwrap(),second);
+        assert_eq!(fs::read(root.join("index.json.bak")).unwrap(),first);
+        assert!(parse_index(&fs::read(&path).unwrap()).is_ok());
+        assert!(parse_index(&fs::read(root.join("index.json.bak")).unwrap()).is_ok());
+        assert_eq!(fs::read_dir(&root).unwrap().count(),2);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn recovered_corrupt_primary_does_not_poison_good_backup() {
+        let root=test_directory("good-recovery");
+        let path=root.join("index.json");
+        let good=br#"{"version":1,"documents":[]}"#;
+        let repaired=br#"{"version":1,"documents":[{"id":"d","path":"C:/a.pdf","added_ms":1,"last_opened_ms":null}]}"#;
+        fs::write(&path,b"not valid JSON").unwrap();
+        fs::write(root.join("index.json.bak"),good).unwrap();
+        save_index_file(&path,repaired).expect("repair primary without poisoning recovery");
+        assert_eq!(fs::read(&path).unwrap(),repaired);
+        assert_eq!(fs::read(root.join("index.json.bak")).unwrap(),good);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn library_index_rejects_non_file_destination_without_removing_it() {
+        let root=test_directory("index-directory");
+        let path=root.join("index.json");
+        fs::create_dir(&path).unwrap();
+        assert!(save_index_file(&path,b"replacement").is_err());
+        assert!(path.is_dir());
+        assert_eq!(fs::read_dir(&root).unwrap().count(),1);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn library_index_rejects_failed_staging_without_destroying_existing_bytes() {
+        let root=test_directory("index-closed");
+        let path=root.join("index.json");
+        fs::write(&path,b"original").unwrap();
+        // Nonexistent parent makes staging fail before the live index is touched.
+        assert!(save_index_file(&root.join("missing").join("index.json"),b"new").is_err());
+        assert_eq!(fs::read(&path).unwrap(),b"original");
+        fs::remove_dir_all(root).expect("cleanup");
+    }
 
     #[test]
     fn maps_supported_document_extensions() {
@@ -654,6 +995,9 @@ mod tests {
         assert_eq!(classify_extension("docx"), "docx");
         assert_eq!(classify_extension("xlsx"), "xlsx");
         assert_eq!(classify_extension("pptx"), "pptx");
+        for unsupported in ["doc", "xls", "ppt", "odt", "ods", "odp", "rtf", "csv", "xlsm"] {
+            assert_eq!(classify_extension(unsupported), "other");
+        }
         assert_eq!(classify_extension("dxf"), "cad");
         assert_eq!(classify_extension("dcm"), "dicom");
         assert_eq!(classify_extension("unknown"), "other");
@@ -687,6 +1031,127 @@ mod tests {
     fn rejects_malformed_requested_paths() {
         assert!(validate_requested_path("").is_err());
         assert!(validate_requested_path("bad\0path.pdf").is_err());
+    }
+
+    fn test_directory(label: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "malenjo-saveas-{}-{label}-{nonce}", std::process::id()
+        ));
+        fs::create_dir(&directory).expect("create isolated test directory");
+        directory
+    }
+
+    #[test]
+    fn save_as_creates_a_complete_new_copy() {
+        let directory = test_directory("new");
+        let source = directory.join("source.txt");
+        let destination = directory.join("copy.txt");
+        fs::write(&source, b"contents to preserve").expect("write source");
+        assert!(destination_path(destination.to_string_lossy().as_ref()).is_ok());
+        save_as_new_file(&source, &destination).expect("save new copy");
+        assert_eq!(fs::read(&source).expect("read source"), b"contents to preserve");
+        assert_eq!(fs::read(&destination).expect("read copy"), b"contents to preserve");
+        assert_eq!(fs::read_dir(&directory).expect("read directory").count(), 2);
+        fs::remove_dir_all(directory).expect("remove fixture");
+    }
+
+    #[test]
+    fn save_as_refuses_an_existing_destination_without_changing_either_file() {
+        let directory = test_directory("existing");
+        let source = directory.join("source.txt");
+        let destination = directory.join("existing.txt");
+        fs::write(&source, b"source bytes").expect("source");
+        fs::write(&destination, b"existing user bytes").expect("destination");
+        assert!(destination_path(destination.to_string_lossy().as_ref()).is_err());
+        assert!(save_as_new_file(&source, &destination).is_err());
+        assert_eq!(fs::read(&source).expect("source unchanged"), b"source bytes");
+        assert_eq!(fs::read(&destination).expect("destination unchanged"), b"existing user bytes");
+        fs::remove_dir_all(directory).expect("remove fixture");
+    }
+
+    #[test]
+    fn save_as_refuses_source_path_and_hard_link_alias() {
+        let directory = test_directory("aliases");
+        let source = directory.join("source.txt");
+        let alias = directory.join("alias.txt");
+        fs::write(&source, b"unaltered source").expect("source");
+        fs::hard_link(&source, &alias).expect("alias");
+        assert!(save_as_new_file(&source, &source).is_err());
+        assert!(save_as_new_file(&source, &alias).is_err());
+        assert_eq!(fs::read(&source).expect("source unchanged"), b"unaltered source");
+        assert_eq!(fs::read(&alias).expect("alias unchanged"), b"unaltered source");
+        fs::remove_dir_all(directory).expect("remove fixture");
+    }
+
+    #[test]
+    fn save_as_missing_source_leaves_no_destination_or_stage() {
+        let directory = test_directory("missing");
+        let source = directory.join("missing-source.txt");
+        let destination = directory.join("copy.txt");
+        assert!(save_as_new_file(&source, &destination).is_err());
+        assert!(!destination.exists());
+        assert_eq!(fs::read_dir(&directory).expect("no stages").count(), 0);
+        fs::remove_dir_all(directory).expect("remove fixture");
+    }
+
+    #[test]
+    fn save_as_refuses_directories_without_removing_them() {
+        let directory = test_directory("target-dir");
+        let source = directory.join("source.txt");
+        let destination = directory.join("subdir.txt");
+        fs::write(&source, b"source bytes").expect("source");
+        fs::create_dir(&destination).expect("destination directory");
+        assert!(save_as_new_file(&source, &destination).is_err());
+        assert!(destination.is_dir());
+        assert_eq!(fs::read(&source).expect("unchanged"), b"source bytes");
+        fs::remove_dir_all(directory).expect("remove fixture");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn save_as_refuses_dangling_symlink_destinations() {
+        use std::os::unix::fs::symlink;
+        let directory = test_directory("dangling-link");
+        let source = directory.join("source.txt");
+        let destination = directory.join("link.txt");
+        fs::write(&source, b"source bytes").expect("source");
+        symlink(directory.join("not-present.txt"), &destination).expect("create dangling link");
+        assert!(!destination.exists());
+        assert!(destination_path(destination.to_string_lossy().as_ref()).is_err());
+        assert!(save_as_new_file(&source, &destination).is_err());
+        assert!(fs::symlink_metadata(&destination).expect("link retained").file_type().is_symlink());
+        fs::remove_dir_all(directory).expect("remove fixture");
+    }
+
+    #[test]
+    fn concurrent_save_as_to_same_name_never_overwrites_the_winner() {
+        let directory = test_directory("race");
+        let first = directory.join("first.txt");
+        let second = directory.join("second.txt");
+        let destination = directory.join("result.txt");
+        fs::write(&first, b"first source").expect("first");
+        fs::write(&second, b"second source").expect("second");
+        let barrier = Arc::new(Barrier::new(3));
+        let workers: Vec<_> = [first, second].into_iter().map(|source| {
+            let barrier = Arc::clone(&barrier);
+            let destination = destination.clone();
+            thread::spawn(move || {
+                barrier.wait();
+                save_as_new_file(&source, &destination)
+            })
+        }).collect();
+        barrier.wait();
+        let outcomes: Vec<_> = workers.into_iter()
+            .map(|worker| worker.join().expect("copy thread")).collect();
+        assert_eq!(outcomes.iter().filter(|result| result.is_ok()).count(), 1);
+        let actual = fs::read(&destination).expect("complete winning file");
+        assert!(actual == b"first source" || actual == b"second source");
+        assert_eq!(fs::read_dir(&directory).expect("read directory").count(), 3);
+        fs::remove_dir_all(directory).expect("remove fixture");
     }
 
     #[test]

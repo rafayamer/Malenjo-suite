@@ -95,21 +95,22 @@ async function recognizeTesseract(blob: Blob, onProgress?: RecognizeOptions['onP
 }
 
 export async function recognizeScan(blob: Blob, options: RecognizeOptions = {}): Promise<OcrPageResult> {
+  const startGeneration = generation;
   const hash = await digestBlob(blob);
-  const cached = cache.get(hash);
+  if (startGeneration !== generation) throw new Error('OCR job cancelled.');
+  const usePaddle = options.preferPaddle !== false && isTauri()
+    ? (await getPaddleStatus()).available
+    : false;
+  if (startGeneration !== generation) throw new Error('OCR job cancelled.');
+  const key = `${usePaddle ? 'paddle-local' : 'tesseract-portable'}:${hash}`;
+  const cached = cache.get(key);
   if (cached) return { ...cached, cached: true };
 
-  let result: OcrPageResult;
-  if (options.preferPaddle !== false && isTauri()) {
-    const status = await getPaddleStatus();
-    result = status.available
-      ? await recognizePaddle(blob, options.onProgress)
-      : await recognizeTesseract(blob, options.onProgress);
-  } else {
-    result = await recognizeTesseract(blob, options.onProgress);
-  }
-
-  cache.set(hash, result);
+  const result = usePaddle
+    ? await recognizePaddle(blob, options.onProgress)
+    : await recognizeTesseract(blob, options.onProgress);
+  if (startGeneration + 1 !== generation) throw new Error('OCR job cancelled.');
+  cache.set(key, result);
   activeJob = null;
   return result;
 }

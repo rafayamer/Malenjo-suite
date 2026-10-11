@@ -230,4 +230,27 @@ describe('PDF provider capability resolver',()=>{
     expect(resolvePdfProviderCapability(operation('/api/v1/general/crop'),[]).providerId).toBe('stirling-core');
     expect(resolvePdfProviderCapability(operation('/api/v1/convert/markdown-to-pdf'),[]).available).toBe(true);
   });
+
+  it('does not claim offline functionality for unreviewed TSA, veraPDF or Tauri-disabled pipeline endpoints',()=>{
+    const timestamp=resolvePdfProviderCapability(
+      operation('/api/v1/security/timestamp-pdf','timestampPdf'),[],
+    );
+    expect(timestamp.available).toBe(false);
+    expect(timestamp.providerId).toBe('tsa');
+    expect(timestamp.disabledReason).toMatch(/external TSA/i);
+
+    const standards=resolvePdfProviderCapability(
+      operation('/api/v1/security/verify-pdf','verifyPdf'),[],
+    );
+    expect(standards.available).toBe(false);
+    expect(standards.providerId).toBe('verapdf');
+    expect(standards.disabledReason).toMatch(/not been verified/i);
+
+    const pipeline=resolvePdfProviderCapability(
+      operation('/api/v1/pipeline/handleData','handleData'),[],
+    );
+    expect(pipeline.available).toBe(false);
+    expect(pipeline.providerId).toBe('stirling-pipeline');
+    expect(pipeline.disabledReason).toMatch(/TAURI_MODE/i);
+  });
 });

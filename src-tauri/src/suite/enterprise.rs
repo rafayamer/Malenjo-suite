@@ -8,6 +8,7 @@ use std::{
     path::{Component, Path, PathBuf},
     process::{Command, Stdio},
     thread,
+    sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Manager};
@@ -21,6 +22,18 @@ const DMS_VERSION: u32 = 1;
 const POLICY_VERSION: u32 = 1;
 const WORKFLOW_VERSION: u32 = 1;
 const BACKUP_VERSION: u32 = 1;
+static SNAPSHOT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+static STATE_WRITE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+static BACKUP_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+fn snapshot_version_id(source: &Path, created_ms: u64) -> String {
+    let nonce = SNAPSHOT_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    format!(
+        "ver-{created_ms}-{}-{nonce}-{}",
+        std::process::id(),
+        stable_id("", &source.display().to_string()).trim_start_matches('-')
+    )
+}
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(45);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -204,16 +217,54 @@ fn workflows_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(enterprise_root(app)?.join("workflows-v1.json"))
 }
 
-fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    let temp = path.with_extension("tmp");
-    fs::write(&temp, bytes)
-        .map_err(|error| format!("Unable to write temporary enterprise state: {error}"))?;
-    if path.exists() {
-        fs::remove_file(path)
-            .map_err(|error| format!("Unable to replace enterprise state: {error}"))?;
+#[cfg(windows)]
+fn replace_state_file(temp: &Path, destination: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use std::ptr;
+    #[link(name = "Kernel32")]
+    extern "system" {
+        fn ReplaceFileW(replaced: *const u16, replacement: *const u16,
+            backup: *const u16, flags: u32, excluded: *mut std::ffi::c_void,
+            reserved: *mut std::ffi::c_void) -> i32;
     }
-    fs::rename(&temp, path)
-        .map_err(|error| format!("Unable to finalize enterprise state: {error}"))
+    if !destination.exists() {
+        return fs::rename(temp, destination);
+    }
+    let old: Vec<u16> = destination.as_os_str().encode_wide().chain(Some(0)).collect();
+    let new: Vec<u16> = temp.as_os_str().encode_wide().chain(Some(0)).collect();
+    // Windows ReplaceFileW preserves the original on failure; no delete gap.
+    let ok = unsafe { ReplaceFileW(old.as_ptr(), new.as_ptr(), ptr::null(), 0,
+        ptr::null_mut(), ptr::null_mut()) };
+    if ok == 0 { Err(std::io::Error::last_os_error()) } else { Ok(()) }
+}
+
+#[cfg(not(windows))]
+fn replace_state_file(temp: &Path, destination: &Path) -> std::io::Result<()> {
+    fs::rename(temp, destination)
+}
+
+fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let sequence = STATE_WRITE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let temp = path.with_extension(format!("{}-{sequence}.tmp", std::process::id()));
+    let mut file = fs::OpenOptions::new().create_new(true).write(true).open(&temp)
+        .map_err(|error| format!("Unable to stage enterprise state: {error}"))?;
+    let result = (|| -> std::io::Result<()> {
+        use std::io::Write;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        Ok(())
+    })();
+    drop(file);
+    if let Err(error) = result {
+        let _ = fs::remove_file(&temp);
+        return Err(format!("Unable to stage enterprise state: {error}"));
+    }
+    let replaced = replace_state_file(&temp, path);
+    if let Err(error) = replaced {
+        let _ = fs::remove_file(&temp);
+        return Err(format!("Unable to atomically replace enterprise state: {error}"));
+    }
+    Ok(())
 }
 
 fn load_dms(app: &AppHandle) -> Result<DmsIndex, String> {
@@ -340,7 +391,7 @@ fn make_snapshot(
 ) -> Result<DmsVersion, String> {
     let source = resolve_library_document_path(app, document_id)?;
     let created_ms = now_ms();
-    let version_id = format!("ver-{created_ms}-{}", stable_id("", &source.display().to_string()).trim_start_matches('-'));
+    let version_id = snapshot_version_id(&source, created_ms);
     let rel = format!("versions/{record_id}/{version_id}-{}", safe_name(name));
     let destination = dms_root(app)?.join(&rel);
     let parent = destination
@@ -348,8 +399,18 @@ fn make_snapshot(
         .ok_or_else(|| "DMS snapshot destination has no parent.".to_string())?;
     fs::create_dir_all(parent)
         .map_err(|error| format!("Unable to create DMS version directory: {error}"))?;
-    fs::copy(&source, &destination)
-        .map_err(|error| format!("Unable to snapshot DMS document: {error}"))?;
+    // create_new prevents silently replacing a supposedly immutable version.
+    let mut source_file = fs::File::open(&source)
+        .map_err(|error| format!("Unable to read DMS snapshot source: {error}"))?;
+    let mut target_file = fs::OpenOptions::new().write(true).create_new(true).open(&destination)
+        .map_err(|error| format!("Unable to create unique DMS snapshot: {error}"))?;
+    if let Err(error) = std::io::copy(&mut source_file, &mut target_file)
+        .and_then(|_| target_file.sync_all())
+    {
+        drop(target_file);
+        let _ = fs::remove_file(&destination);
+        return Err(format!("Unable to complete DMS snapshot: {error}"));
+    }
     let (sha256, size_bytes) = sha256_file(&destination)?;
     Ok(DmsVersion {
         id: version_id,
@@ -404,7 +465,7 @@ pub fn dms_register_document(
     };
     index.records.push(record.clone());
     save_dms(&app, &index)?;
-    let _ = append_audit(&app, "dms-register", "info", &record.name, "Document registered and initial version snapshotted.");
+    append_audit(&app, "dms-register", "info", &record.name, "Document registered and initial version snapshotted.")?;
     Ok(record)
 }
 
@@ -419,7 +480,7 @@ fn snapshot_record_internal(app: &AppHandle, record_id: &str, note: &str) -> Res
     index.records[position].updated_ms = now_ms();
     let record = index.records[position].clone();
     save_dms(app, &index)?;
-    let _ = append_audit(app, "dms-snapshot", "info", &record.name, note);
+    append_audit(app, "dms-snapshot", "info", &record.name, note)?;
     Ok(record)
 }
 
@@ -449,13 +510,13 @@ pub fn dms_update_retention(
     record.updated_ms = now_ms();
     let result = record.clone();
     save_dms(&app, &index)?;
-    let _ = append_audit(
+    append_audit(
         &app,
         "dms-retention",
         "warning",
         &result.name,
         format!("Retention={} days; legal_hold={}.", result.retention_days, result.legal_hold),
-    );
+    )?;
     Ok(result)
 }
 
@@ -516,27 +577,37 @@ pub fn dms_apply_retention(
         return Ok(0);
     }
 
+    // Commit the index before reclaiming old snapshot files.
     let root = dms_root(&app)?;
-    let mut removed = 0usize;
+    let mut expired_paths = Vec::new();
     for record in &mut index.records {
-        let mut retained = Vec::with_capacity(record.versions.len());
-        for version in record.versions.drain(..) {
-            if requested.contains(&version.id) {
-                let path = root.join(safe_relative(&version.snapshot_rel_path)?);
-                if path.exists() {
-                    fs::remove_file(&path)
-                        .map_err(|error| format!("Unable to remove expired DMS version: {error}"))?;
-                }
-                removed += 1;
-            } else {
-                retained.push(version);
-            }
-        }
-        record.versions = retained;
+        record.versions.retain(|version| {
+            if !requested.contains(&version.id) { return true; }
+            expired_paths.push(version.snapshot_rel_path.clone());
+            false
+        });
     }
+    let paths = expired_paths.iter()
+        .map(|value| safe_relative(value).map(|relative| root.join(relative)))
+        .collect::<Result<Vec<_>,_>>()?;
     save_dms(&app, &index)?;
-    let _ = append_audit(&app, "dms-retention-apply", "warning", "DMS", format!("Removed {removed} expired version(s)."));
-    Ok(removed)
+
+    let mut cleanup_errors = Vec::new();
+    for path in &paths {
+        match fs::remove_file(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => cleanup_errors.push(format!("{}: {error}", path.display())),
+        }
+    }
+    append_audit(&app, "dms-retention-apply", "warning", "DMS",
+        format!("Unlinked {} version(s); {} snapshot cleanup error(s).",
+            paths.len(), cleanup_errors.len()))?;
+    if !cleanup_errors.is_empty() {
+        return Err(format!("Retention index updated but expired snapshots need cleanup: {}",
+            cleanup_errors.join("; ")));
+    }
+    Ok(paths.len())
 }
 
 #[tauri::command]
@@ -562,6 +633,9 @@ pub fn admin_update_policy(
     require_permission(&app, "admin.write")?;
     if !["owner", "admin", "editor", "viewer"].contains(&current_role.as_str()) {
         return Err("Unknown enterprise role.".into());
+    }
+    if !role_permissions(&current_role).iter().any(|permission| permission == "admin.write") {
+        return Err("Local administrator cannot assign a role that removes administration access. Configure authenticated multi-user identity first.".into());
     }
     let policy = EnterprisePolicy {
         version: POLICY_VERSION,
@@ -780,6 +854,52 @@ pub fn temporal_start_workflow(
     Ok(stdout)
 }
 
+
+const MAX_NATIVE_HOME_BYTES: usize = 64 * 1024;
+
+fn home_state_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let root = app.path().app_data_dir()
+        .map_err(|error| format!("Unable to resolve Home data directory: {error}"))?.join("library");
+    fs::create_dir_all(&root).map_err(|error| format!("Unable to create Home data directory: {error}"))?;
+    Ok(root.join("home-state-v1.json"))
+}
+
+fn validate_home_payload(content: &str) -> Result<(), String> {
+    if content.len() > MAX_NATIVE_HOME_BYTES {
+        return Err("Home state exceeds its 64 KB budget.".into());
+    }
+    let value: serde_json::Value = serde_json::from_str(content)
+        .map_err(|error| format!("Home state is invalid JSON: {error}"))?;
+    if value.get("schemaVersion").and_then(|value| value.as_u64()) != Some(1) ||
+       !value.get("starredDocumentIds").is_some_and(|v| v.is_array()) ||
+       !value.get("pinnedLocations").is_some_and(|v| v.is_array()) {
+        return Err("Home state is not a supported version 1 structure.".into());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn read_native_home_state(app: AppHandle) -> Result<Option<String>, String> {
+    let path = home_state_path(&app)?;
+    if !path.exists() { return Ok(None); }
+    let metadata = fs::symlink_metadata(&path)
+        .map_err(|error| format!("Unable to inspect Home state: {error}"))?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() ||
+        metadata.len() > MAX_NATIVE_HOME_BYTES as u64 {
+        return Err("Home state must be a bounded regular file.".into());
+    }
+    let content=fs::read_to_string(&path)
+        .map_err(|error| format!("Unable to read Home state: {error}"))?;
+    validate_home_payload(&content)?;
+    Ok(Some(content))
+}
+
+#[tauri::command]
+pub fn write_native_home_state(app: AppHandle, content: String) -> Result<(), String> {
+    validate_home_payload(&content)?;
+    atomic_write(&home_state_path(&app)?, content.as_bytes())
+}
+
 fn copy_dir_recursive(source: &Path, destination: &Path) -> Result<(), String> {
     if !source.exists() {
         return Ok(());
@@ -793,7 +913,9 @@ fn copy_dir_recursive(source: &Path, destination: &Path) -> Result<(), String> {
         let metadata = fs::symlink_metadata(&source_path)
             .map_err(|error| format!("Unable to inspect backup file: {error}"))?;
         if metadata.file_type().is_symlink() {
-            continue;
+            // Silently skipping a linked source creates a "verified" backup
+            // that was never a complete representation of live state.
+            return Err(format!("Backup source contains a symbolic link: {}", source_path.display()));
         }
         if metadata.is_dir() {
             copy_dir_recursive(&source_path, &destination_path)?;
@@ -831,8 +953,25 @@ fn collect_backup_files(root: &Path, current: &Path, files: &mut Vec<BackupFile>
     Ok(())
 }
 
+fn supported_backup_domain(relative: &Path) -> bool {
+    matches!(relative.components().next(),
+        Some(Component::Normal(value))
+        if value == "enterprise" || value == "security" || value == "library")
+}
+
 fn validate_backup_root(path: &Path) -> Result<BackupManifest, String> {
+    let root_metadata=fs::symlink_metadata(path)
+        .map_err(|error|format!("Unable to inspect backup root: {error}"))?;
+    if root_metadata.file_type().is_symlink() || !root_metadata.is_dir() {
+        return Err("Backup root must be an actual directory, not a symbolic link.".into());
+    }
     let manifest_path = path.join("manifest-v1.json");
+    let metadata=fs::symlink_metadata(&manifest_path)
+        .map_err(|error|format!("Unable to inspect backup manifest: {error}"))?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() ||
+       metadata.len()==0 || metadata.len()>32*1024*1024 {
+        return Err("Backup manifest must be a regular file of at most 32 MB.".into());
+    }
     let bytes = fs::read(&manifest_path)
         .map_err(|error| format!("Unable to read backup manifest: {error}"))?;
     let manifest: BackupManifest = serde_json::from_slice(&bytes)
@@ -845,13 +984,54 @@ fn validate_backup_root(path: &Path) -> Result<BackupManifest, String> {
 
 fn inspect_backup(path: &Path) -> Result<BackupInspection, String> {
     let manifest = validate_backup_root(path)?;
+    let state = path.join("state");
+    let state_metadata=fs::symlink_metadata(&state)
+        .map_err(|error| format!("Backup is missing its state directory: {error}"))?;
+    if state_metadata.file_type().is_symlink() || !state_metadata.is_dir() {
+        return Err("Backup state root must be a non-symbolic-link directory.".into());
+    }
     let mut errors = Vec::new();
     let mut total_bytes = 0u64;
+    let mut expected_paths=HashSet::new();
+    if manifest.files.len()>100_000 {
+        return Err("Backup manifest exceeds the 100,000 file safety budget.".into());
+    }
     for entry in &manifest.files {
+        if !expected_paths.insert(entry.path.clone()) {
+            errors.push(format!("Duplicate backup manifest path: {}",entry.path));
+            continue;
+        }
         let relative = safe_relative(&entry.path)?;
-        let file = path.join("state").join(relative);
-        if !file.is_file() {
-            errors.push(format!("Missing {}", entry.path));
+        if !supported_backup_domain(&relative) {
+            errors.push(format!("Backup contains a state domain that restore cannot install: {}",entry.path));
+            continue;
+        }
+        let file = path.join("state").join(&relative);
+        // Reject symlinked entries and ancestors; never verify one file
+        // then restore a different filesystem view.
+        let mut cursor = path.join("state");
+        let mut safe = true;
+        for component in relative.components() {
+            cursor.push(component.as_os_str());
+            match fs::symlink_metadata(&cursor) {
+                Ok(metadata) if metadata.file_type().is_symlink() => {
+                    errors.push(format!("Symbolic link forbidden in backup: {}", entry.path));
+                    safe = false;
+                    break;
+                }
+                Err(error) => {
+                    errors.push(format!("Missing or unreadable {}: {error}", entry.path));
+                    safe = false;
+                    break;
+                }
+                Ok(_) => {}
+            }
+        }
+        if !safe { continue; }
+        let metadata = fs::symlink_metadata(&file)
+            .map_err(|error| format!("Unable to inspect backup entry: {error}"))?;
+        if !metadata.is_file() {
+            errors.push(format!("Not a regular backup file: {}", entry.path));
             continue;
         }
         match sha256_file(&file) {
@@ -864,12 +1044,44 @@ fn inspect_backup(path: &Path) -> Result<BackupInspection, String> {
             Err(error) => errors.push(format!("{}: {}", entry.path, error)),
         }
     }
+    // A manifest may be internally consistent yet omit extra files from
+    // state. Restoring unlisted content would introduce unverified data.
+    // Enumerate the *actual* state tree and require exact inventory parity.
+    let mut actual=Vec::new();
+    collect_backup_files(&state,&state,&mut actual)?;
+    if actual.len()>100_000 {
+        errors.push("Backup contains more than 100,000 files.".into());
+    }
+    for file in actual {
+        if !supported_backup_domain(&safe_relative(&file.path)?) {
+            errors.push(format!("Backup includes unsupported restore domain: {}",file.path));
+        }
+        if !expected_paths.contains(&file.path) {
+            errors.push(format!("Unlisted file in backup state: {}",file.path));
+        }
+    }
     Ok(BackupInspection {
         valid: errors.is_empty(),
         file_count: manifest.files.len(),
         total_bytes,
         errors,
     })
+}
+
+/// Never reuse an existing snapshot directory: create_dir is exclusive
+/// while create_dir_all silently permits reopening and overwriting one.
+fn reserve_backup_root(destination: &Path) -> Result<PathBuf, String> {
+    for _ in 0..32 {
+        let sequence=BACKUP_DIRECTORY_SEQUENCE.fetch_add(1,Ordering::Relaxed);
+        let name=format!("MALENJO-backup-{}-{}-{sequence}",now_ms(),std::process::id());
+        let path=destination.join(name);
+        match fs::create_dir(&path) {
+            Ok(()) => return Ok(path),
+            Err(error) if error.kind()==std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(format!("Unable to reserve new backup folder: {error}")),
+        }
+    }
+    Err("Unable to reserve a unique backup folder without overwriting previous snapshots.".into())
 }
 
 #[tauri::command]
@@ -885,14 +1097,15 @@ pub fn create_local_backup(
         return Err("Backup destination must be an existing non-symbolic-link directory.".into());
     }
 
-    let backup = destination.join(format!("MALENJO-backup-{}", now_ms()));
+    let backup = reserve_backup_root(&destination)?;
     let state = backup.join("state");
-    fs::create_dir_all(&state)
-        .map_err(|error| format!("Unable to create backup root: {error}"))?;
+    fs::create_dir(&state)
+        .map_err(|error| format!("Unable to create new backup state: {error}"))?;
     let app_data = app.path().app_data_dir()
         .map_err(|error| format!("Unable to resolve app data directory: {error}"))?;
     copy_dir_recursive(&app_data.join("enterprise"), &state.join("enterprise"))?;
     copy_dir_recursive(&app_data.join("security"), &state.join("security"))?;
+    copy_dir_recursive(&app_data.join("library"), &state.join("library"))?;
 
     let mut files = Vec::new();
     collect_backup_files(&state, &state, &mut files)?;
@@ -916,53 +1129,75 @@ pub fn inspect_local_backup(path: String) -> Result<BackupInspection, String> {
     inspect_backup(&PathBuf::from(path))
 }
 
+/// Restore each root with rollback directories rather than deleting active
+/// enterprise/security state before the replacement is ready. A failed rename
+/// rolls back earlier successful swaps; the independent recovery copy remains.
 fn restore_state_with_recovery(app_data: &Path, backup: &Path) -> Result<PathBuf, String> {
     let inspection = inspect_backup(backup)?;
     if !inspection.valid {
         return Err(format!("Backup integrity check failed: {}", inspection.errors.join("; ")));
     }
 
-    let recovery = app_data.join(format!("restore-recovery-{}", now_ms()));
+    let nonce = SystemTime::now().duration_since(UNIX_EPOCH)
+        .unwrap_or_default().as_nanos();
+    let recovery = app_data.join(format!("restore-recovery-{nonce}"));
     fs::create_dir_all(&recovery)
         .map_err(|error| format!("Unable to create restore recovery directory: {error}"))?;
-    copy_dir_recursive(&app_data.join("enterprise"), &recovery.join("enterprise"))?;
-    copy_dir_recursive(&app_data.join("security"), &recovery.join("security"))?;
+    for name in ["enterprise", "security", "library"] {
+        copy_dir_recursive(&app_data.join(name), &recovery.join(name))?;
+    }
 
-    let stage = app_data.join(format!("restore-stage-{}", now_ms()));
+    let stage = app_data.join(format!("restore-stage-{nonce}"));
     fs::create_dir_all(&stage)
         .map_err(|error| format!("Unable to create restore staging directory: {error}"))?;
-    copy_dir_recursive(&backup.join("state").join("enterprise"), &stage.join("enterprise"))?;
-    copy_dir_recursive(&backup.join("state").join("security"), &stage.join("security"))?;
+    for name in ["enterprise", "security", "library"] {
+        copy_dir_recursive(&backup.join("state").join(name), &stage.join(name))?;
+    }
 
+    let prior_root = app_data.join(format!("restore-prior-{nonce}"));
+    fs::create_dir_all(&prior_root)
+        .map_err(|error| format!("Unable to allocate restore rollback: {error}"))?;
+    let mut installed = Vec::<&str>::new();
+    let mut prior = Vec::<&str>::new();
     let result = (|| -> Result<(), String> {
-        if app_data.join("enterprise").exists() {
-            fs::remove_dir_all(app_data.join("enterprise"))
-                .map_err(|error| format!("Unable to replace enterprise state: {error}"))?;
-        }
-        if app_data.join("security").exists() {
-            fs::remove_dir_all(app_data.join("security"))
-                .map_err(|error| format!("Unable to replace security state: {error}"))?;
-        }
-        if stage.join("enterprise").exists() {
-            fs::rename(stage.join("enterprise"), app_data.join("enterprise"))
-                .map_err(|error| format!("Unable to install enterprise restore: {error}"))?;
-        }
-        if stage.join("security").exists() {
-            fs::rename(stage.join("security"), app_data.join("security"))
-                .map_err(|error| format!("Unable to install security restore: {error}"))?;
+        for name in ["enterprise", "security", "library"] {
+            // If a backup omitted a domain, it cannot mean "delete that domain."
+            if !stage.join(name).exists() { continue; }
+            let target = app_data.join(name);
+            if target.exists() {
+                fs::rename(&target, prior_root.join(name))
+                    .map_err(|error| format!("Unable to retain live {name} state: {error}"))?;
+                prior.push(name);
+            }
+            fs::rename(stage.join(name), &target)
+                .map_err(|error| format!("Unable to install restored {name} state: {error}"))?;
+            installed.push(name);
         }
         Ok(())
     })();
 
-    let _ = fs::remove_dir_all(&stage);
     if let Err(error) = result {
-        let _ = fs::remove_dir_all(app_data.join("enterprise"));
-        let _ = fs::remove_dir_all(app_data.join("security"));
-        let _ = copy_dir_recursive(&recovery.join("enterprise"), &app_data.join("enterprise"));
-        let _ = copy_dir_recursive(&recovery.join("security"), &app_data.join("security"));
-        return Err(format!("{error}; recovery copy retained at {}.", recovery.display()));
+        for name in installed.into_iter().rev() {
+            // Only remove newly installed roots. The old roots remain in
+            // prior_root until rollback has completed.
+            let _ = fs::rename(app_data.join(name), stage.join(name));
+        }
+        let mut failed = Vec::new();
+        for name in prior.into_iter().rev() {
+            if let Err(rollback_error) = fs::rename(prior_root.join(name), app_data.join(name)) {
+                failed.push(format!("{name}: {rollback_error}"));
+            }
+        }
+        let _ = fs::remove_dir_all(&stage);
+        return Err(format!(
+            "{error}; prior state retained at {}; recovery at {}; rollback failures: {}",
+            prior_root.display(), recovery.display(),
+            if failed.is_empty() { "none".into() } else { failed.join("; ") }
+        ));
     }
-
+    // A recovery snapshot exists independently of this final cleanup.
+    let _ = fs::remove_dir_all(&prior_root);
+    let _ = fs::remove_dir_all(&stage);
     Ok(recovery)
 }
 
@@ -1033,7 +1268,7 @@ pub fn kopia_restore_snapshot(
 mod tests {
     use super::{
         collect_backup_files, inspect_backup, restore_state_with_recovery, retention_candidates,
-        role_permissions, BackupManifest, DmsIndex, DmsRecord, DmsVersion, BACKUP_VERSION,
+        reserve_backup_root, role_permissions, supported_backup_domain, validate_home_payload, BackupManifest, DmsIndex, DmsRecord, DmsVersion, BACKUP_VERSION,
     };
     use std::{fs, time::{SystemTime, UNIX_EPOCH}};
 
@@ -1111,6 +1346,37 @@ mod tests {
     }
 
     #[test]
+    fn home_preferences_validate_schema_and_size() {
+        assert!(validate_home_payload(r#"{"schemaVersion":1,"starredDocumentIds":[],"pinnedLocations":[]}"#).is_ok());
+        assert!(validate_home_payload(r#"{"schemaVersion":2,"starredDocumentIds":[],"pinnedLocations":[]}"#).is_err());
+        assert!(validate_home_payload("INVALID").is_err());
+        assert!(validate_home_payload(&"x".repeat(65537)).is_err());
+    }
+
+    #[test]
+    fn restores_library_index_and_home_state_with_recovery() {
+        let root=temp_root("home-recovery");
+        let live=root.join("live");
+        fs::create_dir_all(live.join("library")).unwrap();
+        fs::write(live.join("library/index.json"),b"old index").unwrap();
+        fs::write(live.join("library/home-state-v1.json"),b"old home").unwrap();
+        let backup=create_test_backup(&root);
+        fs::create_dir_all(backup.join("state/library")).unwrap();
+        fs::write(backup.join("state/library/index.json"),b"new index").unwrap();
+        fs::write(backup.join("state/library/home-state-v1.json"),b"new home").unwrap();
+        let mut files=Vec::new();
+        collect_backup_files(&backup.join("state"),&backup.join("state"),&mut files).unwrap();
+        let manifest=BackupManifest {version:BACKUP_VERSION,created_ms:1,files};
+        fs::write(backup.join("manifest-v1.json"),serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+        let recovery=restore_state_with_recovery(&live,&backup).unwrap();
+        assert_eq!(fs::read(live.join("library/index.json")).unwrap(),b"new index");
+        assert_eq!(fs::read(live.join("library/home-state-v1.json")).unwrap(),b"new home");
+        assert_eq!(fs::read(recovery.join("library/index.json")).unwrap(),b"old index");
+        assert_eq!(fs::read(recovery.join("library/home-state-v1.json")).unwrap(),b"old home");
+        let _=fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn offline_restore_keeps_recovery_copy() {
         let root = temp_root("restore");
         let app_data = root.join("app");
@@ -1122,6 +1388,97 @@ mod tests {
         assert_eq!(fs::read(app_data.join("enterprise").join("new.txt")).expect("new state"), b"new-state");
         assert_eq!(fs::read(recovery.join("enterprise").join("old.txt")).expect("recovery state"), b"old-state");
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn restore_rejects_hash_valid_files_from_unknown_state_roots() {
+        let root=temp_root("unrestorable");
+        let backup=create_test_backup(&root);
+        fs::create_dir_all(backup.join("state/undocumented")).unwrap();
+        fs::write(backup.join("state/undocumented/private.bin"),b"unrestorable").unwrap();
+        let mut files=Vec::new();
+        collect_backup_files(&backup.join("state"),&backup.join("state"),&mut files).unwrap();
+        let manifest=BackupManifest {version:BACKUP_VERSION,created_ms:1,files};
+        fs::write(backup.join("manifest-v1.json"),serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+        let result=inspect_backup(&backup).unwrap();
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|message|message.contains("restore domain")));
+        let _=fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn restore_rejects_symlinked_manifest_even_if_json_is_valid() {
+        use std::os::unix::fs::symlink;
+        let root=temp_root("manifest-link");
+        let backup=create_test_backup(&root);
+        let manifest=backup.join("manifest-v1.json");
+        let real=backup.join("real-manifest.json");
+        fs::rename(&manifest,&real).unwrap();
+        symlink(&real,&manifest).unwrap();
+        assert!(inspect_backup(&backup).is_err());
+        let _=fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn only_declared_restore_domains_are_eligible() {
+        use std::path::Path;
+        for name in ["enterprise/a.json","security/events.jsonl","library/index.json"] {
+            assert!(supported_backup_domain(Path::new(name)));
+        }
+        for name in ["documents/a.pdf","undocumented/data","missing/a.json"] {
+            assert!(!supported_backup_domain(Path::new(name)));
+        }
+    }
+
+    #[test]
+    fn a_new_backup_never_reuses_a_prior_snapshot_directory() {
+        let root=temp_root("backup-unique-root");
+        fs::create_dir_all(&root).unwrap();
+        let first=reserve_backup_root(&root).unwrap();
+        fs::write(first.join("snapshot-marker"),b"FIRST").unwrap();
+        let second=reserve_backup_root(&root).unwrap();
+        assert_ne!(first,second);
+        assert_eq!(fs::read(first.join("snapshot-marker")).unwrap(),b"FIRST");
+        assert!(second.is_dir());
+        assert_eq!(fs::read_dir(&second).unwrap().count(),0);
+        let _=fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn backup_rejects_unlisted_state_files_before_restore() {
+        let root=temp_root("unlisted");
+        let backup=create_test_backup(&root);
+        fs::write(backup.join("state/enterprise/extra.txt"),b"injected").unwrap();
+        let result=inspect_backup(&backup).unwrap();
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|error|error.contains("Unlisted file")));
+        let _=fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn backup_rejects_duplicate_manifest_entries() {
+        let root=temp_root("duplicates");
+        let backup=create_test_backup(&root);
+        let path=backup.join("manifest-v1.json");
+        let mut manifest:BackupManifest=serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        manifest.files.push(manifest.files[0].clone());
+        fs::write(&path,serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+        let result=inspect_backup(&backup).unwrap();
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|error|error.contains("Duplicate")));
+        let _=fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn backup_rejects_symlinks_in_manifest_or_unlisted_tree() {
+        use std::os::unix::fs::symlink;
+        let root=temp_root("symlinks");
+        let backup=create_test_backup(&root);
+        symlink("/etc/hosts",backup.join("state/enterprise/linked.txt")).unwrap();
+        assert!(inspect_backup(&backup).is_err());
+        let _=fs::remove_dir_all(root);
     }
 
     #[test]
