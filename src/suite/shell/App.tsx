@@ -599,6 +599,14 @@ export default function App() {
                 onOpenBrowserPdf={(file)=>openBrowserFiles([file])}
                 onNavigateModule={(id)=>selectModule(id)}
               />
+            : active === 'word' || active === 'spreadsheet' || active === 'presentation'
+              ? <OfficeWorkspace
+                  kind={active === 'word' ? 'docx' : active === 'spreadsheet' ? 'xlsx' : 'pptx'}
+                  session={null}
+                  active
+                  onBackToFiles={()=>selectModule('files')}
+                  onOpenBrowserOffice={(file)=>openBrowserFiles([file])}
+                />
             : active === 'scanner'
             ? <ScannerWorkspace mode="scanner" onBackToFiles={()=>selectModule('files')}/>
             : active === 'ocr'

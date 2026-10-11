@@ -33,6 +33,7 @@ interface Props {
   onBackToFiles(): void;
   onDirtyChange?(dirty: boolean): void;
   onSavingChange?(saving: boolean): void;
+  onOpenBrowserOffice?(file: File): void;
   registerCommands?: RegisterDocumentCommands;
 }
 
@@ -42,7 +43,7 @@ const kindMeta: Record<OfficeKind, { title: string; extension: string; icon: typ
   pptx: { title: 'Presentation', extension: 'pptx', icon: Presentation },
 };
 
-export default function OfficeWorkspace({ kind, session, active, onBackToFiles, onDirtyChange, onSavingChange, registerCommands }: Props) {
+export default function OfficeWorkspace({ kind, session, active, onBackToFiles, onDirtyChange, onSavingChange, onOpenBrowserOffice, registerCommands }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const historyRef = useRef<OfficeHistory | null>(null);
   const [original, setOriginal] = useState<Uint8Array | null>(null);
@@ -141,6 +142,12 @@ export default function OfficeWorkspace({ kind, session, active, onBackToFiles, 
     if (!file) return;
     if (file.size === 0 || file.size > MAX_BROWSER_OFFICE_BYTES) {
       setError('Browser Office documents must be 1 byte to 32 MB before loading.');
+      return;
+    }
+    // The sidebar picker should create a persistent document session, just
+    // like PDF and Files. Otherwise leaving this module silently loses edits.
+    if (!session && onOpenBrowserOffice) {
+      onOpenBrowserOffice(file);
       return;
     }
 
