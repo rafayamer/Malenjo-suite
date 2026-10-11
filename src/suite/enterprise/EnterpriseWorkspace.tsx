@@ -8,7 +8,7 @@ import type { LibraryDocument } from '../files/types';
 import {
   applyAuditRetention, applyRetention, createBackupWithPicker, enterpriseNative, getEnterprisePolicy,
   inspectBackupWithPicker, kopiaSnapshot, kopiaStatus, listDmsRecords, listWorkflows,
-  previewRetention, registerDmsDocument, restoreBackup, runLocalWorkflow, saveWorkflow,
+  previewRetention, registerDmsDocument, restoreBackup, restoreLinkedCopiesWithPicker, runLocalWorkflow, saveWorkflow,
   snapshotDmsRecord, startTemporalWorkflow, temporalStatus, updateDmsRetention,
   updateEnterprisePolicy,
 } from './api';
@@ -140,6 +140,7 @@ function BackupPanel(){
   const [kopia,setKopia]=useState<AdapterStatus|null>(null);
   const [inspection,setInspection]=useState<BackupInspection|null>(null);
   const [backupPath,setBackupPath]=useState('');
+  const [linkedCopies,setLinkedCopies]=useState<Array<{documentId:string;originalName:string;restoredPath:string;sizeBytes:number}>>([]);
   const [busy,setBusy]=useState(false);const[error,setError]=useState('');const[notice,setNotice]=useState('');
   useEffect(()=>{void kopiaStatus().then(setKopia).catch(()=>setKopia(null));},[]);
   async function create(){
@@ -149,15 +150,53 @@ function BackupPanel(){
     setBusy(true);setError('');try{const result=await inspectBackupWithPicker();if(result){setBackupPath(result.path);setInspection(result.inspection);setNotice(result.inspection.valid?'Backup integrity verified.':'Backup failed integrity validation.');}}catch(reason){setError(String(reason));}finally{setBusy(false);}
   }
   async function restore(){
-    if(!backupPath)return;setBusy(true);setError('');try{await restoreBackup(backupPath);setNotice('Verified backup restored. A recovery copy of the prior enterprise/security state was retained in app data.');}catch(reason){setError(String(reason));}finally{setBusy(false);}
+    if(!backupPath)return;setBusy(true);setError('');try{await restoreBackup(backupPath);setNotice('Verified app-state restore complete. Original user documents were not overwritten; archived copies can be recovered separately.');}catch(reason){setError(String(reason));}finally{setBusy(false);}
+  }
+  async function restoreExternalCopies(){
+    if(!backupPath||!inspection?.valid)return;
+    setBusy(true);setError('');setLinkedCopies([]);
+    try{
+      const recovered=await restoreLinkedCopiesWithPicker(backupPath);
+      if(recovered){
+        setLinkedCopies(recovered);
+        setNotice(recovered.length
+          ? `Recovered ${recovered.length} verified document copies to your selected folder. Original files were not changed; import these copies into the Document Library if needed.`
+          : 'The selected backup contains no indexed documents.');
+      }
+    }catch(reason){setError(String(reason));}
+    finally{setBusy(false);}
   }
   async function snapshotKopia(){
     setBusy(true);setError('');try{await kopiaSnapshot();setNotice('Kopia snapshot command completed.');}catch(reason){setError(String(reason));}finally{setBusy(false);}
   }
   return <><Message error={error} notice={notice}/><div className="enterprise-grid">
-    <section className="enterprise-card"><h2><HardDrive size={18}/> Offline backup</h2><p>Creates a directory backup of MALENJO enterprise/security app state, hashes every file and refuses to report success if verification fails.</p><div className="enterprise-actions"><button disabled={busy||!enterpriseNative()} onClick={()=>void create()}>Create verified backup</button><button disabled={busy||!enterpriseNative()} onClick={()=>void inspect()}>Inspect backup</button></div>{inspection&&<div className={inspection.valid?'backup-status ready':'backup-status'}><b>{inspection.valid?'VALID':'INVALID'}</b><span>{inspection.fileCount} files · {inspection.totalBytes} bytes</span>{inspection.errors.map(e=><small key={e}>{e}</small>)}</div>}<button disabled={!inspection?.valid||!backupPath||busy} onClick={()=>void restore()}>Restore verified backup</button></section>
+    <section className="enterprise-card"><h2><HardDrive size={18}/> Offline backup</h2>
+      <p>Creates a verified backup of enterprise, security, library/Home state and independent copies of available indexed user documents. Missing or changing linked files cause backup creation to fail, never to report incomplete data as verified.</p>
+      <div className="enterprise-actions">
+        <button disabled={busy||!enterpriseNative()} onClick={()=>void create()}>Create verified backup</button>
+        <button disabled={busy||!enterpriseNative()} onClick={()=>void inspect()}>Inspect backup</button>
+      </div>
+      {inspection&&<div className={inspection.valid?'backup-status ready':'backup-status'}>
+        <b>{inspection.valid?'VALID':'INVALID'}</b>
+        <span>{inspection.fileCount} files · {inspection.totalBytes} bytes</span>
+        {inspection.errors.map(e=><small key={e}>{e}</small>)}
+      </div>}
+      <button disabled={!inspection?.valid||!backupPath||busy} onClick={()=>void restore()}>
+        Restore app state from verified backup
+      </button>
+      <p>This never overwrites existing user documents. To retrieve document bytes, restore verified copies to a separate folder of your choosing.</p>
+      <button disabled={!inspection?.valid||!backupPath||busy} onClick={()=>void restoreExternalCopies()}>
+        Recover linked document copies safely
+      </button>
+      {linkedCopies.length>0&&<div className="backup-status ready" role="status">
+        <b>{linkedCopies.length} complete user-document copies recovered</b>
+        <ul>{linkedCopies.map(item=><li key={item.documentId}>
+          {item.originalName} → {item.restoredPath} ({item.sizeBytes} bytes)
+        </li>)}</ul>
+      </div>}
+    </section>
     <section className="enterprise-card"><h2>Kopia adapter</h2><div className={kopia?.available?'adapter-state ready':'adapter-state'}><b>{kopia?.available?'Kopia ready':'Kopia optional'}</b><span>{kopia?.version||kopia?.detail||'External repository must already be configured.'}</span></div><button disabled={!kopia?.available||busy} onClick={()=>void snapshotKopia()}>Snapshot enterprise state with Kopia</button><p>Kopia credentials/repository configuration are not stored by this UI. Restore-to-explicit-directory is available through the native adapter.</p></section>
-    <section className="enterprise-card records-card"><h2>Restore safety</h2><ul><li>Manifest and every SHA-256 are verified before live state changes.</li><li>Current enterprise/security state is copied into a recovery directory first.</li><li>Only MALENJO app-data state is restored; user documents are never deleted.</li><li>On replacement failure MALENJO attempts recovery from the pre-restore copy.</li></ul></section>
+    <section className="enterprise-card records-card"><h2>Restore safety</h2><ul><li>Manifest and every SHA-256 are verified before live state changes.</li><li>Current enterprise/security state is copied into a recovery directory first.</li><li>App state is restored separately; linked user documents can be recovered as new verified copies without overwriting originals.</li><li>A restart journal detects interrupted app-state swaps and rolls back to prior state before any workspace opens.</li></ul></section>
   </div></>;
 }
 
