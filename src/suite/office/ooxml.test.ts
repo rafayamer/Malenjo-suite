@@ -166,4 +166,82 @@ describe('OOXML fidelity adapters', () => {
     const next = writePptx(source, model);
     expect(strFromU8(unzipSync(next)['ppt/slides/slide1.xml'])).toContain('Updated');
   });
+
+  it('round-trips edits on two ordered visible tabs and keeps a hidden tab and formulas untouched', () => {
+    const hidden = '<worksheet><sheetData><row r="1"><c r="A1"><f>100+1</f><v>101</v></c></row></sheetData></worksheet>';
+    const first = '<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>First before</t></is></c><c r="B1"><f>1+2</f><v>3</v></c></row></sheetData></worksheet>';
+    const second = '<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Second before</t></is></c></row></sheetData></worksheet>';
+    const source = zip({
+      'xl/workbook.xml': '<workbook><sheets><sheet name="Hidden" state="veryHidden" r:id="rId3"/><sheet name="Second" r:id="rId9"/><sheet name="First" r:id="rId1"/></sheets></workbook>',
+      'xl/_rels/workbook.xml.rels': '<Relationships><Relationship Id="rId3" Target="worksheets/sheet8.xml"/><Relationship Id="rId9" Target="worksheets/sheet13.xml"/><Relationship Id="rId1" Target="worksheets/sheet2.xml"/></Relationships>',
+      'xl/worksheets/sheet8.xml': hidden,
+      'xl/worksheets/sheet13.xml': second,
+      'xl/worksheets/sheet2.xml': first,
+      'custom/preserved.xml': '<keep>yes</keep>',
+    });
+    const originalBytes = source.slice();
+    const model = parseXlsx(source);
+    expect(model.sheetName).toBe('Second');
+    expect(model.sheets!.map((sheet) => [sheet.name, sheet.path, sheet.hidden])).toEqual([
+      ['Hidden', 'xl/worksheets/sheet8.xml', true],
+      ['Second', 'xl/worksheets/sheet13.xml', false],
+      ['First', 'xl/worksheets/sheet2.xml', false],
+    ]);
+    model.cells[0][0] = 'Second after';
+    model.sheets![2].cells[0][0] = 'First after';
+    const saved = writeXlsx(source, model);
+    const parts = unzipSync(saved);
+    expect(strFromU8(parts['xl/worksheets/sheet13.xml'])).toContain('Second after');
+    expect(strFromU8(parts['xl/worksheets/sheet2.xml'])).toContain('First after');
+    expect(strFromU8(parts['xl/worksheets/sheet2.xml'])).toContain('<f>1+2</f>');
+    expect(strFromU8(parts['xl/worksheets/sheet8.xml'])).toBe(hidden);
+    expect(strFromU8(parts['custom/preserved.xml'])).toBe('<keep>yes</keep>');
+    expect(strFromU8(parts['xl/workbook.xml'])).toContain('state="veryHidden"');
+    expect(source).toEqual(originalBytes);
+    const reopened = parseXlsx(saved);
+    expect(reopened.sheets!.map((sheet) => sheet.name)).toEqual(['Hidden','Second','First']);
+    expect(reopened.cells[0][0]).toBe('Second after');
+    expect(reopened.sheets![2].cells[0][0]).toBe('First after');
+  });
+
+  it('rejects incomplete, reordered and hidden-sheet edit models without touching the original', () => {
+    const source = zip({
+      'xl/workbook.xml': '<workbook><sheets><sheet name="Visible" r:id="a"/><sheet name="Hidden" state="hidden" r:id="b"/></sheets></workbook>',
+      'xl/_rels/workbook.xml.rels': '<Relationships><Relationship Id="a" Target="worksheets/sheet5.xml"/><Relationship Id="b" Target="worksheets/sheet6.xml"/></Relationships>',
+      'xl/worksheets/sheet5.xml': '<worksheet><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>',
+      'xl/worksheets/sheet6.xml': '<worksheet><sheetData><row r="1"><c r="A1"><v>2</v></c></row></sheetData></worksheet>',
+    });
+    const immutable = source.slice();
+    const missing = parseXlsx(source);
+    missing.sheets!.pop();
+    expect(() => writeXlsx(source, missing)).toThrow(/identities\/order/);
+    const reordered = parseXlsx(source);
+    reordered.sheets!.reverse();
+    expect(() => writeXlsx(source, reordered)).toThrow(/identities\/order/);
+    const hidden = parseXlsx(source);
+    hidden.sheets![1].cells[0][0] = 'modified';
+    expect(() => writeXlsx(source, hidden)).toThrow(/hidden XLSX worksheets/);
+    expect(source).toEqual(immutable);
+  });
+
+  it('fails closed on ambiguous multi-sheet or unsafe worksheet relationships', () => {
+    const withoutRels = zip({
+      'xl/workbook.xml': '<workbook><sheets><sheet name="A"/><sheet name="B"/></sheets></workbook>',
+      'xl/worksheets/sheet1.xml': '<worksheet/>',
+      'xl/worksheets/sheet2.xml': '<worksheet/>',
+    });
+    expect(() => parseXlsx(withoutRels)).toThrow(/requires workbook relationships/);
+    const unsafe = zip({
+      'xl/workbook.xml': '<workbook><sheets><sheet name="A" r:id="rId1"/></sheets></workbook>',
+      'xl/_rels/workbook.xml.rels': '<Relationships><Relationship Id="rId1" Target="../../outside.xml"/></Relationships>',
+      'xl/worksheets/sheet1.xml': '<worksheet/>',
+    });
+    expect(() => parseXlsx(unsafe)).toThrow(/unsafe/);
+    const noVisible = zip({
+      'xl/workbook.xml': '<workbook><sheets><sheet name="Secrets" state="veryHidden" r:id="rId1"/></sheets></workbook>',
+      'xl/_rels/workbook.xml.rels': '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+      'xl/worksheets/sheet1.xml': '<worksheet/>',
+    });
+    expect(() => parseXlsx(noVisible)).toThrow(/no visible worksheet/);
+  });
 });
