@@ -4,6 +4,7 @@ import {mkdtempSync,readFileSync,mkdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {PDFDocument,PDFName,StandardFonts} from 'pdf-lib';
+import {zipSync,strToU8,strFromU8,unzipSync} from 'fflate';
 import {chromium} from 'playwright';
 const root=resolve(import.meta.dirname,'..');
 const base='http://127.0.0.1:1420';
@@ -59,6 +60,86 @@ async function main(){
     console.log('PHASE3 module launch/navigation: '+name+' PASS (shell only)');
   }
   console.log('PHASE3 22/22 module shell-navigation smoke: PASS (not module functionality sign-off)');
+  await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
+
+  // Real end-to-end browser workflows for the three Office workspaces.
+  // Edit the actual OOXML package via its UI, retain state across navigation,
+  // export a new copy and independently inspect reopened ZIP contents.
+  const officeCases=[
+    {
+      module:'Document Workspace',filename:'phase3-word.docx',
+      mimetype:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      parts:{
+        '[Content_Types].xml':'<Types/>',
+        'word/document.xml':'<w:document><w:body><w:p><w:r><w:t>Initial document</w:t></w:r></w:p><w:sectPr/></w:body></w:document>',
+        'custom/preserve.xml':'<retained>word asset</retained>',
+      },
+      editor:'textarea[aria-label="DOCX text editor"]',updated:'Real browser DOCX edit',
+      xmlPart:'word/document.xml',preservedPart:'custom/preserve.xml',
+    },
+    {
+      module:'Spreadsheet',filename:'phase3-sheet.xlsx',
+      mimetype:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      parts:{
+        'xl/workbook.xml':'<workbook><sheets><sheet name="Data"/></sheets></workbook>',
+        'xl/worksheets/sheet1.xml':'<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Initial cell</t></is></c><c r="B1"><f>2+2</f><v>4</v></c></row></sheetData></worksheet>',
+        'custom/preserve.xml':'<retained>sheet asset</retained>',
+      },
+      editor:'input[aria-label="Cell A1"]',updated:'Real browser XLSX edit',
+      xmlPart:'xl/worksheets/sheet1.xml',preservedPart:'custom/preserve.xml',
+      preservedXml:'<f>2+2</f>',
+    },
+    {
+      module:'Presentation',filename:'phase3-slides.pptx',
+      mimetype:'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      parts:{
+        'ppt/presentation.xml':'<p:presentation/>',
+        'ppt/slides/slide1.xml':'<p:sld><a:t>Initial slide</a:t><a:t>Original notes</a:t></p:sld>',
+        'custom/preserve.xml':'<retained>slide asset</retained>',
+      },
+      editor:'input.slide-title-input',updated:'Real browser PPTX edit',
+      xmlPart:'ppt/slides/slide1.xml',preservedPart:'custom/preserve.xml',
+      preservedXml:'Original notes',
+    },
+  ];
+  for(const item of officeCases){
+    const original=Buffer.from(zipSync(Object.fromEntries(
+      Object.entries(item.parts).map(([name,text])=>[name,strToU8(text)]))));
+    await page.locator('.sidebar nav .nav-item')
+      .filter({hasText:item.module}).first().click();
+    await page.locator('main.workspace > .office-workspace input[type="file"]').first()
+      .setInputFiles({name:item.filename,mimeType:item.mimetype,buffer:original});
+    const officeTab=page.locator('.document-tab-main').filter({hasText:item.filename});
+    await officeTab.waitFor({timeout:30000});
+    const editor=page.locator('.document-session-panel.active').locator(item.editor);
+    await editor.waitFor({timeout:30000});
+    await editor.fill(item.updated);
+    // The editor must not silently discard unsaved edits after leaving.
+    await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
+    await officeTab.click();
+    requireEvidence(await editor.inputValue()===item.updated,
+      'Office session lost edits when switching modules: '+item.module);
+    const waitDownload=page.waitForEvent('download',{timeout:30000});
+    await page.locator('.document-session-panel.active .office-toolbar')
+      .getByRole('button',{name:'Export copy'}).click();
+    const exported=await waitDownload;
+    const dest=join(mkdtempSync(join(tmpdir(),'malenjo-office-acceptance-')),'edited-'+item.filename);
+    await exported.saveAs(dest);
+    const restored=unzipSync(readFileSync(dest));
+    requireEvidence(Boolean(restored[item.xmlPart]),
+      'Exported Office document has no required OOXML content part: '+item.module);
+    requireEvidence(strFromU8(restored[item.xmlPart]).includes(item.updated),
+      'Exported Office document lost the edited content: '+item.module);
+    requireEvidence(strFromU8(restored[item.preservedPart])===item.parts[item.preservedPart],
+      'Exported Office document lost an unrelated original package part: '+item.module);
+    if(item.preservedXml)requireEvidence(strFromU8(restored[item.xmlPart]).includes(item.preservedXml),
+      'Exported Office document damaged an untouched formula/run: '+item.module);
+    requireEvidence(Buffer.from(zipSync(Object.fromEntries(
+      Object.entries(item.parts).map(([name,text])=>[name,strToU8(text)])))).equals(original),
+      'Office editor changed the original imported source: '+item.module);
+    requireEvidence(errors.length===0,'Office browser exception: '+errors.join(' | '));
+    console.log('PHASE3 Office edit/navigation/export/reopen: '+item.module+' PASS (synthetic fixture only)');
+  }
   await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
   console.log('MALENJO loaded in Chromium; opening PDF via browser input');
   await page.locator('.workspace > input[type="file"]').setInputFiles({
