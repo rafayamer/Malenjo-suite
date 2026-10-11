@@ -387,6 +387,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       activeLoadRef.current = result;
       setPdf(result);
       searchSequenceRef.current++;
+      setSearching(false);
       setSearchResults([]);
       setHighlightQuery('');
       setSearchStatus('');
@@ -398,14 +399,16 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setSourceName(name);
       setPageCount(result.document.numPages);
       setRenderedPages(new Set());
-      setCurrentPage(1);
+      if(!preserveDirty) setCurrentPage(1);
       if(!preserveDirty){
         setSelectedPages(new Set([1]));
         selectionAnchorRef.current=1;
       }
-      setFitMode('width');
-      setZoom(1);
-      setRotation(0);
+      if(!preserveDirty){
+        setFitMode('width');
+        setZoom(1);
+        setRotation(0);
+      }
       setForceRenderAll(false);
       if(!preserveDirty){
         setDirty(false);
@@ -539,7 +542,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const selectedPageNumbers=Array.from(selectedPages)
     .filter(page=>page>=1&&page<=pageCount)
     .sort((a,b)=>a-b);
-  const operationPages=selectedPageNumbers.length?selectedPageNumbers:[currentPage];
+  // A stale default selection (typically page 1) must not silently apply
+  // operations to a different page than the one currently being viewed.
+  const operationPages=selectedPageNumbers.length > 1 || selectedPageNumbers[0] === currentPage
+    ? selectedPageNumbers : [currentPage];
 
 
   const onPageRendered = useCallback((page: number) => {
@@ -736,7 +742,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       const target=event.target as HTMLElement|null;
       if(target?.closest('input,textarea,[contenteditable="true"]'))return;
       const key=event.key.toLowerCase();
-      if(key==='z'&&!event.shiftKey){
+      if(key==='s'&&!event.shiftKey){
+        event.preventDefault();
+        void exportCurrent();
+      }else if(key==='z'&&!event.shiftKey){
         event.preventDefault();
         void undoEdit();
       }else if((key==='z'&&event.shiftKey)||key==='y'){
@@ -746,7 +755,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     };
     window.addEventListener('keydown',onKeyDown);
     return()=>window.removeEventListener('keydown',onKeyDown);
-  },[active,historyRevision,mutating]);
+  },[active,historyRevision,mutating,sourceBytes,dirty,sourceName]);
 
 
   useEffect(()=>{
@@ -1363,6 +1372,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     if(!pdf)return;
     const requested=searchQuery.trim();
     if(!requested){
+      searchSequenceRef.current++;
+      setSearching(false);
       setSearchResults([]);
       setHighlightQuery('');
       setSearchStatus('Type a word or phrase, then select Find.');
@@ -1615,7 +1626,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     try{
       const name=dirty?editedName(sourceName):editedName(sourceName,'copy');
       const saved=await exportPdfBytes(name,sourceBytes);
-      if(saved)setActionNotice(dirty?'Exported the edited PDF as a new file.':'Exported a PDF copy.');
+      if(saved)setActionNotice(dirty
+        ? 'Edited PDF exported as a separate copy. The source working session remains unsaved; use the exported copy or continue editing.'
+        : 'PDF copy exported. The original document remains unchanged.');
+      else setActionNotice('PDF export cancelled. No new file was saved.');
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
     }finally{
@@ -2384,8 +2398,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           {leftPanel==='search'&&<div className="pdf-left-panel-body">
             <div className="pdf-find" role="search" aria-label="Find words inside PDF">
               <div><Search size={14}/><input ref={searchInputRef} value={searchQuery} onChange={(event)=>{
+                searchSequenceRef.current++;
+                setSearching(false);
                 setSearchQuery(event.target.value);
-                if(!event.target.value.trim()){setSearchResults([]);setHighlightQuery('');setSearchStatus('');}
+                setSearchResults([]);
+                setHighlightQuery('');
+                setSearchStatus('');
               }} onKeyDown={(event)=>{if(event.key==='Enter')void searchPdf();}} placeholder="Find words in this PDF…" aria-label="Find PDF text"/></div>
               <button disabled={searching||!searchQuery.trim()} onClick={()=>void searchPdf()}>{searching?'Searching…':'Find in PDF'}</button>
               <p className="pdf-search-help">Select or copy words directly on a PDF page. Press Ctrl+F to search. Scanned image pages need OCR.</p>

@@ -324,10 +324,13 @@ export default function PdfProviderToolsPanel({provider,sourceBytes,sourceName,c
 
   async function saveOfflinePageGroups(){
     if(!sourceBytes||busy)return;
+    const sourceRevision=sourceBytes;
     setBusy(true);setError('');setNotice('');
     try{
       const count=Number(splitPagesPerPart);
-      const result=await splitPdfByPageCount(sourceBytes,count,32*1024*1024);
+      const result=await splitPdfByPageCount(sourceRevision,count,32*1024*1024);
+      if(activeSourceRef.current!==sourceRevision)
+        throw new Error('The active PDF changed during page-group splitting; stale output was not saved.');
       // Provider.saveResponse currently bridges bytes as number[]. Keep the
       // small-document fallback bounded until binary streaming IPC is added.
       if(result.archive.byteLength>32*1024*1024){
