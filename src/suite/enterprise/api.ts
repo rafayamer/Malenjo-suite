@@ -28,6 +28,21 @@ export const kopiaStatus=()=>invoke<AdapterStatus>('kopia_status');
 export const kopiaSnapshot=()=>invoke<string>('kopia_snapshot_app_state');
 export const inspectBackup=(path:string)=>invoke<BackupInspection>('inspect_local_backup',{path});
 export const restoreBackup=(backupPath:string)=>invoke<boolean>('restore_local_backup',{backupPath});
+export interface RecoveredLibraryCopy {
+  documentId:string; originalName:string; restoredPath:string; sizeBytes:number;
+}
+/** Restores independent user document COPIES to an explicitly chosen folder.
+ * Never overwrites original documents or silently rewrites indexed paths.
+ */
+export async function restoreLinkedCopiesWithPicker(backupPath:string):Promise<RecoveredLibraryCopy[]|null>{
+  const destinationDirectory=await open({
+    directory:true,multiple:false,title:'Choose an empty or new folder for recovered document copies',
+  });
+  if(!destinationDirectory||Array.isArray(destinationDirectory))return null;
+  return invoke<RecoveredLibraryCopy[]>('restore_linked_document_copies',
+    {backupPath,destinationDirectory});
+}
+
 
 export async function createBackupWithPicker():Promise<string|null>{
   const directory=await open({directory:true,multiple:false,title:'Choose MALENJO backup destination'});
