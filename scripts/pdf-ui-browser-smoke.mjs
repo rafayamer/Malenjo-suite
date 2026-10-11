@@ -105,6 +105,7 @@ async function main(){
   for(const item of officeCases){
     const original=Buffer.from(zipSync(Object.fromEntries(
       Object.entries(item.parts).map(([name,text])=>[name,strToU8(text)]))));
+    const sourceSnapshot=Buffer.from(original);
     await page.locator('.sidebar nav .nav-item')
       .filter({hasText:item.module}).first().click();
     await page.locator('main.workspace > .office-workspace input[type="file"]').first()
@@ -134,8 +135,10 @@ async function main(){
       'Exported Office document lost an unrelated original package part: '+item.module);
     if(item.preservedXml)requireEvidence(strFromU8(restored[item.xmlPart]).includes(item.preservedXml),
       'Exported Office document damaged an untouched formula/run: '+item.module);
-    requireEvidence(Buffer.from(zipSync(Object.fromEntries(
-      Object.entries(item.parts).map(([name,text])=>[name,strToU8(text)])))).equals(original),
+    // Re-zipping produces non-identical bytes when ZIP timestamps differ.
+    // Compare the immutable source snapshot and inspect its original XML instead.
+    requireEvidence(original.equals(sourceSnapshot) &&
+      strFromU8(unzipSync(original)[item.xmlPart])===item.parts[item.xmlPart],
       'Office editor changed the original imported source: '+item.module);
     requireEvidence(errors.length===0,'Office browser exception: '+errors.join(' | '));
     console.log('PHASE3 Office edit/navigation/export/reopen: '+item.module+' PASS (synthetic fixture only)');
