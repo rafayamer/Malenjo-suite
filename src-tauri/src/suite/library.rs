@@ -439,15 +439,14 @@ pub fn remove_library_document(app: AppHandle, document_id: String) -> Result<bo
 fn destination_path(destination: &str) -> Result<PathBuf, String> {
     validate_requested_path(destination)?;
     let path = PathBuf::from(destination);
-    if path.exists() {
-        let metadata = fs::symlink_metadata(&path)
-            .map_err(|error| format!("Unable to inspect Save As destination: {error}"))?;
-        if metadata.file_type().is_symlink() {
-            return Err("Save As refuses to overwrite a symbolic-link destination.".into());
+    // A Save As *copy* may never replace a file, directory, hard-link alias,
+    // or dangling symbolic link; reject even when Path::exists() is false.
+    match fs::symlink_metadata(&path) {
+        Ok(_) => {
+            return Err("Save As destination already exists. Choose a new filename; existing files are never replaced.".into());
         }
-        if !metadata.is_file() {
-            return Err("Save As destination is not a regular file.".into());
-        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("Unable to inspect Save As destination: {error}")),
     }
     let parent = path
         .parent()
@@ -456,6 +455,61 @@ fn destination_path(destination: &str) -> Result<PathBuf, String> {
         return Err("Save As destination folder does not exist.".into());
     }
     Ok(path)
+}
+
+/// Copy an indexed source document into a *new* destination without writing
+/// a single byte to an existing user file. Stage and sync the copy beside the
+/// destination, then atomically create its directory entry via hard-link.
+/// hard_link fails with AlreadyExists even if another process wins a race
+/// after destination_path() checked that the target did not exist.
+fn save_as_new_file(source: &Path, destination: &Path) -> Result<(), String> {
+    match fs::symlink_metadata(destination) {
+        Ok(_) => return Err("Save As destination already exists; no files were changed.".into()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("Unable to inspect Save As destination: {error}")),
+    }
+
+    let parent = destination.parent()
+        .ok_or_else(|| "Save As destination has no parent folder.".to_string())?;
+    let stage = parent.join(format!(
+        ".malenjo-saveas-{}-{:x}.tmp", std::process::id(), staging_nonce()
+    ));
+
+    // create_new makes concurrent stage-name collisions fail closed. Never
+    // remove the stage if it was not successfully created by this operation.
+    let mut output = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&stage)
+        .map_err(|error| format!("Unable to stage Save As copy: {error}"))?;
+
+    let copied = (|| -> std::io::Result<()> {
+        let mut input = fs::File::open(source)?;
+        std::io::copy(&mut input, &mut output)?;
+        output.sync_all()?;
+        Ok(())
+    })();
+    drop(output);
+    if let Err(error) = copied {
+        let _ = fs::remove_file(&stage);
+        return Err(format!("Unable to stage complete Save As copy: {error}"));
+    }
+
+    if let Err(error) = fs::hard_link(&stage, destination) {
+        let _ = fs::remove_file(&stage);
+        if error.kind() == std::io::ErrorKind::AlreadyExists {
+            return Err("Save As destination was created by another operation. No existing file was changed.".into());
+        }
+        return Err(format!("Unable to finalize Save As without overwriting a destination: {error}"));
+    }
+
+    if let Err(error) = fs::remove_file(&stage) {
+        return Err(format!(
+            "Save As copy was created at {}, but could not clean up temporary file {} ({error}).",
+            destination.display(), stage.display()
+        ));
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -475,8 +529,7 @@ pub fn save_as_library_document(
         return Err("Save As destination must be different from the source file.".into());
     }
 
-    fs::copy(&source, &destination)
-        .map_err(|error| format!("Unable to save document copy: {error}"))?;
+    save_as_new_file(&source, &destination)?;
 
     let destination_text = destination.to_string_lossy();
     let canonical_destination = canonical_user_file(destination_text.as_ref())?;
@@ -646,7 +699,8 @@ pub fn discard_staged_document(app: AppHandle, staging_token: String) -> Result<
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_extension, classify_signature, fnv1a64, parse_index, validate_requested_path, validate_staging_token};
+    use super::{classify_extension, classify_signature, destination_path, fnv1a64, parse_index, save_as_new_file, validate_requested_path, validate_staging_token};
+    use std::{fs, path::PathBuf, sync::{Arc, Barrier}, thread, time::{SystemTime, UNIX_EPOCH}};
 
     #[test]
     fn maps_supported_document_extensions() {
@@ -687,6 +741,127 @@ mod tests {
     fn rejects_malformed_requested_paths() {
         assert!(validate_requested_path("").is_err());
         assert!(validate_requested_path("bad\0path.pdf").is_err());
+    }
+
+    fn test_directory(label: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "malenjo-saveas-{}-{label}-{nonce}", std::process::id()
+        ));
+        fs::create_dir(&directory).expect("create isolated test directory");
+        directory
+    }
+
+    #[test]
+    fn save_as_creates_a_complete_new_copy() {
+        let directory = test_directory("new");
+        let source = directory.join("source.txt");
+        let destination = directory.join("copy.txt");
+        fs::write(&source, b"contents to preserve").expect("write source");
+        assert!(destination_path(destination.to_string_lossy().as_ref()).is_ok());
+        save_as_new_file(&source, &destination).expect("save new copy");
+        assert_eq!(fs::read(&source).expect("read source"), b"contents to preserve");
+        assert_eq!(fs::read(&destination).expect("read copy"), b"contents to preserve");
+        assert_eq!(fs::read_dir(&directory).expect("read directory").count(), 2);
+        fs::remove_dir_all(directory).expect("remove fixture");
+    }
+
+    #[test]
+    fn save_as_refuses_an_existing_destination_without_changing_either_file() {
+        let directory = test_directory("existing");
+        let source = directory.join("source.txt");
+        let destination = directory.join("existing.txt");
+        fs::write(&source, b"source bytes").expect("source");
+        fs::write(&destination, b"existing user bytes").expect("destination");
+        assert!(destination_path(destination.to_string_lossy().as_ref()).is_err());
+        assert!(save_as_new_file(&source, &destination).is_err());
+        assert_eq!(fs::read(&source).expect("source unchanged"), b"source bytes");
+        assert_eq!(fs::read(&destination).expect("destination unchanged"), b"existing user bytes");
+        fs::remove_dir_all(directory).expect("remove fixture");
+    }
+
+    #[test]
+    fn save_as_refuses_source_path_and_hard_link_alias() {
+        let directory = test_directory("aliases");
+        let source = directory.join("source.txt");
+        let alias = directory.join("alias.txt");
+        fs::write(&source, b"unaltered source").expect("source");
+        fs::hard_link(&source, &alias).expect("alias");
+        assert!(save_as_new_file(&source, &source).is_err());
+        assert!(save_as_new_file(&source, &alias).is_err());
+        assert_eq!(fs::read(&source).expect("source unchanged"), b"unaltered source");
+        assert_eq!(fs::read(&alias).expect("alias unchanged"), b"unaltered source");
+        fs::remove_dir_all(directory).expect("remove fixture");
+    }
+
+    #[test]
+    fn save_as_missing_source_leaves_no_destination_or_stage() {
+        let directory = test_directory("missing");
+        let source = directory.join("missing-source.txt");
+        let destination = directory.join("copy.txt");
+        assert!(save_as_new_file(&source, &destination).is_err());
+        assert!(!destination.exists());
+        assert_eq!(fs::read_dir(&directory).expect("no stages").count(), 0);
+        fs::remove_dir_all(directory).expect("remove fixture");
+    }
+
+    #[test]
+    fn save_as_refuses_directories_without_removing_them() {
+        let directory = test_directory("target-dir");
+        let source = directory.join("source.txt");
+        let destination = directory.join("subdir.txt");
+        fs::write(&source, b"source bytes").expect("source");
+        fs::create_dir(&destination).expect("destination directory");
+        assert!(save_as_new_file(&source, &destination).is_err());
+        assert!(destination.is_dir());
+        assert_eq!(fs::read(&source).expect("unchanged"), b"source bytes");
+        fs::remove_dir_all(directory).expect("remove fixture");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn save_as_refuses_dangling_symlink_destinations() {
+        use std::os::unix::fs::symlink;
+        let directory = test_directory("dangling-link");
+        let source = directory.join("source.txt");
+        let destination = directory.join("link.txt");
+        fs::write(&source, b"source bytes").expect("source");
+        symlink(directory.join("not-present.txt"), &destination).expect("create dangling link");
+        assert!(!destination.exists());
+        assert!(destination_path(destination.to_string_lossy().as_ref()).is_err());
+        assert!(save_as_new_file(&source, &destination).is_err());
+        assert!(fs::symlink_metadata(&destination).expect("link retained").file_type().is_symlink());
+        fs::remove_dir_all(directory).expect("remove fixture");
+    }
+
+    #[test]
+    fn concurrent_save_as_to_same_name_never_overwrites_the_winner() {
+        let directory = test_directory("race");
+        let first = directory.join("first.txt");
+        let second = directory.join("second.txt");
+        let destination = directory.join("result.txt");
+        fs::write(&first, b"first source").expect("first");
+        fs::write(&second, b"second source").expect("second");
+        let barrier = Arc::new(Barrier::new(3));
+        let workers: Vec<_> = [first, second].into_iter().map(|source| {
+            let barrier = Arc::clone(&barrier);
+            let destination = destination.clone();
+            thread::spawn(move || {
+                barrier.wait();
+                save_as_new_file(&source, &destination)
+            })
+        }).collect();
+        barrier.wait();
+        let outcomes: Vec<_> = workers.into_iter()
+            .map(|worker| worker.join().expect("copy thread")).collect();
+        assert_eq!(outcomes.iter().filter(|result| result.is_ok()).count(), 1);
+        let actual = fs::read(&destination).expect("complete winning file");
+        assert!(actual == b"first source" || actual == b"second source");
+        assert_eq!(fs::read_dir(&directory).expect("read directory").count(), 3);
+        fs::remove_dir_all(directory).expect("remove fixture");
     }
 
     #[test]
