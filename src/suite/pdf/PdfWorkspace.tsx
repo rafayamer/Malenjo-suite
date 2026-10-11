@@ -1049,6 +1049,27 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     if(deleted)setLinkEdit(null);
   }
 
+  function activatePdfLink(link:PdfLinkAnnotation){
+    if(link.kind==='page'){
+      const target=Number(link.destination);
+      if(Number.isSafeInteger(target)&&target>=1&&target<=pageCount)goToPage(target);
+      else setError('The link target page is unavailable.');
+      return;
+    }
+    if(link.kind==='https'){
+      try{
+        const target=new URL(link.destination);
+        if(target.protocol!=='https:'||target.username||target.password)
+          throw new Error('Imported PDF link is not a safe HTTPS URL.');
+        if(window.confirm('This link opens an external website outside MALENJO. Continue?\n'+target.href)){
+          window.open(target.href,'_blank','noopener,noreferrer');
+        }
+      }catch(reason){
+        setError(reason instanceof Error?reason.message:String(reason));
+      }
+    }
+  }
+
   async function openBookmark(entry:PdfOutlineEntry){
     if(!pdf)return;
     if(entry.dest){
@@ -2631,6 +2652,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               eager={active&&(forceRenderAll || schedule.eager)}
               domIdPrefix={domIdPrefix}
               highlightQuery={highlightQuery}
+              links={pdfLinks}
+              onActivateLink={activatePdfLink}
               onVisible={onPageVisible}
               onRendered={onPageRendered}
             />;
