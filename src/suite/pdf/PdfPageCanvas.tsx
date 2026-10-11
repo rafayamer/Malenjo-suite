@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { TextLayer, type PDFDocumentProxy } from 'pdfjs-dist';
 import {highlightPdfTextNodes} from './pdfTextHighlights';
+import type {PdfLinkAnnotation} from './links';
 import type { PdfOptionalContentConfig } from './optionalLayers';
 import { effectivePdfScale, type PdfFitMode } from './layout';
 
@@ -21,6 +22,8 @@ interface Props {
   highlightQuery?: string;
   onVisible(pageNumber: number): void;
   onRendered(pageNumber: number): void;
+  links?:readonly PdfLinkAnnotation[];
+  onActivateLink?(link:PdfLinkAnnotation):void;
 }
 
 export default function PdfPageCanvas({
@@ -40,6 +43,8 @@ export default function PdfPageCanvas({
   highlightQuery='',
   onVisible,
   onRendered,
+  links=[],
+  onActivateLink,
 }: Props) {
   const shellRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -49,6 +54,9 @@ export default function PdfPageCanvas({
   const [visible, setVisible] = useState(pageNumber === 1);
   const [baseSize, setBaseSize] = useState({ width: 612, height: 792 });
   const [failed, setFailed] = useState('');
+  const [linkHitboxes,setLinkHitboxes]=useState<Array<{
+    link:PdfLinkAnnotation;left:number;top:number;width:number;height:number;
+  }>>([]);
 
   useEffect(() => {
     const node = shellRef.current;
@@ -184,6 +192,37 @@ export default function PdfPageCanvas({
   }, [document, eager, forceRender, onRendered, pageNumber, renderAllowed, rotation, scale, visible, optionalContentConfig, layerRevision]);
 
   useEffect(()=>{
+    let cancelled=false;
+    const pageLinks=links.filter(link=>link.pageNumber===pageNumber&&
+      link.rectangle&&(link.kind==='page'||link.kind==='https'));
+    if(!pageLinks.length||!renderAllowed){
+      setLinkHitboxes([]);
+      return;
+    }
+    void document.getPage(pageNumber).then((page)=>{
+      if(cancelled)return;
+      const viewport=page.getViewport({scale,rotation});
+      const hitboxes=pageLinks.flatMap(link=>{
+        const rect=link.rectangle;
+        if(!rect)return [];
+        // PDF.js PageViewport exposes a 2D affine transform. Mapping both
+        // opposite PDF-space corners handles zoom and 90/180/270 rotation.
+        const [a,b,c,d,e,f]=viewport.transform;
+        const [x1,y1,x2,y2]=rect;
+        const ax=a*x1+c*y1+e,ay=b*x1+d*y1+f;
+        const bx=a*x2+c*y2+e,by=b*x2+d*y2+f;
+        const left=Math.min(ax,bx),top=Math.min(ay,by);
+        const width=Math.abs(bx-ax),height=Math.abs(by-ay);
+        if(![left,top,width,height].every(Number.isFinite)||
+          width<2||height<2||width>20_000||height>20_000)return [];
+        return [{link,left,top,width,height}];
+      });
+      setLinkHitboxes(hitboxes);
+    }).catch(()=>{if(!cancelled)setLinkHitboxes([]);});
+    return()=>{cancelled=true;};
+  },[document,links,pageNumber,renderAllowed,rotation,scale]);
+
+  useEffect(()=>{
     // Highlight only selectable text. A scanned/image-only PDF needs OCR and
     // must never pretend its painted pixels are searchable.
     highlightPdfTextNodes(textDivsRef.current,highlightQuery);
@@ -193,11 +232,27 @@ export default function PdfPageCanvas({
     ref={shellRef}
     id={`${domIdPrefix}-page-${pageNumber}`}
     className="pdf-page-shell"
-    style={{ minWidth: placeholder.width, minHeight: placeholder.height }}
+    style={{ minWidth: placeholder.width, minHeight: placeholder.height, position:'relative' }}
   >
     <canvas ref={canvasRef} aria-label={`PDF page ${pageNumber}`}/>
     <div ref={textLayerRef} className="pdf-text-layer textLayer"
-      aria-label={`Selectable text on PDF page ${pageNumber}`}/> 
+      aria-label={`Selectable text on PDF page ${pageNumber}`}/>
+    {linkHitboxes.map(({link,left,top,width,height})=>(
+      <button key={link.index+'-'+link.ref}
+        type="button"
+        className="pdf-link-hitbox"
+        aria-label={link.kind==='page'
+          ?`Go to linked PDF page ${link.destination}`
+          :`Open external HTTPS link ${link.destination}`}
+        title={link.kind==='page'
+          ?`Navigate to page ${link.destination}`
+          :`Open external HTTPS link (confirmation required)`}
+        style={{position:'absolute',left,top,width,height,
+          zIndex:3,background:'transparent',border:'1px dotted transparent',
+          cursor:'pointer'}}
+        onClick={()=>onActivateLink?.(link)}
+      />
+    ))} 
     {failed && <div className="pdf-page-error">Page {pageNumber}: {failed}</div>}
     <span className="pdf-page-number">{pageNumber}</span>
   </div>;

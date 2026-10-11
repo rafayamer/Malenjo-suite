@@ -32,6 +32,17 @@ describe('native PDF link annotations',()=>{
     expect(await listPdfLinkAnnotations(original)).toEqual([]);
   });
 
+  it('returns link PDF coordinates so the page renderer can create clickable hit regions',async()=>{
+    const source=await sample();
+    const bytes=await addPdfLinkAnnotation(source,bounds,{kind:'page',pageNumber:2});
+    const [link]=await listPdfLinkAnnotations(bytes);
+    expect(link.rectangle).toBeDefined();
+    expect(link.rectangle?.[0]).toBeCloseTo(30);
+    expect(link.rectangle?.[1]).toBeCloseTo(80);
+    expect(link.rectangle?.[2]).toBeCloseTo(120);
+    expect(link.rectangle?.[3]).toBeCloseTo(120);
+  });
+
   it('writes HTTPS-only URI actions and supports editing link targets through refreshed references',async()=>{
     let bytes=await addPdfLinkAnnotation(await sample(),bounds,{
       kind:'https',url:'https://example.org/path?q=1',

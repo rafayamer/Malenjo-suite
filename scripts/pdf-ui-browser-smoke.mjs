@@ -3,7 +3,7 @@ import {spawn} from 'node:child_process';
 import {mkdtempSync,readFileSync,mkdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
-import {PDFDocument,StandardFonts} from 'pdf-lib';
+import {PDFDocument,PDFName,StandardFonts} from 'pdf-lib';
 import {chromium} from 'playwright';
 const root=resolve(import.meta.dirname,'..');
 const base='http://127.0.0.1:1420';
@@ -118,6 +118,29 @@ async function main(){
   requireEvidence((await PDFDocument.load(source)).getPage(0).getRotation().angle===0,
     'original source was unexpectedly modified');
   console.log('MALENJO UI rotate, download, reopen and original preservation: PASS');
+  // MAL-AUD-020: Click a real PDF /Link annotation over the rendered canvas.
+  const linked=await PDFDocument.create();
+  const firstLinkPage=linked.addPage([500,700]);
+  const destinationPage=linked.addPage([500,700]);
+  const annotation=linked.context.register(linked.context.obj({
+    Subtype:PDFName.of('Link'),Rect:[50,530,230,575],
+    Dest:linked.context.obj([destinationPage.ref,PDFName.of('Fit')]),
+  }));
+  firstLinkPage.node.set(PDFName.of('Annots'),linked.context.obj([annotation]));
+  const linkedBytes=Buffer.from(await linked.save({useObjectStreams:false}));
+  await page.locator('.sidebar .nav-item').filter({hasText:'PDF Workspace'}).first().click();
+  await page.locator('main.workspace > .pdf-workspace > input[type="file"][accept="application/pdf,.pdf"]').first()
+    .setInputFiles({name:'safe-link-acceptance.pdf',mimeType:'application/pdf',buffer:linkedBytes});
+  const linkTab=page.locator('.document-tab-main').filter({hasText:'safe-link-acceptance.pdf'});
+  await linkTab.waitFor({timeout:30000});
+  const hit=page.locator('.document-session-panel.active .pdf-link-hitbox').first();
+  await hit.waitFor({timeout:30000});
+  await hit.click();
+  await page.waitForFunction(()=>
+    document.querySelector('.document-session-panel.active input[aria-label="Current PDF page"]')?.value==='2',
+    null,{timeout:15000});
+  console.log('MALENJO on-page PDF internal hyperlink activation: PASS');
+
   requireEvidence(errors.length===0,'Unhandled browser exceptions: '+errors.join(' | '));
   await context.close();
   console.log('MALENJO browser PDF acceptance PASSED');
