@@ -955,6 +955,15 @@ fn snapshot_linked_documents(state: &Path) -> Result<usize, String> {
         return Err("Unsupported or oversized library document index; no full backup was published.".into());
     }
     let archive = lib.join("linked-archive-v1");
+    if let Ok(metadata)=fs::symlink_metadata(&archive) {
+        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            return Err("Previous linked archive is not a safe directory.".into());
+        }
+        // This is a private copy inside the newly reserved backup, not the
+        // live user source. Replace only this stale archived snapshot.
+        fs::remove_dir_all(&archive)
+            .map_err(|error| format!("Unable to replace stale snapshot in new backup: {error}"))?;
+    }
     fs::create_dir(&archive)
         .map_err(|error| format!("Unable to reserve new external-document backup archive: {error}"))?;
     let mut seen = HashSet::new();
@@ -1615,7 +1624,7 @@ pub fn kopia_restore_snapshot(
 #[cfg(test)]
 mod tests {
     use super::{
-        collect_backup_files, inspect_backup, restore_state_with_recovery, recover_pending_restore, RestoreJournal, RESTORE_JOURNAL_VERSION, retention_candidates,
+        collect_backup_files, inspect_backup, restore_state_with_recovery, recover_pending_restore, snapshot_linked_documents, recover_linked_document_copies, RestoreJournal, RESTORE_JOURNAL_VERSION, retention_candidates,
         reserve_backup_root, role_permissions, supported_backup_domain, validate_home_payload, BackupManifest, DmsIndex, DmsRecord, DmsVersion, BACKUP_VERSION,
     };
     use std::{fs, time::{SystemTime, UNIX_EPOCH}};
@@ -1765,6 +1774,85 @@ mod tests {
             serde_json::to_vec(&journal).unwrap()).unwrap();
         assert!(recover_pending_restore(&root).is_err());
         assert_eq!(fs::read(root.join("enterprise/safe.txt")).unwrap(),b"unchanged");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn external_document_backup_reopens_source_bytes_after_original_changes() {
+        let root=temp_root("linked-bytes");
+        fs::create_dir_all(&root).unwrap();
+        let source=root.join("external-report.pdf");
+        fs::write(&source,b"%PDF-1.7 original saved snapshot").unwrap();
+        let backup=create_test_backup(&root);
+        let state=backup.join("state");
+        fs::create_dir_all(state.join("library")).unwrap();
+        fs::write(state.join("library/index.json"),
+            serde_json::to_vec(&serde_json::json!({
+                "version":1,
+                "documents":[{"id":"doc-a1b2","path":source.to_string_lossy(),
+                    "addedMs":1,"lastOpenedMs":null}]
+            })).unwrap()).unwrap();
+        assert_eq!(snapshot_linked_documents(&state).unwrap(),1);
+        let mut files=Vec::new();
+        collect_backup_files(&state,&state,&mut files).unwrap();
+        fs::write(backup.join("manifest-v1.json"),
+            serde_json::to_vec_pretty(&BackupManifest{
+                version:BACKUP_VERSION,created_ms:1,files
+            }).unwrap()).unwrap();
+        assert!(inspect_backup(&backup).unwrap().valid);
+        fs::write(&source,b"%PDF-1.7 original edited after backup").unwrap();
+        let restored=root.join("restored");
+        fs::create_dir(&restored).unwrap();
+        let copies=recover_linked_document_copies(&backup,&restored).unwrap();
+        assert_eq!(copies.len(),1);
+        assert_eq!(copies[0].document_id,"doc-a1b2");
+        assert_eq!(fs::read(&copies[0].restored_path).unwrap(),b"%PDF-1.7 original saved snapshot");
+        assert_eq!(fs::read(&source).unwrap(),b"%PDF-1.7 original edited after backup");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn linked_document_recovery_refuses_existing_filename_without_overwriting() {
+        let root=temp_root("linked-refuse-overwrite");
+        fs::create_dir_all(&root).unwrap();
+        let source=root.join("original.pdf");
+        fs::write(&source,b"original document").unwrap();
+        let backup=create_test_backup(&root);
+        let state=backup.join("state");
+        fs::create_dir_all(state.join("library")).unwrap();
+        fs::write(state.join("library/index.json"),
+            serde_json::to_vec(&serde_json::json!({
+                "version":1,"documents":[{"id":"doc-aa","path":source.to_string_lossy()}]
+            })).unwrap()).unwrap();
+        snapshot_linked_documents(&state).unwrap();
+        let mut files=Vec::new(); collect_backup_files(&state,&state,&mut files).unwrap();
+        fs::write(backup.join("manifest-v1.json"),
+            serde_json::to_vec(&BackupManifest{
+                version:BACKUP_VERSION,created_ms:1,files
+            }).unwrap()).unwrap();
+        let restored=root.join("restored");
+        fs::create_dir(&restored).unwrap();
+        let conflict=restored.join("original-recovered-doc-aa.pdf");
+        fs::write(&conflict,b"preexisting user work").unwrap();
+        assert!(recover_linked_document_copies(&backup,&restored).is_err());
+        assert_eq!(fs::read(&conflict).unwrap(),b"preexisting user work");
+        assert_eq!(fs::read(&source).unwrap(),b"original document");
+        assert_eq!(fs::read_dir(&restored).unwrap().count(),1);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn missing_linked_document_prevents_claiming_complete_backup() {
+        let root=temp_root("linked-missing");
+        let backup=create_test_backup(&root);
+        let state=backup.join("state");
+        fs::create_dir_all(state.join("library")).unwrap();
+        fs::write(state.join("library/index.json"),
+            serde_json::to_vec(&serde_json::json!({
+                "version":1,"documents":[{"id":"doc-dead","path":
+                    root.join("unavailable.pdf").to_string_lossy()}]
+            })).unwrap()).unwrap();
+        assert!(snapshot_linked_documents(&state).is_err());
         fs::remove_dir_all(root).unwrap();
     }
 
