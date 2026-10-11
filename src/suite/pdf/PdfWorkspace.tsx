@@ -656,7 +656,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       async(bytes)=>{
         let result=bytes;
         for(const file of ordered){
-          if(file.size>512*1024*1024)throw new Error(`${file.name} exceeds the 512 MB safety limit.`);
+          if(file.size>32*1024*1024)throw new Error(`${file.name} exceeds the 32 MB interactive PDF budget.`);
           result=await insertPdfAfter(result,new Uint8Array(await file.arrayBuffer()),currentPage);
         }
         return result;
@@ -674,7 +674,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     await mutate(`Appended ${files.length} PDF file(s).`,async(bytes)=>{
       let result=bytes;
       for(const file of files){
-        if(file.size>512*1024*1024)throw new Error(`${file.name} exceeds the 512 MB safety limit.`);
+        if(file.size>32*1024*1024)throw new Error(`${file.name} exceeds the 32 MB interactive PDF budget.`);
         result=Uint8Array.from(await appendPdf(result,new Uint8Array(await file.arrayBuffer())));
       }
       return result;
@@ -2385,7 +2385,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                   logicalLabel={logicalPageLabels[page-1]}
                   active={page === currentPage}
                   selected={selectedPages.has(page)}
-                  renderAllowed={thumbnailsRenderAllowed}
+                  renderAllowed={active&&thumbnailsRenderAllowed}
                   onSelect={selectThumbnail}
                   dragScope={domIdPrefix}
                   pageCount={pageCount}
@@ -2607,9 +2607,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               rotation={rotation}
               availableWidth={viewport.width}
               availableHeight={viewport.height}
-              forceRender={forceRenderAll}
-              renderAllowed={forceRenderAll || schedule.allowed}
-              eager={forceRenderAll || schedule.eager}
+              forceRender={active&&forceRenderAll}
+              renderAllowed={active&&(forceRenderAll || schedule.allowed)}
+              eager={active&&(forceRenderAll || schedule.eager)}
               domIdPrefix={domIdPrefix}
               highlightQuery={highlightQuery}
               onVisible={onPageVisible}

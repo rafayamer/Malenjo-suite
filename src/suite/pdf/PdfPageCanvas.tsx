@@ -141,6 +141,7 @@ export default function PdfPageCanvas({
         // overlays real, invisible and selectable text spans on the exact
         // same viewport, including zoom and rotation.
         if(textContainer){
+          try {
           const textContent=await page.getTextContent();
           if(cancelled)return;
           textContainer.style.setProperty('--scale-factor',String(viewport.scale));
@@ -156,6 +157,15 @@ export default function PdfPageCanvas({
             (node):node is HTMLSpanElement=>node instanceof HTMLSpanElement,
           );
           setTextRevision(revision=>revision+1);
+          } catch (error) {
+            // Canvas rendering already succeeded: optional text selection
+            // must not turn a readable page into a fatal page error.
+            if (!cancelled) {
+              textContainer.replaceChildren();
+              textDivsRef.current=[];
+              setTextRevision((revision)=>revision+1);
+            }
+          }
         }
       } catch (error) {
         if (!cancelled && (error as { name?: string }).name !== 'RenderingCancelledException') {

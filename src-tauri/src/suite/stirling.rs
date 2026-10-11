@@ -20,8 +20,8 @@ const STIRLING_OPENAPI_PATH: &str = "/v1/api-docs";
 const START_TIMEOUT: Duration = Duration::from_secs(75);
 const HEALTH_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
-const MAX_INPUT_BYTES: usize = 512 * 1024 * 1024;
-const MAX_OUTPUT_BYTES: usize = 512 * 1024 * 1024;
+const MAX_INPUT_BYTES: usize = 32 * 1024 * 1024;
+const MAX_OUTPUT_BYTES: usize = 32 * 1024 * 1024;
 
 struct OwnedStirlingProcess {
     child: Child,
@@ -1181,7 +1181,7 @@ pub async fn stirling_core_request(
         .try_fold(0usize, |total, file| total.checked_add(file.bytes.len()))
         .ok_or_else(|| "Stirling request input size overflow.".to_string())?;
     if total_input > MAX_INPUT_BYTES {
-        return Err("Stirling request exceeds the 512 MB aggregate input safety limit.".into());
+        return Err("Stirling request exceeds the 32 MB non-streaming aggregate input safety limit.".into());
     }
     if files.iter().any(|file| file.field.len() > 128 || file.filename.len() > 512) {
         return Err("Stirling request contains an invalid file field or filename.".into());
@@ -1235,11 +1235,11 @@ pub async fn stirling_core_request(
         .map(str::to_owned);
 
     if response.content_length().is_some_and(|length| length > MAX_OUTPUT_BYTES as u64) {
-        return Err("Local Stirling response exceeds the 512 MB output safety limit.".into());
+        return Err("Local Stirling response exceeds the 32 MB non-streaming output safety limit.".into());
     }
 
     // Do not trust Content-Length: HTTP chunked responses often omit it.
-    // Error pages are capped at 64 KiB; successful operations at 512 MiB.
+    // Error pages are capped at 64 KiB; successful operations at 32 MiB.
     const MAX_HTTP_ERROR_BODY_BYTES: usize = 64 * 1024;
     let limit = if (200..300).contains(&status) {
         MAX_OUTPUT_BYTES
@@ -1505,8 +1505,8 @@ mod tests {
     #[test]
     fn stirling_limits_and_port_are_fixed() {
         assert_eq!(STIRLING_PORT, 28970);
-        assert_eq!(MAX_INPUT_BYTES, 512 * 1024 * 1024);
-        assert_eq!(MAX_OUTPUT_BYTES, 512 * 1024 * 1024);
+        assert_eq!(MAX_INPUT_BYTES, 32 * 1024 * 1024);
+        assert_eq!(MAX_OUTPUT_BYTES, 32 * 1024 * 1024);
         assert_eq!(STIRLING_BASE_URL, "http://127.0.0.1:28970");
     }
 }
