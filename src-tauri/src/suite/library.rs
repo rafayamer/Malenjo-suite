@@ -3,12 +3,72 @@ use std::{
     fs,
     io::Read,
     path::{Path, PathBuf},
+    sync::{Mutex, OnceLock},
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Manager};
 
 const INDEX_VERSION: u32 = 1;
 const STAGING_VERSION: u32 = 1;
+
+/// Serialize library index mutations within a desktop process. Each mutating
+/// command holds the lock across load, mutation and durable write.
+fn library_mutation_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
+#[cfg(windows)]
+fn replace_document_file(new_file: &Path, destination: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use std::ptr;
+    #[link(name = "Kernel32")]
+    extern "system" {
+        fn ReplaceFileW(replaced: *const u16, replacement: *const u16,
+            backup: *const u16, flags: u32, excluded: *mut std::ffi::c_void,
+            reserved: *mut std::ffi::c_void) -> i32;
+    }
+    let old: Vec<u16> = destination.as_os_str().encode_wide().chain(Some(0)).collect();
+    let new: Vec<u16> = new_file.as_os_str().encode_wide().chain(Some(0)).collect();
+    let status = unsafe {
+        ReplaceFileW(old.as_ptr(), new.as_ptr(), ptr::null(), 0,
+            ptr::null_mut(), ptr::null_mut())
+    };
+    if status == 0 { Err(std::io::Error::last_os_error()) } else { Ok(()) }
+}
+
+#[cfg(not(windows))]
+fn replace_document_file(new_file: &Path, destination: &Path) -> std::io::Result<()> {
+    fs::rename(new_file, destination)
+}
+
+/// Copy to an exclusively created staging file *beside* the original; replace
+/// the original only after the new file is complete and synced. On replacement
+/// failure the old source file is unchanged.
+fn install_staged_document(stage: &Path, source: &Path, nonce: u128) -> Result<(), String> {
+    let parent = source.parent().ok_or("Source document has no parent folder.")?;
+    let sibling = parent.join(format!(
+        ".malenjo-install-{}-{nonce:x}.tmp", std::process::id()
+    ));
+    let mut output = fs::OpenOptions::new().write(true).create_new(true).open(&sibling)
+        .map_err(|error| format!("Unable to stage new document beside source: {error}"))?;
+    let copied = (|| -> std::io::Result<()> {
+        let mut input = fs::File::open(stage)?;
+        std::io::copy(&mut input, &mut output)?;
+        output.sync_all()?;
+        Ok(())
+    })();
+    drop(output);
+    if let Err(error) = copied {
+        let _ = fs::remove_file(&sibling);
+        return Err(format!("Unable to prepare complete source replacement: {error}"));
+    }
+    if let Err(error) = replace_document_file(&sibling, source) {
+        let _ = fs::remove_file(&sibling);
+        return Err(format!("Unable to install document without overwriting it in place: {error}"));
+    }
+    Ok(())
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -373,6 +433,8 @@ pub fn list_library_documents(app: AppHandle) -> Result<Vec<LibraryDocument>, St
 
 #[tauri::command]
 pub fn add_library_documents(app: AppHandle, paths: Vec<String>) -> Result<ImportResult, String> {
+    let _index_guard = library_mutation_lock().lock()
+        .map_err(|_| "Library mutation lock is poisoned.".to_string())?;
     let mut index = load_index(&app)?;
     let mut documents = Vec::new();
     let mut errors = Vec::new();
@@ -408,6 +470,8 @@ pub fn add_library_documents(app: AppHandle, paths: Vec<String>) -> Result<Impor
 
 #[tauri::command]
 pub fn open_library_document(app: AppHandle, document_id: String) -> Result<LibraryDocument, String> {
+    let _index_guard = library_mutation_lock().lock()
+        .map_err(|_| "Library mutation lock is poisoned.".to_string())?;
     let mut index = load_index(&app)?;
     let document = {
         let entry = find_entry_mut(&mut index, &document_id)?;
@@ -428,6 +492,8 @@ pub fn refresh_library_document(app: AppHandle, document_id: String) -> Result<L
 
 #[tauri::command]
 pub fn remove_library_document(app: AppHandle, document_id: String) -> Result<bool, String> {
+    let _index_guard = library_mutation_lock().lock()
+        .map_err(|_| "Library mutation lock is poisoned.".to_string())?;
     let mut index = load_index(&app)?;
     let previous_len = index.documents.len();
     index.documents.retain(|entry| entry.id != document_id);
@@ -520,6 +586,8 @@ pub fn save_as_library_document(
     document_id: String,
     destination: String,
 ) -> Result<LibraryDocument, String> {
+    let _index_guard = library_mutation_lock().lock()
+        .map_err(|_| "Library mutation lock is poisoned.".to_string())?;
     let mut index = load_index(&app)?;
     let source_entry = find_entry(&index, &document_id)?.clone();
     let source = canonical_user_file(&source_entry.path)?;
@@ -600,6 +668,8 @@ pub fn commit_staged_document(
     document_id: String,
     staging_token: String,
 ) -> Result<LibraryDocument, String> {
+    let _index_guard = library_mutation_lock().lock()
+        .map_err(|_| "Library mutation lock is poisoned.".to_string())?;
     validate_staging_token(&staging_token)?;
     if !staging_token.starts_with(&format!("{}-", document_id)) {
         return Err("Staging token does not belong to this document.".into());
@@ -645,26 +715,18 @@ pub fn commit_staged_document(
     fs::copy(&source, &backup)
         .map_err(|error| format!("Unable to create MALENJO save backup: {error}"))?;
 
-    let write_result = fs::copy(&stage, &source)
-        .map_err(|error| format!("Unable to commit document save: {error}"));
+    // The original stays intact until a same-folder, completely synced
+    // replacement is installed. No in-place truncation or restore-by-copy.
+    install_staged_document(&stage, &source, staging_nonce())?;
 
-    if let Err(error) = write_result {
-        let _ = fs::copy(&backup, &source);
-        let _ = fs::remove_file(&backup);
-        return Err(error);
-    }
-
-    if let Ok(file) = fs::OpenOptions::new().read(true).open(&source) {
-        let _ = file.sync_all();
-    }
-
-    let _ = fs::remove_file(&backup);
-    let _ = fs::remove_file(&stage);
-    let _ = fs::remove_file(&manifest_path);
+    // Keep recovery material until the replacement and index update complete.
 
     entry.last_opened_ms = Some(now_ms());
     let document = public_document(entry);
     save_index(&app, &index)?;
+    let _ = fs::remove_file(&backup);
+    let _ = fs::remove_file(&stage);
+    let _ = fs::remove_file(&manifest_path);
     Ok(document)
 }
 
@@ -701,8 +763,32 @@ pub fn discard_staged_document(app: AppHandle, staging_token: String) -> Result<
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_extension, classify_signature, destination_path, fnv1a64, parse_index, save_as_new_file, validate_requested_path, validate_staging_token};
+    use super::{classify_extension, classify_signature, destination_path, fnv1a64, install_staged_document, parse_index, save_as_new_file, validate_requested_path, validate_staging_token};
     use std::{fs, path::PathBuf, sync::{Arc, Barrier}, thread, time::{SystemTime, UNIX_EPOCH}};
+
+    #[test]
+    fn staged_save_commits_only_complete_bytes() {
+        let folder = test_directory("staged-success");
+        let original = folder.join("user.pdf");
+        let stage = folder.join("edited.bin");
+        fs::write(&original, b"unaltered").expect("source");
+        fs::write(&stage, b"complete edited PDF bytes").expect("stage");
+        install_staged_document(&stage, &original, 23).expect("transactional replace");
+        assert_eq!(fs::read(&original).expect("updated"), b"complete edited PDF bytes");
+        assert_eq!(fs::read(&stage).expect("stage preserved"), b"complete edited PDF bytes");
+        fs::remove_dir_all(folder).expect("cleanup");
+    }
+
+    #[test]
+    fn failed_staged_save_preserves_original_bytes() {
+        let folder = test_directory("staged-failure");
+        let original = folder.join("user.pdf");
+        fs::write(&original, b"unaltered").expect("source");
+        assert!(install_staged_document(&folder.join("missing"), &original, 24).is_err());
+        assert_eq!(fs::read(&original).expect("source intact"), b"unaltered");
+        assert_eq!(fs::read_dir(&folder).expect("no leftovers").count(), 1);
+        fs::remove_dir_all(folder).expect("cleanup");
+    }
 
     #[test]
     fn maps_supported_document_extensions() {

@@ -464,7 +464,7 @@ pub fn dms_register_document(
     };
     index.records.push(record.clone());
     save_dms(&app, &index)?;
-    let _ = append_audit(&app, "dms-register", "info", &record.name, "Document registered and initial version snapshotted.");
+    append_audit(&app, "dms-register", "info", &record.name, "Document registered and initial version snapshotted.")?;
     Ok(record)
 }
 
@@ -479,7 +479,7 @@ fn snapshot_record_internal(app: &AppHandle, record_id: &str, note: &str) -> Res
     index.records[position].updated_ms = now_ms();
     let record = index.records[position].clone();
     save_dms(app, &index)?;
-    let _ = append_audit(app, "dms-snapshot", "info", &record.name, note);
+    append_audit(app, "dms-snapshot", "info", &record.name, note)?;
     Ok(record)
 }
 
@@ -509,13 +509,13 @@ pub fn dms_update_retention(
     record.updated_ms = now_ms();
     let result = record.clone();
     save_dms(&app, &index)?;
-    let _ = append_audit(
+    append_audit(
         &app,
         "dms-retention",
         "warning",
         &result.name,
         format!("Retention={} days; legal_hold={}.", result.retention_days, result.legal_hold),
-    );
+    )?;
     Ok(result)
 }
 
@@ -576,27 +576,37 @@ pub fn dms_apply_retention(
         return Ok(0);
     }
 
+    // Commit the index before reclaiming old snapshot files.
     let root = dms_root(&app)?;
-    let mut removed = 0usize;
+    let mut expired_paths = Vec::new();
     for record in &mut index.records {
-        let mut retained = Vec::with_capacity(record.versions.len());
-        for version in record.versions.drain(..) {
-            if requested.contains(&version.id) {
-                let path = root.join(safe_relative(&version.snapshot_rel_path)?);
-                if path.exists() {
-                    fs::remove_file(&path)
-                        .map_err(|error| format!("Unable to remove expired DMS version: {error}"))?;
-                }
-                removed += 1;
-            } else {
-                retained.push(version);
-            }
-        }
-        record.versions = retained;
+        record.versions.retain(|version| {
+            if !requested.contains(&version.id) { return true; }
+            expired_paths.push(version.snapshot_rel_path.clone());
+            false
+        });
     }
+    let paths = expired_paths.iter()
+        .map(|value| safe_relative(value).map(|relative| root.join(relative)))
+        .collect::<Result<Vec<_>,_>>()?;
     save_dms(&app, &index)?;
-    let _ = append_audit(&app, "dms-retention-apply", "warning", "DMS", format!("Removed {removed} expired version(s)."));
-    Ok(removed)
+
+    let mut cleanup_errors = Vec::new();
+    for path in &paths {
+        match fs::remove_file(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => cleanup_errors.push(format!("{}: {error}", path.display())),
+        }
+    }
+    append_audit(&app, "dms-retention-apply", "warning", "DMS",
+        format!("Unlinked {} version(s); {} snapshot cleanup error(s).",
+            paths.len(), cleanup_errors.len()))?;
+    if !cleanup_errors.is_empty() {
+        return Err(format!("Retention index updated but expired snapshots need cleanup: {}",
+            cleanup_errors.join("; ")));
+    }
+    Ok(paths.len())
 }
 
 #[tauri::command]
@@ -912,9 +922,32 @@ fn inspect_backup(path: &Path) -> Result<BackupInspection, String> {
     let mut total_bytes = 0u64;
     for entry in &manifest.files {
         let relative = safe_relative(&entry.path)?;
-        let file = path.join("state").join(relative);
-        if !file.is_file() {
-            errors.push(format!("Missing {}", entry.path));
+        let file = path.join("state").join(&relative);
+        // Reject symlinked entries and ancestors; never verify one file
+        // then restore a different filesystem view.
+        let mut cursor = path.join("state");
+        let mut safe = true;
+        for component in relative.components() {
+            cursor.push(component.as_os_str());
+            match fs::symlink_metadata(&cursor) {
+                Ok(metadata) if metadata.file_type().is_symlink() => {
+                    errors.push(format!("Symbolic link forbidden in backup: {}", entry.path));
+                    safe = false;
+                    break;
+                }
+                Err(error) => {
+                    errors.push(format!("Missing or unreadable {}: {error}", entry.path));
+                    safe = false;
+                    break;
+                }
+                Ok(_) => {}
+            }
+        }
+        if !safe { continue; }
+        let metadata = fs::symlink_metadata(&file)
+            .map_err(|error| format!("Unable to inspect backup entry: {error}"))?;
+        if !metadata.is_file() {
+            errors.push(format!("Not a regular backup file: {}", entry.path));
             continue;
         }
         match sha256_file(&file) {
