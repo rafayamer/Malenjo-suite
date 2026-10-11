@@ -170,6 +170,10 @@ pub struct BackupInspection {
     pub file_count: usize,
     pub total_bytes: u64,
     pub errors: Vec<String>,
+    // An old backup may verify its app state while containing no snapshot
+    // of externally linked documents. Never call that full document recovery.
+    pub linked_documents_complete: bool,
+    pub linked_document_count: usize,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -1385,11 +1389,56 @@ fn inspect_backup(path: &Path) -> Result<BackupInspection, String> {
             errors.push(format!("Unlisted file in backup state: {}",file.path));
         }
     }
+    let linked_inventory=state.join("library/linked-archive-v1/manifest.json");
+    let mut linked_documents_complete=false;
+    let mut linked_document_count=0usize;
+    match fs::symlink_metadata(&linked_inventory) {
+        Ok(_) => match read_linked_archive(path) {
+            Ok(archive) => {
+                // Verify the archive covers EXACTLY the document IDs
+                // referenced by the backed-up index. The outer manifest alone
+                // cannot prove that a linked document was never omitted.
+                let index_file=state.join("library/index.json");
+                let index: Result<LibrarySnapshotIndex,String>=if index_file.exists(){
+                    fs::read(&index_file)
+                        .map_err(|e|format!("Unable to read backed-up library index: {e}"))
+                        .and_then(|content|serde_json::from_slice(&content)
+                            .map_err(|e|format!("Backed-up library index is invalid: {e}")))
+                } else {
+                    Ok(LibrarySnapshotIndex {version:1,documents:Vec::new()})
+                };
+                match index {
+                    Ok(index) if index.version==1 => {
+                        let indexed:HashSet<String>=index.documents.iter()
+                            .map(|item|item.id.clone()).collect();
+                        let archived:HashSet<String>=archive.documents.iter()
+                            .map(|item|item.document_id.clone()).collect();
+                        if indexed.len()!=index.documents.len() || indexed!=archived {
+                            errors.push("Linked-document archive does not match the backed-up Document Library index.".into());
+                        } else {
+                            linked_documents_complete=true;
+                            linked_document_count=archive.documents.len();
+                        }
+                    }
+                    Ok(_)=>errors.push("Unsupported backed-up document index version.".into()),
+                    Err(error)=>errors.push(error),
+                }
+            }
+            Err(error)=>errors.push(format!("Invalid linked-document archive: {error}")),
+        },
+        Err(error) if error.kind()==std::io::ErrorKind::NotFound => {
+            // Legacy backups remain available for app-state restore, but the
+            // frontend shows that they do NOT contain user document copies.
+        },
+        Err(error)=>errors.push(format!("Unable to inspect linked-document archive: {error}")),
+    }
     Ok(BackupInspection {
         valid: errors.is_empty(),
         file_count: manifest.files.len(),
         total_bytes,
         errors,
+        linked_documents_complete,
+        linked_document_count,
     })
 }
 
@@ -1467,6 +1516,9 @@ pub fn create_local_backup(
         let inspection = inspect_backup(&backup)?;
         if !inspection.valid {
             return Err(format!("Backup integrity check failed: {}", inspection.errors.join("; ")));
+        }
+        if !inspection.linked_documents_complete {
+            return Err("Backup contains no verified linked-document coverage; refusing incomplete backup publication.".into());
         }
         Ok(inspection)
     })();
@@ -1953,6 +2005,50 @@ mod tests {
         assert!(!state.join("linked-archive-v1").exists());
         assert_eq!(fs::read(previous.join("linked-archive-v1/old.bin")).unwrap(),
             b"obsolete huge snapshot");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn verified_legacy_backup_is_explicitly_not_complete_document_coverage() {
+        let root=temp_root("legacy-coverage");
+        let backup=create_test_backup(&root);
+        let status=inspect_backup(&backup).unwrap();
+        assert!(status.valid,"legacy app-state integrity can be valid");
+        assert!(!status.linked_documents_complete,"legacy backup has no linked bytes");
+        assert_eq!(status.linked_document_count,0);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn backup_must_contain_every_indexed_document_even_with_valid_outer_manifest() {
+        let root=temp_root("missing-archived-doc");
+        fs::create_dir_all(&root).unwrap();
+        let source=root.join("present.txt");
+        fs::write(&source,b"document contents").unwrap();
+        let backup=create_test_backup(&root);
+        let state=backup.join("state");
+        fs::create_dir_all(state.join("library")).unwrap();
+        fs::write(state.join("library/index.json"),
+            serde_json::to_vec(&serde_json::json!({
+                "version":1,"documents":[{"id":"doc-one","path":source.to_string_lossy()}]
+            })).unwrap()).unwrap();
+        snapshot_linked_documents(&state).unwrap();
+        let archived=state.join("library/linked-archive-v1/manifest.json");
+        let mut content:serde_json::Value=serde_json::from_slice(&fs::read(&archived).unwrap()).unwrap();
+        content["documents"]=serde_json::json!([]);
+        fs::write(&archived,serde_json::to_vec(&content).unwrap()).unwrap();
+        // Recalculate all outer checksums to show the secondary inventory
+        // catches an omission that a self-consistent outer manifest misses.
+        let mut files=Vec::new();
+        collect_backup_files(&state,&state,&mut files).unwrap();
+        fs::write(backup.join("manifest-v1.json"),
+            serde_json::to_vec(&BackupManifest{
+                version:BACKUP_VERSION,created_ms:1,files
+            }).unwrap()).unwrap();
+        let status=inspect_backup(&backup).unwrap();
+        assert!(!status.valid);
+        assert!(!status.linked_documents_complete);
+        assert!(status.errors.iter().any(|e|e.contains("does not match")));
         fs::remove_dir_all(root).unwrap();
     }
 
