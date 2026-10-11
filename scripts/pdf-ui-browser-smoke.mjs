@@ -168,17 +168,17 @@ async function main(){
     'Hidden Excel worksheet was exposed as an editable tab');
   requireEvidence(await workbookUi.getByRole('tab',{name:'Budget'}).getAttribute('aria-selected')==='true',
     'First visible workbook tab was not selected in relationship order');
-  await workbookUi.getByRole('textbox',{name:'Cell A1'}).fill('Budget browser edited');
+  await workbookUi.getByRole('textbox',{name:'Cell A1',exact:true}).fill('Budget browser edited');
   await workbookUi.getByRole('tab',{name:'Forecast'}).click();
-  requireEvidence(await workbookUi.getByRole('textbox',{name:'Cell A1'}).inputValue()==='Forecast original',
+  requireEvidence(await workbookUi.getByRole('textbox',{name:'Cell A1',exact:true}).inputValue()==='Forecast original',
     'Spreadsheet tab showed another worksheet contents');
-  await workbookUi.getByRole('textbox',{name:'Cell A1'}).fill('Forecast browser edited');
+  await workbookUi.getByRole('textbox',{name:'Cell A1',exact:true}).fill('Forecast browser edited');
   await workbookUi.getByRole('tab',{name:'Budget'}).click();
-  requireEvidence(await workbookUi.getByRole('textbox',{name:'Cell A1'}).inputValue()==='Budget browser edited',
+  requireEvidence(await workbookUi.getByRole('textbox',{name:'Cell A1',exact:true}).inputValue()==='Budget browser edited',
     'Spreadsheet lost previous worksheet edits when switching tabs');
   await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
   await multiTab.click();
-  requireEvidence(await workbookUi.getByRole('textbox',{name:'Cell A1'}).inputValue()==='Budget browser edited',
+  requireEvidence(await workbookUi.getByRole('textbox',{name:'Cell A1',exact:true}).inputValue()==='Budget browser edited',
     'Spreadsheet lost multi-sheet editing state after workspace navigation');
   const multiDownload=page.waitForEvent('download',{timeout:30000});
   await workbookUi.getByRole('button',{name:'Export copy'}).click();
@@ -207,10 +207,10 @@ async function main(){
   await reopenedTab.waitFor({timeout:30000});
   const reopenedUi=page.locator('.document-session-panel.active');
   await reopenedUi.getByRole('tab',{name:'Budget'}).waitFor({timeout:30000});
-  requireEvidence(await reopenedUi.getByRole('textbox',{name:'Cell A1'}).inputValue()==='Budget browser edited',
+  requireEvidence(await reopenedUi.getByRole('textbox',{name:'Cell A1',exact:true}).inputValue()==='Budget browser edited',
     'Reopened exported multi-sheet workbook lost first worksheet edit');
   await reopenedUi.getByRole('tab',{name:'Forecast'}).click();
-  requireEvidence(await reopenedUi.getByRole('textbox',{name:'Cell A1'}).inputValue()==='Forecast browser edited',
+  requireEvidence(await reopenedUi.getByRole('textbox',{name:'Cell A1',exact:true}).inputValue()==='Forecast browser edited',
     'Reopened exported multi-sheet workbook lost second worksheet edit');
   requireEvidence(errors.length===0,'Multi-sheet browser exception: '+errors.join(' | '));
   console.log('PHASE3 XLSX multi-tab UI/edit/export/independent ZIP inspection/reimport: PASS (synthetic fixture)');
