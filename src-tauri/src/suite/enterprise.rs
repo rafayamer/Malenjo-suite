@@ -952,8 +952,25 @@ fn collect_backup_files(root: &Path, current: &Path, files: &mut Vec<BackupFile>
     Ok(())
 }
 
+fn supported_backup_domain(relative: &Path) -> bool {
+    matches!(relative.components().next(),
+        Some(Component::Normal(value))
+        if value == "enterprise" || value == "security" || value == "library")
+}
+
 fn validate_backup_root(path: &Path) -> Result<BackupManifest, String> {
+    let root_metadata=fs::symlink_metadata(path)
+        .map_err(|error|format!("Unable to inspect backup root: {error}"))?;
+    if root_metadata.file_type().is_symlink() || !root_metadata.is_dir() {
+        return Err("Backup root must be an actual directory, not a symbolic link.".into());
+    }
     let manifest_path = path.join("manifest-v1.json");
+    let metadata=fs::symlink_metadata(&manifest_path)
+        .map_err(|error|format!("Unable to inspect backup manifest: {error}"))?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() ||
+       metadata.len()==0 || metadata.len()>32*1024*1024 {
+        return Err("Backup manifest must be a regular file of at most 32 MB.".into());
+    }
     let bytes = fs::read(&manifest_path)
         .map_err(|error| format!("Unable to read backup manifest: {error}"))?;
     let manifest: BackupManifest = serde_json::from_slice(&bytes)
@@ -984,6 +1001,10 @@ fn inspect_backup(path: &Path) -> Result<BackupInspection, String> {
             continue;
         }
         let relative = safe_relative(&entry.path)?;
+        if !supported_backup_domain(&relative) {
+            errors.push(format!("Backup contains a state domain that restore cannot install: {}",entry.path));
+            continue;
+        }
         let file = path.join("state").join(&relative);
         // Reject symlinked entries and ancestors; never verify one file
         // then restore a different filesystem view.
@@ -1031,6 +1052,9 @@ fn inspect_backup(path: &Path) -> Result<BackupInspection, String> {
         errors.push("Backup contains more than 100,000 files.".into());
     }
     for file in actual {
+        if !supported_backup_domain(&safe_relative(&file.path)?) {
+            errors.push(format!("Backup includes unsupported restore domain: {}",file.path));
+        }
         if !expected_paths.contains(&file.path) {
             errors.push(format!("Unlisted file in backup state: {}",file.path));
         }
@@ -1227,7 +1251,7 @@ pub fn kopia_restore_snapshot(
 mod tests {
     use super::{
         collect_backup_files, inspect_backup, restore_state_with_recovery, retention_candidates,
-        role_permissions, validate_home_payload, BackupManifest, DmsIndex, DmsRecord, DmsVersion, BACKUP_VERSION,
+        role_permissions, supported_backup_domain, validate_home_payload, BackupManifest, DmsIndex, DmsRecord, DmsVersion, BACKUP_VERSION,
     };
     use std::{fs, time::{SystemTime, UNIX_EPOCH}};
 
@@ -1347,6 +1371,47 @@ mod tests {
         assert_eq!(fs::read(app_data.join("enterprise").join("new.txt")).expect("new state"), b"new-state");
         assert_eq!(fs::read(recovery.join("enterprise").join("old.txt")).expect("recovery state"), b"old-state");
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn restore_rejects_hash_valid_files_from_unknown_state_roots() {
+        let root=temp_root("unrestorable");
+        let backup=create_test_backup(&root);
+        fs::create_dir_all(backup.join("state/undocumented")).unwrap();
+        fs::write(backup.join("state/undocumented/private.bin"),b"unrestorable").unwrap();
+        let mut files=Vec::new();
+        collect_backup_files(&backup.join("state"),&backup.join("state"),&mut files).unwrap();
+        let manifest=BackupManifest {version:BACKUP_VERSION,created_ms:1,files};
+        fs::write(backup.join("manifest-v1.json"),serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+        let result=inspect_backup(&backup).unwrap();
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|message|message.contains("restore domain")));
+        let _=fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn restore_rejects_symlinked_manifest_even_if_json_is_valid() {
+        use std::os::unix::fs::symlink;
+        let root=temp_root("manifest-link");
+        let backup=create_test_backup(&root);
+        let manifest=backup.join("manifest-v1.json");
+        let real=backup.join("real-manifest.json");
+        fs::rename(&manifest,&real).unwrap();
+        symlink(&real,&manifest).unwrap();
+        assert!(inspect_backup(&backup).is_err());
+        let _=fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn only_declared_restore_domains_are_eligible() {
+        use std::path::Path;
+        for name in ["enterprise/a.json","security/events.jsonl","library/index.json"] {
+            assert!(supported_backup_domain(Path::new(name)));
+        }
+        for name in ["documents/a.pdf","undocumented/data","missing/a.json"] {
+            assert!(!supported_backup_domain(Path::new(name)));
+        }
     }
 
     #[test]
