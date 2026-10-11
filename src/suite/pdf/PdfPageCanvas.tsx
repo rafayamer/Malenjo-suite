@@ -205,7 +205,12 @@ export default function PdfPageCanvas({
       const hitboxes=pageLinks.flatMap(link=>{
         const rect=link.rectangle;
         if(!rect)return [];
-        const [ax,ay,bx,by]=viewport.convertToViewportRectangle([...rect]);
+        // PDF.js PageViewport exposes a 2D affine transform. Mapping both
+        // opposite PDF-space corners handles zoom and 90/180/270 rotation.
+        const [a,b,c,d,e,f]=viewport.transform;
+        const [x1,y1,x2,y2]=rect;
+        const ax=a*x1+c*y1+e,ay=b*x1+d*y1+f;
+        const bx=a*x2+c*y2+e,by=b*x2+d*y2+f;
         const left=Math.min(ax,bx),top=Math.min(ay,by);
         const width=Math.abs(bx-ax),height=Math.abs(by-ay);
         if(![left,top,width,height].every(Number.isFinite)||
