@@ -47,6 +47,12 @@ fn replace_document_file(new_file: &Path, destination: &Path) -> std::io::Result
 /// the original only after the new file is complete and synced. On replacement
 /// failure the old source file is unchanged.
 fn install_staged_document(stage: &Path, source: &Path, nonce: u128) -> Result<(), String> {
+    install_staged_document_checked(stage, source, nonce, None)
+}
+
+fn install_staged_document_checked(
+    stage: &Path, source: &Path, nonce: u128, expected_source_sha256: Option<&str>
+) -> Result<(), String> {
     let parent = source.parent().ok_or("Source document has no parent folder.")?;
     let sibling = parent.join(format!(
         ".malenjo-install-{}-{nonce:x}.tmp", std::process::id()
@@ -63,6 +69,23 @@ fn install_staged_document(stage: &Path, source: &Path, nonce: u128) -> Result<(
     if let Err(error) = copied {
         let _ = fs::remove_file(&sibling);
         return Err(format!("Unable to prepare complete source replacement: {error}"));
+    }
+    if let Some(expected) = expected_source_sha256 {
+        // An external editor may have changed the bytes DURING staging, even
+        // though the earlier mtime/size/SHA check succeeded. Recheck as close
+        // as possible to the atomic replacement. A cross-process compare-and-
+        // swap or OS file lock is still required for a zero-race guarantee.
+        match hash_source_file(source) {
+            Ok(actual) if actual == expected => {}
+            Ok(_) => {
+                let _=fs::remove_file(&sibling);
+                return Err("The original changed while preparing Save; the newer external file was preserved.".into());
+            }
+            Err(error) => {
+                let _=fs::remove_file(&sibling);
+                return Err(format!("Unable to verify original immediately before Save: {error}"));
+            }
+        }
     }
     if let Err(error) = replace_document_file(&sibling, source) {
         let _ = fs::remove_file(&sibling);
@@ -816,17 +839,37 @@ pub fn commit_staged_document(
 
     let backup = staging_dir(&app)?.join(format!("{staging_token}-backup"));
 
-    if backup.exists() {
-        fs::remove_file(&backup)
-            .map_err(|error| format!("Unable to clear stale MALENJO save backup: {error}"))?;
+    // Never delete an earlier verified recovery copy simply to retry Save.
+    // The existing copy must still equal the ORIGINAL source fingerprint.
+    match fs::symlink_metadata(&backup) {
+        Ok(metadata) => {
+            if metadata.file_type().is_symlink() || !metadata.is_file() ||
+               hash_source_file(&backup)? != manifest.source_sha256 {
+                return Err("Staged Save recovery copy is invalid or changed; refusing to destroy it.".into());
+            }
+        }
+        Err(error) if error.kind()==std::io::ErrorKind::NotFound => {
+            let mut input=fs::File::open(&source)
+                .map_err(|error| format!("Unable to open original for recovery: {error}"))?;
+            let mut output=fs::OpenOptions::new().write(true).create_new(true).open(&backup)
+                .map_err(|error| format!("Unable to reserve staged Save recovery file: {error}"))?;
+            let copy=std::io::copy(&mut input,&mut output).and_then(|_|output.sync_all());
+            drop(output);
+            if let Err(error)=copy {
+                let _=fs::remove_file(&backup);
+                return Err(format!("Unable to durably copy original for recovery: {error}"));
+            }
+            if hash_source_file(&backup)? != manifest.source_sha256 {
+                let _=fs::remove_file(&backup);
+                return Err("Original changed during recovery snapshot; Save was cancelled.".into());
+            }
+        }
+        Err(error)=>return Err(format!("Unable to inspect staged Save recovery file: {error}")),
     }
-
-    fs::copy(&source, &backup)
-        .map_err(|error| format!("Unable to create MALENJO save backup: {error}"))?;
 
     // The original stays intact until a same-folder, completely synced
     // replacement is installed. No in-place truncation or restore-by-copy.
-    install_staged_document(&stage, &source, staging_nonce())?;
+    install_staged_document_checked(&stage, &source, staging_nonce(), Some(&manifest.source_sha256))?;
 
     // Keep recovery material until the replacement and index update complete.
 
@@ -872,7 +915,7 @@ pub fn discard_staged_document(app: AppHandle, staging_token: String) -> Result<
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_extension, classify_signature, destination_path, ensure_unmodified_source, fnv1a64, hash_source_file, install_staged_document, modified_ms, parse_index, save_as_new_file, save_index_file, StagingManifest, STAGING_VERSION, validate_requested_path, validate_staging_token};
+    use super::{classify_extension, classify_signature, destination_path, ensure_unmodified_source, fnv1a64, hash_source_file, install_staged_document, install_staged_document_checked, modified_ms, parse_index, save_as_new_file, save_index_file, StagingManifest, STAGING_VERSION, validate_requested_path, validate_staging_token};
     use std::{fs, path::PathBuf, sync::{Arc, Barrier}, thread, time::{SystemTime, UNIX_EPOCH}};
 
     #[test]
@@ -911,6 +954,37 @@ mod tests {
         };
         ensure_unmodified_source(&source,&manifest).unwrap();
         fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn final_save_conflict_check_rejects_external_edits_after_staging() {
+        let folder=test_directory("late-external-modification");
+        let source=folder.join("source.pdf");
+        let stage=folder.join("edit-stage.pdf");
+        fs::write(&source,b"OLD!").unwrap();
+        fs::write(&stage,b"edited document").unwrap();
+        let expected=hash_source_file(&source).unwrap();
+        // Simulate a different editor changing the source during the
+        // preparation window, without changing its file length.
+        fs::write(&source,b"NEW!").unwrap();
+        let error=install_staged_document_checked(&stage,&source,18,Some(&expected)).unwrap_err();
+        assert!(error.contains("original changed"));
+        assert_eq!(fs::read(&source).unwrap(),b"NEW!");
+        assert_eq!(fs::read_dir(&folder).unwrap().count(),2);
+        fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn final_save_check_allows_known_original_and_atomic_replacement() {
+        let folder=test_directory("final-check-success");
+        let source=folder.join("source.pdf");
+        let stage=folder.join("stage.pdf");
+        fs::write(&source,b"ORIGINAL").unwrap();
+        fs::write(&stage,b"UPDATED!").unwrap();
+        let expected=hash_source_file(&source).unwrap();
+        install_staged_document_checked(&stage,&source,19,Some(&expected)).unwrap();
+        assert_eq!(fs::read(&source).unwrap(),b"UPDATED!");
+        fs::remove_dir_all(folder).unwrap();
     }
 
     #[test]
