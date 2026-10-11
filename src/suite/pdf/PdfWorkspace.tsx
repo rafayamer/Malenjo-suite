@@ -1677,14 +1677,19 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   }
 
   function printDocument() {
-    if (!pdf) return;
-    setForceRenderAll(true);
-    setActionNotice('Preparing all PDF pages for printing…');
-    const delay = Math.min(2500, 700 + pageCount * 15);
-    window.setTimeout(() => {
-      setActionNotice('');
-      window.print();
-    }, delay);
+    if (!pdf || !sourceBytes) return;
+    // Print the complete PDF bytes, not just lazily mounted page canvases.
+    const copy = Uint8Array.from(sourceBytes);
+    const url = URL.createObjectURL(new Blob([copy.buffer],{type:'application/pdf'}));
+    const viewer = window.open(url, '_blank');
+    if (!viewer) {
+      URL.revokeObjectURL(url);
+      setError('Print preview was blocked. Allow the full PDF viewer window.');
+      return;
+    }
+    viewer.opener = null;
+    setActionNotice('Opened the entire PDF in a separate viewer. Use its Print command to print all pages.');
+    window.setTimeout(() => URL.revokeObjectURL(url), 5 * 60_000);
   }
 
 

@@ -1,4 +1,4 @@
-import {PDFArray,PDFDocument,PDFName} from 'pdf-lib';
+import {PDFArray,PDFDocument,PDFName,PDFNumber} from 'pdf-lib';
 
 /** Offline left-to-right, saddle-stitch booklet imposition in two-page
  * spreads. Reorders vector page artwork without rasterizing the source.
@@ -49,6 +49,10 @@ export async function imposePdfBooklet(source:Uint8Array):Promise<Uint8Array>{
     const annotations=page.node.lookupMaybe(PDFName.of('Annots'),PDFArray);
     if(annotations&&annotations.size()>0){
       throw new Error('Booklet conversion refuses pages with annotations, form widgets or links.');
+    }
+    const userUnit=page.node.lookupMaybe(PDFName.of('UserUnit'),PDFNumber)?.asNumber()??1;
+    if(!Number.isFinite(userUnit)||userUnit!==1){
+      throw new Error('Booklet cannot preserve nondefault PDF UserUnit page scaling.');
     }
     if(page.getRotation().angle!==0){
       throw new Error('Booklet conversion refuses rotated source page boxes.');

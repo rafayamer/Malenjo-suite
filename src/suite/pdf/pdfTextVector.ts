@@ -98,6 +98,10 @@ export async function exportPdfTextOnlySvgZip(
     if(operators.fnArray.length>200000||operators.fnArray.some(op=>unsupportedOps.has(op))){
       throw new Error('Page '+number+' contains graphical paths or images; text-only SVG would lose content.');
     }
+    // Current SVG subset is not rotation-aware; fail instead of misrepresenting
+    // the physical page orientation in exported output.
+    if(((page.rotate??0)%360+360)%360!==0)
+      throw new Error('Rotated PDF pages require rotation-aware SVG; export refused.');
     const content=await page.getTextContent();
     if(content.items.length>PDF_TEXT_VECTOR_MAX_ITEMS_PER_PAGE){
       throw new Error('PDF vector text page exceeds the 5,000-fragment limit.');
