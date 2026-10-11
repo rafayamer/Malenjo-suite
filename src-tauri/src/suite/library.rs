@@ -43,6 +43,48 @@ fn replace_document_file(new_file: &Path, destination: &Path) -> std::io::Result
     fs::rename(new_file, destination)
 }
 
+/// A create-new sentinel serializes Saves across *separate MALENJO processes*.
+/// It is fail-closed after a crash: an orphaned lock requires explicit
+/// inspection/removal, never automatic deletion of somebody else's lock.
+/// External non-cooperating editors are protected by the separate digest checks.
+struct DocumentSaveLock {
+    path: PathBuf,
+    nonce: String,
+}
+impl DocumentSaveLock {
+    fn acquire(source: &Path) -> Result<Self, String> {
+        use std::io::Write;
+        let parent=source.parent().ok_or("Document has no parent directory.")?;
+        let normalized=source.to_string_lossy().replace('\\',"/").to_lowercase();
+        let digest=Sha256::digest(normalized.as_bytes());
+        let short=digest[..12].iter().map(|byte|format!("{byte:02x}")).collect::<String>();
+        let path=parent.join(format!(".malenjo-{short}-save.lock"));
+        let mut file=fs::OpenOptions::new().write(true).create_new(true).open(&path)
+            .map_err(|error|format!(
+                "This document may be open in another MALENJO instance, or has a stale Save lock at {}. Do not delete another running editor's lock: {error}",
+                path.display()
+            ))?;
+        let nonce=format!("{}-{}",std::process::id(),staging_nonce());
+        let written=file.write_all(nonce.as_bytes()).and_then(|_|file.sync_all());
+        drop(file);
+        if let Err(error)=written {
+            let _=fs::remove_file(&path);
+            return Err(format!("Unable to securely initialize document Save lock: {error}"));
+        }
+        Ok(Self { path, nonce })
+    }
+}
+impl Drop for DocumentSaveLock {
+    fn drop(&mut self) {
+        // Do not remove a different process's lock if the file at this path
+        // has been replaced while we held ours.
+        if fs::symlink_metadata(&self.path).is_ok_and(|meta|meta.is_file()&&!meta.file_type().is_symlink()) &&
+           fs::read_to_string(&self.path).is_ok_and(|value|value==self.nonce) {
+            let _=fs::remove_file(&self.path);
+        }
+    }
+}
+
 /// Copy to an exclusively created staging file *beside* the original; replace
 /// the original only after the new file is complete and synced. On replacement
 /// failure the old source file is unchanged.
@@ -835,6 +877,7 @@ pub fn commit_staged_document(
     let mut index = load_index(&app)?;
     let entry = find_entry_mut(&mut index, &document_id)?;
     let source = canonical_user_file(&entry.path)?;
+    let _save_lock=DocumentSaveLock::acquire(&source)?;
     ensure_unmodified_source(&source, &manifest)?;
 
     let backup = staging_dir(&app)?.join(format!("{staging_token}-backup"));
@@ -915,7 +958,7 @@ pub fn discard_staged_document(app: AppHandle, staging_token: String) -> Result<
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_extension, classify_signature, destination_path, ensure_unmodified_source, fnv1a64, hash_source_file, install_staged_document, install_staged_document_checked, modified_ms, parse_index, save_as_new_file, save_index_file, StagingManifest, STAGING_VERSION, validate_requested_path, validate_staging_token};
+    use super::{classify_extension, classify_signature, destination_path, ensure_unmodified_source, DocumentSaveLock, fnv1a64, hash_source_file, install_staged_document, install_staged_document_checked, modified_ms, parse_index, save_as_new_file, save_index_file, StagingManifest, STAGING_VERSION, validate_requested_path, validate_staging_token};
     use std::{fs, path::PathBuf, sync::{Arc, Barrier}, thread, time::{SystemTime, UNIX_EPOCH}};
 
     #[test]
@@ -954,6 +997,40 @@ mod tests {
         };
         ensure_unmodified_source(&source,&manifest).unwrap();
         fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn independent_document_saves_are_serialized_by_exclusive_lock_files() {
+        let root=test_directory("cross-process-lock");
+        fs::create_dir_all(&root).unwrap();
+        let source=root.join("report.pdf");
+        fs::write(&source,b"original bytes").unwrap();
+        let first=DocumentSaveLock::acquire(&source).expect("first save reserves file");
+        let second=DocumentSaveLock::acquire(&source).unwrap_err();
+        assert!(second.contains("another MALENJO instance"));
+        assert_eq!(fs::read(&source).unwrap(),b"original bytes");
+        drop(first);
+        let next=DocumentSaveLock::acquire(&source).expect("released lock can be acquired");
+        drop(next);
+        assert_eq!(fs::read_dir(&root).unwrap().count(),1);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn orphaned_document_lock_fails_closed_instead_of_overwriting_another_save() {
+        let root=test_directory("orphaned-lock");
+        fs::create_dir_all(&root).unwrap();
+        let source=root.join("report.pdf");
+        fs::write(&source,b"original").unwrap();
+        let lock=DocumentSaveLock::acquire(&source).unwrap();
+        let path=lock.path.clone();
+        std::mem::forget(lock); // Simulate abrupt process death.
+        assert!(DocumentSaveLock::acquire(&source).is_err());
+        assert_eq!(fs::read(&source).unwrap(),b"original");
+        fs::remove_file(path).unwrap(); // Explicit operator recovery.
+        let restored=DocumentSaveLock::acquire(&source).unwrap();
+        drop(restored);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
