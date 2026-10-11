@@ -32,8 +32,26 @@ export type OfficeModel = DocxModel | XlsxModel | PptxModel;
 
 const textDecoder = new TextDecoder();
 
+
+const MAX_OOXML_COMPRESSED_BYTES = 32 * 1024 * 1024;
+const MAX_OOXML_ENTRY_BYTES = 32 * 1024 * 1024;
+const MAX_OOXML_EXPANDED_BYTES = 128 * 1024 * 1024;
+const MAX_OOXML_ENTRIES = 4096;
+
 function packageFiles(bytes: Uint8Array): Unzipped {
-  return unzipSync(bytes);
+  if (bytes.length === 0 || bytes.length > MAX_OOXML_COMPRESSED_BYTES)
+    throw new Error('OOXML archive exceeds compressed-size limit of 32 MB.');
+  let count = 0, total = 0;
+  return unzipSync(bytes, {
+    filter: (file) => {
+      count++;
+      total += file.originalSize;
+      if (count > MAX_OOXML_ENTRIES || !Number.isSafeInteger(total) ||
+        file.originalSize > MAX_OOXML_ENTRY_BYTES || total > MAX_OOXML_EXPANDED_BYTES)
+        throw new Error('OOXML archive exceeds safe entry count or expanded-size budget.');
+      return true;
+    },
+  });
 }
 
 function xmlText(files: Unzipped, path: string): string {
@@ -140,23 +158,51 @@ function colName(index: number): string {
   return out;
 }
 
-function firstSheetPath(files: Unzipped): string {
-  const paths = Object.keys(files)
-    .filter((path) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(path))
-    .sort((a, b) => Number(a.match(/sheet(\d+)/i)?.[1] ?? 0) - Number(b.match(/sheet(\d+)/i)?.[1] ?? 0));
-  if (!paths.length) throw new Error('XLSX package contains no worksheets.');
-  return paths[0];
+
+function xmlAttribute(attributes: string, name: string): string | undefined {
+  return attributes.match(new RegExp('(?:^|\\s)' + name + '="([^"]*)"'))?.[1];
 }
 
-function firstSheetName(files: Unzipped): string {
+function firstWorkbookSheet(files: Unzipped): { path: string; name: string } {
   const workbook = xmlText(files, 'xl/workbook.xml');
-  const match = workbook.match(/<sheet\b[^>]*name="([^"]+)"/);
-  return decodeXml(match?.[1] ?? 'Sheet1');
+  const first = workbook.match(/<sheet\b([^>]*)\/?>/);
+  if (!first) throw new Error('XLSX workbook has no sheet tabs.');
+  const name = decodeXml(xmlAttribute(first[1], 'name') ?? 'Sheet1');
+  const id = xmlAttribute(first[1], 'r:id');
+  if (id) {
+    const rels = xmlText(files, 'xl/_rels/workbook.xml.rels');
+    const match = Array.from(rels.matchAll(/<Relationship\b([^>]*)\/?>/g))
+      .find((entry) => xmlAttribute(entry[1], 'Id') === id);
+    const target = match && xmlAttribute(match[1], 'Target');
+    if (!target || target.includes('\\') || /^(?:[a-z]+:|\/\/)/i.test(target))
+      throw new Error('XLSX worksheet relationship is missing or unsafe.');
+    let path: string;
+    if (target.startsWith('/')) path = target.slice(1);
+    else {
+      const parts = ['xl'];
+      for (const segment of target.split('/')) {
+        if (segment === '..') {
+          if (!parts.length) throw new Error('XLSX worksheet relationship escapes package root.');
+          parts.pop();
+        } else if (segment && segment !== '.') parts.push(segment);
+      }
+      path = parts.join('/');
+    }
+    if (!path.startsWith('xl/worksheets/') || !files[path])
+      throw new Error('XLSX first tab points to a missing or unsafe sheet.');
+    return {path, name};
+  }
+  // Support old minimal test fixtures containing a single sheet without rels.
+  const paths = Object.keys(files).filter((path) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(path));
+  if (paths.length !== 1)
+    throw new Error('XLSX sheet tab order requires workbook relationships.');
+  return {path: paths[0], name};
 }
 
 export function parseXlsx(bytes: Uint8Array): XlsxModel {
   const files = packageFiles(bytes);
-  const path = firstSheetPath(files);
+  const first = firstWorkbookSheet(files);
+  const path = first.path;
   const xml = xmlText(files, path);
   const shared = sharedStrings(files);
   const rows: string[][] = [];
@@ -184,36 +230,77 @@ export function parseXlsx(bytes: Uint8Array): XlsxModel {
   return {
     kind: 'xlsx',
     sheetPath: path,
-    sheetName: firstSheetName(files),
+    sheetName: first.name,
     cells: rows,
     fidelity: 'structure-preserving',
   };
 }
 
+
 function numeric(value: string): boolean {
-  if (!value.trim()) return false;
-  return Number.isFinite(Number(value));
+  // Preserve leading-zero IDs, long numbers and scientific-notation text.
+  return /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value) &&
+    value.replace(/[^0-9]/g, '').length <= 15 && Number.isFinite(Number(value));
+}
+
+function changedCell(ref: string, value: string, existing?: string): string {
+  if (!value) return '';
+  const originalAttributes = existing?.match(/^<c\b([^>]*)>/)?.[1] ?? '';
+  const style = xmlAttribute(originalAttributes, 's');
+  const s = style === undefined ? '' : ' s="' + escapeXml(style) + '"';
+  const oldType = xmlAttribute(originalAttributes, 't');
+  const asNumber = existing && oldType !== 'inlineStr' && oldType !== 's' && numeric(value);
+  return asNumber
+    ? '<c r="' + ref + '"' + s + '><v>' + escapeXml(value) + '</v></c>'
+    : '<c r="' + ref + '"' + s + ' t="inlineStr"><is><t xml:space="preserve">' +
+      escapeXml(value) + '</t></is></c>';
+}
+
+function patchCell(xml: string, ref: string, value: string): string {
+  const cells = Array.from(xml.matchAll(/<c\b[^>]*>[\s\S]*?<\/c>|<c\b[^>]*\/>/g));
+  const current = cells.find((match) => {
+    const open = match[0].match(/^<c\b([^>]*?)(?:\/?)>/)?.[1] ?? '';
+    return xmlAttribute(open, 'r') === ref;
+  });
+  if (current) return xml.replace(current[0], changedCell(ref, value, current[0]));
+  if (!value) return xml;
+  const cell = changedCell(ref, value);
+  const rowNumber = rowIndex(ref) + 1;
+  const rows = Array.from(xml.matchAll(/<row\b[^>]*>[\s\S]*?<\/row>/g));
+  const currentRow = rows.find((match) =>
+    Number(xmlAttribute(match[0].match(/^<row\b([^>]*)>/)?.[1] ?? '', 'r')) === rowNumber);
+  if (currentRow)
+    return xml.replace(currentRow[0], currentRow[0].replace('</row>', cell + '</row>'));
+  const newRow = '<row r="' + rowNumber + '">' + cell + '</row>';
+  const nextRow = rows.find((match) =>
+    Number(xmlAttribute(match[0].match(/^<row\b([^>]*)>/)?.[1] ?? '', 'r')) > rowNumber);
+  if (nextRow) return xml.replace(nextRow[0], newRow + nextRow[0]);
+  if (xml.includes('</sheetData>')) return xml.replace('</sheetData>', newRow + '</sheetData>');
+  if (/<sheetData\b[^>]*\/>/.test(xml))
+    return xml.replace(/<sheetData\b[^>]*\/>/, '<sheetData>' + newRow + '</sheetData>');
+  if (xml.includes('</worksheet>'))
+    return xml.replace('</worksheet>', '<sheetData>' + newRow + '</sheetData></worksheet>');
+  throw new Error('XLSX worksheet XML has no safe row insertion point.');
 }
 
 export function writeXlsx(bytes: Uint8Array, model: XlsxModel): Uint8Array {
   const files = packageFiles(bytes);
-  const xml = xmlText(files, model.sheetPath);
-  const sheetData = model.cells.map((row, r) => {
-    const cells = row.map((value, c) => {
-      if (value === undefined || value === '') return '';
-      const ref = `${colName(c)}${r + 1}`;
-      return numeric(value)
-        ? `<c r="${ref}"><v>${escapeXml(value)}</v></c>`
-        : `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(value)}</t></is></c>`;
-    }).join('');
-    return cells ? `<row r="${r + 1}">${cells}</row>` : '';
-  }).join('');
-
-  const next = /<sheetData\b[^>]*>[\s\S]*?<\/sheetData>/.test(xml)
-    ? xml.replace(/<sheetData\b[^>]*>[\s\S]*?<\/sheetData>/, `<sheetData>${sheetData}</sheetData>`)
-    : xml.replace(/<worksheet\b([^>]*)>/, `<worksheet$1><sheetData>${sheetData}</sheetData>`);
-
-  return replaceFile(files, model.sheetPath, next);
+  const first = firstWorkbookSheet(files);
+  if (first.path !== model.sheetPath)
+    throw new Error('XLSX selected sheet identity changed; refusing unsafe export.');
+  const original = parseXlsx(bytes);
+  let xml = xmlText(files, model.sheetPath);
+  for (let r = 0; r < Math.max(original.cells.length, model.cells.length); r++) {
+    const before = original.cells[r] ?? [];
+    const after = model.cells[r] ?? [];
+    for (let c = 0; c < Math.max(before.length, after.length); c++) {
+      const previous = before[c] ?? '';
+      const next = after[c] ?? '';
+      // Never regenerate untouched cells/formulas or cells outside the editor.
+      if (previous !== next) xml = patchCell(xml, colName(c) + (r + 1), next);
+    }
+  }
+  return replaceFile(files, model.sheetPath, xml);
 }
 
 function slidePaths(files: Unzipped): string[] {
