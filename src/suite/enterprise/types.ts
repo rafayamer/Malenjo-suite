@@ -35,5 +35,5 @@ export interface WorkflowStep { kind:'audit'|'dms_snapshot'; recordId?:string; n
 export interface WorkflowContract { version:number; id:string; name:string; createdMs:number; steps:WorkflowStep[]; }
 export interface WorkflowRunResult { workflowId:string; completedSteps:number; messages:string[]; }
 export interface AdapterStatus { available:boolean; version:string; detail:string; }
-export interface BackupInspection { valid:boolean; fileCount:number; totalBytes:number; errors:string[]; }
+export interface BackupInspection { valid:boolean; fileCount:number; totalBytes:number; errors:string[]; linkedDocumentsComplete:boolean; linkedDocumentCount:number; }
 export interface AuditRetentionResult { kept:number; archived:number; }
