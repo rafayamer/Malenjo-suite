@@ -147,7 +147,7 @@ function BackupPanel(){
     setBusy(true);setError('');setInspection(null);setLinkedCopies([]);try{const path=await createBackupWithPicker();if(path){setBackupPath(path);setNotice(`Verified offline backup created at ${path}. Inspect the new backup before restoring.`);}}catch(reason){setError(String(reason));}finally{setBusy(false);}
   }
   async function inspect(){
-    setBusy(true);setError('');setInspection(null);setLinkedCopies([]);try{const result=await inspectBackupWithPicker();if(result){setBackupPath(result.path);setInspection(result.inspection);setNotice(result.inspection.valid?'Backup integrity verified.':'Backup failed integrity validation.');}}catch(reason){setError(String(reason));}finally{setBusy(false);}
+    setBusy(true);setError('');setInspection(null);setLinkedCopies([]);try{const result=await inspectBackupWithPicker();if(result){setBackupPath(result.path);setInspection(result.inspection);setNotice(!result.inspection.valid?'Backup failed integrity validation.':result.inspection.linkedDocumentsComplete?`Backup verified, including ${result.inspection.linkedDocumentCount} indexed document copies.`:'App-state backup integrity verified, but this legacy backup does not include independently recoverable document copies.');}}catch(reason){setError(String(reason));}finally{setBusy(false);}
   }
   async function restore(){
     if(!backupPath)return;setBusy(true);setError('');try{await restoreBackup(backupPath);setNotice('Verified app-state restore complete. Original user documents were not overwritten; archived copies can be recovered separately.');}catch(reason){setError(String(reason));}finally{setBusy(false);}
@@ -177,15 +177,15 @@ function BackupPanel(){
         <button disabled={busy||!enterpriseNative()} onClick={()=>void inspect()}>Inspect backup</button>
       </div>
       {inspection&&<div className={inspection.valid?'backup-status ready':'backup-status'}>
-        <b>{inspection.valid?'VALID':'INVALID'}</b>
-        <span>{inspection.fileCount} files · {inspection.totalBytes} bytes</span>
+        <b>{!inspection.valid?'INVALID':inspection.linkedDocumentsComplete?'COMPLETE DOCUMENT BACKUP':'APP STATE ONLY'}</b>
+        <span>{inspection.fileCount} files · {inspection.totalBytes} bytes · {inspection.linkedDocumentCount} document copies</span>
         {inspection.errors.map(e=><small key={e}>{e}</small>)}
       </div>}
       <button disabled={!inspection?.valid||!backupPath||busy} onClick={()=>void restore()}>
         Restore app state from verified backup
       </button>
       <p>Backups contain independent copies of your documents <strong>without encryption</strong>. Store them in a trusted, access-controlled location. Existing user documents are never overwritten; recovered bytes go into a separate folder you choose.</p>
-      <button disabled={!inspection?.valid||!backupPath||busy} onClick={()=>void restoreExternalCopies()}>
+      <button disabled={!inspection?.valid||!inspection.linkedDocumentsComplete||!backupPath||busy} onClick={()=>void restoreExternalCopies()}>
         Recover linked document copies safely
       </button>
       {linkedCopies.length>0&&<div className="backup-status ready" role="status">
