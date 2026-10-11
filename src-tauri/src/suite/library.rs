@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{
     fs,
     io::Read,
@@ -9,7 +10,7 @@ use std::{
 use tauri::{AppHandle, Manager};
 
 const INDEX_VERSION: u32 = 1;
-const STAGING_VERSION: u32 = 1;
+const STAGING_VERSION: u32 = 2;
 
 /// Serialize library index mutations within a desktop process. Each mutating
 /// command holds the lock across load, mutation and durable write.
@@ -137,6 +138,7 @@ struct StagingManifest {
     document_id: String,
     source_size: u64,
     source_modified_ms: u64,
+    source_sha256: String,
 }
 
 fn now_ms() -> u64 {
@@ -152,6 +154,37 @@ fn staging_nonce() -> u128 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos()
+}
+
+/// Compare file contents rather than trusting only length and mtime, both of
+/// which can remain unchanged after external writes or mtime restoration.
+fn hash_source_file(path: &Path) -> Result<String, String> {
+    use std::fmt::Write;
+    let mut input=fs::File::open(path)
+        .map_err(|error| format!("Unable to hash original source document: {error}"))?;
+    let mut hasher=Sha256::new();
+    let mut buffer=[0u8;64*1024];
+    loop {
+        let read=input.read(&mut buffer)
+            .map_err(|error| format!("Unable to hash original source document: {error}"))?;
+        if read==0 { break; }
+        hasher.update(&buffer[..read]);
+    }
+    let digest=hasher.finalize();
+    let mut encoded=String::with_capacity(64);
+    for byte in digest { write!(&mut encoded,"{byte:02x}").expect("hex formatting"); }
+    Ok(encoded)
+}
+
+fn ensure_unmodified_source(source: &Path, manifest: &StagingManifest) -> Result<(), String> {
+    let current=fs::metadata(source)
+        .map_err(|error| format!("Unable to inspect source before save: {error}"))?;
+    if current.len()!=manifest.source_size ||
+       modified_ms(&current)!=manifest.source_modified_ms ||
+       hash_source_file(source)?!=manifest.source_sha256 {
+        return Err("The source document changed outside MALENJO after editing began. Reopen or Save As to preserve the newer changes.".into());
+    }
+    Ok(())
 }
 
 fn modified_ms(metadata: &fs::Metadata) -> u64 {
@@ -710,11 +743,27 @@ pub fn stage_library_document(app: AppHandle, document_id: String) -> Result<Sta
     fs::copy(&source, &stage)
         .map_err(|error| format!("Unable to create MALENJO edit staging copy: {error}"))?;
 
+    // The working copy must match the source at staging time. Refuse a torn
+    // snapshot if another editor changes bytes during the copy.
+    let copied_hash=hash_source_file(&stage)?;
+    let current_hash=hash_source_file(&source)?;
+    if copied_hash!=current_hash {
+        let _=fs::remove_file(&stage);
+        return Err("Document changed during edit staging; reopen the source before editing.".into());
+    }
+    let current_metadata=fs::metadata(&source)
+        .map_err(|error| format!("Unable to inspect staged source document: {error}"))?;
+    if current_metadata.len()!=source_metadata.len() ||
+       modified_ms(&current_metadata)!=modified_ms(&source_metadata) {
+        let _=fs::remove_file(&stage);
+        return Err("Document changed while staging; the incomplete copy was discarded.".into());
+    }
     let manifest = StagingManifest {
         version: STAGING_VERSION,
         document_id: document_id.clone(),
-        source_size: source_metadata.len(),
-        source_modified_ms: modified_ms(&source_metadata),
+        source_size: current_metadata.len(),
+        source_modified_ms: modified_ms(&current_metadata),
+        source_sha256: current_hash,
     };
     let manifest_bytes = serde_json::to_vec_pretty(&manifest)
         .map_err(|error| format!("Unable to serialize MALENJO staging manifest: {error}"))?;
@@ -763,16 +812,7 @@ pub fn commit_staged_document(
     let mut index = load_index(&app)?;
     let entry = find_entry_mut(&mut index, &document_id)?;
     let source = canonical_user_file(&entry.path)?;
-    let current_metadata = fs::metadata(&source)
-        .map_err(|error| format!("Unable to inspect source document before save: {error}"))?;
-    if current_metadata.len() != manifest.source_size
-        || modified_ms(&current_metadata) != manifest.source_modified_ms
-    {
-        return Err(
-            "The source document changed outside MALENJO after editing began. Reopen or Save As to avoid overwriting newer changes."
-                .into(),
-        );
-    }
+    ensure_unmodified_source(&source, &manifest)?;
 
     let backup = staging_dir(&app)?.join(format!("{staging_token}-backup"));
 
@@ -832,8 +872,46 @@ pub fn discard_staged_document(app: AppHandle, staging_token: String) -> Result<
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_extension, classify_signature, destination_path, fnv1a64, install_staged_document, parse_index, save_as_new_file, save_index_file, validate_requested_path, validate_staging_token};
+    use super::{classify_extension, classify_signature, destination_path, ensure_unmodified_source, fnv1a64, hash_source_file, install_staged_document, modified_ms, parse_index, save_as_new_file, save_index_file, StagingManifest, STAGING_VERSION, validate_requested_path, validate_staging_token};
     use std::{fs, path::PathBuf, sync::{Arc, Barrier}, thread, time::{SystemTime, UNIX_EPOCH}};
+
+    #[test]
+    fn staged_save_rejects_same_size_externally_changed_document() {
+        let directory=test_directory("staged-hash-conflict");
+        let source=directory.join("original.pdf");
+        fs::write(&source,b"AAAA").unwrap();
+        let original_hash=hash_source_file(&source).unwrap();
+        fs::write(&source,b"BBBB").unwrap();
+        let metadata=fs::metadata(&source).unwrap();
+        let manifest=StagingManifest {
+            version:STAGING_VERSION,
+            document_id:"test".into(),
+            source_size:4,
+            // Simulates an external editor that preserves/resets the mtime.
+            source_modified_ms:modified_ms(&metadata),
+            source_sha256:original_hash,
+        };
+        assert!(ensure_unmodified_source(&source,&manifest).is_err());
+        assert_eq!(fs::read(&source).unwrap(),b"BBBB");
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn staged_save_accepts_unchanged_content() {
+        let directory=test_directory("staged-unmodified");
+        let source=directory.join("original.pdf");
+        fs::write(&source,b"unchanged").unwrap();
+        let meta=fs::metadata(&source).unwrap();
+        let manifest=StagingManifest {
+            version:STAGING_VERSION,
+            document_id:"test".into(),
+            source_size:meta.len(),
+            source_modified_ms:modified_ms(&meta),
+            source_sha256:hash_source_file(&source).unwrap(),
+        };
+        ensure_unmodified_source(&source,&manifest).unwrap();
+        fs::remove_dir_all(directory).unwrap();
+    }
 
     #[test]
     fn staged_save_commits_only_complete_bytes() {
