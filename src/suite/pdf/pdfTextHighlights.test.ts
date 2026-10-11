@@ -14,9 +14,9 @@ describe('PDF selectable text and search helpers',()=>{
     expect(findPdfTextMatches('a a a a a','a',2)).toHaveLength(2);
     expect(findPdfTextMatches('hello','   ')).toEqual([]);
   });
-  it('joins PDF.js text fragments and line endings for page Find',()=>{
+  it('keeps run adjacency when search terms span glyph fragments',()=>{
     expect(extractPdfPageSearchText([
-      {str:'MALENJO'},{str:'Suite',hasEOL:true},{str:'Search'},{str:'Works'},
-    ])).toBe('MALENJO Suite Search Works');
+      {str:'MALENJO '},{str:'Suite',hasEOL:true},{str:'Search'},{str:'Works'},
+    ])).toBe('MALENJO Suite SearchWorks');
   });
 });

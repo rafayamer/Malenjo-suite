@@ -88,7 +88,7 @@ export async function exportPdfStructuredJson(
       if(totalItems>PDF_JSON_MAX_TEXT_ITEMS){
         throw new Error('PDF to JSON exceeds 200,000 selectable text fragments.');
       }
-      const value=item.str.replace(/\u0000/g,'').trim();
+      const value=item.str.replace(/\u0000/g,'');
       if(value){
         foundText=true;
         totalChars+=value.length;
@@ -99,7 +99,7 @@ export async function exportPdfStructuredJson(
       }
       if(item.hasEOL)textParts.push('\n');
     }
-    const text=textParts.join(' ').replace(/[ \t]*\n[ \t]*/g,'\n').replace(/[ \t]{2,}/g,' ').trim();
+    const text=textParts.join('').trim();
     const geometry=info.pages[i-1];
     if(geometry.page!==i)throw new Error('PDF page geometry is out of order.');
     pages.push({

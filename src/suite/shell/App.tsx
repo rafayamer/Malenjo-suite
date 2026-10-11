@@ -574,6 +574,7 @@ export default function App() {
           className={session.id === activeSessionId ? 'document-session-panel active' : 'document-session-panel'}
           key={session.id}
           aria-hidden={session.id !== activeSessionId}
+          inert={session.id !== activeSessionId}
         >{renderDocumentWorkspace(session)}</section>)}
       </div>}
 
