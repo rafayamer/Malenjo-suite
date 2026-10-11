@@ -124,7 +124,8 @@ pub(super) fn append_audit(
         .map_err(|error| format!("Unable to open security audit log: {error}"))?;
     file.write_all(&line)
         .map_err(|error| format!("Unable to append security audit event: {error}"))?;
-    let _ = file.sync_data();
+    file.sync_data()
+        .map_err(|error| format!("Unable to durably sync audit event: {error}"))?;
     Ok(event)
 }
 
@@ -147,7 +148,11 @@ pub(super) fn archive_audit_older_than(
         match serde_json::from_str::<AuditEvent>(line) {
             Ok(event) if retention_days > 0 && event.timestamp_ms < cutoff => archived.push(event),
             Ok(event) => kept.push(event),
-            Err(_) => {}
+            Err(error) => {
+                // Retention must never discard an uninterpretable audit record.
+                // Refuse the entire rotation and leave the original log intact.
+                return Err(format!("Audit retention stopped: malformed JSONL entry ({error}). Repair or archive the log before retrying."));
+            }
         }
     }
     if archived.is_empty() {
