@@ -853,6 +853,52 @@ pub fn temporal_start_workflow(
     Ok(stdout)
 }
 
+
+const MAX_NATIVE_HOME_BYTES: usize = 64 * 1024;
+
+fn home_state_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let root = app.path().app_data_dir()
+        .map_err(|error| format!("Unable to resolve Home data directory: {error}"))?.join("library");
+    fs::create_dir_all(&root).map_err(|error| format!("Unable to create Home data directory: {error}"))?;
+    Ok(root.join("home-state-v1.json"))
+}
+
+fn validate_home_payload(content: &str) -> Result<(), String> {
+    if content.len() > MAX_NATIVE_HOME_BYTES {
+        return Err("Home state exceeds its 64 KB budget.".into());
+    }
+    let value: serde_json::Value = serde_json::from_str(content)
+        .map_err(|error| format!("Home state is invalid JSON: {error}"))?;
+    if value.get("schemaVersion").and_then(|value| value.as_u64()) != Some(1) ||
+       !value.get("starredDocumentIds").is_some_and(|v| v.is_array()) ||
+       !value.get("pinnedLocations").is_some_and(|v| v.is_array()) {
+        return Err("Home state is not a supported version 1 structure.".into());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn read_native_home_state(app: AppHandle) -> Result<Option<String>, String> {
+    let path = home_state_path(&app)?;
+    if !path.exists() { return Ok(None); }
+    let metadata = fs::symlink_metadata(&path)
+        .map_err(|error| format!("Unable to inspect Home state: {error}"))?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() ||
+        metadata.len() > MAX_NATIVE_HOME_BYTES as u64 {
+        return Err("Home state must be a bounded regular file.".into());
+    }
+    let content=fs::read_to_string(&path)
+        .map_err(|error| format!("Unable to read Home state: {error}"))?;
+    validate_home_payload(&content)?;
+    Ok(Some(content))
+}
+
+#[tauri::command]
+pub fn write_native_home_state(app: AppHandle, content: String) -> Result<(), String> {
+    validate_home_payload(&content)?;
+    atomic_write(&home_state_path(&app)?, content.as_bytes())
+}
+
 fn copy_dir_recursive(source: &Path, destination: &Path) -> Result<(), String> {
     if !source.exists() {
         return Ok(());
@@ -989,6 +1035,7 @@ pub fn create_local_backup(
         .map_err(|error| format!("Unable to resolve app data directory: {error}"))?;
     copy_dir_recursive(&app_data.join("enterprise"), &state.join("enterprise"))?;
     copy_dir_recursive(&app_data.join("security"), &state.join("security"))?;
+    copy_dir_recursive(&app_data.join("library"), &state.join("library"))?;
 
     let mut files = Vec::new();
     collect_backup_files(&state, &state, &mut files)?;
@@ -1026,14 +1073,14 @@ fn restore_state_with_recovery(app_data: &Path, backup: &Path) -> Result<PathBuf
     let recovery = app_data.join(format!("restore-recovery-{nonce}"));
     fs::create_dir_all(&recovery)
         .map_err(|error| format!("Unable to create restore recovery directory: {error}"))?;
-    for name in ["enterprise", "security"] {
+    for name in ["enterprise", "security", "library"] {
         copy_dir_recursive(&app_data.join(name), &recovery.join(name))?;
     }
 
     let stage = app_data.join(format!("restore-stage-{nonce}"));
     fs::create_dir_all(&stage)
         .map_err(|error| format!("Unable to create restore staging directory: {error}"))?;
-    for name in ["enterprise", "security"] {
+    for name in ["enterprise", "security", "library"] {
         copy_dir_recursive(&backup.join("state").join(name), &stage.join(name))?;
     }
 
@@ -1043,7 +1090,7 @@ fn restore_state_with_recovery(app_data: &Path, backup: &Path) -> Result<PathBuf
     let mut installed = Vec::<&str>::new();
     let mut prior = Vec::<&str>::new();
     let result = (|| -> Result<(), String> {
-        for name in ["enterprise", "security"] {
+        for name in ["enterprise", "security", "library"] {
             // If a backup omitted a domain, it cannot mean "delete that domain."
             if !stage.join(name).exists() { continue; }
             let target = app_data.join(name);
@@ -1151,7 +1198,7 @@ pub fn kopia_restore_snapshot(
 mod tests {
     use super::{
         collect_backup_files, inspect_backup, restore_state_with_recovery, retention_candidates,
-        role_permissions, BackupManifest, DmsIndex, DmsRecord, DmsVersion, BACKUP_VERSION,
+        role_permissions, validate_home_payload, BackupManifest, DmsIndex, DmsRecord, DmsVersion, BACKUP_VERSION,
     };
     use std::{fs, time::{SystemTime, UNIX_EPOCH}};
 
@@ -1226,6 +1273,37 @@ mod tests {
             serde_json::to_vec_pretty(&manifest).expect("serialize manifest"),
         ).expect("write manifest");
         backup
+    }
+
+    #[test]
+    fn home_preferences_validate_schema_and_size() {
+        assert!(validate_home_payload(r#"{"schemaVersion":1,"starredDocumentIds":[],"pinnedLocations":[]}"#).is_ok());
+        assert!(validate_home_payload(r#"{"schemaVersion":2,"starredDocumentIds":[],"pinnedLocations":[]}"#).is_err());
+        assert!(validate_home_payload("INVALID").is_err());
+        assert!(validate_home_payload(&"x".repeat(65537)).is_err());
+    }
+
+    #[test]
+    fn restores_library_index_and_home_state_with_recovery() {
+        let root=temp_root("home-recovery");
+        let live=root.join("live");
+        fs::create_dir_all(live.join("library")).unwrap();
+        fs::write(live.join("library/index.json"),b"old index").unwrap();
+        fs::write(live.join("library/home-state-v1.json"),b"old home").unwrap();
+        let backup=create_test_backup(&root);
+        fs::create_dir_all(backup.join("state/library")).unwrap();
+        fs::write(backup.join("state/library/index.json"),b"new index").unwrap();
+        fs::write(backup.join("state/library/home-state-v1.json"),b"new home").unwrap();
+        let mut files=Vec::new();
+        collect_backup_files(&backup.join("state"),&backup.join("state"),&mut files).unwrap();
+        let manifest=BackupManifest {version:BACKUP_VERSION,created_ms:1,files};
+        fs::write(backup.join("manifest-v1.json"),serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+        let recovery=restore_state_with_recovery(&live,&backup).unwrap();
+        assert_eq!(fs::read(live.join("library/index.json")).unwrap(),b"new index");
+        assert_eq!(fs::read(live.join("library/home-state-v1.json")).unwrap(),b"new home");
+        assert_eq!(fs::read(recovery.join("library/index.json")).unwrap(),b"old index");
+        assert_eq!(fs::read(recovery.join("library/home-state-v1.json")).unwrap(),b"old home");
+        let _=fs::remove_dir_all(root);
     }
 
     #[test]
