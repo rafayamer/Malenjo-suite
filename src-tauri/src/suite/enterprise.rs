@@ -900,6 +900,261 @@ pub fn write_native_home_state(app: AppHandle, content: String) -> Result<(), St
     atomic_write(&home_state_path(&app)?, content.as_bytes())
 }
 
+// A local backup must include the BYTES of documents linked in the library,
+// not only an index containing paths to files on another drive/computer.
+const LINKED_ARCHIVE_VERSION: u32 = 1;
+const MAX_LINKED_ARCHIVE_DOCUMENTS: usize = 10_000;
+const MAX_LINKED_ARCHIVE_BYTES: u64 = 16 * 1024 * 1024 * 1024;
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LinkedArchiveDocument {
+    document_id: String,
+    original_name: String,
+    size_bytes: u64,
+    sha256: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LinkedArchiveManifest {
+    version: u32,
+    documents: Vec<LinkedArchiveDocument>,
+}
+
+#[derive(Deserialize)]
+struct LibrarySnapshotDocument { id: String, path: String }
+#[derive(Deserialize)]
+struct LibrarySnapshotIndex { version: u32, documents: Vec<LibrarySnapshotDocument> }
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecoveredLibraryCopy {
+    pub document_id: String,
+    pub original_name: String,
+    pub restored_path: String,
+    pub size_bytes: u64,
+}
+
+/// Each source is independently copied and then hashed on both sides. A
+/// missing, substituted, or changing file prevents the backup from being
+/// advertised as complete. No source file is ever written.
+fn snapshot_linked_documents(state: &Path) -> Result<usize, String> {
+    let lib = state.join("library");
+    fs::create_dir_all(&lib)
+        .map_err(|error| format!("Unable to create backup library domain: {error}"))?;
+    let source_index = lib.join("index.json");
+    let index: LibrarySnapshotIndex = if source_index.exists() {
+        serde_json::from_slice(&fs::read(&source_index)
+            .map_err(|error| format!("Unable to read backed-up library index: {error}"))?)
+            .map_err(|error| format!("Unable to parse backed-up document index: {error}"))?
+    } else {
+        LibrarySnapshotIndex { version:1, documents:Vec::new() }
+    };
+    if index.version != 1 || index.documents.len() > MAX_LINKED_ARCHIVE_DOCUMENTS {
+        return Err("Unsupported or oversized library document index; no full backup was published.".into());
+    }
+    let archive = lib.join("linked-archive-v1");
+    fs::create_dir(&archive)
+        .map_err(|error| format!("Unable to reserve new external-document backup archive: {error}"))?;
+    let mut seen = HashSet::new();
+    let mut total = 0u64;
+    let mut documents = Vec::new();
+    for document in index.documents {
+        if document.id.is_empty() || document.id.len() > 96 ||
+           !document.id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_') ||
+           !seen.insert(document.id.clone()) {
+            return Err("Library index contains an unsafe or duplicate document ID.".into());
+        }
+        let source = PathBuf::from(&document.path);
+        let metadata = fs::symlink_metadata(&source)
+            .map_err(|error| format!("Indexed document unavailable for full backup ({}): {error}", document.id))?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err(format!("Indexed document is not a regular file: {}", document.id));
+        }
+        total = total.checked_add(metadata.len())
+            .ok_or("Total linked document size overflow.")?;
+        if total > MAX_LINKED_ARCHIVE_BYTES {
+            return Err("Linked documents exceed the 16 GiB offline backup budget.".into());
+        }
+        let name = source.file_name().and_then(|item| item.to_str())
+            .filter(|item| !item.is_empty())
+            .ok_or_else(|| format!("Document {} has an invalid filename.", document.id))?.to_string();
+        let before = sha256_file(&source)?;
+        let saved = archive.join(format!("{}.bin", document.id));
+        // A private snapshot copy rather than a hard link: later source edits
+        // must not modify the contents of this verified backup.
+        let mut input = File::open(&source).map_err(|error| format!("Unable to open linked source: {error}"))?;
+        let mut output = fs::OpenOptions::new().write(true).create_new(true).open(&saved)
+            .map_err(|error| format!("Unable to create independent document snapshot: {error}"))?;
+        std::io::copy(&mut input, &mut output)
+            .and_then(|_| output.sync_all())
+            .map_err(|error| format!("Unable to durably copy linked document: {error}"))?;
+        drop(output);
+        let after = sha256_file(&source)?;
+        let copied = sha256_file(&saved)?;
+        if before != after || copied != before {
+            return Err(format!("Indexed document {} changed during backup; snapshot rejected.", document.id));
+        }
+        documents.push(LinkedArchiveDocument {
+            document_id:document.id, original_name:name,
+            size_bytes:copied.1, sha256:copied.0,
+        });
+    }
+    let bytes=serde_json::to_vec_pretty(&LinkedArchiveManifest {version:LINKED_ARCHIVE_VERSION,documents})
+        .map_err(|error| format!("Unable to serialize external-document inventory: {error}"))?;
+    let path=archive.join("manifest.json");
+    let mut file=fs::OpenOptions::new().write(true).create_new(true).open(&path)
+        .map_err(|error| format!("Unable to create external-document manifest: {error}"))?;
+    use std::io::Write;
+    file.write_all(&bytes).and_then(|_|file.sync_all())
+        .map_err(|error| format!("Unable to sync external-document manifest: {error}"))?;
+    Ok(seen.len())
+}
+
+fn read_linked_archive(backup: &Path) -> Result<LinkedArchiveManifest, String> {
+    let dir=backup.join("state/library/linked-archive-v1");
+    let manifest=dir.join("manifest.json");
+    let metadata=fs::symlink_metadata(&manifest)
+        .map_err(|error| format!("Backup contains no recoverable linked-document inventory: {error}"))?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() || metadata.len()>4*1024*1024 {
+        return Err("Linked-document inventory is not a safe bounded regular file.".into());
+    }
+    let content=fs::read(&manifest)
+        .map_err(|error| format!("Unable to read linked-document inventory: {error}"))?;
+    let index:LinkedArchiveManifest=serde_json::from_slice(&content)
+        .map_err(|error| format!("Linked-document inventory is invalid: {error}"))?;
+    if index.version!=LINKED_ARCHIVE_VERSION || index.documents.len()>MAX_LINKED_ARCHIVE_DOCUMENTS {
+        return Err("Unsupported or oversized linked-document inventory.".into());
+    }
+    let mut seen=HashSet::new();
+    let mut total=0u64;
+    for item in &index.documents {
+        if item.document_id.is_empty() || item.document_id.len()>96 ||
+           !item.document_id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte==b'-'||byte==b'_') ||
+           !seen.insert(&item.document_id) ||
+           item.original_name.is_empty() ||
+           Path::new(&item.original_name).file_name().and_then(|n| n.to_str())!=Some(item.original_name.as_str()) {
+            return Err("Linked document manifest contains invalid or duplicate identity or filename.".into());
+        }
+        total=total.checked_add(item.size_bytes).ok_or("Linked document byte count overflow.")?;
+        if total>MAX_LINKED_ARCHIVE_BYTES {
+            return Err("Linked document manifest exceeds safe backup size.".into());
+        }
+        let source=dir.join(format!("{}.bin",item.document_id));
+        let metadata=fs::symlink_metadata(&source)
+            .map_err(|error| format!("Missing linked document bytes: {error}"))?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err("Linked document backup contains a symlink or non-file entry.".into());
+        }
+        let (hash,size)=sha256_file(&source)?;
+        if hash!=item.sha256 || size!=item.size_bytes {
+            return Err(format!("Linked document content does not match its inventory: {}",item.document_id));
+        }
+    }
+    Ok(index)
+}
+
+/// Restore archived bytes ONLY to a directory explicitly selected by the
+/// user. Existing document paths are never touched. All files are staged
+/// before publishing; new names are published create-only via hard links.
+fn recover_linked_document_copies(backup: &Path, destination: &Path) -> Result<Vec<RecoveredLibraryCopy>, String> {
+    let inspected=inspect_backup(backup)?;
+    if !inspected.valid {
+        return Err("Backup integrity verification failed; linked documents were not restored.".into());
+    }
+    let info=fs::symlink_metadata(destination)
+        .map_err(|error| format!("Unable to inspect linked-document restore directory: {error}"))?;
+    if !info.is_dir() || info.file_type().is_symlink() {
+        return Err("Linked-document restore target must be a real directory.".into());
+    }
+    let canonical_dest=fs::canonicalize(destination)
+        .map_err(|error| format!("Unable to resolve restore destination: {error}"))?;
+    let canonical_backup=fs::canonicalize(backup)
+        .map_err(|error| format!("Unable to resolve backup location: {error}"))?;
+    if canonical_dest.starts_with(&canonical_backup) {
+        return Err("Cannot restore recovered documents into the backup itself.".into());
+    }
+    let archive=read_linked_archive(backup)?;
+    let root=backup.join("state/library/linked-archive-v1");
+    let mut staged:Vec<(PathBuf,PathBuf,RecoveredLibraryCopy)>=Vec::new();
+    let mut prepared=HashSet::new();
+    let prepare=(||->Result<(),String>{
+        for document in archive.documents {
+            let original=Path::new(&document.original_name);
+            let stem=original.file_stem().and_then(|item|item.to_str()).unwrap_or("document");
+            let ext=original.extension().and_then(|item|item.to_str()).unwrap_or("");
+            let extension=if ext.is_empty(){String::new()}else{format!(".{ext}")};
+            let dest=canonical_dest.join(format!("{stem}-recovered-{}{}",document.document_id,extension));
+            if !prepared.insert(dest.clone()) { return Err("Duplicate recovered filename.".into()); }
+            match fs::symlink_metadata(&dest) {
+                Ok(_)=>return Err(format!("Refusing to overwrite existing recovered document: {}",dest.display())),
+                Err(error) if error.kind()==std::io::ErrorKind::NotFound=>{},
+                Err(error)=>return Err(format!("Unable to inspect recovery destination: {error}")),
+            }
+            let source=root.join(format!("{}.bin",document.document_id));
+            let temp=canonical_dest.join(format!(".malenjo-restore-{}-{}-{}.tmp",
+                std::process::id(),now_ms(),BACKUP_DIRECTORY_SEQUENCE.fetch_add(1,Ordering::Relaxed)));
+            let mut input=File::open(&source)
+                .map_err(|error| format!("Unable to read verified linked document: {error}"))?;
+            let mut output=fs::OpenOptions::new().write(true).create_new(true).open(&temp)
+                .map_err(|error| format!("Unable to stage linked document recovery: {error}"))?;
+            let copied=std::io::copy(&mut input,&mut output)
+                .and_then(|_| output.sync_all());
+            drop(output);
+            if let Err(error)=copied {
+                let _=fs::remove_file(&temp);
+                return Err(format!("Unable to stage complete linked document: {error}"));
+            }
+            let (hash,size)=sha256_file(&temp)?;
+            if hash!=document.sha256 || size!=document.size_bytes {
+                let _=fs::remove_file(&temp);
+                return Err("Restored file bytes differ from verified backup.".into());
+            }
+            staged.push((temp,dest.clone(),RecoveredLibraryCopy {
+                document_id:document.document_id,
+                original_name:document.original_name,
+                restored_path:dest.to_string_lossy().into_owned(),
+                size_bytes:size,
+            }));
+        }
+        Ok(())
+    })();
+    if let Err(error)=prepare {
+        for (temp,_,_) in &staged { let _=fs::remove_file(temp); }
+        return Err(error);
+    }
+    let mut published=Vec::new();
+    for (temp,dest,_) in &staged {
+        if let Err(error)=fs::hard_link(temp,dest) {
+            // Remove only entries this operation itself created. Never unlink
+            // a destination that existed before this invocation.
+            for item in &published { let _=fs::remove_file(item); }
+            for (stage,_,_) in &staged { let _=fs::remove_file(stage); }
+            return Err(format!("Safe linked-document restore was rolled back: {error}"));
+        }
+        published.push(dest.clone());
+    }
+    for (temp,_,_) in &staged {
+        fs::remove_file(temp)
+            .map_err(|error| format!("Recovered files are complete but a temporary link requires cleanup: {error}"))?;
+    }
+    Ok(staged.into_iter().map(|(_,_,item)|item).collect())
+}
+
+#[tauri::command]
+pub fn restore_linked_document_copies(
+    app: AppHandle, backup_path: String, destination_directory: String
+) -> Result<Vec<RecoveredLibraryCopy>, String> {
+    require_permission(&app,"backup.restore")?;
+    let recovered=recover_linked_document_copies(
+        &PathBuf::from(backup_path), &PathBuf::from(destination_directory)
+    )?;
+    append_audit(&app,"backup-linked-recover","warning","Backup/DR",
+        format!("Recovered {} linked document copies to a user-selected directory without modifying originals.",recovered.len()))?;
+    Ok(recovered)
+}
+
 fn copy_dir_recursive(source: &Path, destination: &Path) -> Result<(), String> {
     if !source.exists() {
         return Ok(());
@@ -1106,6 +1361,7 @@ pub fn create_local_backup(
     copy_dir_recursive(&app_data.join("enterprise"), &state.join("enterprise"))?;
     copy_dir_recursive(&app_data.join("security"), &state.join("security"))?;
     copy_dir_recursive(&app_data.join("library"), &state.join("library"))?;
+    snapshot_linked_documents(&state)?;
 
     let mut files = Vec::new();
     collect_backup_files(&state, &state, &mut files)?;
