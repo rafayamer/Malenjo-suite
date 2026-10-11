@@ -8,6 +8,7 @@ use std::{
     path::{Component, Path, PathBuf},
     process::{Command, Stdio},
     thread,
+    sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Manager};
@@ -21,6 +22,17 @@ const DMS_VERSION: u32 = 1;
 const POLICY_VERSION: u32 = 1;
 const WORKFLOW_VERSION: u32 = 1;
 const BACKUP_VERSION: u32 = 1;
+static SNAPSHOT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+static STATE_WRITE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+fn snapshot_version_id(source: &Path, created_ms: u64) -> String {
+    let nonce = SNAPSHOT_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    format!(
+        "ver-{created_ms}-{}-{nonce}-{}",
+        std::process::id(),
+        stable_id("", &source.display().to_string()).trim_start_matches('-')
+    )
+}
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(45);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -204,16 +216,54 @@ fn workflows_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(enterprise_root(app)?.join("workflows-v1.json"))
 }
 
-fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    let temp = path.with_extension("tmp");
-    fs::write(&temp, bytes)
-        .map_err(|error| format!("Unable to write temporary enterprise state: {error}"))?;
-    if path.exists() {
-        fs::remove_file(path)
-            .map_err(|error| format!("Unable to replace enterprise state: {error}"))?;
+#[cfg(windows)]
+fn replace_state_file(temp: &Path, destination: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use std::ptr;
+    #[link(name = "Kernel32")]
+    extern "system" {
+        fn ReplaceFileW(replaced: *const u16, replacement: *const u16,
+            backup: *const u16, flags: u32, excluded: *mut std::ffi::c_void,
+            reserved: *mut std::ffi::c_void) -> i32;
     }
-    fs::rename(&temp, path)
-        .map_err(|error| format!("Unable to finalize enterprise state: {error}"))
+    if !destination.exists() {
+        return fs::rename(temp, destination);
+    }
+    let old: Vec<u16> = destination.as_os_str().encode_wide().chain(Some(0)).collect();
+    let new: Vec<u16> = temp.as_os_str().encode_wide().chain(Some(0)).collect();
+    // Windows ReplaceFileW preserves the original on failure; no delete gap.
+    let ok = unsafe { ReplaceFileW(old.as_ptr(), new.as_ptr(), ptr::null(), 0,
+        ptr::null_mut(), ptr::null_mut()) };
+    if ok == 0 { Err(std::io::Error::last_os_error()) } else { Ok(()) }
+}
+
+#[cfg(not(windows))]
+fn replace_state_file(temp: &Path, destination: &Path) -> std::io::Result<()> {
+    fs::rename(temp, destination)
+}
+
+fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let sequence = STATE_WRITE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let temp = path.with_extension(format!("{}-{sequence}.tmp", std::process::id()));
+    let mut file = fs::OpenOptions::new().create_new(true).write(true).open(&temp)
+        .map_err(|error| format!("Unable to stage enterprise state: {error}"))?;
+    let result = (|| -> std::io::Result<()> {
+        use std::io::Write;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        Ok(())
+    })();
+    drop(file);
+    if let Err(error) = result {
+        let _ = fs::remove_file(&temp);
+        return Err(format!("Unable to stage enterprise state: {error}"));
+    }
+    let replaced = replace_state_file(&temp, path);
+    if let Err(error) = replaced {
+        let _ = fs::remove_file(&temp);
+        return Err(format!("Unable to atomically replace enterprise state: {error}"));
+    }
+    Ok(())
 }
 
 fn load_dms(app: &AppHandle) -> Result<DmsIndex, String> {
@@ -340,7 +390,7 @@ fn make_snapshot(
 ) -> Result<DmsVersion, String> {
     let source = resolve_library_document_path(app, document_id)?;
     let created_ms = now_ms();
-    let version_id = format!("ver-{created_ms}-{}", stable_id("", &source.display().to_string()).trim_start_matches('-'));
+    let version_id = snapshot_version_id(&source, created_ms);
     let rel = format!("versions/{record_id}/{version_id}-{}", safe_name(name));
     let destination = dms_root(app)?.join(&rel);
     let parent = destination
@@ -348,8 +398,18 @@ fn make_snapshot(
         .ok_or_else(|| "DMS snapshot destination has no parent.".to_string())?;
     fs::create_dir_all(parent)
         .map_err(|error| format!("Unable to create DMS version directory: {error}"))?;
-    fs::copy(&source, &destination)
-        .map_err(|error| format!("Unable to snapshot DMS document: {error}"))?;
+    // create_new prevents silently replacing a supposedly immutable version.
+    let mut source_file = fs::File::open(&source)
+        .map_err(|error| format!("Unable to read DMS snapshot source: {error}"))?;
+    let mut target_file = fs::OpenOptions::new().write(true).create_new(true).open(&destination)
+        .map_err(|error| format!("Unable to create unique DMS snapshot: {error}"))?;
+    if let Err(error) = std::io::copy(&mut source_file, &mut target_file)
+        .and_then(|_| target_file.sync_all())
+    {
+        drop(target_file);
+        let _ = fs::remove_file(&destination);
+        return Err(format!("Unable to complete DMS snapshot: {error}"));
+    }
     let (sha256, size_bytes) = sha256_file(&destination)?;
     Ok(DmsVersion {
         id: version_id,
@@ -562,6 +622,9 @@ pub fn admin_update_policy(
     require_permission(&app, "admin.write")?;
     if !["owner", "admin", "editor", "viewer"].contains(&current_role.as_str()) {
         return Err("Unknown enterprise role.".into());
+    }
+    if !role_permissions(&current_role).iter().any(|permission| permission == "admin.write") {
+        return Err("Local administrator cannot assign a role that removes administration access. Configure authenticated multi-user identity first.".into());
     }
     let policy = EnterprisePolicy {
         version: POLICY_VERSION,
