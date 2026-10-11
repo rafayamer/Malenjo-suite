@@ -353,7 +353,8 @@ function columnName(index: number): string {
 function XlsxEditor({ model, onChange }: { model: XlsxModel; onChange(model: XlsxModel): void }) {
   const [activeSheetPath, setActiveSheetPath] = useState(model.sheetPath);
   const sheets = model.sheets ?? [{ path: model.sheetPath, name: model.sheetName, cells: model.cells }];
-  const activeSheet = sheets.find((sheet) => sheet.path === activeSheetPath) ?? sheets[0];
+  const visibleSheets = sheets.filter((sheet) => !sheet.hidden);
+  const activeSheet = visibleSheets.find((sheet) => sheet.path === activeSheetPath) ?? visibleSheets[0];
   const grid = useMemo(() => ensureGrid(activeSheet.cells), [activeSheet.cells]);
 
   useEffect(() => {
@@ -377,7 +378,7 @@ function XlsxEditor({ model, onChange }: { model: XlsxModel; onChange(model: Xls
   return <div className="sheet-editor-shell">
     <div className="sheet-titlebar">
       <div className="sheet-tabs" role="tablist" aria-label="Workbook worksheets">
-        {sheets.map((sheet) => <button
+        {visibleSheets.map((sheet) => <button
           key={sheet.path}
           type="button"
           role="tab"
