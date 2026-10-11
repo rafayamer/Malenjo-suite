@@ -3,7 +3,7 @@ use tauri::{ipc::Response, AppHandle};
 
 use super::library::resolve_library_document_path;
 
-const MAX_PDF_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_PDF_BYTES: u64 = 32 * 1024 * 1024;
 
 fn validate_destination(destination: &str) -> Result<PathBuf, String> {
     if destination.trim().is_empty() {
@@ -188,7 +188,7 @@ pub fn write_pdf_copy(destination: String, bytes: Vec<u8>) -> Result<bool, Strin
         return Err("Generated content does not contain a valid PDF header.".into());
     }
     if bytes.len() as u64 > MAX_PDF_BYTES {
-        return Err("Generated PDF exceeds the 512 MB safety limit.".into());
+        return Err("Generated PDF exceeds the 32 MB non-streaming safety limit.".into());
     }
 
     let path = validate_destination(&destination)?;
@@ -198,7 +198,7 @@ pub fn write_pdf_copy(destination: String, bytes: Vec<u8>) -> Result<bool, Strin
 }
 
 
-const MAX_PDF_TOOL_OUTPUT_BYTES: usize = 512 * 1024 * 1024;
+const MAX_PDF_TOOL_OUTPUT_BYTES: usize = 32 * 1024 * 1024;
 const PDF_TOOL_OUTPUT_EXTENSIONS: &[&str] = &[
     "pdf", "zip", "png", "jpg", "jpeg", "webp", "tif", "tiff", "bmp",
     "txt", "csv", "json", "xml", "html", "md",
@@ -226,7 +226,7 @@ pub fn write_pdf_tool_output(destination: String, bytes: Vec<u8>) -> Result<bool
         return Err("PDF tool output is empty.".into());
     }
     if bytes.len() > MAX_PDF_TOOL_OUTPUT_BYTES {
-        return Err("PDF tool output exceeds the 512 MB safety limit.".into());
+        return Err("PDF tool output exceeds the 32 MB non-streaming safety limit.".into());
     }
 
     let path = validate_tool_output_destination(&destination)?;
@@ -266,7 +266,7 @@ mod tests {
 
     #[test]
     fn phase_two_pdf_limit_is_bounded() {
-        assert_eq!(MAX_PDF_BYTES, 512 * 1024 * 1024);
+        assert_eq!(MAX_PDF_BYTES, 32 * 1024 * 1024);
     }
 
     #[test]
@@ -349,6 +349,6 @@ mod tests {
         let blocked = temp_path("output.exe");
         assert!(validate_tool_output_destination(allowed.to_string_lossy().as_ref()).is_ok());
         assert!(validate_tool_output_destination(blocked.to_string_lossy().as_ref()).is_err());
-        assert_eq!(MAX_PDF_TOOL_OUTPUT_BYTES, 512 * 1024 * 1024);
+        assert_eq!(MAX_PDF_TOOL_OUTPUT_BYTES, 32 * 1024 * 1024);
     }
 }

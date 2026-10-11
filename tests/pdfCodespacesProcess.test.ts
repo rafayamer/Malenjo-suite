@@ -5,9 +5,9 @@ import {describe,it,expect} from 'vitest';
 import {PDFDocument} from 'pdf-lib';
 import {getDocument} from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {unzipSync} from 'fflate';
-import {lstatSync,realpathSync,readFileSync,writeFileSync,existsSync} from 'node:fs';
+import {lstatSync,realpathSync,readFileSync,writeFileSync,existsSync,openSync,fstatSync,closeSync,linkSync,rmSync,constants} from 'node:fs';
 import {resolve,dirname,basename,join} from 'node:path';
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {appendPdf,deletePdfPages,movePdfPage,rotatePdfPagePermanent,extractPdfPages} from '../src/suite/pdf/editor';
 import {fitPdfToPaper} from '../src/suite/pdf/pdfPaperResize';
 import {imposePdfBooklet} from '../src/suite/pdf/pdfBooklet';
@@ -35,11 +35,22 @@ interface Command{
 type Kind='pdf'|'zip-pdf'|'zip-svg'|'epub'|'json'|'xml'|'text';
 const MAX_INPUT=32*1024*1024;
 function sourceBytes(path:string):Uint8Array{
-  const resolved=realpathSync(resolve(path));
-  if(lstatSync(resolve(path)).isSymbolicLink())throw new Error('Input may not be a symlink.');
-  const bytes=Uint8Array.from(readFileSync(resolved));
-  if(bytes.length<1||bytes.length>MAX_INPUT)throw new Error('Input must be between 1 byte and 32 MB.');
-  return bytes;
+  const candidate=resolve(path);
+  const inspected=lstatSync(candidate);
+  if(!inspected.isFile()||inspected.isSymbolicLink()||inspected.size<1||inspected.size>MAX_INPUT)
+    throw new Error('Input must be a regular 1 byte to 32 MB file, not a symlink or special device.');
+  const fd=openSync(candidate,constants.O_RDONLY|(constants.O_NOFOLLOW??0));
+  try{
+    const checked=fstatSync(fd);
+    if(!checked.isFile()||checked.size<1||checked.size>MAX_INPUT)
+      throw new Error('Opened input is not a bounded regular file.');
+    const bytes=Uint8Array.from(readFileSync(fd));
+    if(bytes.byteLength<1||bytes.byteLength>MAX_INPUT)
+      throw new Error('Input changed size while being read.');
+    return bytes;
+  }finally{
+    closeSync(fd);
+  }
 }
 function validatedPages(value:string|undefined):number[]{
   if(!value||!/^([1-9][0-9]*)(,[1-9][0-9]*)*$/.test(value)||value.length>400){
@@ -177,17 +188,35 @@ describe.skipIf(!active).sequential('Execute a requested native Codespaces opera
     expect(source).toEqual(prior);
     if(result.bytes.length<10||result.bytes.length>128*1024*1024)
       throw new Error('Operation produced an empty or oversized output.');
-    writeFileSync(out,result.bytes,{flag:'wx'});
-    const disk=Uint8Array.from(readFileSync(out));
-    expect(disk).toEqual(result.bytes);
-    const checked=await verifySaved(kind,disk);
-    const sha256=createHash('sha256').update(disk).digest('hex');
-    const manifest={
-      schemaVersion:1,scope:'Real Linux/Codespaces execution only; not Windows release acceptance',
-      operation:job.operation,input:basename(input),output:basename(out),
-      bytes:disk.length,sha256,checked,
-    };
-    writeFileSync(receipt,JSON.stringify(manifest,null,2)+'\n',{flag:'wx'});
-    console.log('PDF CODESPACES EXECUTED: '+JSON.stringify(manifest));
+    // Verify privately BEFORE making the public output visible. Link
+    // creation cannot replace an output that another process just created.
+    const verified=await verifySaved(kind,result.bytes);
+    const staged=join(dirname(out),'.malenjo-'+randomUUID()+'.tmp');
+    let published=false;
+    try{
+      writeFileSync(staged,result.bytes,{flag:'wx'});
+      const disk=Uint8Array.from(readFileSync(staged));
+      expect(disk).toEqual(result.bytes);
+      const checked=await verifySaved(kind,disk);
+      expect(checked).toBe(verified);
+      const sha256=createHash('sha256').update(disk).digest('hex');
+      const manifest={
+        schemaVersion:1,scope:'Real Linux/Codespaces execution only; not Windows release acceptance',
+        operation:job.operation,input:basename(input),output:basename(out),
+        bytes:disk.length,sha256,checked,
+      };
+      linkSync(staged,out);
+      published=true;
+      writeFileSync(receipt,JSON.stringify(manifest,null,2)+'\n',{flag:'wx'});
+      console.log('PDF CODESPACES EXECUTED: '+JSON.stringify(manifest));
+    }catch(error){
+      if(published){
+        rmSync(out,{force:true});
+        rmSync(receipt,{force:true});
+      }
+      throw error;
+    }finally{
+      rmSync(staged,{force:true});
+    }
   },30000);
 });
