@@ -351,20 +351,45 @@ function columnName(index: number): string {
 }
 
 function XlsxEditor({ model, onChange }: { model: XlsxModel; onChange(model: XlsxModel): void }) {
-  const grid = useMemo(() => ensureGrid(model.cells), [model.cells]);
+  const [activeSheetPath, setActiveSheetPath] = useState(model.sheetPath);
+  const sheets = model.sheets ?? [{ path: model.sheetPath, name: model.sheetName, cells: model.cells }];
+  const visibleSheets = sheets.filter((sheet) => !sheet.hidden);
+  const activeSheet = visibleSheets.find((sheet) => sheet.path === activeSheetPath) ?? visibleSheets[0];
+  const grid = useMemo(() => ensureGrid(activeSheet.cells), [activeSheet.cells]);
+
+  useEffect(() => {
+    setActiveSheetPath(model.sheetPath);
+  }, [model.sheetPath]);
 
   function setCell(row: number, column: number, value: string) {
     const next = grid.map((item) => [...item]);
     next[row][column] = value;
-    onChange({ ...model, cells: next, fidelity: 'reflow-warning' });
+    const updatedSheets = sheets.map((sheet) => sheet.path === activeSheet.path
+      ? { ...sheet, cells: next } : sheet);
+    onChange({
+      ...model,
+      sheets: updatedSheets,
+      // Keep the compatibility representation for the first worksheet in sync.
+      cells: activeSheet.path === model.sheetPath ? next : model.cells,
+      fidelity: 'reflow-warning',
+    });
   }
 
   return <div className="sheet-editor-shell">
     <div className="sheet-titlebar">
-      <span className="sheet-tab active">{model.sheetName}</span>
-      <span className="sheet-warning">Phase 3 edits preserve the OOXML package but may simplify formulas/styles in edited cells.</span>
+      <div className="sheet-tabs" role="tablist" aria-label="Workbook worksheets">
+        {visibleSheets.map((sheet) => <button
+          key={sheet.path}
+          type="button"
+          role="tab"
+          aria-selected={sheet.path === activeSheet.path}
+          className={sheet.path === activeSheet.path ? 'sheet-tab active' : 'sheet-tab'}
+          onClick={() => setActiveSheetPath(sheet.path)}
+        >{sheet.name}</button>)}
+      </div>
+      <span className="sheet-warning">Edits affect the selected sheet only. Untouched formulas, cells and other worksheets remain in the OOXML package.</span>
     </div>
-    <div className="sheet-grid-wrap">
+    <div className="sheet-grid-wrap" role="tabpanel" aria-label={`Worksheet ${activeSheet.name}`}>
       <table className="sheet-grid">
         <thead><tr><th className="sheet-corner"/>{grid[0].map((_, c) => <th key={c}>{columnName(c)}</th>)}</tr></thead>
         <tbody>

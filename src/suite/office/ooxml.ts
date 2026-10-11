@@ -9,11 +9,20 @@ export interface DocxModel {
   fidelity: FidelityLevel;
 }
 
+export interface XlsxSheet {
+  path: string;
+  name: string;
+  hidden?: boolean;
+  cells: string[][];
+}
+
 export interface XlsxModel {
   kind: 'xlsx';
+  // Compatibility fields for the first sheet; sheets contains all editable tabs.
   sheetPath: string;
   sheetName: string;
   cells: string[][];
+  sheets?: XlsxSheet[];
   fidelity: FidelityLevel;
 }
 
@@ -188,50 +197,56 @@ function xmlAttribute(attributes: string, name: string): string | undefined {
   return attributes.match(new RegExp('(?:^|\\s)' + name + '="([^"]*)"'))?.[1];
 }
 
-function firstWorkbookSheet(files: Unzipped): { path: string; name: string } {
+function workbookSheets(files: Unzipped): { path: string; name: string; hidden: boolean }[] {
   const workbook = xmlText(files, 'xl/workbook.xml');
-  const first = workbook.match(/<sheet\b([^>]*)\/?>/);
-  if (!first) throw new Error('XLSX workbook has no sheet tabs.');
-  const name = decodeXml(xmlAttribute(first[1], 'name') ?? 'Sheet1');
-  const id = xmlAttribute(first[1], 'r:id');
-  if (id) {
+  const tabs = Array.from(workbook.matchAll(/<sheet\b([^>]*)\/?>/g));
+  if (!tabs.length) throw new Error('XLSX workbook has no sheet tabs.');
+  // The lightweight grid has a bounded worksheet capability. Never silently
+  // omit workbook tabs and then pretend the export covered the entire workbook.
+  if (tabs.length > 64) throw new Error('This spreadsheet editor supports at most 64 worksheets.');
+  const relIds = tabs.map((tab) => xmlAttribute(tab[1], 'r:id'));
+  if (relIds.some(Boolean)) {
+    if (relIds.some((id) => !id))
+      throw new Error('XLSX workbook contains a sheet without a relationship.');
     const rels = xmlText(files, 'xl/_rels/workbook.xml.rels');
-    const match = Array.from(rels.matchAll(/<Relationship\b([^>]*)\/?>/g))
-      .find((entry) => xmlAttribute(entry[1], 'Id') === id);
-    const target = match && xmlAttribute(match[1], 'Target');
-    if (!target || target.includes('\\') || /^(?:[a-z]+:|\/\/)/i.test(target))
-      throw new Error('XLSX worksheet relationship is missing or unsafe.');
-    let path: string;
-    if (target.startsWith('/')) path = target.slice(1);
-    else {
-      const parts = ['xl'];
-      for (const segment of target.split('/')) {
-        if (segment === '..') {
-          if (!parts.length) throw new Error('XLSX worksheet relationship escapes package root.');
-          parts.pop();
-        } else if (segment && segment !== '.') parts.push(segment);
+    const relationships = new Map(Array.from(rels.matchAll(/<Relationship\b([^>]*)\/?>/g))
+      .map((match) => [xmlAttribute(match[1], 'Id'), xmlAttribute(match[1], 'Target')]));
+    const used = new Set<string>();
+    return tabs.map((tab, index) => {
+      const target = relationships.get(relIds[index]);
+      if (!target || target.includes('\\') || /^(?:[a-z]+:|\/\/)/i.test(target))
+        throw new Error('XLSX worksheet relationship is missing or unsafe.');
+      let path: string;
+      if (target.startsWith('/')) path = target.slice(1);
+      else {
+        const parts = ['xl'];
+        for (const segment of target.split('/')) {
+          if (segment === '..') {
+            if (!parts.length) throw new Error('XLSX worksheet relationship escapes package root.');
+            parts.pop();
+          } else if (segment && segment !== '.') parts.push(segment);
+        }
+        path = parts.join('/');
       }
-      path = parts.join('/');
-    }
-    if (!path.startsWith('xl/worksheets/') || !files[path])
-      throw new Error('XLSX first tab points to a missing or unsafe sheet.');
-    return {path, name};
+      if (!/^xl\/worksheets\/[^/]+\.xml$/i.test(path) || !files[path] || used.has(path))
+        throw new Error('XLSX worksheet relationship is missing, duplicated or unsafe.');
+      used.add(path);
+      return { path, name: decodeXml(xmlAttribute(tab[1], 'name') ?? 'Sheet' + (index + 1)),
+        hidden: /^(hidden|veryHidden)$/.test(xmlAttribute(tab[1], 'state') ?? '') };
+    });
   }
-  // Support old minimal test fixtures containing a single sheet without rels.
+  // Legacy minimal one-sheet fixtures may omit workbook relationships.
+  // Multi-sheet packages without relationships are ambiguous: fail closed.
   const paths = Object.keys(files).filter((path) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(path));
-  if (paths.length !== 1)
+  if (tabs.length !== 1 || paths.length !== 1)
     throw new Error('XLSX sheet tab order requires workbook relationships.');
-  return {path: paths[0], name};
+  return [{ path: paths[0], name: decodeXml(xmlAttribute(tabs[0][1], 'name') ?? 'Sheet1'), hidden: false }];
 }
 
-export function parseXlsx(bytes: Uint8Array): XlsxModel {
-  const files = packageFiles(bytes);
-  const first = firstWorkbookSheet(files);
-  const path = first.path;
+function parseXlsxSheet(files: Unzipped, path: string): string[][] {
   const xml = xmlText(files, path);
   const shared = sharedStrings(files);
   const rows: string[][] = [];
-
   for (const match of xml.matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>/g)) {
     const attrs = match[1];
     const body = match[2];
@@ -240,7 +255,6 @@ export function parseXlsx(bytes: Uint8Array): XlsxModel {
     const r = rowIndex(ref);
     const c = colIndex(ref);
     if (r >= 200 || c >= 50) continue;
-
     rows[r] ??= [];
     let value = '';
     if (type === 'inlineStr') value = textRuns(body, 't').join('');
@@ -250,17 +264,25 @@ export function parseXlsx(bytes: Uint8Array): XlsxModel {
     }
     rows[r][c] = value;
   }
-
   if (!rows.length) rows.push(['']);
+  return rows;
+}
+
+export function parseXlsx(bytes: Uint8Array): XlsxModel {
+  const files = packageFiles(bytes);
+  const sheets = workbookSheets(files).map(({ path, name, hidden }) =>
+    ({ path, name, hidden, cells: parseXlsxSheet(files, path) }));
+  const firstVisible = sheets.find((sheet) => !sheet.hidden);
+  if (!firstVisible) throw new Error('XLSX workbook has no visible worksheet.');
   return {
     kind: 'xlsx',
-    sheetPath: path,
-    sheetName: first.name,
-    cells: rows,
+    sheetPath: firstVisible.path,
+    sheetName: firstVisible.name,
+    cells: firstVisible.cells,
+    sheets,
     fidelity: 'structure-preserving',
   };
 }
-
 
 function numeric(value: string): boolean {
   // Preserve leading-zero IDs, long numbers and scientific-notation text.
@@ -310,23 +332,42 @@ function patchCell(xml: string, ref: string, value: string): string {
 
 export function writeXlsx(bytes: Uint8Array, model: XlsxModel): Uint8Array {
   const files = packageFiles(bytes);
-  const first = firstWorkbookSheet(files);
-  if (first.path !== model.sheetPath)
-    throw new Error('XLSX selected sheet identity changed; refusing unsafe export.');
   const original = parseXlsx(bytes);
-  let xml = xmlText(files, model.sheetPath);
-  for (let r = 0; r < Math.max(original.cells.length, model.cells.length); r++) {
-    const before = original.cells[r] ?? [];
-    const after = model.cells[r] ?? [];
-    for (let c = 0; c < Math.max(before.length, after.length); c++) {
-      const previous = before[c] ?? '';
-      const next = after[c] ?? '';
-      // Never regenerate untouched cells/formulas or cells outside the editor.
-      if (previous !== next) xml = patchCell(xml, colName(c) + (r + 1), next);
+  if (original.sheetPath !== model.sheetPath)
+    throw new Error('XLSX selected sheet identity changed; refusing unsafe export.');
+  const beforeSheets = original.sheets!;
+  const editedSheets = model.sheets ??
+    [{ path: model.sheetPath, name: model.sheetName, cells: model.cells }];
+  // Do not let an altered/incomplete sheet list silently redirect edits to
+  // another tab, overwrite hidden sheets or discard a worksheet.
+  if (model.sheets && (editedSheets.length !== beforeSheets.length ||
+      editedSheets.some((sheet, i) => sheet.path !== beforeSheets[i].path ||
+        sheet.name !== beforeSheets[i].name ||
+        Boolean(sheet.hidden) !== Boolean(beforeSheets[i].hidden))))
+    throw new Error('XLSX worksheet identities/order changed; original file preserved.');
+  const updated: Unzipped = { ...files };
+  for (let i = 0; i < editedSheets.length; i++) {
+    const sheet = editedSheets[i];
+    if (!beforeSheets.some((originalSheet) => originalSheet.path === sheet.path))
+      throw new Error('XLSX edit references an unknown worksheet.');
+    const before = beforeSheets.find((item) => item.path === sheet.path)!;
+    const afterCells = sheet.path === model.sheetPath ? model.cells : sheet.cells;
+    if (sheet.hidden && JSON.stringify(before.cells) !== JSON.stringify(afterCells))
+      throw new Error('Editing hidden XLSX worksheets is not supported.');
+    let xml = xmlText(files, sheet.path);
+    for (let r = 0; r < Math.max(before.cells.length, afterCells.length); r++) {
+      const oldRow = before.cells[r] ?? [];
+      const newRow = afterCells[r] ?? [];
+      for (let c = 0; c < Math.max(oldRow.length, newRow.length); c++) {
+        if ((oldRow[c] ?? '') !== (newRow[c] ?? ''))
+          xml = patchCell(xml, colName(c) + (r + 1), newRow[c] ?? '');
+      }
     }
+    if (xml !== xmlText(files, sheet.path)) updated[sheet.path] = strToU8(xml);
   }
-  return replaceFile(files, model.sheetPath, xml);
+  return zipSync(updated, { level: 6 });
 }
+
 
 function slidePaths(files: Unzipped): string[] {
   const presentation = xmlText(files, 'ppt/presentation.xml');
