@@ -1012,53 +1012,75 @@ pub fn inspect_local_backup(path: String) -> Result<BackupInspection, String> {
     inspect_backup(&PathBuf::from(path))
 }
 
+/// Restore each root with rollback directories rather than deleting active
+/// enterprise/security state before the replacement is ready. A failed rename
+/// rolls back earlier successful swaps; the independent recovery copy remains.
 fn restore_state_with_recovery(app_data: &Path, backup: &Path) -> Result<PathBuf, String> {
     let inspection = inspect_backup(backup)?;
     if !inspection.valid {
         return Err(format!("Backup integrity check failed: {}", inspection.errors.join("; ")));
     }
 
-    let recovery = app_data.join(format!("restore-recovery-{}", now_ms()));
+    let nonce = SystemTime::now().duration_since(UNIX_EPOCH)
+        .unwrap_or_default().as_nanos();
+    let recovery = app_data.join(format!("restore-recovery-{nonce}"));
     fs::create_dir_all(&recovery)
         .map_err(|error| format!("Unable to create restore recovery directory: {error}"))?;
-    copy_dir_recursive(&app_data.join("enterprise"), &recovery.join("enterprise"))?;
-    copy_dir_recursive(&app_data.join("security"), &recovery.join("security"))?;
+    for name in ["enterprise", "security"] {
+        copy_dir_recursive(&app_data.join(name), &recovery.join(name))?;
+    }
 
-    let stage = app_data.join(format!("restore-stage-{}", now_ms()));
+    let stage = app_data.join(format!("restore-stage-{nonce}"));
     fs::create_dir_all(&stage)
         .map_err(|error| format!("Unable to create restore staging directory: {error}"))?;
-    copy_dir_recursive(&backup.join("state").join("enterprise"), &stage.join("enterprise"))?;
-    copy_dir_recursive(&backup.join("state").join("security"), &stage.join("security"))?;
+    for name in ["enterprise", "security"] {
+        copy_dir_recursive(&backup.join("state").join(name), &stage.join(name))?;
+    }
 
+    let prior_root = app_data.join(format!("restore-prior-{nonce}"));
+    fs::create_dir_all(&prior_root)
+        .map_err(|error| format!("Unable to allocate restore rollback: {error}"))?;
+    let mut installed = Vec::<&str>::new();
+    let mut prior = Vec::<&str>::new();
     let result = (|| -> Result<(), String> {
-        if app_data.join("enterprise").exists() {
-            fs::remove_dir_all(app_data.join("enterprise"))
-                .map_err(|error| format!("Unable to replace enterprise state: {error}"))?;
-        }
-        if app_data.join("security").exists() {
-            fs::remove_dir_all(app_data.join("security"))
-                .map_err(|error| format!("Unable to replace security state: {error}"))?;
-        }
-        if stage.join("enterprise").exists() {
-            fs::rename(stage.join("enterprise"), app_data.join("enterprise"))
-                .map_err(|error| format!("Unable to install enterprise restore: {error}"))?;
-        }
-        if stage.join("security").exists() {
-            fs::rename(stage.join("security"), app_data.join("security"))
-                .map_err(|error| format!("Unable to install security restore: {error}"))?;
+        for name in ["enterprise", "security"] {
+            // If a backup omitted a domain, it cannot mean "delete that domain."
+            if !stage.join(name).exists() { continue; }
+            let target = app_data.join(name);
+            if target.exists() {
+                fs::rename(&target, prior_root.join(name))
+                    .map_err(|error| format!("Unable to retain live {name} state: {error}"))?;
+                prior.push(name);
+            }
+            fs::rename(stage.join(name), &target)
+                .map_err(|error| format!("Unable to install restored {name} state: {error}"))?;
+            installed.push(name);
         }
         Ok(())
     })();
 
-    let _ = fs::remove_dir_all(&stage);
     if let Err(error) = result {
-        let _ = fs::remove_dir_all(app_data.join("enterprise"));
-        let _ = fs::remove_dir_all(app_data.join("security"));
-        let _ = copy_dir_recursive(&recovery.join("enterprise"), &app_data.join("enterprise"));
-        let _ = copy_dir_recursive(&recovery.join("security"), &app_data.join("security"));
-        return Err(format!("{error}; recovery copy retained at {}.", recovery.display()));
+        for name in installed.into_iter().rev() {
+            // Only remove newly installed roots. The old roots remain in
+            // prior_root until rollback has completed.
+            let _ = fs::rename(app_data.join(name), stage.join(name));
+        }
+        let mut failed = Vec::new();
+        for name in prior.into_iter().rev() {
+            if let Err(rollback_error) = fs::rename(prior_root.join(name), app_data.join(name)) {
+                failed.push(format!("{name}: {rollback_error}"));
+            }
+        }
+        let _ = fs::remove_dir_all(&stage);
+        return Err(format!(
+            "{error}; prior state retained at {}; recovery at {}; rollback failures: {}",
+            prior_root.display(), recovery.display(),
+            if failed.is_empty() { "none".into() } else { failed.join("; ") }
+        ));
     }
-
+    // A recovery snapshot exists independently of this final cleanup.
+    let _ = fs::remove_dir_all(&prior_root);
+    let _ = fs::remove_dir_all(&stage);
     Ok(recovery)
 }
 
