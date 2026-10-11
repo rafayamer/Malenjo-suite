@@ -24,6 +24,7 @@ const WORKFLOW_VERSION: u32 = 1;
 const BACKUP_VERSION: u32 = 1;
 static SNAPSHOT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 static STATE_WRITE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+static BACKUP_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 fn snapshot_version_id(source: &Path, created_ms: u64) -> String {
     let nonce = SNAPSHOT_SEQUENCE.fetch_add(1, Ordering::Relaxed);
@@ -1067,6 +1068,22 @@ fn inspect_backup(path: &Path) -> Result<BackupInspection, String> {
     })
 }
 
+/// Never reuse an existing snapshot directory: create_dir is exclusive
+/// while create_dir_all silently permits reopening and overwriting one.
+fn reserve_backup_root(destination: &Path) -> Result<PathBuf, String> {
+    for _ in 0..32 {
+        let sequence=BACKUP_DIRECTORY_SEQUENCE.fetch_add(1,Ordering::Relaxed);
+        let name=format!("MALENJO-backup-{}-{}-{sequence}",now_ms(),std::process::id());
+        let path=destination.join(name);
+        match fs::create_dir(&path) {
+            Ok(()) => return Ok(path),
+            Err(error) if error.kind()==std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(format!("Unable to reserve new backup folder: {error}")),
+        }
+    }
+    Err("Unable to reserve a unique backup folder without overwriting previous snapshots.".into())
+}
+
 #[tauri::command]
 pub fn create_local_backup(
     app: AppHandle,
@@ -1080,10 +1097,10 @@ pub fn create_local_backup(
         return Err("Backup destination must be an existing non-symbolic-link directory.".into());
     }
 
-    let backup = destination.join(format!("MALENJO-backup-{}", now_ms()));
+    let backup = reserve_backup_root(&destination)?;
     let state = backup.join("state");
-    fs::create_dir_all(&state)
-        .map_err(|error| format!("Unable to create backup root: {error}"))?;
+    fs::create_dir(&state)
+        .map_err(|error| format!("Unable to create new backup state: {error}"))?;
     let app_data = app.path().app_data_dir()
         .map_err(|error| format!("Unable to resolve app data directory: {error}"))?;
     copy_dir_recursive(&app_data.join("enterprise"), &state.join("enterprise"))?;
@@ -1251,7 +1268,7 @@ pub fn kopia_restore_snapshot(
 mod tests {
     use super::{
         collect_backup_files, inspect_backup, restore_state_with_recovery, retention_candidates,
-        role_permissions, supported_backup_domain, validate_home_payload, BackupManifest, DmsIndex, DmsRecord, DmsVersion, BACKUP_VERSION,
+        reserve_backup_root, role_permissions, supported_backup_domain, validate_home_payload, BackupManifest, DmsIndex, DmsRecord, DmsVersion, BACKUP_VERSION,
     };
     use std::{fs, time::{SystemTime, UNIX_EPOCH}};
 
@@ -1412,6 +1429,20 @@ mod tests {
         for name in ["documents/a.pdf","undocumented/data","missing/a.json"] {
             assert!(!supported_backup_domain(Path::new(name)));
         }
+    }
+
+    #[test]
+    fn a_new_backup_never_reuses_a_prior_snapshot_directory() {
+        let root=temp_root("backup-unique-root");
+        fs::create_dir_all(&root).unwrap();
+        let first=reserve_backup_root(&root).unwrap();
+        fs::write(first.join("snapshot-marker"),b"FIRST").unwrap();
+        let second=reserve_backup_root(&root).unwrap();
+        assert_ne!(first,second);
+        assert_eq!(fs::read(first.join("snapshot-marker")).unwrap(),b"FIRST");
+        assert!(second.is_dir());
+        assert_eq!(fs::read_dir(&second).unwrap().count(),0);
+        let _=fs::remove_dir_all(root);
     }
 
     #[test]
