@@ -26,6 +26,22 @@ describe('Metadata Studio', () => {
     expect(after.author).toBe('');
   });
 
+  it('removes custom properties together with package references and keeps other relationships', async () => {
+    const source=zipSync({
+      '[Content_Types].xml':strToU8('<Types><Override PartName="/docProps/custom.xml" ContentType="application/vnd.openxmlformats-officedocument.custom-properties+xml"/><Override PartName="/word/document.xml" ContentType="keep"/></Types>'),
+      '_rels/.rels':strToU8('<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties" Target="docProps/custom.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'),
+      'word/document.xml':strToU8('<w:document/>'),
+      'docProps/custom.xml':strToU8('<Properties/>'),
+    });
+    const sanitized=await sanitizeMetadata(source,{title:'',author:'',subject:'',keywords:''});
+    const files=unzipSync(sanitized);
+    expect(files['docProps/custom.xml']).toBeUndefined();
+    expect(strFromU8(files['_rels/.rels'])).not.toContain('custom-properties');
+    expect(strFromU8(files['_rels/.rels'])).toContain('officeDocument');
+    expect(strFromU8(files['[Content_Types].xml'])).not.toContain('custom.xml');
+    expect(strFromU8(files['[Content_Types].xml'])).toContain('/word/document.xml');
+  });
+
   it('removes OOXML custom properties while preserving the package', async () => {
     const core = '<?xml version="1.0"?><cp:coreProperties xmlns:cp="x" xmlns:dc="y"><dc:title>Old</dc:title><dc:creator>Alice</dc:creator></cp:coreProperties>';
     const bytes = zipSync({
