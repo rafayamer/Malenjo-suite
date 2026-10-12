@@ -133,6 +133,7 @@ async function main(){
   await aiButton.click();
   const aiDrawer=page.locator('#ml-ai-assistant');
   await aiDrawer.waitFor({state:'visible',timeout:15000});
+  await aiDrawer.locator('.ai-composer textarea').waitFor({state:'visible',timeout:30000});
   requireEvidence(await aiButton.getAttribute('aria-expanded')==='true' &&
     await aiDrawer.locator('.ai-bubble').count()===0 &&
     await aiDrawer.locator('.ai-composer textarea').isVisible(),
