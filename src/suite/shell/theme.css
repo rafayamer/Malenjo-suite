@@ -1171,3 +1171,47 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
   .suite-ribbon-actions {overflow-x:auto}
   .document-tab {max-width:165px}
 }
+
+
+/* Two-mode MALENJO Settings is part of the actual desktop workspace,
+   not a third theme/system-theme selector or a nonfunctional placeholder. */
+.appearance-workspace {flex:1;min-width:0;overflow:auto;padding:30px clamp(14px,4vw,52px);
+  background:var(--ml-background);color:var(--ml-text);}
+.appearance-heading {max-width:920px;margin:0 auto 28px}
+.appearance-heading h1 {margin:7px 0 8px;font-size:28px;letter-spacing:-.025em}
+.appearance-heading>p {margin:0;color:var(--ml-muted);font-size:13px;line-height:1.65}
+.appearance-panel {max-width:920px;margin:0 auto 20px;padding:22px 24px;
+  background:var(--ml-surface);color:var(--ml-text);
+  border:1px solid var(--ml-border);border-radius:11px;}
+.appearance-panel h2 {margin:0;font-size:17px}
+.appearance-panel p {margin:8px 0 0;color:var(--ml-muted);font-size:13px;line-height:1.6}
+.appearance-panel-heading {display:flex;align-items:center;gap:12px}
+.appearance-panel-heading>svg {color:var(--ml-brand-blue)}
+.appearance-options {border:0;padding:0;margin:20px 0 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.appearance-options legend {font-size:12px;color:var(--ml-muted);margin-bottom:11px}
+.appearance-choice {display:block;min-width:0;border:2px solid var(--ml-border);border-radius:9px;
+  padding:11px;background:var(--ml-card);cursor:pointer}
+.appearance-choice.selected {border-color:var(--ml-brand-blue);box-shadow:inset 0 0 0 1px var(--ml-brand-blue)}
+.appearance-choice:focus-within {outline:2px solid var(--ml-brand-cyan);outline-offset:2px}
+.appearance-choice-label {display:flex;align-items:center;gap:9px;margin:12px 2px 2px;font-size:13px;font-weight:650}
+.appearance-choice-label input {margin-left:auto;width:17px;height:17px;accent-color:#2b8cff;cursor:pointer}
+.appearance-preview {display:flex;flex-direction:column;min-height:115px;padding:10px;
+  border-radius:5px;gap:9px;overflow:hidden;border:1px solid #becfdb;}
+.appearance-preview.light {background:#f1f5f8;color:#152c3f}
+.appearance-preview.dark {background:#07131f;border-color:#1e3850;color:#dce9f5}
+.appearance-preview-title {height:12px;width:38%;border-radius:3px;background:#2b8cff}
+.appearance-preview-ribbon {display:flex;gap:7px;padding:7px 5px;border-radius:3px;
+  background:currentColor;opacity:.45}
+.appearance-preview-ribbon i {height:6px;width:20%;border-radius:2px;background:#33d4e5}
+.appearance-preview-content {display:flex;gap:8px;flex:1;min-height:45px}
+.appearance-preview-content i:first-child {width:22%;border-radius:2px;background:#2b8cff;opacity:.5}
+.appearance-preview-content i:last-child {flex:1;border-radius:2px;background:currentColor;opacity:.15}
+.appearance-panel .appearance-save-state {margin:17px 0 0;color:var(--ml-success-fg);font-weight:600}
+.appearance-panel .appearance-note {border-left:3px solid var(--ml-brand-cyan);
+  padding-left:10px;margin-top:16px}
+@media(max-width:520px) {
+  .appearance-workspace {padding:18px 10px}
+  .appearance-panel {padding:14px 12px}
+  .appearance-options {grid-template-columns:1fr}
+  .appearance-preview {min-height:65px}
+}
