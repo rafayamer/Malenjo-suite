@@ -2621,8 +2621,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                 if(!event.altKey || !['ArrowUp','ArrowDown'].includes(event.key))return;
                 event.preventDefault();
                 const position=leftPanelOrder.indexOf(id);
-                const other=leftPanelOrder[position+(event.key==='ArrowUp'?-1:1)];
-                if(other)moveLeftPanel(id,other);
+                const otherPosition=position+(event.key==='ArrowUp'?-1:1);
+                if(otherPosition>=0&&otherPosition<leftPanelOrder.length){
+                  setLeftPanelOrder(current=>{
+                    const next=[...current];
+                    [next[position],next[otherPosition]]=[next[otherPosition],next[position]];
+                    return next;
+                  });
+                }
               }}
               onClick={()=>{setLeftPanel(id);setInspectorHidden(true);setLeftPanelCollapsed(false);}}
             ><PdfLeftPanelIcon id={id}/><span className="pdf-left-nav-label">{item.label}</span></button>;
