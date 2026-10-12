@@ -1925,3 +1925,22 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
   .app-shell-top-only .topbar {gap:2px}
   .app-shell-top-only .search {min-width:50px;max-width:none}
 }
+
+
+/* Fifth horizontal application region: stable, restrained status strip. */
+.app-shell-top-only .ml-bottom-statusbar{
+  flex:0 0 30px;height:30px;min-height:30px;display:flex;align-items:center;
+  gap:13px;padding:0 12px;border-top:1px solid var(--ml-border);
+  background:var(--ml-toolbar);color:var(--ml-muted);font-size:11px;
+  white-space:nowrap;overflow:hidden;min-width:0;
+}
+.app-shell-top-only .ml-bottom-statusbar>span{
+  display:block;min-width:0;max-width:30vw;overflow:hidden;text-overflow:ellipsis;
+}
+.app-shell-top-only .ml-bottom-statusbar .ml-bottom-status-end{
+  margin-left:auto;flex:0 0 auto;max-width:none;
+}
+@media(max-width:550px) {
+  .app-shell-top-only .ml-bottom-statusbar{gap:8px;padding:0 7px}
+  .app-shell-top-only .ml-bottom-statusbar>span:nth-child(3){display:none}
+}
