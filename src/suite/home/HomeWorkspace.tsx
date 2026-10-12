@@ -288,7 +288,7 @@ export default function HomeWorkspace({
       <p className="ml-start-privacy"><ShieldCheck size={14} aria-hidden="true"/> {desktop?'Local Windows documents':'Browser / Codespaces session'} · files stay under your control</p>
     </header>
 
-    {recentOpen&&<section id="ml-home-recent-panel" className="ml-home-section ml-co-files" aria-labelledby="ml-home-files-title">
+    <section id="ml-home-recent-panel" hidden={!recentOpen} className="ml-home-section ml-co-files" aria-labelledby="ml-home-files-title">
       <div className="ml-co-recent-head">
         <div><h2 id="ml-home-files-title">Recent Files</h2><p>Recent and pinned items from the canonical MALENJO library.</p></div>
         <div className="ml-co-recent-tools">
@@ -313,7 +313,7 @@ export default function HomeWorkspace({
           <button onClick={()=>void onOpenDocuments()}><FolderOpen size={14}/>Open file</button>
         </div>}
       </>}
-    </section>}
+    </section>
 
     <details className="ml-start-utilities">
       <summary title="Show optional Home tools, open document shortcuts and locations">More options</summary>
