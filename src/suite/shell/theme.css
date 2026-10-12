@@ -1476,6 +1476,7 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 .ml-start-minimal .ml-home-section:not(.ml-co-files):not(:has(.ml-home-session-grid)){display:none}
 /* Master v2 minimal Home: secondary panels are accessible only on demand.
    Do not permanently hide pinned-location controls inside the disclosure. */
+#ml-home-recent-panel[hidden]{display:none!important}
 .ml-start-utilities{width:min(900px,100%);margin:0 auto 12px}
 .ml-start-utilities>summary{width:max-content;max-width:100%;margin:0 auto;cursor:pointer;
   list-style:none;font-size:12px;color:var(--ml-muted);padding:9px 12px;border-radius:7px}
