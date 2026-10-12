@@ -1660,3 +1660,94 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
   user-select:text!important;
   -webkit-user-select:text!important;
 }
+
+
+/* Phase 1 feature discoverability: Foxit-style icon + short caption.
+   Unavailable features are shown as real, non-executable placeholders.
+   The PDF page itself stays center stage; full inventory is opt-in. */
+.app-shell-top-only .pdf-task-toolbar{position:relative;isolation:isolate;z-index:14;overflow:visible}
+.app-shell-top-only .pdf-context-toolbar{height:67px;min-height:67px;max-height:67px}
+.app-shell-top-only .pdf-task-actions {height:60px;align-items:center;overflow-x:auto;overflow-y:hidden;
+  gap:3px;scrollbar-width:thin}
+.app-shell-top-only .pdf-feature-command {position:relative;display:block;
+  flex:0 0 65px;min-width:65px;height:55px;cursor:default}
+.app-shell-top-only .pdf-feature-command>button,
+.app-shell-top-only .pdf-task-actions>.pdf-feature-index-trigger {
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:4px;width:100%;height:55px;min-width:0;min-height:0;max-height:55px;
+  padding:5px 3px;border-radius:5px;border:1px solid transparent;
+  background:transparent;color:var(--ml-text);font-weight:550;
+  cursor:pointer;line-height:1.1}
+.app-shell-top-only .pdf-feature-command>button svg,
+.app-shell-top-only .pdf-feature-index-trigger svg {flex:0 0 auto;color:var(--ml-brand-blue)}
+:root[data-theme="light"] .app-shell-top-only .pdf-feature-command>button svg,
+:root[data-theme="light"] .app-shell-top-only .pdf-feature-index-trigger svg {color:#145cab}
+.app-shell-top-only .pdf-feature-command>button:disabled {
+  opacity:.62;cursor:not-allowed;color:var(--ml-muted)
+}
+.app-shell-top-only .pdf-feature-command>button:hover:not(:disabled),
+.app-shell-top-only .pdf-feature-index-trigger:hover,
+.app-shell-top-only .pdf-feature-index-trigger[aria-expanded="true"]{
+  border-color:var(--ml-border);background:var(--ml-hover)
+}
+.app-shell-top-only .pdf-feature-command>button:focus-visible,
+.app-shell-top-only .pdf-feature-index-trigger:focus-visible,
+.app-shell-top-only .pdf-feature-gallery button:focus-visible{
+  outline:2px solid var(--ml-brand-blue);outline-offset:-2px
+}
+.app-shell-top-only .pdf-feature-caption {display:block;max-width:62px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  text-align:center;font-size:10px;line-height:1.2}
+.app-shell-top-only .pdf-feature-command.planned .pdf-feature-caption{color:var(--ml-muted)}
+.app-shell-top-only .pdf-feature-planned-dot{position:absolute;top:4px;right:7px;
+  width:5px;height:5px;border-radius:50%;background:var(--ml-warn-fg);pointer-events:none}
+.app-shell-top-only .pdf-task-actions>.pdf-feature-index-trigger {
+  flex:0 0 65px;width:65px;min-width:65px;border-color:var(--ml-border);
+  background:var(--ml-control)
+}
+.app-shell-top-only .pdf-task-actions>.pdf-feature-index-trigger .pdf-feature-caption{font-weight:700}
+.app-shell-top-only .pdf-view-controls{max-height:59px}
+.app-shell-top-only .pdf-feature-gallery {
+  position:absolute;left:10px;top:calc(100% + 3px);width:min(850px,calc(100% - 20px));
+  max-height:min(62vh,530px);display:flex;flex-direction:column;
+  overflow:hidden;border:1px solid var(--ml-border);border-radius:8px;
+  background:var(--ml-surface);color:var(--ml-text);
+  box-shadow:0 16px 32px #0005;z-index:90
+}
+.app-shell-top-only .pdf-feature-gallery header{
+  display:flex;align-items:start;gap:12px;justify-content:space-between;
+  padding:12px 14px;border-bottom:1px solid var(--ml-border)}
+.app-shell-top-only .pdf-feature-gallery header strong{font-size:14px}
+.app-shell-top-only .pdf-feature-gallery header p{margin:4px 0 0;color:var(--ml-muted);
+  font-size:11px;line-height:1.45}
+.app-shell-top-only .pdf-feature-gallery header button{flex:0 0 29px;
+  height:29px;border:1px solid var(--ml-border);border-radius:5px;
+  background:var(--ml-control);color:var(--ml-text);font-size:19px;cursor:pointer}
+.app-shell-top-only .pdf-feature-gallery-grid{display:grid;overflow-y:auto;min-height:0;
+  grid-template-columns:repeat(auto-fill,minmax(115px,1fr));gap:7px;padding:11px}
+.app-shell-top-only .pdf-feature-gallery-cell{display:block;min-width:0;cursor:default}
+.app-shell-top-only .pdf-feature-gallery-cell>button{
+  width:100%;height:103px;display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:7px;padding:9px 7px;min-width:0;
+  text-align:center;border:1px solid var(--ml-border);border-radius:6px;
+  background:var(--ml-card);color:var(--ml-text);cursor:pointer}
+.app-shell-top-only .pdf-feature-gallery-cell>button:disabled{
+  cursor:not-allowed;opacity:.72;border-style:dashed}
+.app-shell-top-only .pdf-feature-gallery-cell>button:hover:not(:disabled){
+  border-color:var(--ml-brand-blue);background:var(--ml-hover)}
+.app-shell-top-only .pdf-feature-gallery-cell svg{color:var(--ml-brand-blue);flex:0 0 auto}
+.app-shell-top-only .pdf-feature-gallery-label{font-size:11px;line-height:1.25;overflow-wrap:anywhere}
+.app-shell-top-only .pdf-feature-gallery-cell small{font-size:10px;color:var(--ml-muted)}
+.app-shell-top-only .pdf-feature-gallery-cell.planned small{color:var(--ml-warn-fg)}
+@media(max-width:660px){
+  .app-shell-top-only .pdf-context-toolbar{height:63px;min-height:63px}
+  .app-shell-top-only .pdf-task-actions{height:58px;max-width:100%}
+  .app-shell-top-only .pdf-feature-command{flex-basis:58px;min-width:58px}
+  .app-shell-top-only .pdf-feature-caption{max-width:56px}
+  .app-shell-top-only .pdf-feature-gallery-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(prefers-reduced-motion:reduce){
+  .app-shell-top-only .pdf-feature-command *, .app-shell-top-only .pdf-feature-gallery *{
+    animation:none!important;transition:none!important
+  }
+}
