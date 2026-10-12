@@ -1,3 +1,4 @@
+import MalenjoBrandIcon from '../../../src-tauri/icons/icon.png';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bot, FileSpreadsheet, FileText, FolderOpen, MapPin, MoreHorizontal,
@@ -263,7 +264,7 @@ export default function HomeWorkspace({
 
   return <div className="content home-start-center ml-co-launcher ml-start-minimal">
     <header className="ml-start-hero" aria-label="MALENJO start screen">
-      <span className="ml-start-symbol" aria-hidden="true"><FileText size={24} strokeWidth={1.5}/></span>
+      <span className="ml-start-symbol" aria-hidden="true"><img src={MalenjoBrandIcon} className="malenjo-brand-logo" alt=""/></span>
       <h1>Welcome to MALENJO</h1>
       <p>Open a file to begin.</p>
       <div className="ml-start-primary" aria-label="Start actions">
