@@ -2457,7 +2457,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               <h3>{label} · {commands.length}</h3>
               <div className="pdf-feature-gallery-grid">
                 {commands.map(command=><span key={command.id} data-mal-command={command.id}
-                  className="pdf-feature-gallery-cell planned" title={command.tooltip}>
+                  className="pdf-feature-gallery-cell planned" tabIndex={0}
+                  role="group" aria-label={command.id+' '+command.label+' — Not release-ready'}
+                  title={command.tooltip}>
                   <button type="button" disabled
                     title={command.tooltip}
                     aria-label={command.id+' '+command.label+' — Not release-ready'}>
