@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { Activity, Command, FolderOpen, Search, ShieldCheck } from 'lucide-react';
+import { Activity, Command, FolderOpen, Search, ShieldCheck, Moon, Sun } from 'lucide-react';
 import { modules } from '../modules/registry';
 import type { ModuleId } from '../core/types';
 import FileLibrary from '../files/FileLibrary';
@@ -35,6 +35,8 @@ import EnterpriseWorkspace from '../enterprise/EnterpriseWorkspace';
 import HelpWorkspace from '../help/HelpWorkspace';
 import HomeWorkspace from '../home/HomeWorkspace';
 import DocumentTabs from './DocumentTabs';
+import RibbonShell from './RibbonShell';
+import { nextSuiteTheme, readSuiteTheme, saveSuiteTheme, type SuiteTheme } from './appearance';
 import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
 import { CANONICAL_COMMAND_PALETTE_EXAMPLES } from './commandPaletteModel';
 import type { DocumentCommandController } from '../commands/types';
@@ -44,7 +46,16 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [commandOpen, setCommandOpen] = useState(false);
   const [dropActive, setDropActive] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // A compact suite rail keeps the canvas dominant; the ribbon is global.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [theme, setTheme] = useState<SuiteTheme>(() => {
+    try { return readSuiteTheme(window.localStorage); } catch { return 'dark'; }
+  });
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    try { saveSuiteTheme(window.localStorage, theme); } catch { /* private context */ }
+  }, [theme]);
   const [sessions, setSessions] = useState<DocumentSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [workspaceNotices, setWorkspaceNotices] = useState<Record<string,string>>({});
@@ -501,7 +512,7 @@ export default function App() {
     />;
   }
 
-  return <div className={sidebarCollapsed?'app-shell sidebar-collapsed':'app-shell'}>
+  return <div className={sidebarCollapsed?'app-shell sidebar-collapsed':'app-shell'} data-shell="malenjo-ribbon">
     <aside className="sidebar" aria-label="MALENJO workspace navigation">
       <div className="brand">
         <div className="brand-mark">M</div>
@@ -540,12 +551,27 @@ export default function App() {
         }}
       />
       <header className="topbar">
+        <div className="suite-title"><strong>MALENJO Suite</strong><small>{activeSession?.document.name ?? module.name}</small></div>
         <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);openCommandPalette();}} placeholder="Search files, tools and commands"/><kbd>Ctrl K</kbd></div>
         <div className="topbar-actions">
           <button className="command" onClick={()=>void openDocumentsFromPicker()}><FolderOpen size={17}/> Open</button>
           <button className="command" onClick={()=>setCommandOpen(true)}><Command size={17}/> Commands</button>
+          <button
+            className="theme-toggle command"
+            type="button"
+            aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+            aria-pressed={theme === 'light'}
+            title={theme === 'dark' ? 'Light appearance' : 'Dark appearance'}
+            onClick={() => setTheme((current) => nextSuiteTheme(current))}
+          >{theme === 'dark' ? <Sun size={17}/> : <Moon size={17}/>}<span>{theme === 'dark' ? 'Light' : 'Dark'}</span></button>
         </div>
       </header>
+
+      <RibbonShell
+        workspace={activeSession ? workspaceForDocument(activeSession.document.kind) : active}
+        onNavigate={selectModule}
+        onOpenFiles={() => void openDocumentsFromPicker()}
+      />
 
       <DocumentTabs
         sessions={sessions}

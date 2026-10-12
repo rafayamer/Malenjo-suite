@@ -40,6 +40,34 @@ async function main(){
   const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.goto(base,{waitUntil:'domcontentloaded'});
+  // UI/UX Phase 3: Home and PDF share one Windows-style ribbon shell.
+  // Verify a real palette switch, persistence after reload and same-window
+  // navigation rather than only checking the presence of a decorative toggle.
+  await page.getByRole('tab',{name:'Home',exact:true}).waitFor({timeout:15000});
+  const topColor=await page.locator('.topbar').evaluate((node)=>getComputedStyle(node).backgroundColor);
+  await page.getByRole('button',{name:'Switch to light theme'}).click();
+  await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
+  const lightColor=await page.locator('.topbar').evaluate((node)=>getComputedStyle(node).backgroundColor);
+  requireEvidence(lightColor!==topColor, 'Light theme did not change the top-bar rendered background');
+  requireEvidence(await page.evaluate(()=>localStorage.getItem('malenjo:suite-theme:v1'))==='light',
+    'Light preference was not saved');
+  await page.reload({waitUntil:'domcontentloaded'});
+  await page.getByRole('button',{name:'Switch to dark theme'}).waitFor({timeout:15000});
+  requireEvidence(await page.locator('.topbar').evaluate((node)=>getComputedStyle(node).backgroundColor)===lightColor,
+    'The light appearance did not persist after reloading MALENJO');
+  await page.getByRole('button',{name:'Switch to dark theme'}).click();
+  await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+  requireEvidence(await page.locator('.topbar').evaluate((node)=>getComputedStyle(node).backgroundColor)===topColor,
+    'The dark appearance failed to restore MALENJO colors');
+  await page.getByRole('tab',{name:'PDF Viewer'}).click();
+  await page.getByRole('tabpanel',{name:'PDF Viewer commands'})
+    .getByRole('button',{name:'PDF Workspace'}).click();
+  requireEvidence(await page.locator('.sidebar .nav-item.active').getAttribute('aria-label')==='PDF Workspace',
+    'Ribbon PDF Viewer command did not navigate inside MALENJO');
+  requireEvidence(context.pages().length===1,'Ribbon navigation opened another window instead of the single workbench');
+  await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
+  console.log('PHASE3 MALENJO ribbon Home/PDF and persistent light/dark appearance: PASS');
+
   // Phase 3: exercise every real navigation surface, not only the PDF tab.
   // This proves shell launchability, not the underlying domain workflows.
   const modulesText=readFileSync(resolve(root,'src/suite/modules/registry.ts'),'utf8');
