@@ -2278,7 +2278,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     id:feature.id,label:feature.label,enabled:false,disabledReason:feature.reason,planned:true,
     run:()=>undefined,
   }));
-  const activeTaskActions=[...plannedActions,...taskActions[taskCategory]]
+  // Real verified commands must precede planned placeholders so Rotate and
+  // editing actions are visible immediately, not buried behind disabled tiles.
+  const activeTaskActions=[...taskActions[taskCategory],...plannedActions]
     .filter(action=>action.id!=='local-provider-tools'||masterTab==='tools');
   const ribbonVisibleCount=viewport.width<540?2:viewport.width<900?3:5;
   const primaryTaskActions=activeTaskActions.slice(0,ribbonVisibleCount);
