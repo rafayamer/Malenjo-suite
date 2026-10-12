@@ -64,10 +64,11 @@ export function capabilityIds(): CapabilityModuleId[] {
 interface Props {
   module: CapabilityModuleId;
   onNavigate(module: ModuleId): void;
+  documentName?: string;
 }
 
 /** Honest, domain-specific single-window UI until the actual feature engines pass acceptance. */
-export default function CapabilityWorkspace({ module, onNavigate }: Props) {
+export default function CapabilityWorkspace({ module, onNavigate, documentName }: Props) {
   const model = CAPABILITY_WORKSPACES[module];
   const Icon = model.icon;
   const guidance = module === 'account' ? 'settings' : 'files';
@@ -104,7 +105,7 @@ export default function CapabilityWorkspace({ module, onNavigate }: Props) {
       <section className="capability-canvas" aria-label={model.name + ' content area'}>
         <div className="capability-empty">
           <Icon size={46} strokeWidth={1.4} aria-hidden="true"/>
-          <h2>{model.name} viewer/editor unavailable</h2>
+          <h2>{documentName ? 'File staged: ' + documentName : model.name + ' viewer/editor unavailable'}</h2>
           <p id={'capability-reason-' + module}>{model.limitation}</p>
           <div className="capability-canvas-actions">
             <button type="button" onClick={() => onNavigate(guidance)}>
