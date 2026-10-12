@@ -448,6 +448,24 @@ async function main(){
   // Phase 1: an icon-only ribbon that conceals its features is not acceptable.
   // Working actions have captions; planned conversions remain visible and
   // disabled, with a complete opt-in feature index rather than a side rail.
+  const pdfTabs=activePdf.locator('.pdf-task-categories [role="tab"]');
+  const pdfTabLabels=await pdfTabs.allTextContents();
+  requireEvidence(JSON.stringify(pdfTabLabels.map(x=>x.trim()))===JSON.stringify([
+    'Home','Edit','Organize','Optimize','Convert',
+    'Forms','Review','Protect','Automate','Tools',
+  ]),'Master Specification v2 ten-category PDF ribbon missing or out of order: '+JSON.stringify(pdfTabLabels));
+  const firstPdfTab=activePdf.getByRole('tab',{name:'Home',exact:true});
+  await firstPdfTab.focus();
+  await page.keyboard.press('ArrowRight');
+  requireEvidence(await activePdf.getByRole('tab',{name:'Edit',exact:true}).getAttribute('aria-selected')==='true',
+    'PDF master ribbon ArrowRight did not select Edit');
+  await page.keyboard.press('End');
+  requireEvidence(await activePdf.getByRole('tab',{name:'Tools',exact:true}).getAttribute('aria-selected')==='true',
+    'PDF master ribbon End did not select Tools');
+  await page.keyboard.press('Home');
+  requireEvidence(await firstPdfTab.getAttribute('aria-selected')==='true',
+    'PDF master ribbon Home did not restore Home');
+  console.log('PHASE1 ten master PDF ribbon categories and keyboard navigation: PASS');
   await activePdf.getByRole('tab',{name:'Convert',exact:true}).click();
   for(const id of ['to-docx','to-xlsx','to-pptx']){
     const feature=activePdf.locator('.pdf-feature-command[data-pdf-feature="'+id+'"]');
