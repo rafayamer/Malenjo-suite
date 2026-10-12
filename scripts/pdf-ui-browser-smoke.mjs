@@ -1049,7 +1049,7 @@ async function main(){
   },null,{timeout:30000});
   await longInput.fill('57');
   await longInput.press('Enter');
-  await page.waitForFunction ()=>
+  await page.waitForFunction(()=>
     document.querySelector('.ml-status-pdf-view')?.textContent?.includes('Page 57 / 57'),
     null,{timeout:30000});
   await page.waitForFunction(()=>{
