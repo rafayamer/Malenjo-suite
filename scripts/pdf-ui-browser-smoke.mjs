@@ -235,18 +235,22 @@ async function main(){
     requireEvidence(await surface.locator('.capability-inspector').isVisible() &&
       await surface.locator('.capability-canvas').isVisible(),
       'Missing contextual canvas/inspector for '+name);
-    const commands=surface.locator('.capability-command-strip button');
-    requireEvidence(await commands.count()===6 &&
+    const commands=page.locator('.suite-ribbon-actions .suite-ribbon-action');
+    await page.waitForFunction(()=>document.querySelectorAll('.suite-ribbon-actions .suite-ribbon-action:disabled').length===4);
+    requireEvidence(await surface.locator('.capability-command-strip').count()===0 &&
+      await page.locator('.suite-ribbon').count()===1 &&
+      await commands.count()===6 &&
       await commands.filter({hasText:'Help'}).isEnabled() &&
-      await surface.locator('.capability-command-strip button:disabled').count()===4,
-      'Unsupported specialist actions appear executable in '+name);
+      await commands.filter({hasText:'Files / Library'}).count()<=1 &&
+      await page.locator('.suite-ribbon-actions .suite-ribbon-action:disabled').count()===4,
+      'Specialist UI has duplicate ribbons or unsupported commands appear executable in '+name);
     requireEvidence(await surface.getByText('NOT RELEASE-READY').isVisible(),
       'Missing honest readiness status in '+name);
   }
-  await page.locator('[data-capability-module="account"]').getByRole('button',{name:'Appearance settings'}).click();
+  await page.locator('.suite-ribbon-actions').getByRole('button',{name:'Appearance settings'}).click();
   await page.getByRole('heading',{name:'Appearance'}).waitFor({timeout:15000});
   await page.locator('.sidebar nav .nav-item').filter({hasText:'CAD'}).first().click();
-  await page.locator('[data-capability-module="cad"]').getByRole('button',{name:'Files / Library',exact:true}).click();
+  await page.locator('.suite-ribbon-actions').getByRole('button',{name:'Files / Library',exact:true}).click();
   requireEvidence(await page.locator('.library-view').count()===1,
     'CAD Files command did not navigate to actual library');
   console.log('PHASE1 specialist CAD/DICOM/Invoice/Account honest desktop UI: PASS');
