@@ -393,7 +393,7 @@ export default function ScannerWorkspace({ mode, onBackToFiles }: Props) {
                   <small>Browse PNG, JPG, WebP, BMP or TIFF</small>
                 </button>
               </div>
-            </div>
+            </div>}
       </main>
 
       <aside className="scan-inspector">
