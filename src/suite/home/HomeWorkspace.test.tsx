@@ -57,7 +57,7 @@ describe('Home CasualOffice structural/accessibility baseline',()=>{
     expect(html).toContain('ml-start-folder');
     expect(html).toContain('ml-start-more-tools');
     expect(html).toContain('More tools');
-    expect((html.match(/ml-co-action-card/g)??[]).length).toBe(7);
+    expect((html.match(/class="ml-co-action-card/g)??[]).length).toBe(7);
     expect(html).toContain('Your files');
     expect(html).toContain('Search recent');
     expect(html).toContain('Filter recent files by type');
