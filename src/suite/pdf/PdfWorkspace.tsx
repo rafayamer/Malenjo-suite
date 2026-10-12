@@ -101,6 +101,8 @@ import {
 } from './history';
 import {
   clampPdfPage,
+  clampPdfZoom,
+  effectivePdfScale,
   rotatePdfClockwise,
   stepPdfZoom,
   type PdfFitMode,
@@ -2111,6 +2113,26 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
   const viewPages=pdfViewPages(viewMode,currentPage,pageCount);
 
+  // A Fit Width / Fit Page click must start from the REAL displayed scale,
+  // rather than jumping from a hard-coded 100% as soon as the user zooms.
+  const zoomByStep=async(direction:-1|1)=>{
+    if(!pdf)return;
+    if(fitMode==='custom'){
+      setZoom(value=>stepPdfZoom(value,direction));
+      return;
+    }
+    try{
+      const page=await pdf.document.getPage(currentPage);
+      const size=page.getViewport({scale:1,rotation});
+      const currentScale=effectivePdfScale(
+        size.width,size.height,viewport.width,viewport.height,fitMode,zoom);
+      setZoom(stepPdfZoom(currentScale,direction));
+      setFitMode('custom');
+    }catch(reason){
+      setError('MAL-PDF-ZOOM-001: '+(reason instanceof Error?reason.message:String(reason)));
+    }
+  };
+
   useEffect(()=>{
     function onFullscreenChange(){
       const active=Boolean(document.fullscreenElement);
@@ -2124,16 +2146,21 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const toggleFullscreen=async(presentation=false)=>{
     const element=workspaceRef.current;
     if(!element)return;
-    if(document.fullscreenElement){
-      await document.exitFullscreen();
-      return;
+    try{
+      if(document.fullscreenElement){
+        await document.exitFullscreen();
+        return;
+      }
+      await element.requestFullscreen();
+      setPresentationMode(presentation);
+      if(presentation){
+        setViewMode('single');
+        setFitMode('page');
+      }
+    }catch(reason){
+      setPresentationMode(false);
+      setError('MAL-PDF-VIEW-002: Fullscreen is unavailable: '+(reason instanceof Error?reason.message:String(reason)));
     }
-    setPresentationMode(presentation);
-    if(presentation){
-      setViewMode('single');
-      setFitMode('page');
-    }
-    await element.requestFullscreen();
   };
 
   const thumbnailsRenderAllowed = forceRenderAll
@@ -2198,7 +2225,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       providerAction,
     ],
     organize:[
-      {id:'turn-pages',label:'Rotate selected',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Permanently rotated ${operationPages.length} selected page(s) by 90°.`,bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),operationPages[0])},
+      {id:'turn-pages',label:'Rotate PDF pages',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Permanently rotated ${operationPages.length} selected page(s) by 90°.`,bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),operationPages[0])},
       {id:'remove-pages',label:`Delete ${operationPages.length} page${operationPages.length===1?'':'s'}`,enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length>=pageCount?'A PDF must retain at least one page.':mutating?'Wait for the current PDF edit to finish.':undefined,run:removeSelectedPagesSafely},
       {id:'copy-page',label:'Duplicate page',enabled:!!sourceBytes&&!mutating&&operationPages.length===1,disabledReason:operationPages.length!==1?'Select exactly one page.':mutating?'Wait for the current PDF edit to finish.':!sourceBytes?'No PDF is loaded.':undefined,run:()=>mutateAction(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)},
       {id:'extract-pages',label:'Extract selected',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:extractSelected},
@@ -2236,7 +2263,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'configure-forms',label:'Form settings',enabled:true,run:configureProperties},
       providerAction,
     ],
-    ai:[navigateAction('Open CAD viewer','cad'),navigateAction('Open DICOM viewer','dicom')],
+    ai:[navigateAction('Open CAD viewer','cad'),navigateAction('Open DICOM viewer','dicom'),providerAction],
     scan:[navigateAction('Open Scanner','scanner'),providerAction],
     automate:[navigateAction('Open Automation Studio','automation'),providerAction],
   };
@@ -2251,9 +2278,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     id:feature.id,label:feature.label,enabled:false,disabledReason:feature.reason,planned:true,
     run:()=>undefined,
   }));
-  const activeTaskActions=[...plannedActions,...taskActions[taskCategory]];
-  const primaryTaskActions=activeTaskActions.slice(0,6);
-  const overflowTaskActions=activeTaskActions.slice(6);
+  // Real verified commands must precede planned placeholders so Rotate and
+  // editing actions are visible immediately, not buried behind disabled tiles.
+  const activeTaskActions=[...taskActions[taskCategory],...plannedActions]
+    .filter(action=>action.id!=='local-provider-tools'||masterTab==='tools');
+  const ribbonVisibleCount=viewport.width<540?2:viewport.width<900?3:5;
+  const primaryTaskActions=activeTaskActions.slice(0,ribbonVisibleCount);
+  const overflowTaskActions=activeTaskActions.slice(ribbonVisibleCount);
   const shortActionLabel=(action:PdfToolbarAction)=>action.label
     .replace(/^Local tools$/,'Local').replace(/^PDF to /,'To ').replace(/^Open /,'').replace(/^Show /,'')
     .replace(/^Hide /,'').replace(/^Add /,'').replace(/\u2026/g,'')
@@ -2363,7 +2394,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             {action.planned&&<span className="pdf-feature-planned-dot" aria-hidden="true"/>}
           </span>)}
           {!activeTaskActions.length&&<span className="pdf-task-empty">No operational {PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label.toLowerCase()} commands are available in this build yet. Use Ctrl+K to discover available document actions.</span>}
-          {false&&overflowTaskActions.length>0&&<details className="pdf-task-overflow">
+          {overflowTaskActions.length>0&&<details className="pdf-task-overflow">
             <summary aria-label={`More ${PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label} tools`}>More</summary>
             <div>
               {overflowTaskActions.map((action)=><button
@@ -2377,64 +2408,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           </details>}
         </div>
 
-        <div className="pdf-view-controls">
-          <div className="pdf-toolbar-group pdf-page-nav">
-            <button type="button" disabled={!pdf}
-              aria-label={leftPanelCollapsed?'Show pages panel':'Hide pages panel'}
-              title={leftPanelCollapsed?'Show pages panel':'Hide pages panel'}
-              onClick={()=>{setLeftPanel('pages');setLeftPanelCollapsed((value)=>!value);}}>
-              <FileText size={17} aria-hidden="true"/>
-            </button>
-            <button disabled={!pdf || currentPage <= 1} onClick={() => goToPage(currentPage - 1)} aria-label="Previous page"><ChevronLeft size={16}/></button>
-            <input
-              aria-label="Current PDF page"
-              disabled={!pdf}
-              value={pdf ? currentPage : ''}
-              onChange={(event) => setCurrentPage(clampPdfPage(Number(event.target.value), pageCount))}
-              onBlur={() => goToPage(currentPage)}
-              onKeyDown={(event) => { if (event.key === 'Enter') goToPage(currentPage); }}
-            />
-            <span>/ {pageCount || '—'}</span>
-            <button disabled={!pdf || currentPage >= pageCount} onClick={() => goToPage(currentPage + 1)} aria-label="Next page"><ChevronRight size={16}/></button>
-          </div>
-          <div className="pdf-toolbar-group">
-            <span aria-label={`Pages selected for editing: ${selectedPageNumbers.join(', ')||'none'}`}
-              title={`Edits target selected page(s): ${selectedPageNumbers.join(', ')||'none'}`}>
-              Edit: {selectedPageNumbers.length>3
-                ? selectedPageNumbers.length+' pages'
-                : selectedPageNumbers.join(', ')||'none'}
-            </span>
-            <button disabled={!pdf||selectedPageNumbers.length===1&&selectedPageNumbers[0]===currentPage}
-              aria-label="Select current viewed page for editing"
-              title="Switch editing selection to the page you are viewing"
-              onClick={()=>{
-                selectionAnchorRef.current=currentPage;
-                setSelectedPages(new Set([currentPage]));
-              }}>Select viewed</button>
-            <button disabled={!pdf} className={leftPanel==='search'&&!leftPanelCollapsed?'active':''}
-              onClick={()=>{
-                setLeftPanel('search');
-                setLeftPanelCollapsed(false);
-                window.requestAnimationFrame(()=>searchInputRef.current?.focus());
-              }} title="Find words in this PDF (Ctrl+F)" aria-label="Find words in PDF"><Search size={15}/> Find</button>
-            <button disabled={!pdf} onClick={() => { setFitMode('custom'); setZoom((value) => stepPdfZoom(value, -1)); }} aria-label="Zoom out"><Minus size={16}/></button>
-            <button className="pdf-zoom-label" disabled={!pdf} onClick={() => setFitMode((mode) => mode === 'width' ? 'page' : 'width')} aria-label={`Zoom mode: ${zoomLabel}`}>{zoomLabel}</button>
-            <button disabled={!pdf} onClick={() => { setFitMode('custom'); setZoom((value) => stepPdfZoom(value, 1)); }} aria-label="Zoom in"><Plus size={16}/></button>
-            <button disabled={!pdf} onClick={() => {setFitMode('custom');setZoom(1);}} aria-label="Actual size" title="Actual size">100%</button>
-            <button disabled={!pdf} className={viewMode==='single'?'active':''} onClick={()=>setViewMode('single')} aria-label="Single page view" title="Single page">1</button>
-            <button disabled={!pdf} className={viewMode==='continuous'?'active':''} onClick={()=>setViewMode('continuous')} aria-label="Continuous page view" title="Continuous">↕</button>
-            <button disabled={!pdf} className={viewMode==='two'?'active':''} onClick={()=>setViewMode('two')} aria-label="Two-page view" title="Two page">2</button>
-            <button disabled={!pdf} onClick={() => setRotation((value) => rotatePdfClockwise(value))} aria-label="Rotate view clockwise" title="Rotate view clockwise"><RotateCw size={16}/></button>
-            <button disabled={!pdf} onClick={()=>void toggleFullscreen(false)} aria-label={fullscreen?'Exit full screen':'Full screen'} title={fullscreen?'Exit full screen':'Full screen'}><Maximize2 size={16}/></button>
-            <button disabled={!pdf} onClick={()=>void toggleFullscreen(true)} aria-label="Presentation mode" title="Presentation mode"><MonitorPlay size={16}/></button>
-            <button
-              disabled={!pdf}
-              onClick={()=>setInspectorHidden((value)=>!value)}
-              aria-label={inspectorHidden?'Show right inspector':'Hide right inspector'}
-              title={`${inspectorHidden?'Show':'Hide'} right inspector · ${DOCUMENT_INSPECTOR_SHORTCUT}`}
-            >{inspectorHidden?<PanelRightOpen size={16}/>:<PanelRightClose size={16}/>}</button>
-          </div>
-        </div>
+
       </div>
       {featureGalleryOpen&&<section id={`${domIdPrefix}-feature-gallery`}
         className="pdf-feature-gallery"
@@ -2581,12 +2555,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     />}
 
     {(notice || actionNotice) && <div className="pdf-notice">{notice || actionNotice}</div>}
-    {!!pdf&&!isDesktopRuntime()&&<div className="pdf-notice" role="note">
-      Browser preview: MALENJO does not delete or overwrite your original local PDF.
-      Edits remain in this document tab until you export a separate copy.
-      Browser tabs are temporary; export edits before reloading or closing Codespaces.
-    </div>}
-    {error && <div className="pdf-notice error">{error}</div>}
+    {error && <div className="pdf-notice error" role="alert"><strong>MAL-PDF-001</strong> · {error}</div>}
 
     {!pdf && <div className="pdf-empty">
       <div className="pdf-empty-icon" aria-hidden="true"><FileText size={32} strokeWidth={1.6}/></div>
@@ -2849,7 +2818,17 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         </section>}
       </aside>
 
-      <div ref={scrollRef} className="pdf-scroll">
+      <div ref={scrollRef} className="pdf-scroll" tabIndex={0}
+        aria-label="Scrollable PDF pages. Use Page Down and Page Up to move between pages."
+        onKeyDown={event=>{
+          if(event.key==='PageDown'||event.key==='PageUp'){
+            event.preventDefault();goToPage(currentPage+(event.key==='PageDown'?1:-1));
+          }else if(event.key==='Home'&&event.ctrlKey){
+            event.preventDefault();goToPage(1);
+          }else if(event.key==='End'&&event.ctrlKey){
+            event.preventDefault();goToPage(pageCount);
+          }
+        }}>
         <div className={`pdf-stage ${viewMode}`}>
           {viewPages.map((page) => {
             const schedule = pdfPageSchedule(page, currentPage, pageCount, renderedPages);
@@ -3277,5 +3256,72 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         </div>}
       </aside>}
     </div>}
+    {pdf && <footer className="pdf-reader-footer" aria-label="PDF page navigation and view controls">
+        <div className="pdf-view-controls">
+          <div className="pdf-toolbar-group pdf-page-nav">
+            <button type="button" disabled={!pdf}
+              aria-label={leftPanelCollapsed?'Show document navigation':'Hide document navigation'}
+              title={leftPanelCollapsed?'Show pages panel':'Hide pages panel'}
+              onClick={()=>{setLeftPanel('pages');setLeftPanelCollapsed((value)=>!value);}}>
+              <FileText size={17} aria-hidden="true"/>
+            </button>
+            <button disabled={!pdf || currentPage <= 1} onClick={() => goToPage(currentPage - 1)} aria-label="Previous page"><ChevronLeft size={16}/></button>
+            <input
+              aria-label="Current PDF page"
+              disabled={!pdf}
+              value={pdf ? currentPage : ''}
+              onChange={(event) => setCurrentPage(clampPdfPage(Number(event.target.value), pageCount))}
+              onBlur={() => goToPage(currentPage)}
+              onKeyDown={(event) => { if (event.key === 'Enter') goToPage(currentPage); }}
+            />
+            <span>/ {pageCount || '—'}</span>
+            <button disabled={!pdf || currentPage >= pageCount} onClick={() => goToPage(currentPage + 1)} aria-label="Next page"><ChevronRight size={16}/></button>
+          </div>
+          <div className="pdf-toolbar-group">
+            <span aria-label={`Pages selected for editing: ${selectedPageNumbers.join(', ')||'none'}`}
+              title={`Edits target selected page(s): ${selectedPageNumbers.join(', ')||'none'}`}>
+              Edit: {selectedPageNumbers.length>3
+                ? selectedPageNumbers.length+' pages'
+                : selectedPageNumbers.join(', ')||'none'}
+            </span>
+            <button disabled={!pdf||selectedPageNumbers.length===1&&selectedPageNumbers[0]===currentPage}
+              aria-label="Select current viewed page for editing"
+              title="Switch editing selection to the page you are viewing"
+              onClick={()=>{
+                selectionAnchorRef.current=currentPage;
+                setSelectedPages(new Set([currentPage]));
+              }}>Select viewed</button>
+            <button disabled={!pdf} className={leftPanel==='search'&&!leftPanelCollapsed?'active':''}
+              onClick={()=>{
+                setLeftPanel('search');
+                setLeftPanelCollapsed(false);
+                window.requestAnimationFrame(()=>searchInputRef.current?.focus());
+              }} title="Find words in this PDF (Ctrl+F)" aria-label="Find words in PDF"><Search size={15}/> Find</button>
+            <button disabled={!pdf} onClick={() => void zoomByStep(-1)} aria-label="Zoom out"><Minus size={16}/></button>
+            <button className="pdf-zoom-label" disabled={!pdf} onClick={() => setFitMode((mode) => mode === 'width' ? 'page' : 'width')} aria-label={`Zoom mode: ${zoomLabel}`}>{zoomLabel}</button>
+            <button disabled={!pdf} onClick={() => void zoomByStep(1)} aria-label="Zoom in"><Plus size={16}/></button>
+            <button disabled={!pdf} onClick={() => {setFitMode('custom');setZoom(1);}} aria-label="Actual size" title="Set actual size (100%)">100%</button>
+            <label className="pdf-zoom-range" title="Set a precise PDF zoom level">
+              <span className="visually-hidden">Zoom percentage</span>
+              <input type="range" aria-label="PDF zoom percentage" disabled={!pdf}
+                min={25} max={400} step={5}
+                value={Math.round(clampPdfZoom(zoom)*100)}
+                onChange={event=>{setFitMode('custom');setZoom(clampPdfZoom(Number(event.target.value)/100));}}/>
+            </label>
+            <button disabled={!pdf} className={viewMode==='single'?'active':''} onClick={()=>setViewMode('single')} aria-label="Single page view" title="Single page">1</button>
+            <button disabled={!pdf} className={viewMode==='continuous'?'active':''} onClick={()=>setViewMode('continuous')} aria-label="Continuous page view" title="Continuous">↕</button>
+            <button disabled={!pdf} className={viewMode==='two'?'active':''} onClick={()=>setViewMode('two')} aria-label="Two-page view" title="Two page">2</button>
+            <button disabled={!pdf} onClick={() => setRotation((value) => rotatePdfClockwise(value))} aria-label="Rotate view clockwise (display only)" title="Rotate view clockwise — display only. To save a rotated page, use Organize → Rotate selected."><RotateCw size={16}/></button>
+            <button disabled={!pdf} onClick={()=>void toggleFullscreen(false)} aria-label={fullscreen?'Exit full screen':'Full screen'} title={fullscreen?'Exit full screen':'Full screen'}><Maximize2 size={16}/></button>
+            <button disabled={!pdf} onClick={()=>void toggleFullscreen(true)} aria-label="Presentation mode" title="Presentation mode"><MonitorPlay size={16}/></button>
+            <button
+              disabled={!pdf}
+              onClick={()=>setInspectorHidden((value)=>!value)}
+              aria-label={inspectorHidden?'Show right inspector':'Hide right inspector'}
+              title={`${inspectorHidden?'Show':'Hide'} right inspector · ${DOCUMENT_INSPECTOR_SHORTCUT}`}
+            >{inspectorHidden?<PanelRightOpen size={16}/>:<PanelRightClose size={16}/>}</button>
+          </div>
+        </div>
+    </footer>}
   </div>;
 }

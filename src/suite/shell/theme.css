@@ -1979,3 +1979,87 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 .app-shell-top-only .pdf-empty p {max-width:440px;font-size:13px;line-height:1.5;margin:0 0 15px}
 .app-shell-top-only .pdf-empty small {font-size:11px;max-width:450px;line-height:1.55}
 .app-shell-top-only .ai-chat {background:var(--ml-surface)}
+
+
+/* Phase 1 owner review 2026-10-12: the ribbon is for document commands,
+   the compact reader footer is for page/zoom/view controls (Foxit convention).
+   Keep horizontal scrolling on the PDF document, not the fixed tool strips. */
+.app-shell-top-only .pdf-workspace .pdf-layout{
+  flex:1 1 auto;min-height:0;overflow:hidden;
+}
+.app-shell-top-only .pdf-workspace .pdf-task-toolbar{
+  flex:0 0 auto;min-width:0;
+}
+.app-shell-top-only .pdf-workspace .pdf-context-toolbar{
+  min-height:67px;height:67px;overflow:visible;
+}
+.app-shell-top-only .pdf-workspace .pdf-task-actions{
+  overflow:visible;min-width:0;align-items:center;gap:3px;
+}
+.app-shell-top-only .pdf-workspace .pdf-task-overflow{
+  flex:0 0 auto;position:relative;z-index:60;
+}
+.app-shell-top-only .pdf-workspace .pdf-task-overflow summary{
+  min-height:42px;height:42px;min-width:49px;font-weight:700;
+}
+.app-shell-top-only .pdf-workspace .pdf-task-overflow>div{
+  max-height:min(65vh,480px);overflow-y:auto;min-width:195px;
+}
+.app-shell-top-only .pdf-reader-footer{
+  flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  min-height:38px;max-width:100%;border-top:1px solid var(--ml-border);
+  background:var(--ml-toolbar);padding:2px 8px;position:relative;z-index:8;
+}
+.app-shell-top-only .pdf-reader-footer .pdf-view-controls{
+  display:flex;align-items:center;justify-content:center;flex:1 1 auto;
+  min-width:0;max-width:100%;min-height:32px;max-height:none;
+  border:0;padding:0;gap:clamp(4px,1vw,12px);
+  overflow:visible;white-space:nowrap;
+}
+.app-shell-top-only .pdf-reader-footer .pdf-toolbar-group{
+  flex:0 0 auto;display:flex;align-items:center;gap:4px;
+}
+.app-shell-top-only .pdf-reader-footer .pdf-view-controls button{
+  min-height:28px;height:29px;min-width:28px;padding:0 5px;
+}
+.app-shell-top-only .pdf-reader-footer .pdf-view-controls .pdf-zoom-range{
+  display:flex;align-items:center;min-width:62px;width:clamp(62px,9vw,124px);
+}
+.app-shell-top-only .pdf-reader-footer .pdf-zoom-range input{
+  display:block;width:100%;min-width:0;accent-color:var(--ml-brand-blue);
+}
+.app-shell-top-only .pdf-reader-footer .pdf-view-controls input:focus-visible,
+.app-shell-top-only .pdf-reader-footer .pdf-view-controls button:focus-visible{
+  outline:2px solid var(--ml-brand-blue);outline-offset:1px;
+}
+.app-shell-top-only .pdf-reader-footer .pdf-view-controls .pdf-page-nav input{
+  width:39px;height:27px;
+}
+@media(max-width:1100px){
+  .app-shell-top-only .pdf-reader-footer .pdf-view-controls{
+    flex-wrap:wrap;row-gap:2px;justify-content:center;
+  }
+  .app-shell-top-only .pdf-reader-footer .pdf-view-controls .pdf-zoom-range{
+    width:70px;
+  }
+}
+@media(max-width:650px){
+  .app-shell-top-only .pdf-reader-footer{padding:3px 4px}
+  .app-shell-top-only .pdf-reader-footer .pdf-view-controls{
+    gap:3px;font-size:11px;
+  }
+  .app-shell-top-only .pdf-reader-footer .pdf-view-controls .pdf-toolbar-group>span{
+    font-size:10px;
+  }
+  .app-shell-top-only .pdf-workspace .pdf-task-actions{
+    gap:1px;
+  }
+  .app-shell-top-only .pdf-workspace .pdf-feature-command{
+    min-width:56px;flex-basis:56px;
+  }
+}
+/* The open inspector is an optional auxiliary tool. Never force PDF pixels
+   off-screen at narrow widths; close inspector via its explicit button. */
+.app-shell-top-only .pdf-layout:not(.inspector-hidden) .pdf-inspector{
+  min-width:0;max-width:100%;overflow:auto;
+}

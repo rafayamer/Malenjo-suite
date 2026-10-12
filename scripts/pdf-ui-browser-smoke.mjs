@@ -483,19 +483,20 @@ async function main(){
   // Working actions have captions; planned conversions remain visible and
   // disabled, with a complete opt-in feature index rather than a side rail.
   await activePdf.getByRole('tab',{name:'Convert',exact:true}).click();
-  for(const id of ['to-docx','to-xlsx','to-pptx']){
-    const feature=activePdf.locator('.pdf-feature-command[data-pdf-feature="'+id+'"]');
-    await feature.waitFor({state:'visible',timeout:15000});
-    requireEvidence(await feature.locator('svg').count()===1 &&
-      await feature.locator('.pdf-feature-caption').isVisible() &&
-      await feature.getByRole('button').isDisabled() &&
-      (await feature.getAttribute('title')??'').includes('not release-ready'),
-      'Unverified PDF conversion feature was hidden, executable, or unexplained: '+id);
-  }
   const browseFeatures=activePdf.getByRole('button',{name:'Browse all PDF features'});
   await browseFeatures.click();
   const featureGrid=activePdf.getByRole('region',{name:'Convert PDF features'});
   await featureGrid.waitFor({state:'visible',timeout:15000});
+  // Real conversion commands occupy the fixed ribbon first. Unverified
+  // DOCX/XLSX/PPTX conversion remains visible (and disabled) in its flyout.
+  for(const id of ['to-docx','to-xlsx','to-pptx']){
+    const feature=featureGrid.locator('[data-pdf-feature="'+id+'"]');
+    await feature.waitFor({state:'visible',timeout:15000});
+    requireEvidence(await feature.locator('svg').count()===1 &&
+      await feature.getByRole('button').isDisabled() &&
+      (await feature.getAttribute('title')??'').includes('not release-ready'),
+      'Unverified PDF conversion feature is unavailable or unexplained: '+id);
+  }
   requireEvidence(await featureGrid.locator('.pdf-feature-gallery-cell').count()>=7 &&
     await featureGrid.locator('[data-pdf-feature="to-docx"] button').isDisabled() &&
     await featureGrid.locator('[data-pdf-feature="export-text"] button').isEnabled(),
@@ -587,17 +588,21 @@ async function main(){
   await page.getByRole('button',{name:'Close MALENJO AI'}).click();
   for(const width of [1024,800,680,430]){
     await page.setViewportSize({width,height:830});
-    const collision=await page.locator('.document-session-panel.active .pdf-context-toolbar')
-      .evaluate(toolbar=>{
-        const actions=toolbar.querySelector('.pdf-task-actions')?.getBoundingClientRect();
-        const controls=toolbar.querySelector('.pdf-view-controls')?.getBoundingClientRect();
-        const bounds=toolbar.getBoundingClientRect();
-        return {actionsRight:actions?.right??0,controlsLeft:controls?.left??0,
-          controlsRight:controls?.right??0,toolbarRight:bounds.right};
+    const collision=await page.locator('.document-session-panel.active')
+      .evaluate(panel=>{
+        const toolbar=panel.querySelector('.pdf-context-toolbar')?.getBoundingClientRect();
+        const actions=panel.querySelector('.pdf-task-actions')?.getBoundingClientRect();
+        const readerFooter=panel.querySelector('.pdf-reader-footer')?.getBoundingClientRect();
+        const controls=panel.querySelector('.pdf-reader-footer .pdf-view-controls')?.getBoundingClientRect();
+        const galleryButton=panel.querySelector('.pdf-feature-index-trigger')?.getBoundingClientRect();
+        return {actionsRight:actions?.right??0,toolbarRight:toolbar?.right??0,
+          readerFooterRight:readerFooter?.right??0,controlsRight:controls?.right??0,
+          footerWidth:readerFooter?.width??0,featureVisible:Boolean(galleryButton?.width)};
       });
-    requireEvidence(collision.actionsRight<=collision.controlsLeft+3 &&
-      collision.controlsRight<=collision.toolbarRight+3,
-      'PDF buttons/panels overlap at '+width+'px: '+JSON.stringify(collision));
+    requireEvidence(collision.actionsRight<=collision.toolbarRight+3 &&
+      collision.controlsRight<=collision.readerFooterRight+3 &&
+      collision.footerWidth>0 && collision.featureVisible,
+      'PDF ribbon/footer overflow or PDF features hidden at '+width+'px: '+JSON.stringify(collision));
   }
   await page.setViewportSize({width:1440,height:900});
   console.log('MALENJO PDF icon ribbon non-overlap, hidden sidebars, side-chat coexistence: PASS');
@@ -667,6 +672,35 @@ async function main(){
     document.querySelector('.ml-bottom-statusbar .ml-status-pdf-view')?.textContent?.includes('Fit width'),
     null,{timeout:15000});
   console.log('PHASE1 live PDF page count and real zoom mode in compact status bar: PASS');
+  // Regression for the owner's real-world defect: the *same* PDF must scroll
+  // through multiple pages; page navigation and zoom are no longer in the ribbon.
+  const readerFooter=activePdf.locator('.pdf-reader-footer');
+  requireEvidence(await readerFooter.getByRole('button',{name:'Rotate view clockwise (display only)'}).isVisible(),
+    'Rotating the displayed PDF is not discoverable in its view footer');
+  await activePdf.getByRole('tab',{name:'Organize',exact:true}).click();
+  requireEvidence(await activePdf.locator('[data-pdf-feature="turn-pages"] button').isVisible(),
+    'Permanently rotating PDF pages is not discoverable in Organize');
+  await activePdf.getByRole('tab',{name:'Home',exact:true}).click();
+  const reader=activePdf.locator('.pdf-scroll');
+  const scrollSizes=await reader.evaluate(node=>({height:node.clientHeight,scrollHeight:node.scrollHeight}));
+  requireEvidence(scrollSizes.scrollHeight>scrollSizes.height+200,
+    'Continuous multi-page PDF does not provide vertical document scrolling: '+JSON.stringify(scrollSizes));
+  await reader.evaluate(node=>{node.scrollTop=node.scrollHeight;});
+  await page.waitForFunction(()=>
+    document.querySelector('.ml-status-pdf-view')?.textContent?.includes('Page 2 / 2'),
+    null,{timeout:15000});
+  await readerFooter.getByRole('button',{name:'Previous page'}).click();
+  await page.waitForFunction(()=>
+    document.querySelector('.ml-status-pdf-view')?.textContent?.includes('Page 1 / 2'),
+    null,{timeout:15000});
+  const range=readerFooter.getByRole('slider',{name:'PDF zoom percentage'});
+  await range.focus();
+  await range.press('End');
+  await page.waitForFunction(()=>
+    document.querySelector('.ml-status-pdf-view')?.textContent?.includes('400%'),
+    null,{timeout:15000});
+  await readerFooter.getByRole('button',{name:'Actual size'}).click();
+  console.log('PHASE1 real multipage scroll + reader footer + slider + rotate discoverability: PASS');
 
   // Master v2 Phase 1 responsive + appearance matrix on a REAL open PDF.
   // Keep PDF.js selectable text functional through live theme changes,
@@ -772,7 +806,7 @@ async function main(){
     await undoQuick.isDisabled() && await redoQuick.isDisabled(),
     'Top-bar Save / Undo / Redo did not reflect the unedited live PDF');
   await page.locator('.document-session-panel.active .pdf-task-categories button').filter({hasText:'Organize'}).click();
-  await page.locator('.document-session-panel.active .pdf-context-toolbar').getByRole('button',{name:/Rotate selected/}).click();
+  await page.locator('.document-session-panel.active .pdf-context-toolbar').getByRole('button',{name:/Rotate PDF pages/}).click();
   await page.waitForFunction(()=>
     Array.from(document.querySelectorAll('.pdf-notice')).some(
       node=>node.textContent?.includes('Permanently rotated'),
