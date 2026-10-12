@@ -1697,7 +1697,7 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 }
 .app-shell-top-only .pdf-feature-caption {display:block;max-width:62px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  text-align:center;font-size:10px;line-height:1.2}
+  text-align:center;font-size:11px;line-height:1.2}
 .app-shell-top-only .pdf-feature-command.planned .pdf-feature-caption{color:var(--ml-muted)}
 .app-shell-top-only .pdf-feature-planned-dot{position:absolute;top:4px;right:7px;
   width:5px;height:5px;border-radius:50%;background:var(--ml-warn-fg);pointer-events:none}
@@ -1799,4 +1799,12 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
   .app-shell-top-only .pdf-user-tool-group .pdf-feature-gallery-grid {
     grid-template-columns:repeat(2,minmax(0,1fr));gap:6px
   }
+}
+
+/* The primary feature index must remain visible when narrower windows require
+   sideways scroll for additional top-only ribbon icons. */
+.app-shell-top-only .pdf-task-actions>.pdf-feature-index-trigger{
+  order:-1;position:sticky;left:0;z-index:2;
+  flex:0 0 71px;width:71px;min-width:71px;
+  background:var(--ml-surface);box-shadow:2px 0 4px #0002;
 }
