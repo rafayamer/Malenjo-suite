@@ -164,6 +164,13 @@ export default function PdfPageCanvas({
           textDivsRef.current=textLayer.textDivs.filter(
             (node):node is HTMLSpanElement=>node instanceof HTMLSpanElement,
           );
+          // PDF.js text spans may receive inline styles as the layer is
+          // reconstructed. Preserve text selection affordance even when
+          // overlays or viewport changes restyle the surrounding canvas.
+          for (const span of textDivsRef.current) {
+            span.style.setProperty('cursor','text','important');
+            span.style.setProperty('user-select','text','important');
+          }
           setTextRevision(revision=>revision+1);
           } catch (error) {
             // Canvas rendering already succeeded: optional text selection
