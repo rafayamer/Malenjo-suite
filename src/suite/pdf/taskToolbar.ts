@@ -6,3 +6,38 @@ const shortcutCode: Record<string,PdfTaskCategory> = {Digit1:'home',Digit2:'edit
 export interface PdfTaskShortcutEventLike {altKey:boolean;shiftKey:boolean;ctrlKey:boolean;metaKey:boolean;code:string}
 export function pdfTaskCategoryFromShortcut(event:PdfTaskShortcutEventLike):PdfTaskCategory|null {if(!event.altKey||!event.shiftKey||event.ctrlKey||event.metaKey)return null;return shortcutCode[event.code]??null;}
 export function movePdfTaskCategory(current:PdfTaskCategory,key:'ArrowLeft'|'ArrowRight'|'Home'|'End'):PdfTaskCategory {if(key==='Home')return PDF_TASK_CATEGORIES[0];if(key==='End')return PDF_TASK_CATEGORIES[PDF_TASK_CATEGORIES.length-1];const index=PDF_TASK_CATEGORIES.indexOf(current);const delta=key==='ArrowRight'?1:-1;return PDF_TASK_CATEGORIES[(index+delta+PDF_TASK_CATEGORIES.length)%PDF_TASK_CATEGORIES.length];}
+
+
+/** Master Specification v2.0 user-facing PDF ribbon.
+ * The older internal task IDs remain stable until their real handlers have
+ * been migrated; only these ten PDF-first categories appear on screen. */
+export const PDF_MASTER_RIBBON_TABS = [
+  {id:'home',label:'Home',task:'home'},
+  {id:'edit',label:'Edit',task:'edit'},
+  {id:'organize',label:'Organize',task:'organize'},
+  {id:'optimize',label:'Optimize',task:'scan'},
+  {id:'convert',label:'Convert',task:'convert'},
+  {id:'forms',label:'Forms',task:'forms'},
+  {id:'review',label:'Review',task:'comment'},
+  {id:'protect',label:'Protect',task:'protect'},
+  {id:'automate',label:'Automate',task:'automate'},
+  {id:'tools',label:'Tools',task:'ai'},
+] as const satisfies readonly {id:string;label:string;task:PdfTaskCategory}[];
+export type PdfMasterRibbonTabId = typeof PDF_MASTER_RIBBON_TABS[number]['id'];
+export function masterRibbonTabForTask(task:PdfTaskCategory):PdfMasterRibbonTabId {
+  if(task==='sign') return 'review';
+  return PDF_MASTER_RIBBON_TABS.find(tab=>tab.task===task)?.id ?? 'tools';
+}
+export function moveMasterRibbonTab(
+  current:PdfMasterRibbonTabId,
+  key:'ArrowLeft'|'ArrowRight'|'Home'|'End',
+):PdfMasterRibbonTabId {
+  if(key==='Home')return PDF_MASTER_RIBBON_TABS[0].id;
+  if(key==='End')return PDF_MASTER_RIBBON_TABS[PDF_MASTER_RIBBON_TABS.length-1].id;
+  const index=PDF_MASTER_RIBBON_TABS.findIndex(tab=>tab.id===current);
+  const delta=key==='ArrowRight'?1:-1;
+  return PDF_MASTER_RIBBON_TABS[(index+delta+PDF_MASTER_RIBBON_TABS.length)%PDF_MASTER_RIBBON_TABS.length].id;
+}
+export function taskForMasterRibbonTab(id:PdfMasterRibbonTabId):PdfTaskCategory {
+  return PDF_MASTER_RIBBON_TABS.find(tab=>tab.id===id)!.task;
+}
