@@ -617,12 +617,19 @@ async function main(){
   }
   await page.setViewportSize({width:1440,height:900});
   const statusBar=activePdf.getByRole('contentinfo',{name:'PDF document status and page navigation'});
-  requireEvidence(await statusBar.isVisible() &&
-    await statusBar.getByRole('button',{name:'Status bar zoom in'}).isEnabled() &&
-    await page.getByRole('button',{name:'Save document'}).count()===1 &&
-    await page.getByRole('button',{name:'Undo document change'}).count()===1 &&
-    await page.getByRole('button',{name:'Redo document change'}).count()===1,
-    'Document quick controls or live bottom PDF status are missing');
+  const actionEvidence={
+    footer:await statusBar.count(),
+    footerVisible:await statusBar.isVisible(),
+    zoomButtons:await statusBar.getByRole('button',{name:'Status bar zoom in'}).count(),
+    zoomEnabled:await statusBar.getByRole('button',{name:'Status bar zoom in'}).isEnabled(),
+    save:await page.getByRole('button',{name:'Save document'}).count(),
+    undo:await page.getByRole('button',{name:'Undo document change'}).count(),
+    redo:await page.getByRole('button',{name:'Redo document change'}).count(),
+  };
+  requireEvidence(actionEvidence.footer===1 && actionEvidence.footerVisible &&
+    actionEvidence.zoomEnabled && actionEvidence.save===1 &&
+    actionEvidence.undo===1 && actionEvidence.redo===1,
+    'Document quick controls or live bottom PDF status are missing: '+JSON.stringify(actionEvidence));
   console.log('PHASE1 v2 top quick actions and functional PDF bottom status bar: PASS');
   console.log('MALENJO PDF icon ribbon non-overlap, hidden sidebars, side-chat coexistence: PASS');
   console.log('MALENJO browser document tab opened');
