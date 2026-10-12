@@ -44,6 +44,7 @@ import { nextSuiteTheme, readSuiteTheme, saveSuiteTheme, type SuiteTheme } from 
 import { applySuitePalette } from './themePalette';
 import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
 import { CANONICAL_COMMAND_PALETTE_EXAMPLES } from './commandPaletteModel';
+import { pdfCatalogDiscovery } from '../commands/masterCatalog';
 import type { DocumentCommandController } from '../commands/types';
 
 export default function App() {
@@ -439,6 +440,10 @@ export default function App() {
       disabledReason:example.unavailableReason,
       run:()=>{ if (example.target) selectModule(example.target); },
     })),
+    // Master v2.0 catalog is source-of-truth for 90 requirements.
+    // Unreleased capabilities appear in search with an explanation, never
+    // as executable actions until their implementation is independently accepted.
+    ...pdfCatalogDiscovery(),
     ...sessions.map((session) => ({
       id:`tab-${session.id}`,
       label:`Switch to ${session.document.name}`,
