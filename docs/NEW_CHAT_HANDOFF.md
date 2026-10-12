@@ -1,60 +1,67 @@
-# MALENJO — New Chat Engineering Handoff
+# MALENJO — Engineering Continuation Handoff
 
-**Updated:** 2026-10-12  
-**Repo:** https://github.com/rafayamer/Malenjo-suite  
-**Master specification (authoritative):** [docs/MALENJO_MASTER_SPEC_V2.md](MALENJO_MASTER_SPEC_V2.md)  
-**Codespaces validation branch:** `integration/option-b-codespaces-validation`  
-**Current open Phase 1 development PR:** [#260 — Master v2 ten-tab PDF ribbon, searchable 90-feature catalog and quick actions](https://github.com/rafayamer/Malenjo-suite/pull/260)  
-**Phase 1 UI/UX tracking:** [issue #121](https://github.com/rafayamer/Malenjo-suite/issues/121)  
-**Ten-phase roadmap:** [issue #238](https://github.com/rafayamer/Malenjo-suite/issues/238)
+**Updated:** 2026-10-12 (after verified PR #264)
+**Project:** [rafayamer/Malenjo-suite](https://github.com/rafayamer/Malenjo-suite)
+**Authoritative design/feature specification:** [MALENJO_MASTER_SPEC_V2.md](MALENJO_MASTER_SPEC_V2.md)
+**Codespaces integration branch:** `integration/option-b-codespaces-validation`
+**UI/UX tracking:** [#121](https://github.com/rafayamer/Malenjo-suite/issues/121)
+**Ten-phase RELEASE-READY roadmap:** [#238](https://github.com/rafayamer/Malenjo-suite/issues/238)
 
-## Product invariants (do not reinterpret)
+## Absolute release status
 
-MALENJO is primarily a **professional PDF manipulation and editing product**, not a Word/Excel/PowerPoint productivity suite. Its UI is minimalist and Foxit-inspired. It must have **no permanent module sidebar** and no unrelated dashboard. One window contains: (1) narrow top application/quick-action bar; (2) ten-tab compact icon-first PDF ribbon; (3) document tab strip; (4) central live PDF canvas; (5) small bottom status bar. The persistent top AI icon opens a Messenger-like right chat panel with permitted document context and no fake AI responses.
+**Phase 1: NOT RELEASE-READY.** Development PRs can be merged for Codespaces evaluation, but that is not owner acceptance. Owner Foxit-style visual approval and exhaustive UI/accessibility validation have NOT been recorded. All engines retained for later phases must pass their own functional release gates.
 
-Exactly **two themes: Light and Dark** using existing MALENJO blue/cyan. Home has a real **Open File** picker and **Recent Files**. CAD and DICOM are independent specialty viewers and support direct file-opening only to the extent decoding is genuinely supported. **Office output editors launch only after verified PDF→DOCX/XLSX/PPTX conversion**; no public standalone Office import paths or Windows Office associations. Native Windows file association policy belongs to the last phase.
+**Most recent verified production merge:** [PR #264](https://github.com/rafayamer/Malenjo-suite/pull/264), merge commit `28102225eb383dbf7a5d8543f03ca7cc6909edd7`. This handoff itself may subsequently advance the integration branch tip without changing that application-code baseline. Do **not** merge `main`.
 
-All **MAL-001–MAL-090** must be discoverable in a shared command catalog, and all **15 original screenshot tools** retained. Ten top ribbon categories must be exactly: Home, Edit, Organize, Optimize, Convert, Forms, Review, Protect, Automate, Tools. **Never substitute clickable fake functionality for a real command.** Engines not yet implemented may be represented in Phase 1 UI by accessible, explanatory, clearly disabled entries, but count as **NOT RELEASE-READY** under their later feature phases. Do not claim the 90 engines have been built simply because 90 commands are registered.
+## Merged, exact-head verified Phase 1 batches
 
-## Current exact technical state — verified live
+| PR | Integration merge | Actual changes |
+| --- | --- | --- |
+| [#260](https://github.com/rafayamer/Malenjo-suite/pull/260) | `23e968ce4ef9bcb678049a5ebc1e139245e8e8d1` | Master v2 ten compact PDF ribbon tabs, MAL-001–090 searchable discovery, real Save/Undo/Redo bindings, selectable PDF.js text hover repair |
+| [#261](https://github.com/rafayamer/Malenjo-suite/pull/261) | `1cfe00318b6cd9af26f46b6802d896a8ad6ed55c` | Home defaults to real Open File / expandable Recent Files; retains optional secondary document/file tools |
+| [#262](https://github.com/rafayamer/Malenjo-suite/pull/262) | `ed2a35b264b37d21d12df9794aa0dae406bf2588` | Chromium text-layer mouse hover + PDF opened across six viewport sizes and both themes, AI open/closed, viewport screenshots |
+| [#263](https://github.com/rafayamer/Malenjo-suite/pull/263) | `5fb15d7bf133702f60f012fa2847dd3d35ffa031` | Compact bottom status bar bound to real current PDF page count and zoom mode |
+| [#264](https://github.com/rafayamer/Malenjo-suite/pull/264) | `28102225eb383dbf7a5d8543f03ca7cc6909edd7` | Fix top-bar Undo/Redo stale availability after real PDF edits via stable command-controller registration and reactive refresh; real Save/Undo/Redo + independent PDF reopen regression |
 
-- [PR #260](https://github.com/rafayamer/Malenjo-suite/pull/260) is **OPEN, DRAFT, NOT MERGED**, base `integration/option-b-codespaces-validation`.
-- PR head as checked: `cd472ab8a017b2d7a15cef95608fea234404f40b`. **Re-check head on resumption**; never assume unchanged.
-- At that exact head the five-job [CI run #38256310110](https://github.com/rafayamer/Malenjo-suite/actions/runs/38256310110) is **SUCCESS** (frontend, Rust, Codespaces/Linux, Linux PDF execution and Windows provider).
-- At that exact head [Chromium acceptance run #38256310083](https://github.com/rafayamer/Malenjo-suite/actions/runs/38256310083) is **FAILURE**, job `114835488539`. Browser log says:
-  `PDF browser acceptance failure: PDF hover does not show I-beam`, at `scripts/pdf-ui-browser-smoke.mjs` around line 618.
-  The same browser run passed ten-tab / 90-feature Home discovery, conversion-only Office entry checks, top AI drawer, Home keyboard filters, command palette, responsive / two-theme 18-public-workspace captures, actual PDF→JPG export and 33-tool directory before failing.
-  Failure screenshot artifact: https://github.com/rafayamer/Malenjo-suite/actions/runs/38256310083/artifacts/11749853518
-- `/api/tags` proxy `ECONNREFUSED` was logged because local Ollama was not running in the browser test. The explicit failing assertion was PDF I-beam, not proof that the AI engine is available. Do not fake AI answers or conflate optional inference with deterministic PDF operations.
-- Previously merged PR #250 provided the PDF-first minimal shell and AI top drawer. PR #260 adds master-v2 ten-tab/90-feature UI and a compact status bar. These are **UI work**, not verification of all MAL-001–090 engines.
+**Final application-code head tested:** `4e37b91f24a303e501626346bd304668ac2090c6` from #264.
+**Exact-head full five-job CI:** [run 38268243481](https://github.com/rafayamer/Malenjo-suite/actions/runs/38268243481), **SUCCESS**.
+**Exact-head real Chromium acceptance:** [run 38268243441](https://github.com/rafayamer/Malenjo-suite/actions/runs/38268243441), **SUCCESS**.
+**Visual evidence:** [full Light/Dark modules + responsive real PDF review artifact](https://github.com/rafayamer/Malenjo-suite/actions/runs/38268243441/artifacts/11756210610) — screenshots are evidence **for** review, NOT recorded approval.
 
-**Important:** The full user-provided master specification is stored in the linked repository file on the integration branch (committed 2026-10-12). It takes precedence over earlier draft UI descriptions. The older ten-phase roadmap governs development/release sequencing unless explicitly revised; the v2.0 master document provides authoritative features, UX, security and acceptance criteria. Do not silently drop requirements because the v2.0 document also describes seven engineering milestones.
+Browser has exercised real PDF rendering, selectable text, Find, internal page links, PDF→JPG independent ZIP/JPEG checks, permanent rotation/undo/redo/export and independent PDF reopen, Home keyboard filters and disabled Office conversion gates, 10-tab/90-entry discovery, the original 33 PDF tool shortcut directory, document tab retention, AI panel interaction, six screen sizes (1920×1080, 1440×900, 1366×768, 1024×768, 768×600 and 430×720) in both themes, and live status updates.
 
-## Immediate next engineering task
+## Immutable product UI contract
 
-1. Re-check current GitHub refs and PR #260 source, exact head CI and browser logs. Inspect `src/suite/shell/theme.css`, `src/suite/pdf/PdfPageCanvas.tsx`, PDF text-layer/cursor CSS, and the browser I-beam assertion.
-2. **Repair PDF text-hover I-beam behavior in production UI** (do not suppress or weaken the acceptance test). Verify selectable text still works, including after opening the active document, toggling optional panels and AI, and changing theme. Re-run exact-head real Chromium acceptance.
-3. Check top quick-action Save/Undo/Redo are genuinely attached to valid PDF operations and disabled when unavailable; confirm status bar, ten categories, 90 command IDs, original 15 tools, and existing 33 live PDF tools are preserved. Test accessible icon hover/focus tooltips, overflow/flyouts, viewport fit and no side-panel overlap.
-4. Validate responsive layouts at 1920×1080, 1440×900, 1366×768, 1024×768, 768×600, plus narrow web viewport, in Light and Dark, with real PDF open and AI drawer opened/closed. Check recent file reopen/error paths and keyboard/screen reader controls.
-5. Once **the PR's exact final head** passes full CI and real browser acceptance, merge **only into `integration/option-b-codespaces-validation`** for the owner's Codespaces review. **Never merge `main` without explicit owner approval.**
-6. Continue closing all Phase 1 UI/UX acceptance defects and collect owner visual approval against supplied Foxit references. Do not start treating backend-only engines as Phase 1 blockers: preserve clear disabled UI state for later functionality work and their own strict gates.
+- **PDF first:** single window, no permanent workspace navigation rail or unrelated dashboard. Top quick-action bar, exactly ten compact PDF tabs (**Home, Edit, Organize, Optimize, Convert, Forms, Review, Protect, Automate, Tools**), document tabs, live central PDF canvas, compact status bar.
+- **Home:** genuine Open File picker and Recent Files collection. Secondary options are disclosed explicitly rather than always occupying the workspace.
+- **AI:** persistent top-bar AI icon opens the optional right Messenger-like assistant. Never invent AI answers or silently substitute cloud inference. No dependency on an Ollama service for deterministic PDF operations.
+- **Exactly Light and Dark themes**, established MALENJO blue/cyan, accessible keyboard interactions, icon tooltips and viewport-safe dialogs, no uncontrolled panel overlap.
+- **All 90 MAL command identifiers discoverable; all 15 legacy PDF tools remain mapped and retained; the 33 existing PDF shortcuts remain discoverable.** A catalog entry is NOT proof its engine is implemented. Unverified engines must remain clearly disabled and carry explanatory reasons.
+- **Office DOCX/XLSX/PPTX editors ONLY after a genuinely successful PDF conversion produces those outputs.** No standalone Office imports, workflows or file associations. CAD/DICOM opening stays limited to genuinely supported formats.
+- Preserve existing real PDF commands, transactional edits, undo/redo, source-file integrity, error feedback, and document tabs. NEVER restart the app or discard functioning behavior.
 
-## Reporting/acceptance standard
+## Remaining Phase 1 release blockers and next work
 
-The owner requires **binary status only: RELEASE-READY or NOT RELEASE-READY**. A development batch can be tested and merged while Phase 1 remains **NOT RELEASE-READY**. No feature is complete until its whole release contract passes. Do not inflate 220-ticket or 90-feature acceptance from superficial UI screenshots or green compile/tests. For every continuation, report: last merged integration SHA, current PR SHA/status, exact-head CI/browser results, actual functionality implemented, and **remaining blockers**.
+1. **Owner visual approval still missing** for full Foxit-inspired compact UI across Light/Dark screenshots and representative Codespaces PDF files. Do not infer approval from a green browser suite.
+2. **Manual accessibility and comprehensive screen-reader/tooltip/focus review not yet signed off**, especially disabled command descriptions, keyboard tab traversal, contextual flyouts and assistive feedback. Add deterministic tests for discovered defects.
+3. **Full realistic Home Recent Files recovery/reopen and error-path signoff** across browser and Windows desktop still needed; browser session files are intentionally ephemeral.
+4. **Exhaustive visual/panel layout review** needed at all prescribed sizes with AI narrow-mode, optional left/right PDF panels, dialogs and multi-document dirty states. The Chromium responsive matrix is substantial regression evidence, not full UX UAT.
+5. **Owner approval / Phase 1 acceptance trace** must be recorded in issue #121 before declaring RELEASE-READY. Continue narrow fix PRs with exact-head CI and Chromium, merge only into integration.
+6. PDF→Office real converters, advanced native editing, security, OCR/AI/CAD/DICOM and other feature engines remain explicitly **NOT RELEASE-READY in their later phases**. Never implement fake outputs or treat their release gates as completed by Phase 1 UI discovery.
 
-## Codespaces verification
+## Resume Codespaces evaluation
 
-From a Codespace:
 ```bash
 git fetch origin
 git switch integration/option-b-codespaces-validation
 git pull --ff-only origin integration/option-b-codespaces-validation
 npm run dev:codespace
 ```
-Open forwarded port **1420**. To inspect unfinished #260 before it merges, explicitly switch to `feat/phase1-master-v2-ribbon-current`, understanding it is **not** the validated integration build. Re-check branch/PR head first.
 
-## New chat first message (copy/paste)
+Open forwarded port `1420`. Use a real multi-page PDF and inspect text selection, Home/Recent, ten-tab ribbon, top Save/Undo/Redo, status bar, AI open/close, both themes and compact layouts. Record feedback and screenshots in issue #121.
 
-> Continue development of MALENJO Phase 1 UI/UX from GitHub repo `rafayamer/Malenjo-suite`. Read `docs/MALENJO_MASTER_SPEC_V2.md` and `docs/NEW_CHAT_HANDOFF.md` on `integration/option-b-codespaces-validation` first. **Do not start from scratch.** Inspect PR #260 (currently open and not merged), its exact-head CI and Chromium. The latest browser test failed because selectable PDF text loses its I-beam on hover. Fix that real regression, rerun exact-head browser and full CI, and merge the validated PR into the Codespaces integration branch only, never `main`. Then keep implementing and verifying remaining **Phase 1 UI/UX** requirements until the user's Foxit-style minimalist PDF-first design passes. Preserve ten ribbon tabs, discoverable MAL-001–090 catalog, 15 legacy tools, existing working PDF handlers, exactly Light/Dark, top-bar AI drawer, no permanent rail, true Open/Recent, and Office editors **only as automatic PDF-conversion outputs**. All unavailable engines must be honestly disabled, not fake. Report completed and remaining work using only **RELEASE-READY / NOT RELEASE-READY**; do not mark Phase 1 release-ready without complete acceptance and owner's visual approval.
+**Never merge to `main` without the owner's explicit final release approval.**
 
+## Suggested first task for a new chat
+
+> Read `docs/MALENJO_MASTER_SPEC_V2.md` and this handoff from `integration/option-b-codespaces-validation`. Do not restart. Check current integration tip, CI and PR history (#260–#264 verified and merged). Phase 1 remains NOT RELEASE-READY until visual approval and accessibility/real-user UAT. Continue narrow UI defect fixes with actual Chromium and full exact-head CI, only merging into integration. Never merge `main` or enable fake engines. Report latest SHA, actual functionality, tests and blockers.
