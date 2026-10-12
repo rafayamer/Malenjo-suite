@@ -52,7 +52,7 @@ async function main(){
     await page.locator('.app-shell-top-only').count()===1,
     'Permanent module sidebar was not eliminated');
   requireEvidence(await page.locator('.ml-start-hero').getByRole('button',{name:'Open File',exact:true}).isVisible() &&
-    await page.getByRole('button',{name:'Recent Files',exact:true}).isVisible(),
+    await page.locator('.ml-start-hero').getByRole('button',{name:'Recent Files',exact:true}).isVisible(),
     'Minimal central Home Open File / Recent Files entry points are missing');
   requireEvidence(await page.locator('.ml-start-more-tools:not([open])').count()===1,
     'Extra Home dashboard tools must remain hidden until requested');
