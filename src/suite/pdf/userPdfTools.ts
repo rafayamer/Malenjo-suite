@@ -27,11 +27,11 @@ export const USER_PDF_TOOLS: readonly UserPdfTool[] = [
   {id:'remove-pages',label:'Remove pages',group:'Organize PDF',category:'organize',actionId:'remove-pages',explanation:'Permanently remove selected pages after review.'},
   {id:'extract-pages',label:'Extract pages',group:'Organize PDF',category:'organize',actionId:'extract-pages',explanation:'Export selected pages as a separate PDF.'},
   {id:'organize-pdf',label:'Organize PDF',group:'Organize PDF',category:'organize',explanation:'Select, reorder, duplicate, insert and remove pages using the Organize ribbon and page panel.'},
-  {id:'scan-to-pdf',label:'Scan to PDF',group:'Organize PDF',category:'scan',destination:'scanner',explanation:'Open the local scanning workspace; remote mobile-to-browser transfer is not release-ready.'},
+  {id:'scan-to-pdf',label:'Scan to PDF',group:'Organize PDF',category:'optimize',destination:'scanner',explanation:'Open the local scanning workspace; remote mobile-to-browser transfer is not release-ready.'},
 
-  {id:'compress-pdf',label:'Compress PDF',group:'Optimize PDF',category:'convert',explanation:'Validated size reduction and image-quality comparison remain required.'},
-  {id:'repair-pdf',label:'Repair PDF',group:'Optimize PDF',category:'organize',explanation:'Recovering malformed PDFs without dropping content has not passed acceptance.'},
-  {id:'ocr-pdf',label:'OCR PDF',group:'Optimize PDF',category:'scan',explanation:'Searchable PDF OCR requires verified placement, Unicode support and independent text extraction.'},
+  {id:'compress-pdf',label:'Compress PDF',group:'Optimize PDF',category:'optimize',explanation:'Validated size reduction and image-quality comparison remain required.'},
+  {id:'repair-pdf',label:'Repair PDF',group:'Optimize PDF',category:'optimize',explanation:'Recovering malformed PDFs without dropping content has not passed acceptance.'},
+  {id:'ocr-pdf',label:'OCR PDF',group:'Optimize PDF',category:'optimize',explanation:'Searchable PDF OCR requires verified placement, Unicode support and independent text extraction.'},
 
   {id:'jpg-to-pdf',label:'JPG to PDF',group:'Convert to PDF',category:'convert',actionId:'images-to-pdf',explanation:'Create a local PDF from selected JPEG/PNG images.'},
   {id:'word-to-pdf',label:'Word to PDF',group:'Convert to PDF',category:'convert',explanation:'Full DOC/DOCX formatting and page fidelity have not been verified.'},
@@ -54,12 +54,12 @@ export const USER_PDF_TOOLS: readonly UserPdfTool[] = [
 
   {id:'unlock-pdf',label:'Unlock PDF',group:'PDF Security',category:'protect',explanation:'Authorized PDF password removal and cross-reader output validation remain required.'},
   {id:'protect-pdf',label:'Protect PDF',group:'PDF Security',category:'protect',explanation:'Strong PDF encryption with verified reader behavior remains required.'},
-  {id:'sign-pdf',label:'Sign PDF',group:'PDF Security',category:'sign',destination:'sign',explanation:'Open the signature workspace; certified signatures and remote requests remain separate acceptance requirements.'},
+  {id:'sign-pdf',label:'Sign PDF',group:'PDF Security',category:'protect',destination:'sign',explanation:'Open the signature workspace; certified signatures and remote requests remain separate acceptance requirements.'},
   {id:'redact-pdf',label:'Redact PDF',group:'PDF Security',category:'protect',explanation:'Permanent source-content erasure and post-export leakage scans remain required.'},
-  {id:'compare-pdf',label:'Compare PDF',group:'PDF Security',category:'convert',actionId:'compare-pdf',explanation:'Compare the selectable text of two PDFs; graphical side-by-side comparison is not yet supported.'},
+  {id:'compare-pdf',label:'Compare PDF',group:'PDF Security',category:'review',actionId:'compare-pdf',explanation:'Compare the selectable text of two PDFs; graphical side-by-side comparison is not yet supported.'},
 
-  {id:'ai-summarizer',label:'AI Summarizer',group:'PDF Intelligence',category:'ai',explanation:'Verified grounded one-click summaries and model availability are not release-ready. The top AI chat remains available.'},
-  {id:'translate-pdf',label:'Translate PDF',group:'PDF Intelligence',category:'ai',explanation:'Language translation with fully preserved PDF fonts and page layout is not release-ready.'},
+  {id:'ai-summarizer',label:'AI Summarizer',group:'PDF Intelligence',category:'tools',explanation:'Verified grounded one-click summaries and model availability are not release-ready. The top AI chat remains available.'},
+  {id:'translate-pdf',label:'Translate PDF',group:'PDF Intelligence',category:'tools',explanation:'Language translation with fully preserved PDF fonts and page layout is not release-ready.'},
   {id:'pdf-to-markdown',label:'PDF to Markdown',group:'PDF Intelligence',category:'convert',explanation:'Full headings, tables, links and image fidelity in Markdown output are not release-ready.'},
 ];
 
