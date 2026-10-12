@@ -693,9 +693,10 @@ async function main(){
     document.querySelector('.ml-status-pdf-view')?.textContent?.includes('Page 1 / 2'),
     null,{timeout:15000});
   const range=readerFooter.getByRole('slider',{name:'PDF zoom percentage'});
-  await range.fill('175');
+  await range.focus();
+  await range.press('End');
   await page.waitForFunction(()=>
-    document.querySelector('.ml-status-pdf-view')?.textContent?.includes('175%'),
+    document.querySelector('.ml-status-pdf-view')?.textContent?.includes('400%'),
     null,{timeout:15000});
   await readerFooter.getByRole('button',{name:'Actual size'}).click();
   console.log('PHASE1 real multipage scroll + reader footer + slider + rotate discoverability: PASS');
