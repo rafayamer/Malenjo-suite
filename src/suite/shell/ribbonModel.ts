@@ -26,7 +26,7 @@ export const RIBBON_TABS: RibbonTab[] = [
   {id:'home',label:'Home',actions:[
     {id:'open',label:'Open files',opensFiles:true},
     {id:'start',label:'Start Center',destination:'home'},
-    {id:'library',label:'Recent Files',destination:'files'},
+    {id:'library',label:'Files / Library',destination:'files'},
     {id:'pdf',label:'PDF Viewer',destination:'pdf'},
   ]},
   {id:'edit',label:'Edit',actions:[
