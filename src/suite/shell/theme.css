@@ -708,7 +708,10 @@
   position:absolute;
   color:transparent;
   white-space:pre;
-  cursor:text;
+  /* PDF.js can place matched text inside a markedContent wrapper span.
+     Both the wrapper and leaf spans must be real text-cursor hit targets. */
+  cursor:text!important;
+  pointer-events:auto;
   user-select:text;
   -webkit-user-select:text;
   transform-origin:0 0;
