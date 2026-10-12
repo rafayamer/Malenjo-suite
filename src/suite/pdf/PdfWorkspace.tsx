@@ -15,6 +15,7 @@ import {
   FileCheck2,
   PanelRightClose,
   PanelRightOpen,
+  Download, Printer, FilePenLine, Scissors, FilePlus2, ScanText,
   Sparkles,
   ShieldCheck,
   Maximize2,
@@ -175,6 +176,17 @@ function PdfLeftPanelIcon({id}:{id:PdfLeftPanelId}) {
   if (id === 'search') return <Search size={17}/>;
   if (id === 'layers') return <Square size={17}/>;
   return <ListChecks size={17}/>;
+}
+
+function PdfMinimalCommandIcon({label}: {label:string}) {
+  const value=label.toLowerCase();
+  if (/print/.test(value)) return <Printer size={18} aria-hidden="true"/>;
+  if (/export|save|download|extract/.test(value)) return <Download size={18} aria-hidden="true"/>;
+  if (/scan|ocr|recognize/.test(value)) return <ScanText size={18} aria-hidden="true"/>;
+  if (/delete|split|cut|crop/.test(value)) return <Scissors size={18} aria-hidden="true"/>;
+  if (/insert|add|append|create/.test(value)) return <FilePlus2 size={18} aria-hidden="true"/>;
+  if (/text|edit|highlight|comment|mark/.test(value)) return <FilePenLine size={18} aria-hidden="true"/>;
+  return <FileText size={18} aria-hidden="true"/>;
 }
 
 export default function PdfWorkspace({ session, active, notice, onBackToFiles, onOpenBrowserPdf, onNavigateModule, onDirtyChange, onSavingChange, registerCommands }: Props) {
@@ -2255,7 +2267,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             title={taskActionTitle(action)}
             aria-label={taskActionTitle(action)}
             onClick={()=>{void action.run();}}
-          >{action.label}</button>)}
+          ><PdfMinimalCommandIcon label={action.label}/></button>)}
           {!activeTaskActions.length&&<span className="pdf-task-empty">No operational {PDF_TASK_CATEGORY_LABELS[taskCategory].toLowerCase()} commands are available in this build yet. Use Ctrl+K to discover available document actions.</span>}
           {overflowTaskActions.length>0&&<details className="pdf-task-overflow">
             <summary aria-label={`More ${PDF_TASK_CATEGORY_LABELS[taskCategory]} tools`}>More</summary>
