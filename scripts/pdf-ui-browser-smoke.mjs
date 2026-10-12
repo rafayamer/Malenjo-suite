@@ -806,7 +806,7 @@ async function main(){
     await undoQuick.isDisabled() && await redoQuick.isDisabled(),
     'Top-bar Save / Undo / Redo did not reflect the unedited live PDF');
   await page.locator('.document-session-panel.active .pdf-task-categories button').filter({hasText:'Organize'}).click();
-  await page.locator('.document-session-panel.active .pdf-context-toolbar').getByRole('button',{name:/Rotate selected/}).click();
+  await page.locator('.document-session-panel.active .pdf-context-toolbar').getByRole('button',{name:/Rotate PDF pages/}).click();
   await page.waitForFunction(()=>
     Array.from(document.querySelectorAll('.pdf-notice')).some(
       node=>node.textContent?.includes('Permanently rotated'),
