@@ -358,7 +358,7 @@ export default function ScannerWorkspace({ mode, onBackToFiles }: Props) {
     </div>
 
     {(message || error) && <div className={error ? 'scanner-message error' : 'scanner-message'}
-      role={error?'alert':'status'}>{error?'MAL-SCAN-001 · ':''}{error || message}</div>
+      role={error?'alert':'status'}>{error?'MAL-SCAN-001 · ':''}{error || message}</div>}
 
     {ocrBusy && <div className="ocr-progress">
       <LoaderCircle className="spin" size={15}/><span>{ocrStatus}</span>
