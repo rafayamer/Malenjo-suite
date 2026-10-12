@@ -1628,3 +1628,13 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
   .app-shell-top-only .search{flex:1 1 70px;max-width:none;min-width:60px}
   .app-shell-top-only .topbar-primary,.app-shell-top-only .topbar-actions{gap:1px}
 }
+
+
+.app-shell-top-only .ml-open-feedback{display:flex;align-items:center;gap:12px;min-height:30px;
+  padding:5px 12px;background:var(--ml-info-bg);color:var(--ml-info-fg);
+  font-size:11px;border-bottom:1px solid var(--ml-border);flex:0 0 auto}
+.app-shell-top-only .ml-open-feedback span{min-width:0;flex:1}
+.app-shell-top-only .ml-open-feedback button{display:grid;place-items:center;flex:0 0 27px;
+  height:25px;border:0;border-radius:4px;cursor:pointer;background:transparent;color:inherit}
+.app-shell-top-only .ml-open-feedback button:hover{background:var(--ml-hover)}
+.app-shell-top-only .suite-ribbon-hint{display:none!important}
