@@ -164,12 +164,16 @@ export default function PdfPageCanvas({
           textDivsRef.current=textLayer.textDivs.filter(
             (node):node is HTMLSpanElement=>node instanceof HTMLSpanElement,
           );
-          // PDF.js text spans may receive inline styles as the layer is
-          // reconstructed. Preserve text selection affordance even when
-          // overlays or viewport changes restyle the surrounding canvas.
-          for (const span of textDivsRef.current) {
+          // PDF.js emits wrapper spans (including marked-content containers)
+          // in addition to TextLayer.textDivs. Those wrappers can be the
+          // browser hit target for an entire selectable text run. Apply the
+          // text cursor to ALL generated spans, not just the leaf textDivs,
+          // so hovering and selecting PDF text works at either DOM depth.
+          // Keep textDivsRef restricted to actual glyph runs for Find highlights.
+          for (const span of textContainer.querySelectorAll('span')) {
             span.style.setProperty('cursor','text','important');
             span.style.setProperty('user-select','text','important');
+            span.style.setProperty('-webkit-user-select','text','important');
           }
           setTextRevision(revision=>revision+1);
           } catch (error) {
