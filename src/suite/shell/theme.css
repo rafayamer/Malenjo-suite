@@ -1225,3 +1225,17 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 .sidebar .nav-label,.suite-title strong,.suite-ribbon-tabs button,
 .suite-ribbon-action,.topbar .command,.document-tab-main {font-size:var(--ml-text-small)}
 .sidebar section h3,.local-state span,.eyebrow {font-size:var(--ml-text-compact)}
+
+
+/* WCAG non-text active-state discernibility: cyan remains MALENJO's brand
+   accent, but a darker member of its blue palette marks selected tabs and
+   radio focus in Light mode against near-white surfaces. */
+:root[data-theme="light"] .suite-ribbon-tabs button[aria-selected="true"] {
+  border-bottom-color:#145cab;
+}
+:root[data-theme="light"] .appearance-choice:focus-within {
+  outline-color:#145cab;
+}
+:root[data-theme="light"] .pdf-left-rail button.active {
+  box-shadow:inset 2px 0 0 #145cab;
+}
