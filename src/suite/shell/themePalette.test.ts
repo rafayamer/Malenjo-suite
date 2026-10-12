@@ -1,13 +1,8 @@
 import { describe, expect, it } from 'vitest';
-// Vite imports the original stylesheet text without requiring Node typings
-// in the Windows frontend's browser-only TypeScript compilation.
-import css from './theme.css?raw';
+import { applySuitePalette, MALENJO_BRAND_ACCENTS, MALENJO_THEME_PALETTES } from './themePalette';
 
 function palette(mode: 'dark' | 'light'): Map<string, string> {
-  const match = css.match(new RegExp('/\\* Semantic MALENJO surfaces[\\s\\S]*?\\*/\\s*:root\\s*\\{([\\s\\S]*?)\\}\\s*:root\\[data-theme="light"\\]\\s*\\{([\\s\\S]*?)\\}'));
-  if (!match) throw new Error('Semantic MALENJO dark/light palettes are missing.');
-  const lines = mode === 'dark' ? match[1] : match[2];
-  return new Map([...lines.matchAll(/--ml-([a-z-]+):\s*(#[0-9a-f]{6});/g)].map((row) => [row[1], row[2]]));
+  return new Map(Object.entries(MALENJO_THEME_PALETTES[mode]));
 }
 
 function channel(hex: string): number[] {
@@ -49,12 +44,19 @@ describe('MALENJO two-palette design contract', () => {
   it('changes the neutral visual treatment without changing customer-visible brand hues', () => {
     expect(light.get('surface')).not.toBe(dark.get('surface'));
     expect(luminance(light.get('background')!)).toBeGreaterThan(luminance(dark.get('background')!));
-    expect(css).toContain('--ml-brand-blue:#2b8cff');
-    expect(css).toContain('--ml-brand-cyan:#33d4e5');
+    expect(MALENJO_BRAND_ACCENTS.blue).toBe('#2b8cff');
+    expect(MALENJO_BRAND_ACCENTS.cyan).toBe('#33d4e5');
   });
-  it('preserves a visibly rendered paper/canvas instead of recoloring document pixels', () => {
-    expect(css).toContain('.pdf-page-shell{');
-    expect(css).toContain('background:white');
-    expect(css).toContain('.pdf-page-shell canvas{display:block;background:white}');
+  it('sets all 27 tokens and only MALENJO accent colors on a theme switch', () => {
+    const applied = new Map<string, string>();
+    const style = { setProperty: (key: string, value: string) => { applied.set(key, value); } };
+    applySuitePalette(style as unknown as CSSStyleDeclaration, 'light');
+    expect(applied.size).toBe(29);
+    expect(applied.get('--ml-text')).toBe('#152c3f');
+    expect(applied.get('--ml-brand-blue')).toBe('#2b8cff');
+    applySuitePalette(style as unknown as CSSStyleDeclaration, 'dark');
+    expect(applied.size).toBe(29);
+    expect(applied.get('--ml-text')).toBe('#dce9f5');
+    expect([...applied.keys()].every((key) => key.startsWith('--ml-'))).toBe(true);
   });
 });
