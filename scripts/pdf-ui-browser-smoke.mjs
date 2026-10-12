@@ -454,6 +454,33 @@ async function main(){
     await featureGrid.locator('[data-pdf-feature="export-text"] button').isEnabled(),
     'PDF Features grid did not distinguish operational and unverified tools');
   await featureGrid.getByRole('button',{name:'Close PDF features'}).click();
+  // This is a REAL two-page PDF-to-JPG conversion. Inspect the independent
+  // downloaded ZIP and decode both JPEGs with Chromium (no mocked raster).
+  const jpgTool=activePdf.locator('[data-pdf-feature="export-page-jpeg"] button');
+  requireEvidence(await jpgTool.isEnabled(),'PDF-to-JPG was listed but not executable');
+  const downloadPromise=page.waitForEvent('download',{timeout:60000});
+  await jpgTool.click();
+  const jpgDownload=await downloadPromise;
+  requireEvidence(jpgDownload.suggestedFilename().endsWith('-pages-jpg.zip'),
+    'PDF-to-JPG emitted the wrong file type: '+jpgDownload.suggestedFilename());
+  const jpgPath=join(acceptanceDir,'independent-pdf-to-jpg.zip');
+  await jpgDownload.saveAs(jpgPath);
+  const jpgFiles=unzipSync(new Uint8Array(readFileSync(jpgPath)));
+  requireEvidence(JSON.stringify(Object.keys(jpgFiles))===JSON.stringify(['page-0001.jpg','page-0002.jpg']),
+    'PDF-to-JPG skipped or reordered source pages');
+  for(const [filename,jpgBytes] of Object.entries(jpgFiles)){
+    const decoded=await page.evaluate(async base64=>{
+      const image=new Image();
+      image.src='data:image/jpeg;base64,'+base64;
+      await image.decode();
+      return {width:image.naturalWidth,height:image.naturalHeight};
+    },Buffer.from(jpgBytes).toString('base64'));
+    requireEvidence(jpgBytes[0]===0xff&&jpgBytes[1]===0xd8&&
+      jpgBytes[jpgBytes.length-2]===0xff&&jpgBytes[jpgBytes.length-1]===0xd9&&
+      decoded.width>700&&decoded.height>1000,
+      'PDF-to-JPG output is not a decodable full-resolution page: '+filename);
+  }
+  console.log('PHASE1 real PDF-to-JPG two-page export, independent ZIP inspection and JPEG decoding: PASS');
   requireEvidence(await featureGrid.count()===0 &&
     await activePdf.locator('.pdf-page-shell canvas').first().isVisible(),
     'Feature gallery obscured or navigated away from the PDF');
