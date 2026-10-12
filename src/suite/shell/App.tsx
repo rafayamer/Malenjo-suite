@@ -684,7 +684,7 @@ export default function App() {
             aria-label="All tools" title="All tools — browse MALENJO modules"
             aria-expanded={moduleMenuOpen} aria-haspopup="dialog"
             onClick={()=>setModuleMenuOpen(value=>!value)}>
-            <LayoutGrid size={18} aria-hidden="true"/><span>Tools</span><ChevronDown size={12} aria-hidden="true"/>
+            <LayoutGrid size={18} aria-hidden="true"/><span>Workspaces</span><ChevronDown size={12} aria-hidden="true"/>
           </button>
         </div>
         <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);openCommandPalette();}} placeholder="Search commands" aria-label="Search commands"/><kbd>Ctrl K</kbd></div>
