@@ -29,6 +29,14 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Launch all 22 workspaces and verify real PDF workflows in Chromium
         run: node scripts/pdf-ui-browser-smoke.mjs
+      - name: Publish Phase 3 light/dark visual review screenshots
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-malenjo-dark-light-visual-review
+          path: .build/pdf-ui-browser/theme-review/*.png
+          retention-days: 14
+          if-no-files-found: error
       - name: Upload screenshot when PDF UI acceptance fails
         if: failure()
         uses: actions/upload-artifact@v4

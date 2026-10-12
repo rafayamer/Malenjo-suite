@@ -37,6 +37,7 @@ import HomeWorkspace from '../home/HomeWorkspace';
 import DocumentTabs from './DocumentTabs';
 import RibbonShell from './RibbonShell';
 import { nextSuiteTheme, readSuiteTheme, saveSuiteTheme, type SuiteTheme } from './appearance';
+import { applySuitePalette } from './themePalette';
 import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
 import { CANONICAL_COMMAND_PALETTE_EXAMPLES } from './commandPaletteModel';
 import type { DocumentCommandController } from '../commands/types';
@@ -54,6 +55,7 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
+    applySuitePalette(document.documentElement.style, theme);
     try { saveSuiteTheme(window.localStorage, theme); } catch { /* private context */ }
   }, [theme]);
   const [sessions, setSessions] = useState<DocumentSession[]>([]);
