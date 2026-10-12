@@ -15,6 +15,7 @@ import {
   type DocumentSession,
 } from '../files/session';
 import type { LibraryDocument } from '../files/types';
+import { isMalenjoDirectOpenExtension, isMalenjoDirectOpenKind } from '../files/openPolicy';
 import {
   addLibraryDocumentsByPaths,
   chooseAndAddDocuments,
@@ -108,6 +109,13 @@ export default function App() {
   }
 
   function openFromLibrary(document: LibraryDocument) {
+    if (!isMalenjoDirectOpenKind(document.kind)) {
+      setWorkspaceNotices(current=>({...current,__open:
+        'Only PDF, CAD and DICOM files open directly. Word, Excel and PowerPoint viewers are available solely after successful PDF conversion.'}));
+      setActive('pdf');
+      setActiveSessionId(null);
+      return;
+    }
     const existing = sessions.find((session) => session.document.id === document.id);
     if (existing) {
       activateSession(existing.id);
@@ -133,8 +141,13 @@ export default function App() {
   }
 
   function openBrowserFiles(files: FileList | File[]) {
-    const documents = registerBrowserFiles(files);
-    documents.forEach((document) => openFromLibrary(markBrowserDocumentOpened(document)));
+    const selected=Array.from(files);
+    const supported=selected.filter(file=>isMalenjoDirectOpenExtension(file.name));
+    if (supported.length!==selected.length) {
+      setWorkspaceNotices(current=>({...current,__open:
+        'Only PDF, CAD and DICOM can open directly. DOCX, XLSX and PPTX open only as verified PDF conversion outputs.'}));
+    }
+    registerBrowserFiles(supported).forEach(document=>openFromLibrary(markBrowserDocumentOpened(document)));
   }
 
   async function openDocumentsFromPicker() {
@@ -586,7 +599,7 @@ export default function App() {
         className="visually-hidden"
         type="file"
         multiple
-        accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.webp,.tif,.tiff,.bmp,.dxf,.dwg,.dcm,.dicom"
+        accept=".pdf,.dxf,.dwg,.dcm,.dicom"
         onChange={(event) => {
           if (event.target.files) openBrowserFiles(event.target.files);
           event.target.value = '';
