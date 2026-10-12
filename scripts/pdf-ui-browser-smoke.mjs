@@ -467,6 +467,32 @@ async function main(){
     await featureGrid.locator('[data-pdf-feature="export-text"] button').isEnabled(),
     'PDF Features grid did not distinguish operational and unverified tools');
 
+  // Master Spec v2.0 release gate: every MAL-001…MAL-090 must be
+  // visible by name or ID and safely unavailable until independently accepted.
+  await featureGrid.getByRole('button',{name:'All 90 capabilities'}).click();
+  requireEvidence(await featureGrid.locator('[data-master-command]').count()===90 &&
+    await featureGrid.locator('[data-pdf-command-category]').count()===9,
+    'Master v2.0 90-command directory is incomplete or contains orphan categories');
+  for(const id of ['MAL-001','MAL-015','MAL-035','MAL-037','MAL-063','MAL-071','MAL-089','MAL-090']){
+    const command=featureGrid.locator('[data-master-command="'+id+'"]');
+    requireEvidence(await command.count()===1 && await command.locator('button').isDisabled() &&
+      await command.locator('svg').count()===1,
+      'A master command is missing, lacks icon or incorrectly advertises acceptance: '+id);
+  }
+  const masterSearch=featureGrid.getByRole('searchbox',{name:'Search 90 PDF capabilities'});
+  await masterSearch.fill('MAL-063');
+  requireEvidence(await featureGrid.locator('[data-master-command]').count()===1 &&
+    await featureGrid.locator('[data-master-command="MAL-063"] button').isDisabled(),
+    'Searching the master command ID did not reveal real redaction safely');
+  await masterSearch.fill('');
+  const listedIds=await featureGrid.locator('[data-master-command]').evaluateAll(nodes=>
+    nodes.map(node=>node.getAttribute('data-master-command')));
+  requireEvidence(listedIds.every((id,index)=>id==='MAL-'+String(index+1).padStart(3,'0'))===false,
+    'No categories were applied to the 90-feature directory');
+  requireEvidence(new Set(listedIds).size===90,
+    'Duplicate feature identifiers exist in the master command UI');
+  console.log('PHASE1 90/90 searchable PDF capabilities, disabled/unavailable discovery: PASS');
+
   // The user-facing feature index is a complete, searchable PDF suite
   // directory, never a separate Word/Excel/PowerPoint application menu.
   await featureGrid.getByRole('button',{name:'All 33 PDF tools'}).click();
