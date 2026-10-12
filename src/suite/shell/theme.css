@@ -1890,3 +1890,38 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 @media(prefers-reduced-motion:reduce) {
   .ml-command-catalog * {transition:none!important;animation:none!important}
 }
+
+
+/* v2 quick bar: genuine, explicit PDF save-copy/undo/redo actions. Disabled
+   commands remain explanatory and other file types are not impersonated. */
+.app-shell-top-only .topbar-primary .command,
+.app-shell-top-only .topbar-actions .command {
+  flex:0 0 40px;min-width:40px;width:40px;height:40px;
+}
+.app-shell-top-only .topbar-primary .command:disabled {
+  opacity:.40;cursor:not-allowed;
+}
+.app-shell-top-only .topbar-primary .topbar-tool-trigger {
+  width:auto;min-width:66px;flex:0 0 auto;
+}
+.app-shell-top-only .topbar .suite-title {
+  flex:0 1 180px;max-width:180px;
+}
+.app-shell-top-only .topbar .search {min-width:48px;flex:1 1 90px}
+@media(max-width:1000px) {
+  .app-shell-top-only .topbar .suite-title {flex-basis:105px}
+  .app-shell-top-only .suite-title small {display:none}
+}
+@media(max-width:760px) {
+  /* Reduced layout keeps Home, Open, Tools, Search, AI and Theme reachable.
+     Save/Undo/Redo stay available through the active PDF contextual ribbon. */
+  .app-shell-top-only .topbar-primary .topbar-quick-history {display:none}
+  .app-shell-top-only .topbar-primary .topbar-tool-trigger {width:40px;min-width:40px}
+}
+@media(max-width:510px) {
+  .app-shell-top-only .topbar .suite-title {display:none}
+  .app-shell-top-only .topbar-actions .topbar-user {display:none}
+  .app-shell-top-only .topbar-actions .command[aria-label="Open command palette"] {display:none}
+  .app-shell-top-only .topbar {gap:2px}
+  .app-shell-top-only .search {min-width:50px;max-width:none}
+}
