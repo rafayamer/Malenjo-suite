@@ -453,6 +453,31 @@ async function main(){
     await featureGrid.locator('[data-pdf-feature="to-docx"] button').isDisabled() &&
     await featureGrid.locator('[data-pdf-feature="export-text"] button').isEnabled(),
     'PDF Features grid did not distinguish operational and unverified tools');
+
+  // The user-facing feature index is a complete, searchable PDF suite
+  // directory, never a separate Word/Excel/PowerPoint application menu.
+  await featureGrid.getByRole('button',{name:'All 33 PDF tools'}).click();
+  requireEvidence(await featureGrid.locator('[data-user-pdf-tool]').count()===33 &&
+    await featureGrid.locator('.pdf-user-tool-group').count()===7,
+    'User-visible PDF manipulation suite does not expose all 33 named tools in seven groups');
+  for(const id of ['pdf-to-word','pdf-to-excel','pdf-to-powerpoint','protect-pdf','redact-pdf']){
+    requireEvidence(await featureGrid.locator('[data-user-pdf-tool="'+id+'"] button').isDisabled(),
+      'Unaccepted conversion/security tool was incorrectly executable: '+id);
+  }
+  for(const id of ['merge-pdf','split-pdf','jpg-to-pdf','pdf-to-jpg']){
+    requireEvidence(await featureGrid.locator('[data-user-pdf-tool="'+id+'"] svg').count()===1,
+      'Named working PDF tool does not have a meaningful icon: '+id);
+  }
+  const toolSearch=featureGrid.getByRole('searchbox',{name:'Find PDF tool'});
+  await toolSearch.fill('compress');
+  requireEvidence(await featureGrid.locator('[data-user-pdf-tool]').count()===1 &&
+    await featureGrid.locator('[data-user-pdf-tool="compress-pdf"] button').isDisabled(),
+    'PDF feature search returned misleading results or enabled unverified compression');
+  await toolSearch.fill('');
+  await featureGrid.getByRole('button',{name:'Current ribbon'}).click();
+  requireEvidence(await featureGrid.locator('[data-pdf-feature="export-text"]').count()===1,
+    'Returning from all PDF tools lost the current ribbon actions');
+  console.log('PHASE1 complete 33-tool, seven-group searchable PDF feature directory: PASS');
   await featureGrid.getByRole('button',{name:'Close PDF features'}).click();
   // This is a REAL two-page PDF-to-JPG conversion. Inspect the independent
   // downloaded ZIP and decode both JPEGs with Chromium (no mocked raster).
