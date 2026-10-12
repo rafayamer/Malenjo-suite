@@ -151,6 +151,8 @@ interface Props {
   onNavigateModule?(id:ModuleId): void;
   onDirtyChange?(dirty:boolean): void;
   onSavingChange?(saving:boolean): void;
+  /** Read-only, real renderer state for the compact application status bar. */
+  onViewStatusChange?(status:{page:number;pageCount:number;zoom:string}):void;
   registerCommands?: RegisterDocumentCommands;
 }
 
@@ -195,7 +197,7 @@ function PdfMinimalCommandIcon({label}: {label:string}) {
   return <FileText size={18} aria-hidden="true"/>;
 }
 
-export default function PdfWorkspace({ session, active, notice, onBackToFiles, onOpenBrowserPdf, onNavigateModule, onDirtyChange, onSavingChange, registerCommands }: Props) {
+export default function PdfWorkspace({ session, active, notice, onBackToFiles, onOpenBrowserPdf, onNavigateModule, onDirtyChange, onSavingChange, onViewStatusChange, registerCommands }: Props) {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -2100,6 +2102,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     : fitMode === 'page'
       ? 'Fit page'
       : `${Math.round(zoom * 100)}%`;
+
+  // Keep the shell status strip synchronized with the actual live PDF reader.
+  // Do not synthesize a page count or make the app chrome modify the PDF.
+  useEffect(()=>{
+    if(active&&session)onViewStatusChange?.({page:currentPage,pageCount,zoom:zoomLabel});
+  },[active,session?.id,currentPage,pageCount,zoomLabel,onViewStatusChange]);
 
   const viewPages=pdfViewPages(viewMode,currentPage,pageCount);
 

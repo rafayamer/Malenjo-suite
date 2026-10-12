@@ -652,6 +652,21 @@ async function main(){
   requireEvidence(/2 match/i.test(await page.locator('.pdf-search-status').innerText()),
     'Find did not report matches from two real PDF pages');
   console.log('MALENJO UI Find + visible text highlights: PASS');
+  // Master v2 bottom status must be driven by the active PDF reader, not a
+  // constant "working copy" badge. Exercise zoom and actual page numbers.
+  const liveStatus=page.locator('.ml-bottom-statusbar .ml-status-pdf-view');
+  await liveStatus.waitFor({state:'visible',timeout:15000});
+  requireEvidence(/Page [12] \/ 2 · Fit width/.test(await liveStatus.innerText()),
+    'Compact status bar does not reflect real two-page PDF and fit mode: '+await liveStatus.innerText());
+  await page.getByRole('button',{name:'Actual size'}).click();
+  await page.waitForFunction(()=>
+    document.querySelector('.ml-bottom-statusbar .ml-status-pdf-view')?.textContent?.includes('100%'),
+    null,{timeout:15000});
+  await page.getByRole('button',{name:'Zoom mode: 100%'}).click();
+  await page.waitForFunction(()=>
+    document.querySelector('.ml-bottom-statusbar .ml-status-pdf-view')?.textContent?.includes('Fit width'),
+    null,{timeout:15000});
+  console.log('PHASE1 live PDF page count and real zoom mode in compact status bar: PASS');
 
   // Master v2 Phase 1 responsive + appearance matrix on a REAL open PDF.
   // Keep PDF.js selectable text functional through live theme changes,
