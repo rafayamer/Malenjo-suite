@@ -581,21 +581,45 @@ async function main(){
   requireEvidence(sideBounds.workRight<=sideBounds.drawerLeft+2,
     'AI drawer overlapped the PDF workspace instead of sharing the window: '+JSON.stringify(sideBounds));
   await page.getByRole('button',{name:'Close MALENJO AI'}).click();
-  for(const width of [1024,800,680,430]){
-    await page.setViewportSize({width,height:830});
-    const collision=await page.locator('.document-session-panel.active .pdf-context-toolbar')
-      .evaluate(toolbar=>{
-        const actions=toolbar.querySelector('.pdf-task-actions')?.getBoundingClientRect();
-        const controls=toolbar.querySelector('.pdf-view-controls')?.getBoundingClientRect();
-        const bounds=toolbar.getBoundingClientRect();
-        return {actionsRight:actions?.right??0,controlsLeft:controls?.left??0,
-          controlsRight:controls?.right??0,toolbarRight:bounds.right};
+  // Verify the five Master v2 window areas at desktop and compact sizes.
+  // The bottom status controls, not a duplicate top toolbar, own page/zoom.
+  for(const [width,height] of [[1920,1080],[1440,900],[1366,768],[1024,768],[768,600],[430,830],[320,720]]){
+    await page.setViewportSize({width,height});
+    const layout=await page.locator('.document-session-panel.active .pdf-workspace')
+      .evaluate(workspace=>{
+        const toolbar=workspace.querySelector('.pdf-context-toolbar')?.getBoundingClientRect();
+        const actions=workspace.querySelector('.pdf-task-actions')?.getBoundingClientRect();
+        const canvas=workspace.querySelector('.pdf-layout')?.getBoundingClientRect();
+        const footer=workspace.querySelector('.pdf-bottom-status')?.getBoundingClientRect();
+        const oldTop=workspace.querySelector('.pdf-view-controls');
+        return {
+          width:window.innerWidth,documentWidth:document.documentElement.scrollWidth,
+          toolbarRight:toolbar?.right??Infinity,actionsRight:actions?.right??Infinity,
+          canvasBottom:canvas?.bottom??Infinity,footerTop:footer?.top??-1,
+          footerRight:footer?.right??Infinity,footerHeight:footer?.height??0,
+          oldTopVisible:oldTop ? getComputedStyle(oldTop).display!=='none' : false,
+        };
       });
-    requireEvidence(collision.actionsRight<=collision.controlsLeft+3 &&
-      collision.controlsRight<=collision.toolbarRight+3,
-      'PDF buttons/panels overlap at '+width+'px: '+JSON.stringify(collision));
+    requireEvidence(layout.documentWidth<=width+2 &&
+      layout.toolbarRight<=width+2 &&
+      layout.actionsRight<=layout.toolbarRight+2 &&
+      layout.canvasBottom<=layout.footerTop+3 &&
+      layout.footerRight<=width+2 &&
+      layout.footerHeight>=28 && layout.footerHeight<=36 &&
+      !layout.oldTopVisible,
+      'Five-area PDF layout clips or overlaps at '+width+'x'+height+': '+JSON.stringify(layout));
+    requireEvidence(await page.getByRole('button',{name:'MALENJO AI',exact:true}).isVisible(),
+      'Persistent AI top icon is not reachable at '+width);
   }
   await page.setViewportSize({width:1440,height:900});
+  const statusBar=activePdf.getByRole('contentinfo',{name:'PDF document status and page navigation'});
+  requireEvidence(await statusBar.isVisible() &&
+    await statusBar.getByRole('button',{name:'Status bar zoom in'}).isEnabled() &&
+    await page.getByRole('button',{name:'Save document'}).count()===1 &&
+    await page.getByRole('button',{name:'Undo document change'}).count()===1 &&
+    await page.getByRole('button',{name:'Redo document change'}).count()===1,
+    'Document quick controls or live bottom PDF status are missing');
+  console.log('PHASE1 v2 top quick actions and functional PDF bottom status bar: PASS');
   console.log('MALENJO PDF icon ribbon non-overlap, hidden sidebars, side-chat coexistence: PASS');
   console.log('MALENJO browser document tab opened');
   await page.waitForFunction(()=>
