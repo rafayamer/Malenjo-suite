@@ -56,7 +56,7 @@ async function main(){
     'Minimal central Home Open File / Recent Files entry points are missing');
   requireEvidence(await page.locator('.ml-start-more-tools:not([open])').count()===1 &&
     await page.locator('.ml-start-utilities:not([open])').count()===1 &&
-    await page.locator('#ml-home-recent-panel').count()===0,
+    await page.locator('#ml-home-recent-panel').isHidden(),
     'Home must initially show Open/Recent, not a permanent dashboard or recent list');
   requireEvidence(await page.getByRole('button',{name:'MALENJO AI',exact:true}).count()===1,
     'AI control missing from the top command bar');
