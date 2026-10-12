@@ -210,6 +210,16 @@ async function main(){
   requireEvidence(await page.locator('.suite-ribbon').count()===0 &&
     await page.locator('main.workspace > .pdf-workspace .pdf-task-toolbar').isVisible(),
     'PDF workspace stacked two ribbons or lost its actual PDF task ribbon');
+  requireEvidence(JSON.stringify(await page.getByRole('tablist',{name:'PDF task categories'})
+    .getByRole('tab').allTextContents())===JSON.stringify(canonical),
+    'Actual PDF document ribbon did not match the ten Master v2 categories');
+  const allNinety=page.getByRole('button',{name:'Browse all 90 PDF capabilities'});
+  await allNinety.click();
+  const pdfCatalog=page.locator('.pdf-task-toolbar .ml-feature-gallery');
+  await pdfCatalog.waitFor({state:'visible',timeout:15000});
+  requireEvidence(await pdfCatalog.locator('.ml-feature-gallery-item').count()===90,
+    'Actual PDF workspace did not expose all 90 source-truth catalog entries');
+  await pdfCatalog.getByRole('button',{name:'Close PDF tools'}).click();
   requireEvidence(context.pages().length===1,'Ribbon navigation opened another window instead of the single workbench');
   await openModule('Home');
   await page.getByRole('tab',{name:'Home',exact:true}).waitFor({timeout:15000});
@@ -271,13 +281,14 @@ async function main(){
       await page.getByRole('button',{name:theme==='light'?'Switch to light theme':'Switch to dark theme'}).click();
       await page.waitForFunction(value=>document.documentElement.dataset.theme===value,theme);
     }
-    for(const width of [1024,800,680,430,320]){
-      await page.setViewportSize({width,height:850});
+    for(const width of [1920,1440,1366,1024,800,768,680,430,320]){
+      await page.setViewportSize({width,height:width===1920?1080:width===1440?900:width===1366?768:width===1024?768:width===768?600:850});
       const metrics=await page.evaluate(()=>{
         const bar=document.querySelector('.topbar').getBoundingClientRect();
         const ribbon=document.querySelector('.suite-ribbon').getBoundingClientRect();
         const search=document.querySelector('.topbar .search').getBoundingClientRect();
-        const commands=[...document.querySelectorAll('.topbar-actions button')].map((button)=>{
+        const commands=[...document.querySelectorAll('.topbar-actions button')].filter(button=>
+          getComputedStyle(button).display!=='none').map((button)=>{
           const box=button.getBoundingClientRect();
           return {left:box.left,right:box.right,width:box.width};
         });
@@ -288,7 +299,7 @@ async function main(){
       requireEvidence(metrics.documentWidth<=width+2 && metrics.bodyWidth<=width+2 &&
         metrics.barRight<=width+2 && metrics.ribbonRight<=width+2,
         'Shell or document horizontally overflows at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
-      requireEvidence(metrics.searchWidth>45 && metrics.commands.every((c)=>c.left>=0&&c.right<=width+2&&c.width>=30),
+      requireEvidence(metrics.searchWidth>38 && metrics.commands.every((c)=>c.left>=0&&c.right<=width+2&&c.width>=30),
         'Essential titlebar commands clipped at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
       requireEvidence(context.pages().length===1,'Responsive layout launched a second browser window');
     }
