@@ -662,7 +662,7 @@ async function main(){
         return {
           viewport:innerWidth, documentWidth:document.documentElement.scrollWidth,
           ai:rect('.ml-top-ai'),
-          ribbon:rect('.suite-ribbon'),
+          ribbon:rect('.document-session-panel.active .pdf-task-categories'),
           status:rect('.ml-bottom-statusbar'),
           pdfToolbar:rect('.document-session-panel.active .pdf-context-toolbar'),
         };
