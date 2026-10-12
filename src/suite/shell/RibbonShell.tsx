@@ -83,7 +83,7 @@ export default function RibbonShell({workspace,onNavigate,onOpenFiles}:Props) {
           ?action.label+' — '+action.unavailableReason
           :action.tooltip?action.label+' — '+action.tooltip:action.label;
         return <span key={action.id} className="ml-ribbon-tooltip-wrap" title={title}>
-          <button type="button" className="suite-ribbon-action" disabled={Boolean(action.unavailableReason)}
+          <button type="button" className="suite-ribbon-action ml-ribbon-primary-action" disabled={Boolean(action.unavailableReason)}
             aria-label={title} title={title}
             onClick={()=>{
               if(action.unavailableReason)return;
