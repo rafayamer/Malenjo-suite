@@ -2159,6 +2159,20 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }
   };
 
+  // Preserve ordinary wheel scrolling through the whole PDF. Modified wheel
+  // events zoom the actual page instead of magnifying the whole application.
+  useEffect(()=>{
+    const reader=scrollRef.current;
+    if(!reader||!active||!pdf)return;
+    const onWheel=(event:WheelEvent)=>{
+      if(!(event.ctrlKey||event.metaKey)||event.deltaY===0)return;
+      event.preventDefault();
+      void zoomByStep(event.deltaY<0?1:-1);
+    };
+    reader.addEventListener('wheel',onWheel,{passive:false});
+    return()=>reader.removeEventListener('wheel',onWheel);
+  },[active,pdf,fitMode,zoom,currentPage,rotation,viewport.width,viewport.height]);
+
   useEffect(()=>{
     function onFullscreenChange(){
       const active=Boolean(document.fullscreenElement);
@@ -2867,14 +2881,27 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       </aside>
 
       <div ref={scrollRef} className="pdf-scroll" tabIndex={0}
-        aria-label="Scrollable PDF pages. Use Page Down and Page Up to move between pages."
+        aria-label="Scrollable PDF pages. Page Up/Down and arrow keys navigate. Plus/minus zoom; 0 actual size, W fit width, F fit page; F9 presents."
         onKeyDown={event=>{
-          if(event.key==='PageDown'||event.key==='PageUp'){
-            event.preventDefault();goToPage(currentPage+(event.key==='PageDown'?1:-1));
+          if(event.target!==event.currentTarget || event.altKey || event.metaKey)return;
+          if(event.key==='PageDown'||event.key==='PageUp'||event.key==='ArrowRight'||event.key==='ArrowLeft'){
+            event.preventDefault();goToPage(currentPage+(['PageDown','ArrowRight'].includes(event.key)?1:-1));
           }else if(event.key==='Home'&&event.ctrlKey){
             event.preventDefault();goToPage(1);
           }else if(event.key==='End'&&event.ctrlKey){
             event.preventDefault();goToPage(pageCount);
+          }else if(!event.ctrlKey&&!event.shiftKey && (event.key==='+'||event.key==='=')){
+            event.preventDefault();void zoomByStep(1);
+          }else if(!event.ctrlKey&&!event.shiftKey && event.key==='-'){
+            event.preventDefault();void zoomByStep(-1);
+          }else if(!event.ctrlKey && event.key==='0'){
+            event.preventDefault();setFitMode('custom');setZoom(1);
+          }else if(!event.ctrlKey && event.key.toLowerCase()==='w'){
+            event.preventDefault();setFitMode('width');
+          }else if(!event.ctrlKey && event.key.toLowerCase()==='f'){
+            event.preventDefault();setFitMode('page');
+          }else if(!event.ctrlKey&&event.key==='F9'){
+            event.preventDefault();void toggleFullscreen(true);
           }
         }}>
         <div className={`pdf-stage ${viewMode}`}>
