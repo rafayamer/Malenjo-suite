@@ -88,7 +88,78 @@ async function main(){
     console.log('PHASE3 module launch/navigation: '+name+' PASS (shell only)');
   }
   console.log('PHASE3 22/22 module shell-navigation smoke: PASS (not module functionality sign-off)');
+
+  // Theme overhaul: every workspace must render an actual neutral UI surface
+  // in both themes. Photograph representative module views for human visual QA
+  // instead of relying only on CSS source inspection.
+  const themeProbes={
+    'Home':'.ml-co-action-card',
+    'Files / Library':'.library-toolbar',
+    'PDF Workspace':'.pdf-task-toolbar',
+    'Document Workspace':'.office-toolbar',
+    'Spreadsheet':'.office-toolbar',
+    'Presentation':'.office-toolbar',
+    'Scanner':'.scanner-toolbar',
+    'OCR':'.scanner-toolbar',
+    'Malenjo AI':'.ai-toolbar',
+    'Sign':'.security-toolbar',
+    'Metadata Studio':'.security-toolbar',
+    'Security Center':'.security-toolbar',
+    'Automation Studio':'.enterprise-toolbar',
+    'Enterprise DMS':'.enterprise-toolbar',
+    'Administration':'.enterprise-toolbar',
+    'Backup / DR':'.enterprise-toolbar',
+    'Help / Support':'.help-panel',
+  };
+  const screenshotModules=new Set([
+    'Home','Files / Library','PDF Workspace','Document Workspace',
+    'Spreadsheet','Presentation','Scanner','Malenjo AI','Security Center',
+    'CAD','DICOM','Help / Support',
+  ]);
+  const reviewDir=resolve(root,'.build/pdf-ui-browser/theme-review');
+  mkdirSync(reviewDir,{recursive:true});
+  const paletteEvidence={};
+  for(const theme of ['dark','light']){
+    const currentTheme=await page.evaluate(()=>document.documentElement.dataset.theme);
+    if(currentTheme!==theme){
+      await page.getByRole('button',{name:theme==='light'?'Switch to light theme':'Switch to dark theme'}).click();
+      await page.waitForFunction(expected=>document.documentElement.dataset.theme===expected,theme);
+    }
+    const accents=await page.evaluate(()=>{
+      const style=getComputedStyle(document.documentElement);
+      return [style.getPropertyValue('--ml-brand-blue').trim(),style.getPropertyValue('--ml-brand-cyan').trim()];
+    });
+    paletteEvidence[theme]=accents;
+    requireEvidence(accents[0]==='#2b8cff'&&accents[1]==='#33d4e5',
+      'MALENJO accent colors changed in '+theme+' mode');
+    for(const name of moduleNames){
+      await page.locator('.sidebar nav .nav-item').filter({hasText:name}).first().click();
+      await page.waitForFunction(expected=>
+        document.querySelector('.sidebar nav .nav-item.active')?.getAttribute('aria-label')===expected,name,{timeout:15000});
+      const probe=themeProbes[name]??'.canvas-placeholder';
+      const visible=page.locator('main.workspace').locator(probe).first();
+      await visible.waitFor({state:'visible',timeout:15000});
+      const bg=await visible.evaluate((element)=>getComputedStyle(element).backgroundColor);
+      const rgb=bg.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      requireEvidence(Boolean(rgb),'Theme has no opaque panel background: '+name+' / '+theme+' ('+bg+')');
+      const channels=rgb.slice(1,4).map(Number);
+      requireEvidence(theme==='light'?Math.min(...channels)>155:Math.max(...channels)<115,
+        name+' retained an unreadable '+(theme==='light'?'dark':'light')+' panel in '+theme+' mode: '+bg);
+      if(screenshotModules.has(name)){
+        const safe=name.toLowerCase().replace(/[^a-z0-9]+/g,'-');
+        await page.screenshot({path:join(reviewDir,theme+'-'+safe+'.png'),animations:'disabled',timeout:15000});
+      }
+      requireEvidence(errors.length===0,'Browser error during '+theme+' theme of '+name+': '+errors.join(' | '));
+    }
+    console.log('PHASE3 '+theme+' palette rendered in 22/22 module shells: PASS (visual review pending)');
+  }
+  requireEvidence(JSON.stringify(paletteEvidence.dark)===JSON.stringify(paletteEvidence.light),
+    'Brand colors were inconsistent between the two themes');
   await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
+  await page.getByRole('button',{name:'Switch to dark theme'}).click();
+  await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+  console.log('PHASE3 two-theme surface review and MALENJO brand parity: PASS');
+
 
   // Real end-to-end browser workflows for the three Office workspaces.
   // Edit the actual OOXML package via its UI, retain state across navigation,
