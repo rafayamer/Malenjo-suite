@@ -141,7 +141,8 @@ export default function RibbonShell({ workspace, onNavigate, onOpenFiles }: Prop
           return <section key={category} aria-label={category+' features'}>
             <h3>{category} <small>{subset.length}</small></h3>
             <div className="ml-command-catalog-grid">
-              {subset.map(command=><div key={command.id} className="ml-command-catalog-entry"
+              {subset.map(command=><div key={command.id} className="ml-command-catalog-entry" tabIndex={0}
+                role="group" aria-label={command.id+' '+command.label+' — Not release-ready. '+command.tooltip}
                 title={command.tooltip} data-mal-command={command.id}>
                 <span className="ml-command-catalog-icon"><Icon size={20} aria-hidden="true"/></span>
                 <span className="ml-command-catalog-label"><b>{command.label}</b><small>{command.id} · Not release-ready</small></span>
