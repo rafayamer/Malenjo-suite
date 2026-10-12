@@ -239,7 +239,7 @@ async function main(){
   const sourceModules=Array.from(modulesText.matchAll(/\{\s*id:'[^']+',\s*name:'([^']+)'/g),match=>match[1]);
   const moduleNames=sourceModules.filter(name=>!['Document Workspace','Spreadsheet','Presentation','Malenjo AI'].includes(name));
   requireEvidence(sourceModules.length===22&&moduleNames.length===18&&new Set(moduleNames).size===18,
-    'not all 22 source-defined workspaces are available for browser verification');
+    'not all 18 user-facing tools are reachable from the top launcher');
   for(const name of moduleNames){
     await openModule(name);
     const entry=page.locator('.sidebar nav .nav-item').filter({hasText:name}).first();
@@ -256,7 +256,7 @@ async function main(){
       'Unhandled error after navigating to '+name+': '+errors.join(' | '));
     console.log('PHASE3 module launch/navigation: '+name+' PASS (shell only)');
   }
-  console.log('PHASE3 22/22 module shell-navigation smoke: PASS (not module functionality sign-off)');
+  console.log('PHASE3 18/18 user-facing module shell-navigation smoke (22 registry entries): PASS (not module functionality sign-off)');
   // Release-oriented Phase 1: specialist screens must not share a generic
   // branded placeholder or expose nonfunctional editor commands as clickable.
   for(const [name,kind] of [
@@ -293,7 +293,7 @@ async function main(){
   // in both themes. Photograph representative module views for human visual QA
   // instead of relying only on CSS source inspection.
   const themeProbes={
-    'Home':'.ml-co-action-card',
+    'Home':'.ml-start-hero',
     'Files / Library':'.library-toolbar',
     'PDF Workspace':'.pdf-task-toolbar',
     'Document Workspace':'.office-toolbar',
@@ -371,7 +371,7 @@ async function main(){
       }
       requireEvidence(errors.length===0,'Browser error during '+theme+' theme of '+name+': '+errors.join(' | '));
     }
-    console.log('PHASE3 '+theme+' palette rendered in 22/22 module shells: PASS (visual review pending)');
+    console.log('PHASE3 '+theme+' palette rendered in 18/18 public module shells: PASS (visual review pending)');
   }
   requireEvidence(releaseGateScreenshotCount===moduleNames.length*2,
     'Complete Light/Dark visual evidence missing some module views: '+releaseGateScreenshotCount);
@@ -384,192 +384,10 @@ async function main(){
   console.log('PHASE3 two-theme surface review and MALENJO brand parity: PASS');
 
 
-  // Real end-to-end browser workflows for the three Office workspaces.
-  // Edit the actual OOXML package via its UI, retain state across navigation,
-  // export a new copy and independently inspect reopened ZIP contents.
-  const officeCases=[
-    {
-      module:'Document Workspace',filename:'phase3-word.docx',
-      mimetype:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      parts:{
-        '[Content_Types].xml':'<Types/>',
-        'word/document.xml':'<w:document><w:body><w:p><w:r><w:t>Initial document</w:t></w:r></w:p><w:sectPr/></w:body></w:document>',
-        'custom/preserve.xml':'<retained>word asset</retained>',
-      },
-      editor:'textarea[aria-label="DOCX text editor"]',updated:'Real browser DOCX edit',
-      xmlPart:'word/document.xml',preservedPart:'custom/preserve.xml',
-    },
-    {
-      module:'Spreadsheet',filename:'phase3-sheet.xlsx',
-      mimetype:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      parts:{
-        'xl/workbook.xml':'<workbook><sheets><sheet name="Data"/></sheets></workbook>',
-        'xl/worksheets/sheet1.xml':'<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Initial cell</t></is></c><c r="B1"><f>2+2</f><v>4</v></c></row></sheetData></worksheet>',
-        'custom/preserve.xml':'<retained>sheet asset</retained>',
-      },
-      editor:'input[aria-label="Cell A1"]',updated:'Real browser XLSX edit',
-      xmlPart:'xl/worksheets/sheet1.xml',preservedPart:'custom/preserve.xml',
-      preservedXml:'<f>2+2</f>',
-    },
-    {
-      module:'Presentation',filename:'phase3-slides.pptx',
-      mimetype:'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      parts:{
-        'ppt/presentation.xml':'<p:presentation/>',
-        'ppt/slides/slide1.xml':'<p:sld><a:t>Initial slide</a:t><a:t>Original notes</a:t></p:sld>',
-        'custom/preserve.xml':'<retained>slide asset</retained>',
-      },
-      editor:'input.slide-title-input',updated:'Real browser PPTX edit',
-      xmlPart:'ppt/slides/slide1.xml',preservedPart:'custom/preserve.xml',
-      preservedXml:'Original notes',
-    },
-  ];
-  for(const item of officeCases){
-    const original=Buffer.from(zipSync(Object.fromEntries(
-      Object.entries(item.parts).map(([name,text])=>[name,strToU8(text)]))));
-    const sourceSnapshot=Buffer.from(original);
-    await page.locator('.sidebar nav .nav-item')
-      .filter({hasText:item.module}).first().click();
-    await page.locator('main.workspace > .office-workspace input[type="file"]').first()
-      .setInputFiles({name:item.filename,mimeType:item.mimetype,buffer:original});
-    const officeTab=page.locator('.document-tab-main').filter({hasText:item.filename});
-    await officeTab.waitFor({timeout:30000});
-    const editor=page.locator('.document-session-panel.active').locator(item.editor);
-    await editor.waitFor({timeout:30000});
-    await editor.fill(item.updated);
-    const tabItems=page.locator('.document-tab-main');
-    const countBeforeKeyboard=await tabItems.count();
-    if(countBeforeKeyboard>1){
-      await officeTab.focus();
-      await page.keyboard.press('ArrowLeft');
-      const prior=tabItems.nth(countBeforeKeyboard-2);
-      requireEvidence(await prior.getAttribute('aria-selected')==='true' &&
-        await prior.evaluate((element)=>element===document.activeElement),
-        'Document tab Left arrow failed to activate/focus previous session: '+item.module);
-      await page.keyboard.press('ArrowRight');
-      requireEvidence(await officeTab.getAttribute('aria-selected')==='true' &&
-        await officeTab.evaluate((element)=>element===document.activeElement),
-        'Document tab Right arrow failed to restore the editing session: '+item.module);
-      const actionMenu=page.getByRole('button',{name:'Tab actions for '+item.filename});
-      await actionMenu.click();
-      const popup=page.getByRole('menu',{name:'Tab actions for '+item.filename});
-      await popup.waitFor({state:'visible'});
-      await page.keyboard.press('Escape');
-      requireEvidence(await popup.count()===0 && await actionMenu.evaluate((element)=>element===document.activeElement),
-        'Tab actions menu failed to close and restore keyboard focus: '+item.module);
-    }
-    // Theme changes must not remount or discard a dirty Office session.
-    // The original OOXML/source byte protection is independently verified below.
-    const tabCountBeforeTheme=await page.locator('.document-tab').count();
-    await page.getByRole('button',{name:'Switch to light theme'}).click();
-    await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
-    requireEvidence(await editor.inputValue()===item.updated,
-      'Light appearance discarded unsaved content: '+item.module);
-    await page.getByRole('button',{name:'Switch to dark theme'}).click();
-    await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
-    requireEvidence(await editor.inputValue()===item.updated &&
-      await page.locator('.document-tab').count()===tabCountBeforeTheme,
-      'Appearance switching remounted the editor or changed document sessions: '+item.module);
-    // The editor must not silently discard unsaved edits after leaving.
-    await openModule('Home');
-    await officeTab.click();
-    requireEvidence(await editor.inputValue()===item.updated,
-      'Office session lost edits when switching modules: '+item.module);
-    const waitDownload=page.waitForEvent('download',{timeout:30000});
-    await page.locator('.document-session-panel.active .office-toolbar')
-      .getByRole('button',{name:'Export copy'}).click();
-    const exported=await waitDownload;
-    const dest=join(mkdtempSync(join(tmpdir(),'malenjo-office-acceptance-')),'edited-'+item.filename);
-    await exported.saveAs(dest);
-    const restored=unzipSync(readFileSync(dest));
-    requireEvidence(Boolean(restored[item.xmlPart]),
-      'Exported Office document has no required OOXML content part: '+item.module);
-    requireEvidence(strFromU8(restored[item.xmlPart]).includes(item.updated),
-      'Exported Office document lost the edited content: '+item.module);
-    requireEvidence(strFromU8(restored[item.preservedPart])===item.parts[item.preservedPart],
-      'Exported Office document lost an unrelated original package part: '+item.module);
-    if(item.preservedXml)requireEvidence(strFromU8(restored[item.xmlPart]).includes(item.preservedXml),
-      'Exported Office document damaged an untouched formula/run: '+item.module);
-    // Re-zipping produces non-identical bytes when ZIP timestamps differ.
-    // Compare the immutable source snapshot and inspect its original XML instead.
-    requireEvidence(original.equals(sourceSnapshot) &&
-      strFromU8(unzipSync(original)[item.xmlPart])===item.parts[item.xmlPart],
-      'Office editor changed the original imported source: '+item.module);
-    requireEvidence(errors.length===0,'Office browser exception: '+errors.join(' | '));
-    console.log('PHASE3 Office edit/navigation/export/reopen: '+item.module+' PASS (synthetic fixture only)');
-  }
-  // Real multi-sheet XLSX workflow: relationship order, visible tabs, two
-  // different edits, hidden worksheet isolation, export and independent reopen.
-  const multiSheetParts={
-    'xl/workbook.xml':'<workbook><sheets><sheet name="Private" state="veryHidden" r:id="rId3"/><sheet name="Budget" r:id="rId9"/><sheet name="Forecast" r:id="rId2"/></sheets></workbook>',
-    'xl/_rels/workbook.xml.rels':'<Relationships><Relationship Id="rId3" Target="worksheets/sheet8.xml"/><Relationship Id="rId9" Target="worksheets/sheet7.xml"/><Relationship Id="rId2" Target="worksheets/sheet2.xml"/></Relationships>',
-    'xl/worksheets/sheet8.xml':'<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Secret unchanged</t></is></c></row></sheetData></worksheet>',
-    'xl/worksheets/sheet7.xml':'<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Budget original</t></is></c><c r="B1"><f>1+2</f><v>3</v></c></row></sheetData></worksheet>',
-    'xl/worksheets/sheet2.xml':'<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Forecast original</t></is></c></row></sheetData></worksheet>',
-    'custom/preserved.xml':'<keep>round trip</keep>',
-  };
-  const multiSheetSource=Buffer.from(zipSync(Object.fromEntries(
-    Object.entries(multiSheetParts).map(([name,value])=>[name,strToU8(value)]))));
-  await openModule('Spreadsheet');
-  await page.locator('main.workspace > .office-workspace input[type="file"]').first()
-    .setInputFiles({name:'multi-worksheet.xlsx',
-      mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      buffer:multiSheetSource});
-  const multiTab=page.locator('.document-tab-main').filter({hasText:'multi-worksheet.xlsx'});
-  await multiTab.waitFor({timeout:30000});
-  const workbookUi=page.locator('.document-session-panel.active');
-  await workbookUi.getByRole('tab',{name:'Budget'}).waitFor({timeout:30000});
-  requireEvidence(await workbookUi.getByRole('tab',{name:'Private'}).count()===0,
-    'Hidden Excel worksheet was exposed as an editable tab');
-  requireEvidence(await workbookUi.getByRole('tab',{name:'Budget'}).getAttribute('aria-selected')==='true',
-    'First visible workbook tab was not selected in relationship order');
-  await workbookUi.getByRole('textbox',{name:'Cell A1',exact:true}).fill('Budget browser edited');
-  await workbookUi.getByRole('tab',{name:'Forecast'}).click();
-  requireEvidence(await workbookUi.getByRole('textbox',{name:'Cell A1',exact:true}).inputValue()==='Forecast original',
-    'Spreadsheet tab showed another worksheet contents');
-  await workbookUi.getByRole('textbox',{name:'Cell A1',exact:true}).fill('Forecast browser edited');
-  await workbookUi.getByRole('tab',{name:'Budget'}).click();
-  requireEvidence(await workbookUi.getByRole('textbox',{name:'Cell A1',exact:true}).inputValue()==='Budget browser edited',
-    'Spreadsheet lost previous worksheet edits when switching tabs');
-  await openModule('Home');
-  await multiTab.click();
-  requireEvidence(await workbookUi.getByRole('textbox',{name:'Cell A1',exact:true}).inputValue()==='Budget browser edited',
-    'Spreadsheet lost multi-sheet editing state after workspace navigation');
-  const multiDownload=page.waitForEvent('download',{timeout:30000});
-  await workbookUi.getByRole('button',{name:'Export copy'}).click();
-  const multiExport=await multiDownload;
-  const multiDest=join(mkdtempSync(join(tmpdir(),'malenjo-multisheet-acceptance-')),'roundtrip.xlsx');
-  await multiExport.saveAs(multiDest);
-  const multiFiles=unzipSync(readFileSync(multiDest));
-  requireEvidence(strFromU8(multiFiles['xl/worksheets/sheet7.xml']).includes('Budget browser edited'),
-    'Edited Budget worksheet was not present in exported XLSX');
-  requireEvidence(strFromU8(multiFiles['xl/worksheets/sheet2.xml']).includes('Forecast browser edited'),
-    'Edited Forecast worksheet was not present in exported XLSX');
-  requireEvidence(strFromU8(multiFiles['xl/worksheets/sheet7.xml']).includes('<f>1+2</f>'),
-    'Unedited formula was damaged during XLSX export');
-  requireEvidence(strFromU8(multiFiles['xl/worksheets/sheet8.xml'])===multiSheetParts['xl/worksheets/sheet8.xml'],
-    'Hidden worksheet bytes were altered during XLSX edit');
-  requireEvidence(strFromU8(multiFiles['custom/preserved.xml'])===multiSheetParts['custom/preserved.xml'],
-    'Unrelated OOXML package part was altered during multi-sheet export');
-  requireEvidence(strFromU8(unzipSync(multiSheetSource)['xl/worksheets/sheet7.xml']).includes('Budget original'),
-    'Original imported multi-sheet file was modified');
-  await openModule('Spreadsheet');
-  await page.locator('main.workspace > .office-workspace input[type="file"]').first()
-    .setInputFiles({name:'multi-worksheet-export-reopened.xlsx',
-      mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      buffer:readFileSync(multiDest)});
-  const reopenedTab=page.locator('.document-tab-main').filter({hasText:'multi-worksheet-export-reopened.xlsx'});
-  await reopenedTab.waitFor({timeout:30000});
-  const reopenedUi=page.locator('.document-session-panel.active');
-  await reopenedUi.getByRole('tab',{name:'Budget'}).waitFor({timeout:30000});
-  requireEvidence(await reopenedUi.getByRole('textbox',{name:'Cell A1',exact:true}).inputValue()==='Budget browser edited',
-    'Reopened exported multi-sheet workbook lost first worksheet edit');
-  await reopenedUi.getByRole('tab',{name:'Forecast'}).click();
-  requireEvidence(await reopenedUi.getByRole('textbox',{name:'Cell A1',exact:true}).inputValue()==='Forecast browser edited',
-    'Reopened exported multi-sheet workbook lost second worksheet edit');
-  requireEvidence(errors.length===0,'Multi-sheet browser exception: '+errors.join(' | '));
-  console.log('PHASE3 XLSX multi-tab UI/edit/export/independent ZIP inspection/reimport: PASS (synthetic fixture)');
-
+  // Conversion-only Office editor rule: don't fake conversion provenance by
+  // importing hand-authored DOCX/XLSX/PPTX files in the user-facing browser.
+  // Low-level OOXML fidelity/edit/export regressions remain in Vitest;
+  // real conversion->editor browser acceptance is still NOT RELEASE-READY.
   await openModule('Home');
   console.log('MALENJO loaded in Chromium; opening PDF via browser input');
   await page.locator('.workspace > input[type="file"]').setInputFiles({
@@ -631,14 +449,14 @@ async function main(){
   // Return to the original PDF to verify edit/export without altering it.
   await documentTab.click();
   await page.locator('.document-session-panel.active .pdf-task-categories button').filter({hasText:'Organize'}).click();
-  await page.locator('.document-session-panel.active .pdf-context-toolbar button').filter({hasText:/^Rotate selected$/}).click();
+  await page.locator('.document-session-panel.active .pdf-context-toolbar').getByRole('button',{name:/Rotate selected/}).click();
   await page.waitForFunction(()=>
     Array.from(document.querySelectorAll('.pdf-notice')).some(
       node=>node.textContent?.includes('Permanently rotated'),
     ),null,{timeout:30000});
   await page.locator('.document-session-panel.active .pdf-task-categories button').filter({hasText:/^Home$/}).click();
   const pendingDownload=page.waitForEvent('download',{timeout:30000});
-  await page.locator('.document-session-panel.active .pdf-context-toolbar button').filter({hasText:/^Export$/}).click();
+  await page.locator('.document-session-panel.active .pdf-context-toolbar').getByRole('button',{name:/^Export/}).click();
   const download=await pendingDownload;
   const destination=join(mkdtempSync(join(tmpdir(),'malenjo-browser-pdf-')),'exported.pdf');
   await download.saveAs(destination);
