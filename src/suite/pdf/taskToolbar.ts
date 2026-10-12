@@ -1,3 +1,4 @@
+import type { PDFRibbonCategory } from '../commands/masterCatalog';
 /** Canonical ten PDF ribbon tabs from MALENJO Master Specification v2.0. */
 export const PDF_TASK_CATEGORIES = [
   'home','edit','organize','optimize','convert',
@@ -5,7 +6,7 @@ export const PDF_TASK_CATEGORIES = [
 ] as const;
 export type PdfTaskCategory=typeof PDF_TASK_CATEGORIES[number];
 
-export const PDF_TASK_CATEGORY_LABELS:Record<PdfTaskCategory,string>={
+export const PDF_TASK_CATEGORY_LABELS:Record<PdfTaskCategory,PDFRibbonCategory>={
   home:'Home', edit:'Edit', organize:'Organize', optimize:'Optimize',
   convert:'Convert', forms:'Forms', review:'Review', protect:'Protect',
   automate:'Automate',tools:'Tools',
