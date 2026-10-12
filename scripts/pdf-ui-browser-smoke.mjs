@@ -325,7 +325,7 @@ async function main(){
   // in both themes. Photograph representative module views for human visual QA
   // instead of relying only on CSS source inspection.
   const themeProbes={
-    'Home':'.ml-start-hero',
+    'Home':'.ml-start-open',
     'Files / Library':'.library-toolbar',
     'PDF Workspace':'.pdf-task-toolbar',
     'Document Workspace':'.office-toolbar',
