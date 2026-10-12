@@ -272,10 +272,13 @@ async function main(){
         const bar=document.querySelector('.topbar').getBoundingClientRect();
         const ribbon=document.querySelector('.suite-ribbon').getBoundingClientRect();
         const search=document.querySelector('.topbar .search').getBoundingClientRect();
-        const commands=[...document.querySelectorAll('.topbar-actions button')].map((button)=>{
-          const box=button.getBoundingClientRect();
-          return {left:box.left,right:box.right,width:box.width};
-        });
+        const commands=[...document.querySelectorAll('.topbar-actions button')]
+          .filter(button=>getComputedStyle(button).display!=='none')
+          .map(button=>{
+            const box=button.getBoundingClientRect();
+            return {left:box.left,right:box.right,width:box.width,
+              label:button.getAttribute('aria-label')};
+          });
         return {viewport:innerWidth,documentWidth:document.documentElement.scrollWidth,
           bodyWidth:document.body.scrollWidth,barRight:bar.right,ribbonRight:ribbon.right,
           searchWidth:search.width,commands};
@@ -283,8 +286,10 @@ async function main(){
       requireEvidence(metrics.documentWidth<=width+2 && metrics.bodyWidth<=width+2 &&
         metrics.barRight<=width+2 && metrics.ribbonRight<=width+2,
         'Shell or document horizontally overflows at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
-      requireEvidence(metrics.searchWidth>45 && metrics.commands.every((c)=>c.left>=0&&c.right<=width+2&&c.width>=30),
-        'Essential titlebar commands clipped at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
+      requireEvidence(metrics.searchWidth>45 && metrics.commands.every((c)=>c.left>=0&&c.right<=width+2&&c.width>=30) &&
+        metrics.commands.some(c=>c.label==='MALENJO AI') &&
+        metrics.commands.some(c=>c.label?.includes('Switch to')),
+        'Visible titlebar commands clipped or AI/theme missing at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
       requireEvidence(context.pages().length===1,'Responsive layout launched a second browser window');
     }
   }
