@@ -533,6 +533,10 @@ async function main(){
   requireEvidence(await featureGrid.locator('[data-user-pdf-tool]').count()===33 &&
     await featureGrid.locator('.pdf-user-tool-group').count()===7,
     'User-visible PDF manipulation suite does not expose all 33 named tools in seven groups');
+  const shortcutGlyphs=await featureGrid.locator('[data-user-pdf-tool] svg')
+    .evaluateAll(nodes=>nodes.map(node=>node.getAttribute('class')??''));
+  requireEvidence(shortcutGlyphs.length===33&&new Set(shortcutGlyphs).size===33,
+    'The 33 PDF shortcut tiles repeat icons instead of having distinct meaningful glyphs');
   for(const id of ['pdf-to-word','pdf-to-excel','pdf-to-powerpoint','protect-pdf','redact-pdf']){
     requireEvidence(await featureGrid.locator('[data-user-pdf-tool="'+id+'"] button').isDisabled(),
       'Unaccepted conversion/security tool was incorrectly executable: '+id);
@@ -551,6 +555,10 @@ async function main(){
   requireEvidence(await featureGrid.locator('[data-mal-command]').count()===90 &&
     await featureGrid.locator('[data-feature-index="MAL-001-MAL-090"]').count()===1,
     'Full MAL-001..MAL-090 PDF gallery is missing or incomplete');
+  const masterGlyphs=await featureGrid.locator('[data-mal-command] svg')
+    .evaluateAll(nodes=>nodes.map(node=>node.getAttribute('class')??''));
+  requireEvidence(masterGlyphs.length===90&&new Set(masterGlyphs).size===90,
+    'All 90 master PDF requirements must use UNIQUE, purpose-matched pictograms');
   for(const id of ['MAL-001','MAL-011','MAL-037','MAL-063','MAL-090']){
     requireEvidence(await featureGrid.locator('[data-mal-command="'+id+'"] button').isDisabled(),
       'Master v2 unverified command became executable: '+id);
