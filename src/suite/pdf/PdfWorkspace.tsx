@@ -269,6 +269,32 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [highlightQuery,setHighlightQuery]=useState('');
   const [searchStatus,setSearchStatus]=useState('');
   const [leftPanel, setLeftPanel] = useState<PdfLeftPanelId>(DEFAULT_PDF_LEFT_PANEL);
+  // Workspace customization remains local to this installation and never
+  // changes document bytes. Drag a navigation icon, or Alt+ArrowUp/Down.
+  const [leftPanelOrder,setLeftPanelOrder]=useState<PdfLeftPanelId[]>(()=>{
+    const defaults=PDF_LEFT_PANEL_ITEMS.map(item=>item.id);
+    try{
+      const saved=JSON.parse(window.localStorage.getItem('malenjo:pdf-left-panel-order-v1')??'null');
+      if(Array.isArray(saved)&&saved.length===defaults.length &&
+        defaults.every(id=>saved.includes(id)))return saved as PdfLeftPanelId[];
+    }catch{ /* private browsing or first run */ }
+    return defaults;
+  });
+  const draggedPanelRef=useRef<PdfLeftPanelId|null>(null);
+  useEffect(()=>{
+    try{window.localStorage.setItem('malenjo:pdf-left-panel-order-v1',JSON.stringify(leftPanelOrder));}
+    catch{ /* optional local preference */ }
+  },[leftPanelOrder]);
+  const moveLeftPanel=(source:PdfLeftPanelId,target:PdfLeftPanelId)=>{
+    if(source===target)return;
+    setLeftPanelOrder(current=>{
+      const next=current.filter(id=>id!==source);
+      const position=next.indexOf(target);
+      if(position<0)return current;
+      next.splice(position,0,source);
+      return next;
+    });
+  };
   const [optionalLayers, setOptionalLayers] = useState<{
     document:PdfLoadResult['document'];
     config:PdfOptionalContentConfig;
@@ -2060,7 +2086,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     function onInspectorShortcut(event: KeyboardEvent) {
       if (!isDocumentInspectorToggleShortcut(event)) return;
       event.preventDefault();
-      setInspectorHidden((value)=>!value);
+      setInspectorHidden(value=>{if(value)setLeftPanelCollapsed(true);return !value;});
     }
     window.addEventListener('keydown', onInspectorShortcut);
     return () => window.removeEventListener('keydown', onInspectorShortcut);
@@ -2173,10 +2199,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
   const configureProperties=()=>{
     setInspectorTab('properties');
+    setLeftPanelCollapsed(true);
     setInspectorHidden(false);
   };
   const openLeftPanel=(panel:PdfLeftPanelId)=>{
     setLeftPanel(panel);
+    setInspectorHidden(true);
     setLeftPanelCollapsed(false);
   };
   const navigateAction=(label:string,id:ModuleId):PdfToolbarAction=>({
@@ -2200,7 +2228,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'open',label:'Open PDF',enabled:!session,disabledReason:session?'Open additional documents from Files / Library so they receive their own tabs.':undefined,run:()=>fileInputRef.current?.click()},
       {id:'export',label:'Export',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:exportCurrent},
       {id:'print',label:'Print',enabled:!!pdf&&!mutating,disabledReason:!pdf?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:printDocument},
-      {id:'inspector',label:inspectorHidden?'Show inspector':'Hide inspector',enabled:true,run:()=>setInspectorHidden((value)=>!value)},
+      {id:'inspector',label:inspectorHidden?'Show properties':'Hide properties',enabled:true,run:()=>setInspectorHidden(value=>{if(value)setLeftPanelCollapsed(true);return !value;})},
       providerAction,
     ],
     edit:[
@@ -2566,25 +2594,50 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       <button className="primary-action" disabled={loading} onClick={() => fileInputRef.current?.click()}>
         <FileText size={17}/> {loading ? 'Loading…' : 'Choose PDF'}
       </button>
-      <small>For multi-document work in Codespaces, add several files from Files / Library first.</small>
+      <small>Open more PDFs with Open File to keep them in separate document tabs.</small>
     </div>}
 
     {pdf && <div className={pdfLayoutClass}>
       <aside className={leftPanelCollapsed ? 'pdf-left-shell collapsed' : 'pdf-left-shell'} aria-label="PDF navigation rail and panel">
         <nav className="pdf-left-rail" aria-label="PDF navigation">
-          {PDF_LEFT_PANEL_ITEMS.map((item)=><button
-            key={item.id}
-            className={leftPanel===item.id?'active':''}
-            aria-pressed={leftPanel===item.id}
-            aria-label={item.label}
-            title={item.label}
-            onClick={()=>{setLeftPanel(item.id);setLeftPanelCollapsed(false);}}
-          ><PdfLeftPanelIcon id={item.id}/></button>)}
+          {leftPanelOrder.map(id=>{
+            const item=pdfLeftPanelItem(id);
+            return <button key={id} type="button"
+              className={leftPanel===id?'active':''}
+              aria-pressed={leftPanel===id}
+              aria-label={item.label}
+              aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+              title={item.label+' — drag to reorder, or Alt+Up/Down'}
+              draggable
+              onDragStart={event=>{draggedPanelRef.current=id;event.dataTransfer.effectAllowed='move';}}
+              onDragEnd={()=>{draggedPanelRef.current=null;}}
+              onDragOver={event=>event.preventDefault()}
+              onDrop={event=>{
+                event.preventDefault();
+                if(draggedPanelRef.current)moveLeftPanel(draggedPanelRef.current,id);
+                draggedPanelRef.current=null;
+              }}
+              onKeyDown={event=>{
+                if(!event.altKey || !['ArrowUp','ArrowDown'].includes(event.key))return;
+                event.preventDefault();
+                const position=leftPanelOrder.indexOf(id);
+                const otherPosition=position+(event.key==='ArrowUp'?-1:1);
+                if(otherPosition>=0&&otherPosition<leftPanelOrder.length){
+                  setLeftPanelOrder(current=>{
+                    const next=[...current];
+                    [next[position],next[otherPosition]]=[next[otherPosition],next[position]];
+                    return next;
+                  });
+                }
+              }}
+              onClick={()=>{setLeftPanel(id);setInspectorHidden(true);setLeftPanelCollapsed(false);}}
+            ><PdfLeftPanelIcon id={id}/><span className="pdf-left-nav-label">{item.label}</span></button>;
+          })}
           <button
             className="pdf-left-collapse"
             aria-label={leftPanelCollapsed?'Expand PDF navigation panel':'Collapse PDF navigation panel'}
             title={leftPanelCollapsed?'Expand panel':'Collapse panel'}
-            onClick={()=>setLeftPanelCollapsed((value)=>!value)}
+            onClick={()=>{setInspectorHidden(true);setLeftPanelCollapsed((value)=>!value);}}
           >{leftPanelCollapsed?<ChevronRight size={17}/>:<ChevronLeft size={17}/>}</button>
         </nav>
 
@@ -2857,7 +2910,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         </div>
       </div>
 
-      {!inspectorHidden&&<aside className="pdf-inspector" aria-label="Contextual document inspector">
+      {!inspectorHidden&&<aside className="pdf-inspector" aria-label="Left document properties and edit inspector">
         <div className="pdf-inspector-tabs" role="tablist" aria-label="Document inspector">
           {DOCUMENT_INSPECTOR_TABS.map((tab)=><button
             key={tab}
@@ -2869,7 +2922,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           >{DOCUMENT_INSPECTOR_LABELS[tab]}</button>)}
           <button
             className="pdf-inspector-hide"
-            aria-label="Hide right inspector"
+            aria-label="Hide left document inspector"
             title={`Hide inspector · ${DOCUMENT_INSPECTOR_SHORTCUT}`}
             onClick={()=>setInspectorHidden(true)}
           ><PanelRightClose size={14}/></button>
@@ -3262,7 +3315,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             <button type="button" disabled={!pdf}
               aria-label={leftPanelCollapsed?'Show document navigation':'Hide document navigation'}
               title={leftPanelCollapsed?'Show pages panel':'Hide pages panel'}
-              onClick={()=>{setLeftPanel('pages');setLeftPanelCollapsed((value)=>!value);}}>
+              onClick={()=>{setLeftPanel('pages');setInspectorHidden(true);setLeftPanelCollapsed((value)=>!value);}}>
               <FileText size={17} aria-hidden="true"/>
             </button>
             <button disabled={!pdf || currentPage <= 1} onClick={() => goToPage(currentPage - 1)} aria-label="Previous page"><ChevronLeft size={16}/></button>
@@ -3316,9 +3369,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             <button disabled={!pdf} onClick={()=>void toggleFullscreen(true)} aria-label="Presentation mode" title="Presentation mode"><MonitorPlay size={16}/></button>
             <button
               disabled={!pdf}
-              onClick={()=>setInspectorHidden((value)=>!value)}
-              aria-label={inspectorHidden?'Show right inspector':'Hide right inspector'}
-              title={`${inspectorHidden?'Show':'Hide'} right inspector · ${DOCUMENT_INSPECTOR_SHORTCUT}`}
+              onClick={()=>setInspectorHidden(value=>{if(value)setLeftPanelCollapsed(true);return !value;})}
+              aria-label={inspectorHidden?'Show left document inspector':'Hide left document inspector'}
+              title={`${inspectorHidden?'Show':'Hide'} document properties and edit inspector on the left · ${DOCUMENT_INSPECTOR_SHORTCUT}`}
             >{inspectorHidden?<PanelRightOpen size={16}/>:<PanelRightClose size={16}/>}</button>
           </div>
         </div>

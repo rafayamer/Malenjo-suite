@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bot, FileSpreadsheet, FileText, FolderOpen, MapPin, MoreHorizontal,
   Presentation, ScanLine, Search, ShieldCheck, Sparkles, Star, Workflow,
@@ -111,6 +111,7 @@ export default function HomeWorkspace({
   const [homeHydrated,setHomeHydrated]=useState(()=>!desktop);
   const [query,setQuery]=useState('');
   const [recentOpen,setRecentOpen]=useState(false);
+  const moreOptionsRef=useRef<HTMLDetailsElement>(null);
   const [filter,setFilter]=useState<HomeFileFilter>('all');
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
@@ -280,12 +281,11 @@ export default function HomeWorkspace({
         </button>
         <button className="ml-start-recent" type="button" title="View recently opened documents"
           aria-expanded={recentOpen} aria-controls="ml-home-recent-panel"
-          onClick={()=>setRecentOpen(current=>!current)}>
+          onClick={()=>{moreOptionsRef.current?.removeAttribute('open');setRecentOpen(current=>!current);}}>
           <span className="ml-start-recent-icon" aria-hidden="true"><FolderOpen size={27}/></span>
           <span>Recent Files</span>
         </button>
       </div>
-      <p className="ml-start-privacy"><ShieldCheck size={14} aria-hidden="true"/> {desktop?'Local Windows documents':'Browser / Codespaces session'} · files stay under your control</p>
     </header>
 
     <section id="ml-home-recent-panel" hidden={!recentOpen} className="ml-home-section ml-co-files" aria-labelledby="ml-home-files-title">
@@ -315,7 +315,9 @@ export default function HomeWorkspace({
       </>}
     </section>
 
-    <details className="ml-start-utilities">
+    <details ref={moreOptionsRef} className="ml-start-utilities"
+      onToggle={event=>{if(event.currentTarget.open)setRecentOpen(false);}}
+      onKeyDown={event=>{if(event.key==='Escape'){event.currentTarget.open=false;event.preventDefault();}}}>
       <summary title="Show optional Home tools, open document shortcuts and locations">More options</summary>
     <details className="ml-start-more-tools">
       <summary title="Show additional MALENJO shortcuts"><Sparkles size={15} aria-hidden="true"/> More tools</summary>
@@ -362,7 +364,7 @@ export default function HomeWorkspace({
           <button disabled={busy} onClick={()=>void browseLocation(location)}>Browse & open</button>
           <button className="text-action" onClick={()=>removeLocation(location.id)}>Remove</button>
         </article>)}
-        {!desktop&&<article className="ml-home-location muted"><FolderOpen size={18}/><div><b>Browser session</b><small>Native folder pins are available only in the Windows desktop runtime.</small></div><button onClick={()=>onSelectModule('files')}>View files</button></article>}
+        {!desktop&&<article className="ml-home-location muted"><FolderOpen size={18}/><div><b>Available files</b><small>Browse files already opened in this session.</small></div><button onClick={()=>onSelectModule('files')}>View files</button></article>}
         {desktop&&!state.pinnedLocations.length&&<div className="ml-home-location-empty">No pinned folders yet.</div>}
       </div>
     </section>
