@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { Bot, ChevronDown, Command, FolderOpen, House, LayoutGrid, Search, ShieldCheck, Moon, Sun, X } from 'lucide-react';
+import { Bot, ChevronDown, Command, FolderOpen, House, LayoutGrid, Redo2, Save, Search, Settings2, ShieldCheck, Moon, Sun, Undo2, X } from 'lucide-react';
 import { modules } from '../modules/registry';
 import type { ModuleId } from '../core/types';
 import FileLibrary from '../files/FileLibrary';
@@ -409,6 +409,12 @@ export default function App() {
     ? commandControllersRef.current.get(activeSession.id)?.list() ?? []
     : [];
 
+  const saveQuickAction = activeDocumentCommands.find(action=>action.id==='save')
+    ?? activeDocumentCommands.find(action=>action.id==='save-as')
+    ?? activeDocumentCommands.find(action=>action.id==='export');
+  const undoQuickAction = activeDocumentCommands.find(action=>action.id==='undo');
+  const redoQuickAction = activeDocumentCommands.find(action=>action.id==='redo');
+
   const commandItems: CommandPaletteItem[] = [
     {
       id:'open-documents',
@@ -630,6 +636,23 @@ export default function App() {
             onClick={()=>setModuleMenuOpen(value=>!value)}>
             <LayoutGrid size={18} aria-hidden="true"/><span>Tools</span><ChevronDown size={12} aria-hidden="true"/>
           </button>
+          <span className="ml-top-quick-divider" aria-hidden="true"/>
+          <button className="command" type="button" aria-label="Open files"
+            title="Open file (Ctrl+O)" onClick={()=>void openDocumentsFromPicker()}>
+            <FolderOpen size={18} aria-hidden="true"/>
+          </button>
+          {([
+            ['Save document',saveQuickAction,Save],
+            ['Undo document change',undoQuickAction,Undo2],
+            ['Redo document change',redoQuickAction,Redo2],
+          ] as const).map(([label,action,Icon])=><button
+            key={label} type="button" className="command ml-top-document-action"
+            aria-label={label}
+            title={action?.enabled ? label : action?.disabledReason ?? label+' unavailable until a supported document operation exists'}
+            disabled={!action?.enabled}
+            onClick={()=>{if(action?.enabled)void action.run();}}>
+            <Icon size={18} aria-hidden="true"/>
+          </button>)}
         </div>
         <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);openCommandPalette();}} placeholder="Search commands" aria-label="Search commands"/><kbd>Ctrl K</kbd></div>
         <div className="topbar-actions">
@@ -639,7 +662,6 @@ export default function App() {
             onClick={()=>{setAiHasOpened(true);setAiOpen(value=>!value);setModuleMenuOpen(false);}}>
             <Bot size={20} aria-hidden="true"/>
           </button>
-          <button className="command" aria-label="Open files" title="Open a file (Ctrl+O)" onClick={()=>void openDocumentsFromPicker()}><FolderOpen size={19}/></button>
           <button className="command" aria-label="Open command palette" title="Commands (Ctrl+K)" onClick={()=>setCommandOpen(true)}><Command size={19}/></button>
           <button className="theme-toggle command" type="button"
             aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
@@ -647,6 +669,10 @@ export default function App() {
             title={theme === 'dark' ? 'Light appearance' : 'Dark appearance'}
             onClick={() => setTheme(current=>nextSuiteTheme(current))}>
             {theme === 'dark' ? <Sun size={18}/> : <Moon size={18}/>}
+          </button>
+          <button type="button" className="command" aria-label="User and settings"
+            title="Settings and appearance" onClick={()=>selectModule('settings')}>
+            <Settings2 size={18} aria-hidden="true"/>
           </button>
         </div>
       </header>
