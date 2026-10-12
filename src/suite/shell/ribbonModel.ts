@@ -1,11 +1,13 @@
 import type { ModuleId } from '../core/types';
 import { CAPABILITY_WORKSPACES, type CapabilityModuleId } from './CapabilityWorkspace';
 
-export type RibbonTabId = 'home' | 'pdf' | 'convert' | 'review' | 'scan' | 'specialist' | 'tools';
+export type RibbonTabId = 'home' | 'edit' | 'organize' | 'optimize' | 'convert' |
+  'forms' | 'review' | 'protect' | 'automate' | 'tools';
 
 export interface RibbonAction {
   id: string;
   label: string;
+  description?: string;
   destination?: ModuleId;
   opensFiles?: boolean;
   unavailableReason?: string;
@@ -17,54 +19,85 @@ export interface RibbonTab {
   actions: RibbonAction[];
 }
 
+import { PDF_COMMAND_BY_ID, type PDFRequirementId } from '../commands/masterCatalog';
+
+function required(id: PDFRequirementId): RibbonAction {
+  const feature = PDF_COMMAND_BY_ID.get(id);
+  if (!feature) throw new Error('Missing MALENJO PDF feature: '+id);
+  return {
+    id,
+    label:feature.label,
+    description:feature.tooltip,
+    unavailableReason:feature.tooltip,
+  };
+}
+
+/** Exactly the ten primary categories from MALENJO Master Specification v2.0.
+ * An entry navigates to an existing working surface or is disabled; it never
+ * pretends to execute a PDF engine that has not passed release acceptance. */
 export const RIBBON_TABS: RibbonTab[] = [
-  { id: 'home', label: 'Home', actions: [
-    { id: 'open', label: 'Open files', opensFiles: true },
-    { id: 'start', label: 'Start Center', destination: 'home' },
-    { id: 'library', label: 'My Files', destination: 'files' },
-    { id: 'pdf', label: 'PDF Viewer', destination: 'pdf' },
-  ] },
-  { id: 'pdf', label: 'PDF Viewer', actions: [
-    { id: 'open', label: 'Open PDF', opensFiles: true },
-    { id: 'viewer', label: 'PDF Workspace', destination: 'pdf' },
-    { id: 'library', label: 'Files / Library', destination: 'files' },
-    { id: 'metadata', label: 'Metadata', destination: 'metadata' },
-  ] },
-  { id: 'convert', label: 'Convert', actions: [
-    { id: 'to-word', label: 'PDF to Word', unavailableReason: 'PDF-to-DOCX conversion must be verified before the Office output editor is enabled.' },
-    { id: 'to-excel', label: 'PDF to Excel', unavailableReason: 'PDF-to-XLSX conversion must be verified before the Office output editor is enabled.' },
-    { id: 'to-slides', label: 'PDF to Slides', unavailableReason: 'PDF-to-PPTX conversion must be verified before the Office output editor is enabled.' },
-  ] },
-  { id: 'review', label: 'Review & Sign', actions: [
-    { id: 'sign', label: 'Sign', destination: 'sign' },
-    { id: 'security', label: 'Security', destination: 'security' },
-    { id: 'metadata', label: 'Metadata', destination: 'metadata' },
-  ] },
-  { id: 'scan', label: 'Scan & OCR', actions: [
-    { id: 'scanner', label: 'Scanner', destination: 'scanner' },
-    { id: 'ocr', label: 'OCR', destination: 'ocr' },
-  ] },
-  { id: 'specialist', label: 'CAD & DICOM', actions: [
-    { id: 'cad', label: 'CAD', destination: 'cad' },
-    { id: 'dicom', label: 'DICOM', destination: 'dicom' },
-    { id: 'library', label: 'Files / Library', destination: 'files' },
-  ] },
-  { id: 'tools', label: 'Suite Tools', actions: [
-    { id: 'automation', label: 'Automation', destination: 'automation' },
-    { id: 'dms', label: 'DMS', destination: 'dms' },
-    { id: 'backup', label: 'Backup', destination: 'backup' },
-    { id: 'settings', label: 'Settings', destination: 'settings' },
-    { id: 'help', label: 'Help', destination: 'help' },
-  ] },
+  { id:'home', label:'Home', actions:[
+    {id:'open',label:'Open File',description:'Select a local PDF, CAD or DICOM document',opensFiles:true},
+    {id:'start',label:'Start',description:'Open MALENJO Home and recent files',destination:'home'},
+    {id:'library',label:'Recent Files',description:'Browse the local document library',destination:'files'},
+    {id:'pdf',label:'PDF Viewer',description:'Open the PDF manipulation workspace',destination:'pdf'},
+  ]},
+  { id:'edit',label:'Edit',actions:[
+    {id:'pdf',label:'PDF Workspace',description:'View and edit supported PDF content',destination:'pdf'},
+    required('MAL-011'),required('MAL-014'),required('MAL-015'),required('MAL-023'),
+  ]},
+  { id:'organize',label:'Organize',actions:[
+    {id:'pdf',label:'PDF Workspace',description:'Work with PDF pages and thumbnails',destination:'pdf'},
+    required('MAL-001'),required('MAL-002'),required('MAL-003'),required('MAL-008'),
+  ]},
+  { id:'optimize',label:'Optimize',actions:[
+    {id:'scanner',label:'Scan',destination:'scanner',description:'Open scanning workspace'},
+    {id:'ocr',label:'OCR',destination:'ocr',description:'Open OCR workspace'},
+    required('MAL-024'),required('MAL-025'),required('MAL-026'),
+  ]},
+  { id:'convert',label:'Convert',actions:[
+    required('MAL-037'),required('MAL-039'),required('MAL-038'),
+    {id:'pdf',label:'PDF Workspace',destination:'pdf',description:'Open PDF conversion tools'},
+    required('MAL-040'),
+  ]},
+  { id:'forms',label:'Forms',actions:[
+    {id:'pdf',label:'PDF Workspace',destination:'pdf',description:'Inspect existing PDF form fields'},
+    required('MAL-046'),required('MAL-047'),required('MAL-052'),
+  ]},
+  { id:'review',label:'Review',actions:[
+    {id:'pdf',label:'PDF Workspace',destination:'pdf',description:'Open PDF markup and review tools'},
+    {id:'sign',label:'Sign',destination:'sign',description:'Open document signing workspace'},
+    required('MAL-054'),required('MAL-059'),
+  ]},
+  { id:'protect',label:'Protect',actions:[
+    {id:'security',label:'Security',destination:'security',description:'Open local PDF security workspace'},
+    {id:'sign',label:'Sign',destination:'sign',description:'Open signing and certificate workspace'},
+    required('MAL-061'),required('MAL-063'),required('MAL-065'),
+  ]},
+  { id:'automate',label:'Automate',actions:[
+    {id:'automation',label:'Automation',destination:'automation',description:'Open automation workspace'},
+    {id:'invoice',label:'Invoice',destination:'invoice',description:'Open invoice workspace'},
+    {id:'dms',label:'Documents',destination:'dms',description:'Open document management'},
+    required('MAL-083'),
+  ]},
+  { id:'tools',label:'Tools',actions:[
+    {id:'cad',label:'CAD',destination:'cad',description:'Open supported CAD documents'},
+    {id:'dicom',label:'DICOM',destination:'dicom',description:'Open medical image workspace'},
+    {id:'settings',label:'Settings',destination:'settings',description:'Light and Dark appearance'},
+    {id:'help',label:'Help',destination:'help',description:'Documentation and diagnostics'},
+    required('MAL-087'),
+  ]},
 ];
 
 export function defaultRibbonTab(workspace: ModuleId): RibbonTabId {
-  if (workspace === 'pdf') return 'pdf';
+  if (workspace === 'pdf' || workspace === 'home' || workspace === 'files') return 'home';
   if (workspace === 'word' || workspace === 'spreadsheet' || workspace === 'presentation') return 'convert';
-  if (workspace === 'scanner' || workspace === 'ocr' || workspace === 'ai') return 'scan';
-  if (workspace === 'sign' || workspace === 'security' || workspace === 'metadata') return 'review';
-  if (workspace === 'cad' || workspace === 'dicom') return 'specialist';
-  if (workspace === 'home' || workspace === 'files') return 'home';
+  if (workspace === 'scanner' || workspace === 'ocr') return 'optimize';
+  if (workspace === 'sign') return 'review';
+  if (workspace === 'security' || workspace === 'metadata') return 'protect';
+  if (workspace === 'automation' || workspace === 'invoice' || workspace === 'dms') return 'automate';
+  if (workspace === 'cad' || workspace === 'dicom' || workspace === 'settings' || workspace === 'account' || workspace === 'help') return 'tools';
+  if (workspace === 'ai') return 'tools';
   return 'tools';
 }
 
