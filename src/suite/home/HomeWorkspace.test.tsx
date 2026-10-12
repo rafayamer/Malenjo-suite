@@ -36,7 +36,7 @@ const session:DocumentSession={
 };
 
 describe('Home CasualOffice structural/accessibility baseline',()=>{
-  it('renders the source-adapted office launcher rather than the old generic dashboard',()=>{
+  it('renders the centered PDF-first Foxit-style start UI with accessible real file actions',()=>{
     const html=renderToStaticMarkup(
       <HomeWorkspace
         sessions={[session]}
@@ -48,21 +48,22 @@ describe('Home CasualOffice structural/accessibility baseline',()=>{
         onOpenCommandPalette={()=>undefined}
       />,
     );
-
-    expect((html.match(/ml-co-action-card/g)??[]).length).toBeGreaterThanOrEqual(8);
-    expect(html).toContain('Welcome to Malenjo Suite');
-    expect(html).toContain('Open something, or start a local document task.');
+    expect(html).toContain('ml-start-minimal');
+    expect(html).toContain('ml-start-hero');
+    expect(html).toContain('Welcome to MALENJO');
+    expect(html).toContain('Open a file to begin.');
+    expect(html).toContain('Open File');
+    expect(html).toContain('Recent Files');
+    expect(html).toContain('ml-start-folder');
+    expect(html).toContain('ml-start-more-tools');
+    expect(html).toContain('More tools');
+    expect((html.match(/class="ml-co-action-card/g)??[]).length).toBe(7);
     expect(html).toContain('Your files');
     expect(html).toContain('Search recent');
     expect(html).toContain('Filter recent files by type');
     expect(html).toContain('role="tablist"');
     expect(html).toContain('Continue working');
     expect(html).toContain('Unsaved changes');
-    expect(html).toContain('Pinned locations');
-    expect(html).toContain('updater not operational yet');
-    expect(html).toContain('Not connected');
-    expect(html).toContain('Ctrl');
-    expect(html).toContain('Search');
     expect(html).not.toContain('shadcn-admin');
     expect(html).not.toContain('WPS');
     expect(html).not.toContain('Go Premium');

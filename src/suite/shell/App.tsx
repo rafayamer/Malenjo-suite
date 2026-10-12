@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { Activity, Command, FolderOpen, Search, ShieldCheck, Moon, Sun } from 'lucide-react';
+import { Bot, ChevronDown, Command, FolderOpen, House, LayoutGrid, Search, ShieldCheck, Moon, Sun, X } from 'lucide-react';
 import { modules } from '../modules/registry';
 import type { ModuleId } from '../core/types';
 import FileLibrary from '../files/FileLibrary';
@@ -15,6 +15,7 @@ import {
   type DocumentSession,
 } from '../files/session';
 import type { LibraryDocument } from '../files/types';
+import { isMalenjoDirectOpenExtension, isMalenjoDirectOpenKind } from '../files/openPolicy';
 import {
   addLibraryDocumentsByPaths,
   chooseAndAddDocuments,
@@ -50,8 +51,10 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [commandOpen, setCommandOpen] = useState(false);
   const [dropActive, setDropActive] = useState(false);
-  // A compact suite rail keeps the canvas dominant; the ribbon is global.
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [moduleMenuOpen, setModuleMenuOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiHasOpened, setAiHasOpened] = useState(false);
+  const moduleMenuButtonRef = useRef<HTMLButtonElement>(null);
   const [theme, setTheme] = useState<SuiteTheme>(() => {
     try { return readSuiteTheme(window.localStorage); } catch { return 'dark'; }
   });
@@ -70,6 +73,17 @@ export default function App() {
   const browserOpenInputRef = useRef<HTMLInputElement>(null);
   const module = modules.find((item) => item.id === active) ?? modules[0];
   const groups = useMemo(() => ['Core','Create','Intelligence','Enterprise','System'] as const, []);
+  useEffect(() => {
+    if (!moduleMenuOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && !target.closest('.ml-tools-popup') &&
+        !target.closest('.topbar-tool-trigger')) setModuleMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    return () => document.removeEventListener('pointerdown', closeOutside);
+  }, [moduleMenuOpen]);
+
 
   const activeSession = useMemo(
     () => sessions.find((session) => session.id === activeSessionId) ?? null,
@@ -81,6 +95,15 @@ export default function App() {
   );
 
   function selectModule(id: ModuleId) {
+    setModuleMenuOpen(false);
+    if (id === 'ai') { setAiHasOpened(true); setAiOpen(true); return; }
+    if (id === 'word' || id === 'spreadsheet' || id === 'presentation') {
+      setWorkspaceNotices(current=>({...current,__open:
+        'Office viewers are PDF conversion results, not separate MALENJO tools. Open a PDF and use a verified conversion first.'}));
+      setActive('pdf');
+      setActiveSessionId(null);
+      return;
+    }
     setActive(id);
     setActiveSessionId(null);
   }
@@ -93,6 +116,13 @@ export default function App() {
   }
 
   function openFromLibrary(document: LibraryDocument) {
+    if (!isMalenjoDirectOpenKind(document.kind)) {
+      setWorkspaceNotices(current=>({...current,__open:
+        'Only PDF, CAD and DICOM files open directly. Word, Excel and PowerPoint viewers are available solely after successful PDF conversion.'}));
+      setActive('pdf');
+      setActiveSessionId(null);
+      return;
+    }
     const existing = sessions.find((session) => session.document.id === document.id);
     if (existing) {
       activateSession(existing.id);
@@ -118,8 +148,13 @@ export default function App() {
   }
 
   function openBrowserFiles(files: FileList | File[]) {
-    const documents = registerBrowserFiles(files);
-    documents.forEach((document) => openFromLibrary(markBrowserDocumentOpened(document)));
+    const selected=Array.from(files);
+    const supported=selected.filter(file=>isMalenjoDirectOpenExtension(file.name));
+    if (supported.length!==selected.length) {
+      setWorkspaceNotices(current=>({...current,__open:
+        'Only PDF, CAD and DICOM can open directly. DOCX, XLSX and PPTX open only as verified PDF conversion outputs.'}));
+    }
+    registerBrowserFiles(supported).forEach(document=>openFromLibrary(markBrowserDocumentOpened(document)));
   }
 
   async function openDocumentsFromPicker() {
@@ -383,7 +418,7 @@ export default function App() {
       kind:'action',
       run:()=>{ void openDocumentsFromPicker(); },
     },
-    ...modules.map((item) => ({
+    ...modules.filter(item=>!['word','spreadsheet','presentation','ai'].includes(item.id)).map((item) => ({
       id:`workspace-${item.id}`,
       label:item.id === 'home' ? 'Home' : `Open ${item.name}`,
       group:item.id === 'settings' ? 'Settings' : 'Workspaces',
@@ -522,30 +557,44 @@ export default function App() {
     />;
   }
 
-  return <div className={sidebarCollapsed?'app-shell sidebar-collapsed':'app-shell'} data-shell="malenjo-ribbon">
+  return <div className="app-shell app-shell-top-only" data-shell="malenjo-ribbon">
     <a className="skip-to-workspace" href="#malenjo-workspace-content">Skip to workspace content</a>
-    <aside className="sidebar" aria-label="MALENJO workspace navigation">
-      <div className="brand">
-        <div className="brand-mark">M</div>
-        <div className="brand-copy"><strong>MALENJO</strong><span>SUITE</span></div>
-        <button className="sidebar-toggle" onClick={()=>setSidebarCollapsed((value)=>!value)} aria-label={sidebarCollapsed?'Expand workspace navigation':'Collapse workspace navigation'} title={sidebarCollapsed?'Expand navigation':'Collapse navigation'}>{sidebarCollapsed?'›':'‹'}</button>
-      </div>
-      <nav>
-        {groups.map(group => <section key={group}><h3>{group}</h3>{modules.filter(item=>item.group===group).map(item =>
-          <button className={!activeSessionId && active===item.id?'nav-item active':'nav-item'} onClick={()=>selectModule(item.id)} key={item.id} title={item.name} aria-label={item.name}>
-            <span className="nav-glyph" aria-hidden="true"><ModuleNavIcon module={item.id}/></span>
-            <span className="nav-label">{item.name}</span>
-            <small aria-hidden="true">›</small>
-          </button>
-        )}</section>)}
+    <aside className={moduleMenuOpen ? 'sidebar ml-tools-popup is-open' : 'sidebar ml-tools-popup'}
+      role="dialog" aria-label="All MALENJO tools" aria-hidden={!moduleMenuOpen}
+      inert={!moduleMenuOpen}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault(); setModuleMenuOpen(false);
+          moduleMenuButtonRef.current?.focus();
+        }
+      }}>
+      <header className="ml-tools-popup-head">
+        <strong>Tools</strong><span>All MALENJO workspaces</span>
+        <button aria-label="Close tools menu" title="Close tools menu"
+          onClick={() => { setModuleMenuOpen(false); moduleMenuButtonRef.current?.focus(); }}>
+          <X size={17} aria-hidden="true"/>
+        </button>
+      </header>
+      <nav aria-label="All workspaces">
+        {groups.map(group => <section key={group} aria-label={group}>
+          <h3>{group}</h3>
+          {modules.filter(item=>item.group===group &&
+            !['word','spreadsheet','presentation','ai'].includes(item.id)).map(item =>
+            <button className={!activeSessionId && active===item.id?'nav-item active':'nav-item'}
+              onClick={()=>selectModule(item.id)} key={item.id}
+              title={item.name} aria-label={item.name}>
+              <span className="nav-glyph" aria-hidden="true"><ModuleNavIcon module={item.id}/></span>
+              <span className="nav-label">{item.name}</span>
+            </button>
+          )}
+        </section>)}
       </nav>
-      <div className="local-state"><Activity size={16}/><div className="local-state-copy"><b>Local-first</b><span>{sessions.length} document{sessions.length===1?'':'s'} open · network optional</span></div></div>
     </aside>
 
     <main
       id="malenjo-workspace-content"
       tabIndex={-1}
-      className={dropActive ? 'workspace drop-active' : 'workspace'}
+      className={'workspace'+(dropActive ? ' drop-active' : '')+(aiOpen ? ' ai-panel-open' : '')}
       onDragEnter={(event) => { if (!isDesktopRuntime() && event.dataTransfer.types.includes('Files')) setDropActive(true); }}
       onDragOver={(event) => { if (!isDesktopRuntime() && event.dataTransfer.types.includes('Files')) event.preventDefault(); }}
       onDragLeave={(event) => { if (!isDesktopRuntime() && event.currentTarget === event.target) setDropActive(false); }}
@@ -557,28 +606,51 @@ export default function App() {
         className="visually-hidden"
         type="file"
         multiple
-        accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.webp,.tif,.tiff,.bmp,.dxf,.dwg,.dcm,.dicom"
+        accept=".pdf,.dxf,.dwg,.dcm,.dicom"
         onChange={(event) => {
           if (event.target.files) openBrowserFiles(event.target.files);
           event.target.value = '';
         }}
       />
       <header className="topbar">
-        <div className="suite-title"><strong>MALENJO Suite</strong><small>{activeSession?.document.name ?? module.name}</small></div>
-        <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);openCommandPalette();}} placeholder="Search files, tools and commands"/><kbd>Ctrl K</kbd></div>
+        <div className="suite-title"><strong>MALENJO</strong><small title={activeSession?.document.name ?? module.name}>{activeSession?.document.name ?? module.name}</small></div>
+        <div className="topbar-primary">
+          <button type="button" className="command topbar-home"
+            aria-label="Home" title="Home — start and recent files" onClick={()=>selectModule('home')}>
+            <House size={18} aria-hidden="true"/>
+          </button>
+          <button type="button" className="command topbar-tool-trigger" ref={moduleMenuButtonRef}
+            aria-label="All tools" title="All tools — browse MALENJO modules"
+            aria-expanded={moduleMenuOpen} aria-haspopup="dialog"
+            onClick={()=>setModuleMenuOpen(value=>!value)}>
+            <LayoutGrid size={18} aria-hidden="true"/><span>Tools</span><ChevronDown size={12} aria-hidden="true"/>
+          </button>
+        </div>
+        <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);openCommandPalette();}} placeholder="Search commands" aria-label="Search commands"/><kbd>Ctrl K</kbd></div>
         <div className="topbar-actions">
-          <button className="command" aria-label="Open files" title="Open files" onClick={()=>void openDocumentsFromPicker()}><FolderOpen size={17}/><span>Open</span></button>
-          <button className="command" aria-label="Open command palette" title="Open command palette" onClick={()=>setCommandOpen(true)}><Command size={17}/><span>Commands</span></button>
-          <button
-            className="theme-toggle command"
-            type="button"
+          <button type="button" className="command ml-top-ai" aria-label="MALENJO AI"
+            title="MALENJO AI — document assistant" aria-expanded={aiOpen}
+            aria-controls="ml-ai-assistant"
+            onClick={()=>{setAiHasOpened(true);setAiOpen(value=>!value);setModuleMenuOpen(false);}}>
+            <Bot size={20} aria-hidden="true"/>
+          </button>
+          <button className="command" aria-label="Open files" title="Open a file (Ctrl+O)" onClick={()=>void openDocumentsFromPicker()}><FolderOpen size={19}/></button>
+          <button className="command" aria-label="Open command palette" title="Commands (Ctrl+K)" onClick={()=>setCommandOpen(true)}><Command size={19}/></button>
+          <button className="theme-toggle command" type="button"
             aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
             aria-pressed={theme === 'light'}
             title={theme === 'dark' ? 'Light appearance' : 'Dark appearance'}
-            onClick={() => setTheme((current) => nextSuiteTheme(current))}
-          >{theme === 'dark' ? <Sun size={17}/> : <Moon size={17}/>}<span>{theme === 'dark' ? 'Light' : 'Dark'}</span></button>
+            onClick={() => setTheme(current=>nextSuiteTheme(current))}>
+            {theme === 'dark' ? <Sun size={18}/> : <Moon size={18}/>}
+          </button>
         </div>
       </header>
+
+      {workspaceNotices.__open && <div className="ml-open-feedback" role="status">
+        <span>{workspaceNotices.__open}</span>
+        <button type="button" title="Dismiss file notice" aria-label="Dismiss file notice"
+          onClick={()=>setWorkspaceNotices(current=>({...current,__open:''}))}><X size={14} aria-hidden="true"/></button>
+      </div>}
 
       {(activeSession ? workspaceForDocument(activeSession.document.kind) : active) !== 'pdf' && <RibbonShell
         workspace={activeSession ? workspaceForDocument(activeSession.document.kind) : active}
@@ -599,6 +671,18 @@ export default function App() {
         onCloseAll={() => closeSessions(sessions.map((session) => session.id))}
         onReorder={reorderSessions}
       />
+
+      {aiHasOpened && <aside id="ml-ai-assistant" className={aiOpen?'ml-ai-drawer is-open':'ml-ai-drawer'}
+        aria-label="MALENJO AI document assistant" aria-hidden={!aiOpen} inert={!aiOpen}>
+        <div className="ml-ai-drawer-title">
+          <Bot size={19} aria-hidden="true"/><strong>MALENJO AI</strong>
+          <span>Local assistant</span>
+          <button type="button" aria-label="Close MALENJO AI" title="Close assistant"
+            onClick={()=>setAiOpen(false)}><X size={18} aria-hidden="true"/></button>
+        </div>
+        <AiWorkspace compact openDocuments={openDocumentsForAi}
+          onBackToFiles={()=>{setAiOpen(false);selectModule('files');}}/>
+      </aside>}
 
       <CommandPalette
         open={commandOpen}

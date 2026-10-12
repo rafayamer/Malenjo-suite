@@ -1323,3 +1323,340 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 :root[data-theme="light"] .ml-co-segmented [role="tab"][aria-selected="true"] {
   box-shadow:inset 0 -2px #145cab;
 }
+
+
+/* PHASE 1: Foxit-style document-first information architecture.
+   All 22 modules remain available from a *temporary top toolbar* menu.
+   Neither document content nor source-file pixels are affected. */
+.app-shell.app-shell-top-only {
+  display:grid!important;grid-template-columns:minmax(0,1fr)!important;
+  width:100%;max-width:100vw;height:100dvh;min-height:0;overflow:hidden;
+  background:var(--ml-background);
+}
+.app-shell-top-only .workspace{grid-column:1;grid-row:1;min-width:0;min-height:0;height:100dvh;
+  max-width:100%;overflow:hidden;display:flex;flex-direction:column}
+.app-shell-top-only .topbar {
+  position:relative;flex:0 0 50px;min-height:50px;height:50px;top:auto;
+  display:flex;align-items:center;gap:10px;justify-content:initial;
+  padding:0 14px;background:var(--ml-toolbar);z-index:12;
+}
+.app-shell-top-only .suite-title{display:flex;gap:10px;align-items:center;flex:0 1 270px;min-width:0}
+.app-shell-top-only .suite-title strong{font-size:13px;letter-spacing:.01em;font-weight:750;white-space:nowrap}
+.app-shell-top-only .suite-title small{font-size:11px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+  min-width:0;max-width:155px;color:var(--ml-muted)}
+.topbar-primary,.app-shell-top-only .topbar-actions{display:flex;align-items:center;gap:3px;flex:0 0 auto}
+.app-shell-top-only .topbar-primary .command,
+.app-shell-top-only .topbar-actions .command {
+  flex:0 0 36px;width:36px;height:36px;min-width:36px;padding:0;
+  display:grid;place-items:center;border:1px solid transparent;background:transparent;
+  color:var(--ml-text);border-radius:5px;cursor:pointer;
+}
+.app-shell-top-only .topbar-primary .command:hover,
+.app-shell-top-only .topbar-actions .command:hover {
+  background:var(--ml-hover-strong);border-color:var(--ml-border)
+}
+.app-shell-top-only .topbar-primary .topbar-tool-trigger {
+  display:flex;gap:4px;width:auto;padding:0 8px;min-width:72px
+}
+.app-shell-top-only .topbar-primary .topbar-tool-trigger>span {font-size:12px;font-weight:650}
+.app-shell-top-only .search {
+  flex:1 1 180px;max-width:420px;min-width:50px;margin:0 auto;height:34px;
+  background:var(--ml-field);border:1px solid var(--ml-border);border-radius:5px;padding:0 9px
+}
+.app-shell-top-only .search input {color:var(--ml-text);font-size:12px;width:100%;outline:0}
+.app-shell-top-only .search:focus-within {border-color:var(--ml-brand-blue)}
+.app-shell-top-only .search kbd{font-size:10px;white-space:nowrap}
+.app-shell-top-only .sidebar.ml-tools-popup {
+  display:none!important;position:fixed!important;top:48px;left:14px;right:auto;
+  z-index:50;width:min(740px,calc(100vw - 28px));height:auto;max-height:min(72vh,670px);
+  padding:12px 14px 16px;margin:0;overflow:auto;
+  background:var(--ml-surface);color:var(--ml-text);border:1px solid var(--ml-border);
+  border-radius:7px;box-shadow:0 18px 45px #0005;
+}
+.app-shell-top-only .sidebar.ml-tools-popup.is-open {display:block!important}
+.ml-tools-popup-head {display:flex;gap:11px;align-items:center;padding:2px 3px 12px;
+  border-bottom:1px solid var(--ml-border);margin-bottom:6px}
+.ml-tools-popup-head strong{font-size:14px}
+.ml-tools-popup-head span{font-size:11px;color:var(--ml-muted);flex:1}
+.ml-tools-popup-head button{border:0;background:transparent;color:var(--ml-text);
+  width:28px;height:28px;border-radius:4px;cursor:pointer;display:grid;place-items:center}
+.ml-tools-popup-head button:hover{background:var(--ml-hover)}
+.app-shell-top-only .ml-tools-popup nav {
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;
+}
+.app-shell-top-only .ml-tools-popup section {display:flex;flex-direction:column;min-width:0}
+.app-shell-top-only .ml-tools-popup section h3 {font-size:10px;letter-spacing:.09em;
+  margin:8px 5px 6px;color:var(--ml-muted)}
+.app-shell-top-only .ml-tools-popup .nav-item{
+  display:flex;align-items:center;justify-content:flex-start;gap:9px;
+  padding:9px 7px;min-height:37px;border-radius:5px;
+  color:var(--ml-text);text-align:left;font-size:12px
+}
+.app-shell-top-only .ml-tools-popup .nav-item.active{background:var(--ml-selected);
+  box-shadow:inset 2px 0 var(--ml-brand-blue)}
+.app-shell-top-only .ml-tools-popup .nav-glyph{display:grid!important;
+  color:var(--ml-brand-blue);width:22px;min-width:22px}
+.app-shell-top-only .ml-tools-popup .nav-label{display:block!important;min-width:0;white-space:normal;
+  line-height:1.25;word-break:normal}
+.app-shell-top-only .ml-tools-popup button:focus-visible,
+.app-shell-top-only .topbar .command:focus-visible{outline:2px solid var(--ml-brand-blue);outline-offset:2px}
+
+/* Flat command ribbon: only meaningful icons, with native hover/focus tooltips. */
+.app-shell-top-only .suite-ribbon{min-height:0;height:auto;flex:0 0 auto}
+.app-shell-top-only .suite-ribbon-tabs{min-height:31px;height:31px;padding:0 12px;gap:2px}
+.app-shell-top-only .suite-ribbon-tabs button{padding:0 10px;font-size:12px;min-height:31px}
+.app-shell-top-only .suite-ribbon-actions{min-height:48px;height:auto;max-height:54px;
+  display:flex;align-items:center;gap:4px;flex-wrap:nowrap;overflow-x:auto;
+  padding:4px 13px;scrollbar-width:thin}
+.app-shell-top-only .suite-ribbon-action{
+  flex:0 0 37px!important;min-width:37px!important;width:37px!important;
+  height:37px!important;min-height:37px!important;padding:5px!important;
+  display:grid;place-items:center;border-radius:5px!important;
+  gap:0!important;background:transparent;border:1px solid transparent;
+}
+.app-shell-top-only .suite-ribbon-action:hover{background:var(--ml-hover);border-color:var(--ml-border)}
+.app-shell-top-only .suite-ribbon-action svg{width:20px;height:20px;color:var(--ml-text)}
+.app-shell-top-only .suite-ribbon-action>span{display:none!important}
+.app-shell-top-only .suite-ribbon-hint{font-size:11px;white-space:nowrap;min-width:300px;
+  margin-left:8px;max-width:450px;overflow:hidden;text-overflow:ellipsis}
+.app-shell-top-only .document-tabs{flex:0 0 auto;min-height:0}
+.app-shell-top-only .document-session-stack {min-height:0;flex:1}
+.app-shell-top-only .document-session-panel{min-height:0}
+
+/* New Home: quiet central actions, not a dashboard or a module grid. */
+.app-shell-top-only .ml-start-minimal {flex:1 1 auto;min-height:0;overflow:auto;
+  width:100%;max-width:100%;margin:0;padding:0 clamp(16px,4vw,64px) 32px;gap:0}
+.ml-start-hero {display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;min-height:clamp(295px,50vh,455px);padding:32px 16px 24px;gap:12px}
+.ml-start-symbol{width:54px;height:54px;display:grid;place-items:center;color:var(--ml-brand-blue);
+  border:1px solid var(--ml-border);background:var(--ml-surface);border-radius:15px}
+.ml-start-hero h1{font-size:clamp(22px,2.5vw,31px);margin:4px 0 0;
+  font-weight:650;color:var(--ml-text);letter-spacing:-.025em}
+.ml-start-hero>p{margin:0;color:var(--ml-muted);font-size:13px}
+.ml-start-primary{display:flex;justify-content:center;gap:16px;flex-wrap:wrap;margin:16px 0 2px}
+.ml-start-primary>button{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;width:172px;height:122px;border:1px solid var(--ml-border);border-radius:9px;
+  color:var(--ml-text);background:var(--ml-surface);font-weight:650;font-size:14px;
+  cursor:pointer;transition:border-color .14s ease,background-color .14s ease,transform .14s ease}
+.ml-start-primary>button:hover{background:var(--ml-hover);border-color:var(--ml-brand-blue);transform:translateY(-2px)}
+.ml-start-primary>button:focus-visible{outline:3px solid var(--ml-brand-blue);outline-offset:2px}
+.ml-start-folder{display:grid;place-items:center;width:48px;height:44px}
+.ml-start-folder svg{overflow:visible}
+.ml-start-sheet{transform-origin:50% 80%}
+.ml-start-primary .ml-start-open:hover .ml-start-sheet.one,
+.ml-start-primary .ml-start-open:focus-visible .ml-start-sheet.one {animation:ml-start-page-float 900ms ease-in-out infinite alternate}
+.ml-start-primary .ml-start-open:hover .ml-start-sheet.two,
+.ml-start-primary .ml-start-open:focus-visible .ml-start-sheet.two {animation:ml-start-page-float 850ms 110ms ease-in-out infinite alternate}
+.ml-start-primary .ml-start-open:hover .ml-start-folder-flap,
+.ml-start-primary .ml-start-open:focus-visible .ml-start-folder-flap {animation:ml-folder-flap 780ms ease-in-out infinite alternate}
+.ml-start-recent-icon{display:grid;place-items:center;height:44px;color:var(--ml-brand-blue)}
+@keyframes ml-start-page-float {to{transform:translateY(-7px)}}
+@keyframes ml-folder-flap {to{transform:translateY(2px) skewX(-3deg)}}
+.ml-start-hero .ml-start-privacy{display:flex;gap:5px;align-items:center;justify-content:center;
+  font-size:11px;color:var(--ml-muted);margin-top:10px}
+.ml-start-more-tools{margin:0 auto 12px;width:min(900px,100%);border-bottom:1px solid var(--ml-border)}
+.ml-start-more-tools summary{display:flex;align-items:center;gap:7px;padding:10px 0;
+  width:max-content;color:var(--ml-muted);font-size:12px;cursor:pointer;list-style:none}
+.ml-start-more-tools summary::-webkit-details-marker{display:none}
+.ml-start-more-tools summary:hover{color:var(--ml-text)}
+.ml-start-more-tools .ml-co-actions{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+  margin:8px 0 16px;gap:8px}
+.ml-start-more-tools .ml-co-action-card{min-height:60px;border-radius:5px;padding:8px 10px}
+.ml-start-minimal .ml-co-files{width:min(900px,100%);margin:16px auto 36px;scroll-margin-top:18px}
+.ml-start-minimal .ml-co-recent-head{align-items:center;flex-direction:row;flex-wrap:wrap}
+.ml-start-minimal .ml-co-recent-head h2{font-size:15px;text-transform:none;letter-spacing:0}
+.ml-start-minimal .ml-co-recent-head p{font-size:11px}
+.ml-start-minimal .ml-co-recent-grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px}
+.ml-start-minimal .ml-co-recent-card{min-height:57px;border-radius:5px;padding-top:7px;padding-bottom:7px}
+.ml-start-minimal .ml-home-shortcuts,.ml-start-minimal .ml-home-status-row,
+.ml-start-minimal .ml-co-shortcut-footer {display:none}
+.ml-start-minimal .ml-home-section:not(.ml-co-files):not(:has(.ml-home-session-grid)){display:none}
+@media(max-width:760px){
+  .app-shell-top-only .topbar{padding:0 7px;gap:4px}
+  .app-shell-top-only .suite-title{flex:0 1 auto}
+  .app-shell-top-only .suite-title small{display:none}
+  .app-shell-top-only .search{max-width:200px}
+  .app-shell-top-only .ml-tools-popup nav{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .app-shell-top-only .ml-tools-popup{top:48px;left:6px;width:calc(100vw - 12px)}
+  .app-shell-top-only .topbar-primary .topbar-tool-trigger>span{display:none}
+  .app-shell-top-only .topbar-primary .topbar-tool-trigger{width:38px;min-width:38px;padding:0}
+  .app-shell-top-only .topbar-primary .topbar-tool-trigger svg:last-child{display:none}
+}
+@media(max-width:460px){
+  .app-shell-top-only .suite-title strong{font-size:11px}
+  .app-shell-top-only .search{flex:1 1 50px;min-width:40px}
+  .app-shell-top-only .search kbd{display:none}
+  .ml-start-primary>button{width:135px;height:115px}
+  .ml-start-primary{gap:9px}
+  .ml-start-hero{min-height:300px;padding:20px 8px}
+  .app-shell-top-only .ml-tools-popup nav{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+/* A user who disables animations still sees full affordances and icon labels. */
+@media(prefers-reduced-motion:reduce){
+  .ml-start-primary>button,.ml-start-folder *, .ml-start-sheet{animation:none!important;transition:none!important}
+}
+
+
+/* MALENJO AI: Messenger-style chat beside the PDF, never a separate editor. */
+.app-shell-top-only .workspace.ai-panel-open {padding-right:min(364px,41vw)}
+.app-shell-top-only .workspace.ai-panel-open>.topbar {
+  margin-right:calc(-1 * min(364px,41vw));width:auto;
+}
+.app-shell-top-only .topbar .ml-top-ai[aria-expanded="true"]{
+  background:var(--ml-selected);outline:1px solid var(--ml-brand-blue);
+}
+.ml-ai-drawer {display:none;position:fixed;z-index:20;top:50px;right:0;bottom:0;
+  width:min(364px,41vw);min-width:0;min-height:0;overflow:hidden;
+  background:var(--ml-surface);border-left:1px solid var(--ml-border);
+  box-shadow:-9px 0 21px #0003;}
+.ml-ai-drawer.is-open{display:flex;flex-direction:column}
+.ml-ai-drawer-title{display:flex;align-items:center;gap:8px;min-height:47px;
+  padding:0 13px;border-bottom:1px solid var(--ml-border);
+  color:var(--ml-text);background:var(--ml-toolbar)}
+.ml-ai-drawer-title>svg{color:var(--ml-brand-blue)}
+.ml-ai-drawer-title strong{font-size:13px}
+.ml-ai-drawer-title>span{flex:1;font-size:11px;color:var(--ml-muted)}
+.ml-ai-drawer-title>button{display:grid;place-items:center;height:29px;width:29px;border:0;
+  background:transparent;border-radius:5px;color:var(--ml-text);cursor:pointer}
+.ml-ai-drawer-title>button:hover{background:var(--ml-hover)}
+.ml-ai-drawer-title>button:focus-visible{outline:2px solid var(--ml-brand-blue)}
+.ml-ai-drawer .ai-workspace-compact{height:100%;flex:1;min-height:0;width:100%}
+.ml-ai-drawer .ai-workspace-compact .ai-layout {display:flex;flex-direction:column;min-height:0}
+.ml-ai-drawer .ai-workspace-compact .ai-sources,
+.ml-ai-drawer .ai-workspace-compact .ai-runtime {display:none}
+.ml-ai-drawer .ai-workspace-compact .ai-chat{flex:1;min-width:0;min-height:0;
+  background:var(--ml-background)}
+.ml-ai-drawer .ai-workspace-compact .ai-toolbar{padding:5px 8px;height:auto;min-height:43px;gap:4px}
+.ml-ai-drawer .ai-workspace-compact .ai-toolbar>div{gap:3px;min-width:0}
+.ml-ai-drawer .ai-workspace-compact .ai-toolbar button{padding:5px;min-width:31px;height:31px;font-size:0;gap:0}
+.ml-ai-drawer .ai-workspace-compact .ai-toolbar button svg{width:16px;height:16px}
+.ml-ai-drawer .ai-workspace-compact .ai-lite-toggle{font-size:11px;display:flex;align-items:center;gap:4px;padding:5px}
+.ml-ai-drawer .ai-workspace-compact .ai-chat-header{height:43px;flex:0 0 43px;padding:0 10px}
+.ml-ai-drawer .ai-workspace-compact .ai-chat-header button{font-size:11px}
+.ml-ai-drawer .ai-workspace-compact .ai-messages{padding:13px 11px;flex:1;min-height:0;overflow:auto}
+.ml-ai-drawer .ai-workspace-compact .ai-welcome{margin:34px auto;max-width:260px}
+.ml-ai-drawer .ai-workspace-compact .ai-welcome .hero-mark{width:48px;height:48px;font-size:20px;border-radius:11px}
+.ml-ai-drawer .ai-workspace-compact .ai-welcome h2{font-size:16px}
+.ml-ai-drawer .ai-workspace-compact .ai-welcome p{font-size:12px;line-height:1.55}
+.ml-ai-drawer .ai-workspace-compact .ai-bubble{max-width:90%;margin-bottom:11px;padding:10px 12px;border-radius:15px 15px 15px 3px}
+.ml-ai-drawer .ai-workspace-compact .ai-bubble.user{background:var(--ml-selected);margin-left:auto;
+  border-radius:15px 15px 3px 15px;border-color:var(--ml-brand-blue)}
+.ml-ai-drawer .ai-workspace-compact .ai-content{font-size:12px;line-height:1.55}
+.ml-ai-drawer .ai-workspace-compact .retrieval-preview{max-height:56px;min-height:0}
+.ml-ai-drawer .ai-workspace-compact .ai-composer{flex:0 0 auto;padding:9px}
+.ml-ai-drawer .ai-workspace-compact .ai-composer textarea{min-height:55px;font-size:13px}
+@media(max-width:680px){
+  .app-shell-top-only .workspace.ai-panel-open{padding-right:0}
+  .app-shell-top-only .workspace.ai-panel-open>.topbar{margin-right:0}
+  .ml-ai-drawer {top:50px;width:min(100vw,380px);max-width:100vw}
+}
+
+
+/* The PDF itself has no persistent left or right sidebars: both are opened
+   from icon controls and close back to a single central document canvas. */
+.app-shell-top-only .pdf-workspace{height:100%;min-height:0;flex:1;max-width:100%;overflow:hidden}
+.app-shell-top-only .pdf-layout.left-panel-collapsed.inspector-hidden {
+  grid-template-columns:minmax(0,1fr)!important;
+}
+.app-shell-top-only .pdf-layout.left-panel-collapsed:not(.inspector-hidden){
+  grid-template-columns:minmax(0,1fr) minmax(190px,230px)!important;
+}
+.app-shell-top-only .pdf-layout.inspector-hidden:not(.left-panel-collapsed) {
+  grid-template-columns:minmax(165px,235px) minmax(0,1fr)!important;
+}
+.app-shell-top-only .pdf-layout:not(.left-panel-collapsed):not(.inspector-hidden){
+  grid-template-columns:minmax(160px,215px) minmax(0,1fr) minmax(190px,220px)!important;
+}
+.app-shell-top-only .pdf-layout.left-panel-collapsed .pdf-left-shell{display:none!important}
+.app-shell-top-only .pdf-layout {min-width:0;max-width:100%;overflow:hidden}
+.app-shell-top-only .pdf-scroll,.app-shell-top-only .pdf-stage{min-width:0}
+.app-shell-top-only .pdf-task-toolbar{
+  display:flex!important;flex:0 0 auto;min-height:0!important;
+  background:var(--ml-toolbar);border-bottom:1px solid var(--ml-border);
+}
+.app-shell-top-only .pdf-task-categories{height:31px;min-height:31px;max-height:31px;
+  padding:0 9px;gap:2px}
+.app-shell-top-only .pdf-task-categories button{font-size:12px;padding:0 10px}
+.app-shell-top-only .pdf-context-toolbar{display:flex;align-items:center;gap:7px;
+  min-width:0;max-width:100%;min-height:45px;height:45px;padding:4px 7px;
+  overflow:hidden;justify-content:normal}
+.app-shell-top-only .pdf-task-actions{flex:1 1 auto;min-width:60px;max-width:100%;
+  display:flex;gap:3px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;padding-bottom:2px}
+.app-shell-top-only .pdf-task-actions>button {
+  min-width:34px;width:34px;height:34px;flex:0 0 34px;padding:0;display:grid;place-items:center;
+  color:var(--ml-text);background:transparent;border:1px solid transparent;
+  border-radius:5px;white-space:nowrap
+}
+.app-shell-top-only .pdf-task-actions>button:hover{border-color:var(--ml-border);background:var(--ml-hover)}
+.app-shell-top-only .pdf-task-overflow{position:sticky;right:0}
+.app-shell-top-only .pdf-task-overflow>div {z-index:40}
+.app-shell-top-only .pdf-view-controls {flex:0 1 auto;min-width:0;
+  max-width:min(64vw,620px);padding-left:5px;gap:5px;
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;}
+.app-shell-top-only .pdf-view-controls .pdf-toolbar-group{gap:3px;flex:0 0 auto}
+.app-shell-top-only .pdf-view-controls button{display:grid;place-items:center;
+  height:33px;min-height:33px;min-width:31px;padding:0 5px;font-size:11px;
+  border-radius:5px}
+.app-shell-top-only .pdf-task-empty{max-height:33px;max-width:240px;overflow:hidden;font-size:11px}
+.app-shell-top-only .pdf-notice {
+  flex:0 0 auto;padding:5px 11px;max-height:47px;overflow:auto;
+  font-size:11px;line-height:1.3
+}
+.app-shell-top-only .pdf-stage {padding:18px clamp(12px,2vw,28px) 35px}
+@media(max-width:920px){
+  .app-shell-top-only .pdf-context-toolbar {flex-wrap:nowrap;overflow-x:auto}
+  .app-shell-top-only .pdf-view-controls {max-width:55%;min-width:80px}
+  .app-shell-top-only .pdf-layout:not(.left-panel-collapsed):not(.inspector-hidden){
+    grid-template-columns:180px minmax(0,1fr) 195px!important
+  }
+}
+@media(max-width:650px){
+  .app-shell-top-only .pdf-layout:not(.left-panel-collapsed):not(.inspector-hidden){
+    grid-template-columns:150px minmax(0,1fr) 160px!important
+  }
+  .app-shell-top-only .pdf-task-actions{min-width:75px}
+  .app-shell-top-only .pdf-view-controls{max-width:62%;min-width:70px}
+  .app-shell-top-only .pdf-task-categories button{padding:0 7px}
+}
+
+
+/* Extremely narrow Codespaces/mobile viewport: preserve every toolbar icon
+   and a usable command search rather than clipping the rightmost actions. */
+@media(max-width:390px) {
+  .app-shell-top-only .suite-title{display:none}
+  .app-shell-top-only .topbar{padding:0 4px;gap:2px}
+  .app-shell-top-only .search{flex:1 1 70px;max-width:none;min-width:60px}
+  .app-shell-top-only .topbar-primary,.app-shell-top-only .topbar-actions{gap:1px}
+}
+
+
+.app-shell-top-only .ml-open-feedback{display:flex;align-items:center;gap:12px;min-height:30px;
+  padding:5px 12px;background:var(--ml-info-bg);color:var(--ml-info-fg);
+  font-size:11px;border-bottom:1px solid var(--ml-border);flex:0 0 auto}
+.app-shell-top-only .ml-open-feedback span{min-width:0;flex:1}
+.app-shell-top-only .ml-open-feedback button{display:grid;place-items:center;flex:0 0 27px;
+  height:25px;border:0;border-radius:4px;cursor:pointer;background:transparent;color:inherit}
+.app-shell-top-only .ml-open-feedback button:hover{background:var(--ml-hover)}
+.app-shell-top-only .suite-ribbon-hint{display:none!important}
+
+
+/* Text selection is a PDF viewer interaction, not a drag-pan action.
+   PDF.js may apply inline text-span styles; keep the I-beam in both themes. */
+.app-shell-top-only .pdf-page-shell .pdf-text-layer span,
+.app-shell-top-only .pdf-page-shell .pdf-text-layer br {
+  cursor:text!important;
+  user-select:text!important;
+  -webkit-user-select:text!important;
+}
+
+
+/* Retain the native text-selection I-beam regardless of PDF.js-generated
+   wrapper spans. This does not modify canvas pixels or text extraction. */
+.pdf-text-layer,
+.pdf-text-layer span,
+.pdf-text-layer .markedContent span,
+.pdf-text-layer br {
+  cursor:text!important;
+  user-select:text!important;
+  -webkit-user-select:text!important;
+}

@@ -43,7 +43,6 @@ export const RIBBON_TABS: RibbonTab[] = [
   { id: 'scan', label: 'Scan & OCR', actions: [
     { id: 'scanner', label: 'Scanner', destination: 'scanner' },
     { id: 'ocr', label: 'OCR', destination: 'ocr' },
-    { id: 'ai', label: 'Malenjo AI', destination: 'ai' },
   ] },
   { id: 'specialist', label: 'CAD & DICOM', actions: [
     { id: 'cad', label: 'CAD', destination: 'cad' },

@@ -19,7 +19,8 @@ export async function chooseAndAddDocuments(): Promise<ImportResult | null> {
   const selected = await open({
     multiple: true,
     directory: false,
-    title: 'Add documents to MALENJO',
+    title: 'Open PDF, CAD or DICOM',
+    filters: [{name:'MALENJO documents (PDF / CAD / DICOM)',extensions:['pdf','dxf','dwg','dcm','dicom']}],
   });
 
   if (selected === null) return null;
