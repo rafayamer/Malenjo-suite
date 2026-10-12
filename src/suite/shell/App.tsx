@@ -97,6 +97,13 @@ export default function App() {
   function selectModule(id: ModuleId) {
     setModuleMenuOpen(false);
     if (id === 'ai') { setAiHasOpened(true); setAiOpen(true); return; }
+    if (id === 'word' || id === 'spreadsheet' || id === 'presentation') {
+      setWorkspaceNotices(current=>({...current,__open:
+        'Office viewers are PDF conversion results, not separate MALENJO tools. Open a PDF and use a verified conversion first.'}));
+      setActive('pdf');
+      setActiveSessionId(null);
+      return;
+    }
     setActive(id);
     setActiveSessionId(null);
   }
