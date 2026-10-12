@@ -17,24 +17,22 @@ export const PDF_PLANNED_FEATURES: Partial<Record<PdfTaskCategory, readonly Plan
     { id:'to-xlsx', label:'PDF to Excel', reason:'PDF-to-XLSX conversion and automatic spreadsheet viewer handoff are not release-ready.' },
     { id:'to-pptx', label:'PDF to Slides', reason:'PDF-to-PPTX conversion and automatic presentation viewer handoff are not release-ready.' },
   ],
-  comment: [
+  review: [
     { id:'highlight-text', label:'Highlight text', reason:'Text-range highlight annotations require independent saved-PDF validation.' },
   ],
-  sign: [
-    { id:'digital-sign-pdf', label:'Digital sign', reason:'Certificate-backed digital signing and independent verification are not release-ready.' },
-  ],
   protect: [
+    { id:'digital-sign-pdf', label:'Digital sign', reason:'Certificate-backed digital signing and independent verification are not release-ready.' },
     { id:'encrypt-pdf', label:'Encrypt PDF', reason:'PDF password encryption and independent reader validation are not release-ready.' },
     { id:'redact-sensitive', label:'Remove sensitive data', reason:'Verified sanitization and metadata removal are not release-ready.' },
   ],
   forms: [
     { id:'form-designer', label:'Form designer', reason:'Full visual AcroForm designer and cross-reader compatibility are not release-ready.' },
   ],
-  ai: [
+  tools: [
     { id:'ai-summarize', label:'Summarize PDF', reason:'One-click AI PDF summaries require a verified local model, source grounding and acceptance. Use the top AI chat meanwhile.' },
     { id:'ai-translate', label:'Translate PDF', reason:'Layout-preserving multilingual translation is not release-ready.' },
   ],
-  scan: [
+  optimize: [
     { id:'searchable-ocr', label:'Searchable OCR', reason:'Full text alignment, Unicode coverage and searchable-output acceptance are not release-ready.' },
   ],
   automate: [
