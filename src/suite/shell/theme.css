@@ -1618,3 +1618,13 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
   .app-shell-top-only .pdf-view-controls{max-width:62%;min-width:70px}
   .app-shell-top-only .pdf-task-categories button{padding:0 7px}
 }
+
+
+/* Extremely narrow Codespaces/mobile viewport: preserve every toolbar icon
+   and a usable command search rather than clipping the rightmost actions. */
+@media(max-width:390px) {
+  .app-shell-top-only .suite-title{display:none}
+  .app-shell-top-only .topbar{padding:0 4px;gap:2px}
+  .app-shell-top-only .search{flex:1 1 70px;max-width:none;min-width:60px}
+  .app-shell-top-only .topbar-primary,.app-shell-top-only .topbar-actions{gap:1px}
+}
