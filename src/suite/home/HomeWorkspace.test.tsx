@@ -12,6 +12,7 @@ vi.mock('@tauri-apps/plugin-dialog',()=>({
 }));
 
 import HomeWorkspace from './HomeWorkspace';
+import { HOME_PRIMARY_ACTIONS } from './model';
 import type { DocumentSession } from '../files/session';
 
 const session:DocumentSession={
@@ -66,5 +67,20 @@ describe('Home CasualOffice structural/accessibility baseline',()=>{
     expect(html).not.toContain('WPS');
     expect(html).not.toContain('Go Premium');
     expect(html).not.toContain('SALE');
+    expect(html).toContain('PDF to Word');
+    expect(html).toContain('PDF to Excel');
+    expect(html).toContain('PDF to Slides');
+    expect((html.match(/disabled=""/g)??[]).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('never advertises direct Office launching before PDF output conversion exists',()=>{
+    const office=HOME_PRIMARY_ACTIONS.filter(item=>
+      ['document','spreadsheet','presentation'].includes(item.id));
+    expect(office).toHaveLength(3);
+    expect(office.every(item=>Boolean(item.unavailableReason) &&
+      !item.target && !item.opensFiles)).toBe(true);
+    const open=HOME_PRIMARY_ACTIONS.find(item=>item.id==='open')!;
+    expect(open.opensFiles).toBe(true);
+    expect(open.unavailableReason).toBeUndefined();
   });
 });

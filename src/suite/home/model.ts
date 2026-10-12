@@ -27,13 +27,14 @@ export interface HomePrimaryAction {
   detail: string;
   target?: ModuleId;
   opensFiles?: boolean;
+  unavailableReason?: string;
 }
 
 export const HOME_PRIMARY_ACTIONS: HomePrimaryAction[] = [
   { id:'open', label:'Open', detail:'Open local documents', opensFiles:true },
-  { id:'document', label:'Document', detail:'Word-like workspace', target:'word' },
-  { id:'spreadsheet', label:'Spreadsheet', detail:'Workbook workspace', target:'spreadsheet' },
-  { id:'presentation', label:'Presentation', detail:'Slide workspace', target:'presentation' },
+  { id:'document', label:'PDF to Word', detail:'Conversion required before editing', unavailableReason:'PDF-to-DOCX conversion is not yet release-ready. Open a PDF and use Convert after the converter is verified.' },
+  { id:'spreadsheet', label:'PDF to Excel', detail:'Conversion required before editing', unavailableReason:'PDF-to-XLSX conversion is not yet release-ready. Open a PDF and use Convert after the converter is verified.' },
+  { id:'presentation', label:'PDF to Slides', detail:'Conversion required before editing', unavailableReason:'PDF-to-PPTX conversion is not yet release-ready. Open a PDF and use Convert after the converter is verified.' },
   { id:'pdf', label:'PDF', detail:'Open PDF workspace', target:'pdf' },
   { id:'scan', label:'Scan', detail:'Camera and page capture', target:'scanner' },
   { id:'ocr', label:'OCR', detail:'Recognize document text', target:'ocr' },

@@ -279,7 +279,13 @@ export default function HomeWorkspace({
           icon={<Icon size={21}/>} 
           tone={actionTone(action.id)}
           dashed={action.id==='open'}
-          onClick={()=>action.opensFiles?void onOpenDocuments():action.target&&onSelectModule(action.target)}
+          disabled={Boolean(action.unavailableReason)}
+          aria-description={action.unavailableReason}
+          onClick={()=>{
+            if(action.unavailableReason)return;
+            if(action.opensFiles)void onOpenDocuments();
+            else if(action.target)onSelectModule(action.target);
+          }}
         />;
       })}
     </section>
