@@ -357,7 +357,8 @@ export default function ScannerWorkspace({ mode, onBackToFiles }: Props) {
       </div>
     </div>
 
-    {(message || error) && <div className={error ? 'scanner-message error' : 'scanner-message'}>{error || message}</div>}
+    {(message || error) && <div className={error ? 'scanner-message error' : 'scanner-message'}
+      role={error?'alert':'status'}>{error?'MAL-SCAN-001 · ':''}{error || message}</div>}
 
     {ocrBusy && <div className="ocr-progress">
       <LoaderCircle className="spin" size={15}/><span>{ocrStatus}</span>
@@ -377,7 +378,22 @@ export default function ScannerWorkspace({ mode, onBackToFiles }: Props) {
       <main className="scan-canvas-area">
         {selected
           ? <ProcessedPreview page={selected}/>
-          : <div className="scanner-empty"><div className="empty-icon">M</div><h2>{mode === 'ocr' ? 'OCR Workspace' : 'Scanner'}</h2><p>Import document photos or capture pages from a camera. Pages stay local to this session.</p></div>}
+          : <div className="scanner-empty">
+              <h2>{mode === 'ocr' ? 'OCR Workspace' : 'Scan a document'}</h2>
+              <p>Choose an image from your computer or capture a page using your camera. Files stay in this session.</p>
+              <div className="scanner-quickstart" role="group" aria-label="Choose scan source">
+                <button type="button" onClick={()=>void startCamera()}>
+                  <Camera size={25} aria-hidden="true"/>
+                  <strong>Open camera</strong>
+                  <small>Take a photo of a document</small>
+                </button>
+                <button type="button" onClick={()=>inputRef.current?.click()}>
+                  <FileImage size={25} aria-hidden="true"/>
+                  <strong>Choose images</strong>
+                  <small>Browse PNG, JPG, WebP, BMP or TIFF</small>
+                </button>
+              </div>
+            </div>}
       </main>
 
       <aside className="scan-inspector">
