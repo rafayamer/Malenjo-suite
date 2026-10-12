@@ -374,14 +374,16 @@ async function main(){
     requireEvidence(await surface.locator('.capability-inspector').isVisible() &&
       await surface.locator('.capability-canvas').isVisible(),
       'Missing contextual canvas/inspector for '+name);
-    const commands=page.locator('.suite-ribbon-actions .suite-ribbon-action');
-    await page.waitForFunction(()=>document.querySelectorAll('.suite-ribbon-actions .suite-ribbon-action:disabled').length===4);
+    // Specialist primary commands are separate from the intentionally disabled
+    // MAL catalog preview buttons shown to help users discover future tools.
+    const commands=page.locator('.suite-ribbon-actions .ml-ribbon-primary-action');
+    await page.waitForFunction(()=>document.querySelectorAll('.suite-ribbon-actions .ml-ribbon-primary-action:disabled').length===4);
     requireEvidence(await surface.locator('.capability-command-strip').count()===0 &&
       await page.locator('.suite-ribbon').count()===1 &&
       await commands.count()===6 &&
       await commands.filter({hasText:'Help'}).isEnabled() &&
       await commands.filter({hasText:'Files / Library'}).count()<=1 &&
-      await page.locator('.suite-ribbon-actions .suite-ribbon-action:disabled').count()===4,
+      await page.locator('.suite-ribbon-actions .ml-ribbon-primary-action:disabled').count()===4,
       'Specialist UI has duplicate ribbons or unsupported commands appear executable in '+name);
     requireEvidence(await surface.getByText('NOT RELEASE-READY').isVisible(),
       'Missing honest readiness status in '+name);
