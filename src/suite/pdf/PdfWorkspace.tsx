@@ -136,7 +136,10 @@ import {
   PDF_TASK_CATEGORIES,
   PDF_TASK_CATEGORY_LABELS,
   PDF_TASK_CATEGORY_SHORTCUTS,
-  movePdfTaskCategory,
+  PDF_MASTER_RIBBON_TABS,
+  masterRibbonTabForTask,
+  moveMasterRibbonTab,
+  taskForMasterRibbonTab,
   pdfTaskCategoryFromShortcut,
   type PdfTaskCategory,
 } from './taskToolbar';
@@ -2085,7 +2088,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       if(!category)return;
       event.preventDefault();
       setTaskCategory(category);
-      window.requestAnimationFrame(()=>document.getElementById(`${domIdPrefix}-task-${category}`)?.focus());
+      window.requestAnimationFrame(()=>document.getElementById(`${domIdPrefix}-task-${masterRibbonTabForTask(category)}`)?.focus());
     }
     window.addEventListener('keydown',onTaskShortcut);
     return()=>window.removeEventListener('keydown',onTaskShortcut);
@@ -2237,7 +2240,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     id:feature.id,label:feature.label,enabled:false,disabledReason:feature.reason,planned:true,
     run:()=>undefined,
   }));
-  const activeTaskActions=[...plannedActions,...taskActions[taskCategory]];
+  const activeTaskActions=[...plannedActions,...taskActions[taskCategory],
+    ...(taskCategory==='comment' ? taskActions.sign : [])];
   const primaryTaskActions=activeTaskActions.slice(0,6);
   const overflowTaskActions=activeTaskActions.slice(6);
   const shortActionLabel=(action:PdfToolbarAction)=>action.label
@@ -2249,7 +2253,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const focusTaskCategory=(category:PdfTaskCategory)=>{
     setTaskCategory(category);
     setFeatureGalleryOpen(false);
-    window.requestAnimationFrame(()=>document.getElementById(`${domIdPrefix}-task-${category}`)?.focus());
+    window.requestAnimationFrame(()=>document.getElementById(`${domIdPrefix}-task-${masterRibbonTabForTask(category)}`)?.focus());
   };
 
   return <div ref={workspaceRef} className={`pdf-workspace${presentationMode?' presentation-mode':''}`}>
@@ -2301,23 +2305,25 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
     <div className="pdf-task-toolbar">
       <div className="pdf-task-categories" role="tablist" aria-label="PDF task categories">
-        {PDF_TASK_CATEGORIES.map((category)=><button
-          id={`${domIdPrefix}-task-${category}`}
-          key={category}
+        {PDF_MASTER_RIBBON_TABS.map(tab=><button
+          id={`${domIdPrefix}-task-${tab.id}`}
+          key={tab.id}
           role="tab"
-          aria-selected={taskCategory===category}
+          aria-selected={masterRibbonTabForTask(taskCategory)===tab.id}
           aria-controls={`${domIdPrefix}-task-tools`}
-          aria-keyshortcuts={PDF_TASK_CATEGORY_SHORTCUTS[category]}
-          tabIndex={taskCategory===category?0:-1}
-          className={taskCategory===category?'active':''}
-          title={`${PDF_TASK_CATEGORY_LABELS[category]} · ${PDF_TASK_CATEGORY_SHORTCUTS[category]}`}
-          onClick={()=>{setTaskCategory(category);setFeatureGalleryOpen(false);if(category==='ai')setProviderPanelOpen(false);}}
+          aria-keyshortcuts={PDF_TASK_CATEGORY_SHORTCUTS[tab.task]}
+          tabIndex={masterRibbonTabForTask(taskCategory)===tab.id?0:-1}
+          className={masterRibbonTabForTask(taskCategory)===tab.id?'active':''}
+          title={`${tab.label} PDF tools · ${PDF_TASK_CATEGORY_SHORTCUTS[tab.task]}`}
+          onClick={()=>{setTaskCategory(tab.task);setFeatureGalleryOpen(false);if(tab.id==='tools')setProviderPanelOpen(false);}}
           onKeyDown={(event)=>{
             if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
             event.preventDefault();
-            focusTaskCategory(movePdfTaskCategory(taskCategory,event.key as 'ArrowLeft'|'ArrowRight'|'Home'|'End'));
+            focusTaskCategory(taskForMasterRibbonTab(moveMasterRibbonTab(
+              masterRibbonTabForTask(taskCategory),
+              event.key as 'ArrowLeft'|'ArrowRight'|'Home'|'End')));
           }}
-        >{PDF_TASK_CATEGORY_LABELS[category]}</button>)}
+        >{tab.label}</button>)}}
       </div>
 
       <div id={`${domIdPrefix}-task-tools`} className="pdf-context-toolbar" role="toolbar" aria-label={`${PDF_TASK_CATEGORY_LABELS[taskCategory]} PDF tools`}>
@@ -2348,7 +2354,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             {action.planned&&<span className="pdf-feature-planned-dot" aria-hidden="true"/>}
           </span>)}
           {!activeTaskActions.length&&<span className="pdf-task-empty">No operational {PDF_TASK_CATEGORY_LABELS[taskCategory].toLowerCase()} commands are available in this build yet. Use Ctrl+K to discover available document actions.</span>}
-          {false&&overflowTaskActions.length>0&&<details className="pdf-task-overflow">
+          {overflowTaskActions.length>0&&<details className="pdf-task-overflow">
             <summary aria-label={`More ${PDF_TASK_CATEGORY_LABELS[taskCategory]} tools`}>More</summary>
             <div>
               {overflowTaskActions.map((action)=><button
