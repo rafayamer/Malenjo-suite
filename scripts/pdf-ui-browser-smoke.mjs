@@ -52,6 +52,25 @@ async function main(){
     requireEvidence(await action.isDisabled() && (await action.getAttribute('aria-description'))?.includes('conversion'),
       'Home incorrectly advertises an unverified independent Office launch: '+label);
   }
+  // Phase 1 Home filtering is a real keyboard-operated tablist, not a
+  // sequence of unreachable decorative pills.
+  const homeFileFilters=page.getByRole('tablist',{name:'Filter recent files by type'});
+  const allFilter=homeFileFilters.getByRole('tab',{name:'All',exact:true});
+  await allFilter.focus();
+  await page.keyboard.press('ArrowRight');
+  const pdfFilter=homeFileFilters.getByRole('tab',{name:'PDF',exact:true});
+  requireEvidence(await pdfFilter.getAttribute('aria-selected')==='true' &&
+    await pdfFilter.evaluate(el=>document.activeElement===el),
+    'Home file filter Right Arrow failed to select and focus PDF');
+  await page.keyboard.press('End');
+  const otherFilter=homeFileFilters.getByRole('tab',{name:'Other',exact:true});
+  requireEvidence(await otherFilter.getAttribute('aria-selected')==='true',
+    'Home file filter End failed');
+  await page.keyboard.press('Home');
+  requireEvidence(await allFilter.getAttribute('aria-selected')==='true' &&
+    await allFilter.evaluate(el=>document.activeElement===el),
+    'Home file filter Home failed to restore first tab');
+  console.log('PHASE1 Home file filters accessible keyboard navigation: PASS');
   // The Settings page must provide exactly two real native radio controls.
   await page.locator('.sidebar nav .nav-item').filter({hasText:'Settings'}).first().click();
   await page.getByRole('heading',{name:'Appearance'}).waitFor({timeout:15000});

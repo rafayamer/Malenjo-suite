@@ -6,7 +6,7 @@
  * MALENJO changes: React/lucide icon injection, broader document kinds,
  * MALENJO class prefix, and explicit disabled/unavailable states.
  */
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, InputHTMLAttributes, KeyboardEvent, ReactNode } from 'react';
 import { Search } from 'lucide-react';
 
 export interface OfficeActionCardProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'title'> {
@@ -80,14 +80,27 @@ export interface OfficeSegmentedFilterProps<T extends string=string>{
 export function OfficeSegmentedFilter<T extends string=string>({
   options,value,onChange,...rest
 }:OfficeSegmentedFilterProps<T>){
+  function onKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const dir = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+    const next = event.key === 'Home' ? 0 : event.key === 'End'
+      ? options.length - 1 : dir ? (index + dir + options.length) % options.length : null;
+    if (next === null) return;
+    event.preventDefault();
+    onChange?.(options[next].value);
+    event.currentTarget.parentElement
+      ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+  }
+
   return <div className="ml-co-segmented" role="tablist" aria-label={rest['aria-label']}>
-    {options.map((option)=><button
+    {options.map((option,index)=><button
       key={option.value}
       type="button"
       role="tab"
       aria-selected={option.value===value}
+      tabIndex={option.value===value ? 0 : -1}
       className={option.value===value?'ml-co-segmented-btn active':'ml-co-segmented-btn'}
       onClick={()=>onChange?.(option.value)}
+      onKeyDown={(event)=>onKeyDown(event,index)}
     >{option.label}</button>)}
   </div>;
 }

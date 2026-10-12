@@ -1313,3 +1313,13 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
   .capability-identity h1 {font-size:19px}
   .capability-command-strip button {min-width:77px}
 }
+
+/* Home file-type tab bar: visible keyboard focus without changing MALENJO
+   document content or altering the two approved appearance palettes. */
+.ml-co-segmented [role="tab"]:focus-visible {
+  outline:2px solid var(--ml-brand-blue);
+  outline-offset:-2px;
+}
+:root[data-theme="light"] .ml-co-segmented [role="tab"][aria-selected="true"] {
+  box-shadow:inset 0 -2px #145cab;
+}
