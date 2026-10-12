@@ -762,14 +762,50 @@ async function main(){
   requireEvidence(await pickerTab.count()===1,
     'the PDF Workspace picker did not keep the opened document in a regular tab');
   console.log('MALENJO PDF Workspace Choose PDF tab retention: PASS');
-  // Return to the original PDF to verify edit/export without altering it.
+  // Return to the original PDF and verify top-bar actions are genuine
+  // document-controller commands with honest disabled history state.
   await documentTab.click();
+  const saveQuick=page.getByRole('button',{name:'Save PDF copy',exact:true});
+  const undoQuick=page.getByRole('button',{name:'Undo PDF edit',exact:true});
+  const redoQuick=page.getByRole('button',{name:'Redo PDF edit',exact:true});
+  requireEvidence(await saveQuick.isEnabled() &&
+    await undoQuick.isDisabled() && await redoQuick.isDisabled(),
+    'Top-bar Save / Undo / Redo did not reflect the unedited live PDF');
   await page.locator('.document-session-panel.active .pdf-task-categories button').filter({hasText:'Organize'}).click();
   await page.locator('.document-session-panel.active .pdf-context-toolbar').getByRole('button',{name:/Rotate selected/}).click();
   await page.waitForFunction(()=>
     Array.from(document.querySelectorAll('.pdf-notice')).some(
       node=>node.textContent?.includes('Permanently rotated'),
     ),null,{timeout:30000});
+  await page.waitForFunction(()=>
+    [...document.querySelectorAll('.topbar-quick-history')].some(node=>
+      node.getAttribute('aria-label')==='Undo PDF edit' && !node.disabled),
+  null,{timeout:15000});
+  requireEvidence(await undoQuick.isEnabled() && await redoQuick.isDisabled(),
+    'Real PDF rotation did not enable Undo and keep Redo disabled');
+  await undoQuick.click();
+  await page.waitForFunction(()=>
+    [...document.querySelectorAll('.pdf-notice')].some(node=>node.textContent?.includes('Undid:')),
+  null,{timeout:30000});
+  await page.waitForFunction(()=>
+    [...document.querySelectorAll('.topbar-quick-history')].some(node=>
+      node.getAttribute('aria-label')==='Redo PDF edit' && !node.disabled),
+  null,{timeout:15000});
+  requireEvidence(await redoQuick.isEnabled(),
+    'Undo did not produce a redo-able PDF history state');
+  await redoQuick.click();
+  await page.waitForFunction(()=>
+    [...document.querySelectorAll('.pdf-notice')].some(node=>node.textContent?.includes('Redid:')),
+  null,{timeout:30000});
+  const quickDownloadPromise=page.waitForEvent('download',{timeout:30000});
+  await saveQuick.click();
+  const quickDownload=await quickDownloadPromise;
+  const quickPath=join(mkdtempSync(join(tmpdir(),'malenjo-topbar-save-')),'saved-copy.pdf');
+  await quickDownload.saveAs(quickPath);
+  const quickPdf=await PDFDocument.load(readFileSync(quickPath));
+  requireEvidence(quickPdf.getPageCount()===2&&quickPdf.getPage(0).getRotation().angle===90,
+    'Top-bar Save PDF copy did not export the redone real PDF mutation');
+  console.log('PHASE1 real top-bar Save/Undo/Redo and saved-PDF independent reopen: PASS');
   await page.locator('.document-session-panel.active .pdf-task-categories button').filter({hasText:/^Home$/}).click();
   const pendingDownload=page.waitForEvent('download',{timeout:30000});
   await page.locator('.document-session-panel.active .pdf-context-toolbar').getByRole('button',{name:/^Export/}).click();
