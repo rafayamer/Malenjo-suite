@@ -22,7 +22,6 @@ export const PDF_PLANNED_FEATURES: Partial<Record<PdfTaskCategory, readonly Plan
   ],
   protect: [
     { id:'digital-sign-pdf', label:'Digital sign', reason:'Certificate-backed digital signing and independent verification are not release-ready.' },
-  ],
     { id:'encrypt-pdf', label:'Encrypt PDF', reason:'PDF password encryption and independent reader validation are not release-ready.' },
     { id:'redact-sensitive', label:'Remove sensitive data', reason:'Verified sanitization and metadata removal are not release-ready.' },
   ],
