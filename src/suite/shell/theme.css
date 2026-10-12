@@ -1985,3 +1985,53 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 @media(max-width:680px){
   .app-shell-top-only .ml-ai-drawer {bottom:30px;max-height:calc(100dvh - 80px)}
 }
+
+
+/* Master v2: document pager, zoom and view controls occupy the compact
+   bottom status/navigation band instead of shrinking the main icon ribbon.
+   The controls scroll within their own bounded area, never the whole app. */
+.app-shell-top-only .pdf-view-controls {
+  position:fixed!important;top:auto!important;bottom:0!important;right:0!important;
+  z-index:43!important;
+  display:flex!important;align-items:center!important;flex-wrap:nowrap!important;
+  width:min(960px,calc(100vw - 230px))!important;min-width:0!important;
+  height:30px!important;min-height:30px!important;max-height:30px!important;
+  margin:0!important;padding:0 6px!important;gap:5px!important;
+  overflow-x:auto!important;overflow-y:hidden!important;scrollbar-width:thin;
+  background:var(--ml-toolbar);border-top:1px solid var(--ml-border)
+}
+.app-shell-top-only .pdf-view-controls>.pdf-toolbar-group {
+  height:29px!important;min-height:29px!important;max-height:29px!important;
+  flex:0 0 auto!important;align-items:center!important
+}
+.app-shell-top-only .pdf-view-controls button {
+  height:27px!important;min-height:27px!important;min-width:28px!important;
+  padding:0 5px!important;border-radius:3px!important
+}
+.app-shell-top-only .pdf-view-controls input {
+  height:27px!important;min-height:27px!important
+}
+.app-shell-top-only .pdf-context-toolbar {
+  width:100%;overflow:hidden
+}
+.app-shell-top-only .pdf-task-actions {
+  flex:1 1 100%!important;max-width:100%!important
+}
+.app-shell-top-only .workspace.ai-panel-open .pdf-view-controls {
+  right:min(364px,41vw)!important;
+  width:min(810px,calc(100vw - min(364px,41vw) - 140px))!important
+}
+@media(max-width:760px) {
+  .app-shell-top-only .pdf-view-controls {
+    width:calc(100vw - 145px)!important;
+  }
+  .app-shell-top-only .workspace.ai-panel-open .pdf-view-controls {
+    right:0!important;width:calc(100vw - 125px)!important;
+  }
+}
+@media(max-width:440px) {
+  .app-shell-top-only .pdf-view-controls{width:calc(100vw - 90px)!important;}
+  .app-shell-top-only .workspace.ai-panel-open .pdf-view-controls {
+    width:calc(100vw - 90px)!important;
+  }
+}
