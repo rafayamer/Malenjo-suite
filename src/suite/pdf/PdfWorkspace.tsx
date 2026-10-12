@@ -2159,6 +2159,20 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }
   };
 
+  // Preserve ordinary wheel scrolling through the whole PDF. Modified wheel
+  // events zoom the actual page instead of magnifying the whole application.
+  useEffect(()=>{
+    const reader=scrollRef.current;
+    if(!reader||!active||!pdf)return;
+    const onWheel=(event:WheelEvent)=>{
+      if(!(event.ctrlKey||event.metaKey)||event.deltaY===0)return;
+      event.preventDefault();
+      void zoomByStep(event.deltaY<0?1:-1);
+    };
+    reader.addEventListener('wheel',onWheel,{passive:false});
+    return()=>reader.removeEventListener('wheel',onWheel);
+  },[active,pdf,fitMode,zoom,currentPage,rotation,viewport.width,viewport.height]);
+
   useEffect(()=>{
     function onFullscreenChange(){
       const active=Boolean(document.fullscreenElement);
@@ -2223,21 +2237,16 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   };
 
   const taskActions:Record<PdfTaskCategory,PdfToolbarAction[]>={
+    // Global Open, Save, Undo, Redo and the reader's Properties toggle have
+    // one stable home in the top bar/footer. Do not duplicate them in ribbons.
     home:[
-      {id:'files',label:'Files',enabled:true,run:onBackToFiles},
-      {id:'open',label:'Open PDF',enabled:!session,disabledReason:session?'Open additional documents from Files / Library so they receive their own tabs.':undefined,run:()=>fileInputRef.current?.click()},
-      {id:'export',label:'Export',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:exportCurrent},
       {id:'print',label:'Print',enabled:!!pdf&&!mutating,disabledReason:!pdf?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:printDocument},
-      {id:'inspector',label:inspectorHidden?'Show properties':'Hide properties',enabled:true,run:()=>setInspectorHidden(value=>{if(value)setLeftPanelCollapsed(true);return !value;})},
-      providerAction,
     ],
     edit:[
-      {id:'undo',label:'Undo',enabled:!!historyRef.current&&!mutating&&canUndoPdfHistory(historyRef.current),disabledReason:mutating?'Wait for the current PDF edit to finish.':'There is no PDF edit to undo.',run:undoEdit},
-      {id:'redo',label:'Redo',enabled:!!historyRef.current&&!mutating&&canRedoPdfHistory(historyRef.current),disabledReason:mutating?'Wait for the current PDF edit to finish.':'There is no PDF edit to redo.',run:redoEdit},
       {id:'place-text',label:'Place text',enabled:!!sourceBytes&&!mutating&&!!textOverlay.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!textOverlay.text.trim()?'Enter text in the Properties inspector first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Added permanent text to the PDF.',bytes=>addPdfTextOverlay(bytes,{pageNumber:currentPage,...textOverlay}),currentPage)},
       {id:'rectangle',label:shapeOverlay.mode==='highlight'?'Highlight rectangle':'Outline rectangle',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage)},
       {id:'configure-edit',label:'Edit settings',enabled:true,run:configureProperties},
-      {id:'open-crop-settings',label:'Crop PDF settings',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF before cropping.':mutating?'Wait for the current PDF edit.':undefined,run:configureProperties},
+      {id:'open-page-numbers',label:'Page numbers settings',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF before adding page numbers.':mutating?'Wait for the current PDF edit.':undefined,run:configureProperties},
       providerAction,
     ],
     convert:[
@@ -2253,6 +2262,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       providerAction,
     ],
     organize:[
+      {id:'open-crop-settings',label:'Crop PDF settings',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF before cropping.':mutating?'Wait for the current PDF edit.':undefined,run:configureProperties},
       {id:'turn-pages',label:'Rotate PDF pages',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Permanently rotated ${operationPages.length} selected page(s) by 90°.`,bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),operationPages[0])},
       {id:'remove-pages',label:`Delete ${operationPages.length} page${operationPages.length===1?'':'s'}`,enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length>=pageCount?'A PDF must retain at least one page.':mutating?'Wait for the current PDF edit to finish.':undefined,run:removeSelectedPagesSafely},
       {id:'copy-page',label:'Duplicate page',enabled:!!sourceBytes&&!mutating&&operationPages.length===1,disabledReason:operationPages.length!==1?'Select exactly one page.':mutating?'Wait for the current PDF edit to finish.':!sourceBytes?'No PDF is loaded.':undefined,run:()=>mutateAction(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)},
@@ -2262,7 +2272,6 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'append',label:'Append PDF…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>appendInputRef.current?.click()},
       {id:'blank',label:'Blank after',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Inserted a blank page after page ${currentPage}.`,bytes=>insertBlankPdfPage(bytes,currentPage),currentPage+1)},
       {id:'page-labels',label:'Set page label',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF first.':'Wait for PDF edit.',run:applyPageLabel},
-      {id:'open-page-numbers',label:'Page numbers settings',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF before adding page numbers.':mutating?'Wait for the current PDF edit.':undefined,run:configureProperties},
       {id:'earlier',label:'Move earlier',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&currentPage>1,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':currentPage<=1?'The first page cannot move earlier.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Moved page earlier.',bytes=>movePdfPage(bytes,currentPage,currentPage-1),currentPage-1)},
       {id:'later',label:'Move later',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&currentPage<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':currentPage>=pageCount?'The final page cannot move later.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)},
       providerAction,
@@ -2872,14 +2881,27 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       </aside>
 
       <div ref={scrollRef} className="pdf-scroll" tabIndex={0}
-        aria-label="Scrollable PDF pages. Use Page Down and Page Up to move between pages."
+        aria-label="Scrollable PDF pages. Page Up/Down and arrow keys navigate. Plus/minus zoom; 0 actual size, W fit width, F fit page; F9 presents."
         onKeyDown={event=>{
-          if(event.key==='PageDown'||event.key==='PageUp'){
-            event.preventDefault();goToPage(currentPage+(event.key==='PageDown'?1:-1));
+          if(event.target!==event.currentTarget || event.altKey || event.metaKey)return;
+          if(event.key==='PageDown'||event.key==='PageUp'||event.key==='ArrowRight'||event.key==='ArrowLeft'){
+            event.preventDefault();goToPage(currentPage+(['PageDown','ArrowRight'].includes(event.key)?1:-1));
           }else if(event.key==='Home'&&event.ctrlKey){
             event.preventDefault();goToPage(1);
           }else if(event.key==='End'&&event.ctrlKey){
             event.preventDefault();goToPage(pageCount);
+          }else if(!event.ctrlKey&&!event.shiftKey && (event.key==='+'||event.key==='=')){
+            event.preventDefault();void zoomByStep(1);
+          }else if(!event.ctrlKey&&!event.shiftKey && event.key==='-'){
+            event.preventDefault();void zoomByStep(-1);
+          }else if(!event.ctrlKey && event.key==='0'){
+            event.preventDefault();setFitMode('custom');setZoom(1);
+          }else if(!event.ctrlKey && event.key.toLowerCase()==='w'){
+            event.preventDefault();setFitMode('width');
+          }else if(!event.ctrlKey && event.key.toLowerCase()==='f'){
+            event.preventDefault();setFitMode('page');
+          }else if(!event.ctrlKey&&event.key==='F9'){
+            event.preventDefault();void toggleFullscreen(true);
           }
         }}>
         <div className={`pdf-stage ${viewMode}`}>

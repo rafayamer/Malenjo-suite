@@ -733,7 +733,35 @@ async function main(){
     document.querySelector('.ml-status-pdf-view')?.textContent?.includes('400%'),
     null,{timeout:15000});
   await readerFooter.getByRole('button',{name:'Actual size'}).click();
-  console.log('PHASE1 real multipage scroll + reader footer + slider + rotate discoverability: PASS');
+  const pdfKeyboard=activePdf.locator('.pdf-scroll');
+  await pdfKeyboard.focus();
+  await pdfKeyboard.press('0');
+  await page.waitForFunction(()=>
+    document.querySelector('.ml-status-pdf-view')?.textContent?.includes('100%'),
+    null,{timeout:15000});
+  await pdfKeyboard.press('+');
+  await page.waitForFunction(()=>
+    document.querySelector('.ml-status-pdf-view')?.textContent?.includes('110%'),
+    null,{timeout:15000});
+  await pdfKeyboard.evaluate(node=>node.dispatchEvent(new WheelEvent('wheel',{
+    deltaY:-120,ctrlKey:true,bubbles:true,cancelable:true,
+  })));
+  await page.waitForFunction(()=>
+    document.querySelector('.ml-status-pdf-view')?.textContent?.includes('120%'),
+    null,{timeout:15000});
+  await pdfKeyboard.press('w');
+  await page.waitForFunction(()=>
+    document.querySelector('.ml-status-pdf-view')?.textContent?.includes('Fit width'),
+    null,{timeout:15000});
+  await pdfKeyboard.press('PageDown');
+  await page.waitForFunction(()=>
+    document.querySelector('.ml-status-pdf-view')?.textContent?.includes('Page 2 / 2'),
+    null,{timeout:15000});
+  await pdfKeyboard.press('PageUp');
+  await page.waitForFunction(()=>
+    document.querySelector('.ml-status-pdf-view')?.textContent?.includes('Page 1 / 2'),
+    null,{timeout:15000});
+  console.log('PHASE1 real multipage scroll + reader footer + keyboard and wheel zoom: PASS');
 
   // Master v2 Phase 1 responsive + appearance matrix on a REAL open PDF.
   // Keep PDF.js selectable text functional through live theme changes,
@@ -873,9 +901,16 @@ async function main(){
   requireEvidence(quickPdf.getPageCount()===2&&quickPdf.getPage(0).getRotation().angle===90,
     'Top-bar Save PDF copy did not export the redone real PDF mutation');
   console.log('PHASE1 real top-bar Save/Undo/Redo and saved-PDF independent reopen: PASS');
+  await page.locator('.document-session-panel.active .pdf-task-categories button').filter({hasText:/^Edit$/}).click();
+  requireEvidence(await page.locator('.document-session-panel.active .pdf-context-toolbar [data-pdf-feature="undo"]').count()===0 &&
+    await page.locator('.document-session-panel.active .pdf-context-toolbar [data-pdf-feature="redo"]').count()===0 &&
+    await page.locator('.document-session-panel.active .pdf-context-toolbar [data-pdf-feature="place-text"]').count()===1,
+    'Edit ribbon repeated topbar Undo/Redo or hid actual editing tools');
   await page.locator('.document-session-panel.active .pdf-task-categories button').filter({hasText:/^Home$/}).click();
+  requireEvidence(await page.locator('.document-session-panel.active .pdf-context-toolbar [data-pdf-feature="export"]').count()===0,
+    'Save was duplicated in the PDF Home ribbon and top bar');
   const pendingDownload=page.waitForEvent('download',{timeout:30000});
-  await page.locator('.document-session-panel.active .pdf-context-toolbar').getByRole('button',{name:/^Export/}).click();
+  await saveQuick.click();
   const download=await pendingDownload;
   const destination=join(mkdtempSync(join(tmpdir(),'malenjo-browser-pdf-')),'exported.pdf');
   await download.saveAs(destination);
