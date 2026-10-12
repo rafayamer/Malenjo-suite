@@ -1,6 +1,6 @@
 import {
-  CircleHelp, FileText, FolderOpen, HeartPulse, Layers3, LockKeyhole,
-  Receipt, Ruler, Settings2, ShieldCheck, type LucideIcon,
+  FileText, HeartPulse, LockKeyhole, Receipt, Ruler,
+  ShieldCheck, type LucideIcon,
 } from 'lucide-react';
 import type { ModuleId } from '../core/types';
 
@@ -84,22 +84,6 @@ export default function CapabilityWorkspace({ module, onNavigate, documentName }
       </div>
       <span className="capability-status" role="status"><ShieldCheck size={15} aria-hidden="true"/> NOT RELEASE-READY</span>
     </header>
-
-    <section className="capability-command-strip" aria-label={model.name + ' command bar'}>
-      {model.tools.map((tool) =>
-        <button key={tool} type="button" disabled aria-describedby={'capability-reason-' + module}
-          title={'Unavailable: ' + model.limitation}>
-          <Layers3 size={18} aria-hidden="true"/><span>{tool}</span>
-        </button>
-      )}
-      <button type="button" className="capability-live-command" onClick={() => onNavigate(guidance)}>
-        {module === 'account' ? <Settings2 size={18} aria-hidden="true"/> : <FolderOpen size={18} aria-hidden="true"/>}
-        {module === 'account' ? 'Appearance settings' : 'Files / Library'}
-      </button>
-      <button type="button" className="capability-live-command" onClick={() => onNavigate('help')}>
-        <CircleHelp size={18} aria-hidden="true"/> Help
-      </button>
-    </section>
 
     <div className="capability-body">
       <section className="capability-canvas" aria-label={model.name + ' content area'}>
