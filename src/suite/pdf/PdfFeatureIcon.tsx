@@ -1,3 +1,4 @@
+import { MASTER_FEATURE_ICON_BY_ID } from './masterFeatureIcons';
 import {
   Bot, ClipboardCheck, Copy, Download, FileImage, FilePlus2, FileText, FileType,
   FolderOpen, FormInput, Highlighter, Image, Languages, LayoutTemplate, LockKeyhole,
@@ -6,6 +7,44 @@ import {
   Trash2, Undo2, Workflow, Crop, FileCode2, GitCompare,
   Hash, LockOpen, Minimize2, Stamp, Wrench, type LucideIcon,
 } from 'lucide-react';
+
+/** Each of the existing 33 PDF shortcut tiles has exactly one matching,
+ * unique master feature glyph. Do not silently collapse them to FileText. */
+export const PDF_SHORTCUT_MASTER_IDS: Readonly<Record<string,string>> = {
+  'merge-pdf':'MAL-001',
+  'split-pdf':'MAL-002',
+  'remove-pages':'MAL-004',
+  'extract-pages':'MAL-005',
+  'organize-pdf':'MAL-003',
+  'scan-to-pdf':'MAL-028',
+  'compress-pdf':'MAL-024',
+  'repair-pdf':'MAL-026',
+  'ocr-pdf':'MAL-027',
+  'jpg-to-pdf':'MAL-030',
+  'word-to-pdf':'MAL-031',
+  'powerpoint-to-pdf':'MAL-032',
+  'excel-to-pdf':'MAL-033',
+  'html-to-pdf':'MAL-034',
+  'pdf-to-jpg':'MAL-036',
+  'pdf-to-word':'MAL-037',
+  'pdf-to-powerpoint':'MAL-038',
+  'pdf-to-excel':'MAL-039',
+  'pdf-to-pdfa':'MAL-040',
+  'rotate-pdf':'MAL-007',
+  'page-numbers':'MAL-018',
+  'watermark-pdf':'MAL-019',
+  'crop-pdf':'MAL-008',
+  'edit-pdf':'MAL-016',
+  'pdf-forms':'MAL-046',
+  'unlock-pdf':'MAL-062',
+  'protect-pdf':'MAL-061',
+  'sign-pdf':'MAL-065',
+  'redact-pdf':'MAL-063',
+  'compare-pdf':'MAL-059',
+  'ai-summarizer':'MAL-073',
+  'translate-pdf':'MAL-074',
+  'pdf-to-markdown':'MAL-041',
+};
 
 /** Meaningful, stable symbols rather than the same generic document icon for every command. */
 const icons: Record<string,LucideIcon> = {
@@ -48,6 +87,7 @@ export function PdfFeatureIcon({id,label,size=20}:{id:string;label:string;size?:
     : /convert|export/i.test(label) ? Download
     : /page/i.test(label) ? FileText
     : FileText;
-  const Icon=icons[id]??fallback;
+  const Icon=MASTER_FEATURE_ICON_BY_ID[id]??
+    MASTER_FEATURE_ICON_BY_ID[PDF_SHORTCUT_MASTER_IDS[id]]??icons[id]??fallback;
   return <Icon size={size} aria-hidden="true" strokeWidth={1.8}/>;
 }
