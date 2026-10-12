@@ -165,6 +165,19 @@ async function main(){
   await page.keyboard.press('Enter');
   requireEvidence(await page.getByRole('dialog',{name:'MALENJO command palette'}).isVisible(),
     'Enter executed a disabled command');
+  // Master Specification v2.0: every MAL-001..MAL-090 is discoverable,
+  // but searching it must NEVER make an unverified feature executable.
+  for(const [requirement,label] of [['MAL-001','Merge PDF Files'],
+      ['MAL-037','PDF to Word'],['MAL-063','Permanent PDF Redaction'],
+      ['MAL-071','AI Chat with PDF'],['MAL-090','Advanced Print and Prepress']]){
+    await commandSearch.fill(requirement);
+    const option=page.getByRole('option',{name:new RegExp(label.replace(/[.*+?^${}()|[\\]\\]/g,'\\  await commandSearch.fill('Open Settings');'))}).first();
+    await option.waitFor({timeout:15000});
+    requireEvidence(await option.isDisabled() &&
+      (await option.getAttribute('title'))?.includes('Not release-ready'),
+      'Unverified '+requirement+' was missing from discovery or falsely executable');
+  }
+  console.log('MASTER v2: sample MAL-001 through MAL-090 searchable and safely disabled: PASS');
   await commandSearch.fill('Open Settings');
   await page.getByRole('option',{name:/Open Settings/}).waitFor({timeout:15000});
   requireEvidence(Boolean(await commandSearch.getAttribute('aria-activedescendant')),
