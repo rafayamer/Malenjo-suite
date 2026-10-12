@@ -83,6 +83,16 @@ async function main(){
   });
   requireEvidence(await page.locator('.document-tab-main').filter({hasText:'forbidden-standalone.docx'}).count()===0,
     'Independent Word document opened without successful PDF conversion');
+  requireEvidence(await page.locator('.ml-open-feedback').isVisible() &&
+    /only PDF, CAD and DICOM/i.test(await page.locator('.ml-open-feedback').innerText()),
+    'Rejected Office import did not explain the PDF-first opening policy');
+  await page.getByRole('button',{name:'Dismiss file notice'}).click();
+  await page.getByRole('button',{name:'All tools',exact:true}).click();
+  for(const forbidden of ['Document Workspace','Spreadsheet','Presentation','Malenjo AI']){
+    requireEvidence(await page.locator('.ml-tools-popup nav .nav-item[aria-label="'+forbidden+'"]').count()===0,
+      'Standalone '+forbidden+' appeared in the user-facing top Tools menu');
+  }
+  await page.getByRole('button',{name:'Close tools menu'}).click();
   console.log('PHASE1 PDF/CAD/DICOM-only direct open, Office conversion-only gating: PASS');
   // AI belongs in the top bar and behaves as a persistent Messenger-like
   // chat drawer, not a standalone module or a second browser window.
