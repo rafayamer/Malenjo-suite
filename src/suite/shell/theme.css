@@ -1808,3 +1808,105 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
   flex:0 0 71px;width:71px;min-width:71px;
   background:var(--ml-surface);box-shadow:2px 0 4px #0002;
 }
+
+
+/* Master v2.0 Phase 1 — shared gallery and 10-tab responsive PDF-first ribbon.
+   PDF command capabilities remain disabled until their output is accepted. */
+.app-shell-top-only .suite-ribbon,
+.app-shell-top-only .pdf-task-toolbar {position:relative;isolation:isolate}
+.app-shell-top-only .suite-ribbon-tabs,.app-shell-top-only .pdf-task-categories {
+  overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;
+  scrollbar-width:thin;scroll-snap-type:x proximity
+}
+.app-shell-top-only .suite-ribbon-tabs button,
+.app-shell-top-only .pdf-task-categories button {
+  flex-shrink:0;scroll-snap-align:nearest;white-space:nowrap;
+}
+.app-shell-top-only .suite-ribbon-actions {
+  gap:5px;max-width:100%;min-height:54px;max-height:64px;overflow-x:auto;
+}
+.app-shell-top-only .ml-ribbon-tooltip-wrap{display:grid;place-items:center;flex:0 0 43px;
+  height:44px;min-width:43px}
+.app-shell-top-only .ml-ribbon-tooltip-wrap>.suite-ribbon-action,
+.app-shell-top-only .suite-ribbon-action.ml-ribbon-gallery-trigger {
+  height:42px!important;min-height:42px!important;
+  width:42px!important;min-width:42px!important;flex:0 0 42px!important;
+  padding:6px!important;border-radius:5px!important;
+}
+.app-shell-top-only .ml-ribbon-tooltip-wrap>.suite-ribbon-action:disabled{
+  opacity:.55;cursor:not-allowed
+}
+.app-shell-top-only .ml-ribbon-gallery-trigger{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:0!important;position:sticky;right:0;z-index:2;
+  background:var(--ml-surface);border:1px solid var(--ml-border)
+}
+.app-shell-top-only .ml-ribbon-gallery-trigger svg:first-child{width:19px;height:19px}
+.app-shell-top-only .ml-ribbon-gallery-trigger svg:nth-child(2){width:11px;height:11px}
+.ml-ribbon-separator{height:28px;width:1px;min-width:1px;flex:0 0 1px;
+  background:var(--ml-border);margin:0 3px}
+/* Floating galleries live inside the ribbon viewport, never across the OS
+   titlebar; keyboard Escape closes and returns focus to the trigger. */
+.ml-feature-gallery {
+  position:absolute;top:calc(100% - 1px);right:8px;
+  z-index:86;width:min(770px,calc(100vw - 16px));
+  height:auto;max-height:min(67dvh,650px);
+  display:flex;flex-direction:column;
+  background:var(--ml-surface);color:var(--ml-text);
+  border:1px solid var(--ml-border);border-radius:8px;
+  box-shadow:0 15px 38px #0005;overflow:hidden
+}
+.ml-feature-gallery-header{display:flex;justify-content:space-between;gap:12px;
+  align-items:center;padding:11px 13px;border-bottom:1px solid var(--ml-border)}
+.ml-feature-gallery-header>div{display:flex;flex-direction:column;gap:3px}
+.ml-feature-gallery-header strong{font-size:14px}
+.ml-feature-gallery-header span{font-size:11px;color:var(--ml-muted)}
+.ml-feature-gallery-header button{width:36px;height:36px;display:grid;place-items:center;
+  border:1px solid var(--ml-border);border-radius:5px;background:var(--ml-control);
+  color:var(--ml-text);cursor:pointer}
+.ml-feature-gallery-controls{display:flex;align-items:center;gap:9px;
+  padding:9px 13px;border-bottom:1px solid var(--ml-border)}
+.ml-feature-gallery-controls input {min-width:40px;flex:1;height:38px;
+  border:1px solid var(--ml-border);border-radius:5px;padding:6px 10px;
+  background:var(--ml-field);color:var(--ml-text);font-size:12px}
+.ml-feature-gallery-controls button {border:1px solid var(--ml-border);
+  border-radius:5px;padding:9px;background:var(--ml-control);color:var(--ml-text);
+  display:flex;gap:3px;align-items:center;cursor:pointer;font-size:12px}
+.ml-feature-gallery-controls button.selected{border-color:var(--ml-brand-blue)}
+.ml-feature-gallery-scroll{padding:12px 13px;overflow:auto;min-height:0;overscroll-behavior:contain}
+.ml-feature-gallery-count{font-size:11px;color:var(--ml-muted);margin-bottom:11px}
+.ml-feature-gallery-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.ml-feature-gallery-item{display:flex;gap:9px;align-items:center;min-width:0;
+  min-height:80px;border:1px solid var(--ml-border);border-radius:6px;
+  padding:9px;background:var(--ml-card)}
+.ml-feature-gallery-symbol{flex:0 0 30px;color:var(--ml-brand-blue);
+  display:grid;place-items:center}
+.ml-feature-gallery-copy{display:flex;flex-direction:column;flex:1;min-width:0;gap:4px}
+.ml-feature-gallery-copy strong{font-size:12px;line-height:1.3;color:var(--ml-text)}
+.ml-feature-gallery-copy small,.ml-feature-gallery-copy>span{
+  color:var(--ml-muted);font-size:11px;line-height:1.25;overflow-wrap:anywhere}
+.ml-feature-gallery-item button{flex:0 0 auto;min-width:65px;min-height:32px;
+  border:1px dashed var(--ml-border);border-radius:4px;background:var(--ml-control);
+  color:var(--ml-muted);font-size:11px;opacity:.7;cursor:not-allowed}
+.ml-feature-gallery button:focus-visible,.ml-feature-gallery input:focus-visible {
+  outline:2px solid var(--ml-brand-blue);outline-offset:1px
+}
+/* PDF's working action row retains its verified handlers. The full catalog
+   adds a single discoverable trigger, not 90 always-visible buttons. */
+.app-shell-top-only .pdf-task-actions>.pdf-master-catalog-trigger {
+  flex:0 0 65px;min-width:65px;width:65px;height:55px;padding:5px 3px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:4px;border:1px solid var(--ml-border);border-radius:5px;
+  background:var(--ml-surface);color:var(--ml-text);cursor:pointer
+}
+.app-shell-top-only .pdf-task-actions>.pdf-master-catalog-trigger span{font-size:11px}
+.app-shell-top-only .pdf-task-actions>.pdf-master-catalog-trigger:hover{background:var(--ml-hover)}
+@media(max-width:760px){
+  .ml-feature-gallery{right:2px;width:calc(100vw - 4px);max-height:min(65dvh,540px)}
+  .ml-feature-gallery-grid{grid-template-columns:minmax(0,1fr)}
+  .ml-feature-gallery-item{min-height:70px}
+  .app-shell-top-only .suite-ribbon-hint{display:none}
+}
+@media(max-height:590px){
+  .ml-feature-gallery{max-height:calc(100dvh - 155px)}
+}
