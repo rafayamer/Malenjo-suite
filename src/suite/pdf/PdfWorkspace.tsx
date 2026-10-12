@@ -2322,7 +2322,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               masterRibbonTabForTask(taskCategory),
               event.key as 'ArrowLeft'|'ArrowRight'|'Home'|'End')));
           }}
-        >{tab.label}</button>)}}
+        >{tab.label}</button>)}
       </div>
 
       <div id={`${domIdPrefix}-task-tools`} className="pdf-context-toolbar" role="toolbar" aria-label={`${PDF_TASK_CATEGORY_LABELS[taskCategory]} PDF tools`}>
