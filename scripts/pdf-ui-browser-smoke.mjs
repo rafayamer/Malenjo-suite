@@ -810,6 +810,29 @@ async function main(){
   await page.waitForFunction(()=>
     document.querySelector('.ml-status-pdf-view')?.textContent?.includes('Page 1 / 2'),
     null,{timeout:15000});
+  // Presentation owns the entire PDF fullscreen surface. A viewer should
+  // be able to navigate and Escape without getting stranded in single-page.
+  await readerFooter.getByRole('button',{name:'Presentation mode'}).click();
+  await page.waitForFunction(()=>
+    Boolean(document.fullscreenElement) &&
+    Boolean(document.querySelector('.document-session-panel.active .pdf-workspace.presentation-mode')),
+    null,{timeout:15000});
+  requireEvidence(await readerFooter.isHidden() &&
+    await activePdf.locator('.pdf-stage.single').isVisible(),
+    'Presentation did not enter true chrome-free fullscreen single-page mode');
+  await page.keyboard.press('PageDown');
+  await page.waitForFunction(()=>
+    document.querySelector('.document-session-panel.active input[aria-label="Current PDF page"]')?.value==='2',
+    null,{timeout:15000});
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(()=>
+    !document.fullscreenElement &&
+    !document.querySelector('.document-session-panel.active .pdf-workspace.presentation-mode'),
+    null,{timeout:15000});
+  requireEvidence(await readerFooter.isVisible() &&
+    await activePdf.locator('.pdf-stage.continuous').isVisible(),
+    'Exiting presentation failed to restore continuous reading mode and footer');
+  console.log('PHASE1 genuine fullscreen PDF presentation, page turn and Escape restore: PASS');
   console.log('PHASE1 real multipage scroll + reader footer + keyboard and wheel zoom: PASS');
 
   // Master v2 Phase 1 responsive + appearance matrix on a REAL open PDF.
@@ -993,6 +1016,47 @@ async function main(){
     document.querySelector('.document-session-panel.active input[aria-label="Current PDF page"]')?.value==='2',
     null,{timeout:15000});
   console.log('MALENJO on-page PDF internal hyperlink activation: PASS');
+
+  // Owner's real-world PDF had 57 pages. A two-page-only smoke is insufficient:
+  // verify page 55 and final page in ONE continuous document, not 57 tabs.
+  const longPdf=await PDFDocument.create();
+  for(let i=1;i<=57;i++){
+    const longPage=longPdf.addPage([612,792]);
+    longPage.drawText('MALENJO multipage acceptance '+i,{x:48,y:728,size:18});
+  }
+  const longPdfBytes=Buffer.from(await longPdf.save());
+  await openModule('PDF Workspace');
+  const longLoadStarted=Date.now();
+  await page.locator('main.workspace > .pdf-workspace > input[type="file"][accept="application/pdf,.pdf"]').first()
+    .setInputFiles({name:'57-pages-long-reading.pdf',mimeType:'application/pdf',buffer:longPdfBytes});
+  await page.locator('.document-tab-main').filter({hasText:'57-pages-long-reading.pdf'})
+    .waitFor({timeout:30000});
+  const longReader=page.locator('.document-session-panel.active .pdf-scroll');
+  await longReader.waitFor({state:'visible',timeout:30000});
+  console.log('PHASE1 measured 57-page PDF reader startup: '+(Date.now()-longLoadStarted)+' ms (no performance budget assumed)');
+  const longScrollDimensions=await longReader.evaluate(node=>({client:node.clientHeight,total:node.scrollHeight}));
+  requireEvidence(longScrollDimensions.total>longScrollDimensions.client*10,
+    '57-page PDF is not a continuous vertically scrollable document: '+JSON.stringify(longScrollDimensions));
+  const longInput=page.locator('.document-session-panel.active input[aria-label="Current PDF page"]');
+  await longInput.fill('55');
+  await longInput.press('Enter');
+  await page.waitForFunction(()=>
+    document.querySelector('.ml-status-pdf-view')?.textContent?.includes('Page 55 / 57'),
+    null,{timeout:30000});
+  await page.waitForFunction(()=>{
+    const canvas=document.querySelector('.document-session-panel.active [id$="-page-55"] canvas');
+    return canvas instanceof HTMLCanvasElement&&canvas.width>200;
+  },null,{timeout:30000});
+  await longInput.fill('57');
+  await longInput.press('Enter');
+  await page.waitForFunction ()=>
+    document.querySelector('.ml-status-pdf-view')?.textContent?.includes('Page 57 / 57'),
+    null,{timeout:30000});
+  await page.waitForFunction(()=>{
+    const canvas=document.querySelector('.document-session-panel.active [id$="-page-57"] canvas');
+    return canvas instanceof HTMLCanvasElement&&canvas.width>200;
+  },null,{timeout:30000});
+  console.log('PHASE1 real 57-page continuous PDF navigation and last-page rendering: PASS');
 
   requireEvidence(errors.length===0,'Unhandled browser exceptions: '+errors.join(' | '));
   await context.close();
