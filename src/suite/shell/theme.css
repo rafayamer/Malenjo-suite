@@ -1744,3 +1744,65 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 @media(prefers-reduced-motion:reduce) {
  .ml-catalog-popup,.ml-catalog-trigger{transition:none!important;animation:none!important}
 }
+
+
+/* Master Specification v2.0 §2.2/2.1: compact real quick commands
+   and document status, not oversized labels or a fake Save click target. */
+.app-shell-top-only .topbar-primary .command:disabled {
+  opacity:.42;cursor:not-allowed;border-color:transparent;
+}
+.app-shell-top-only .topbar-primary .command:disabled:hover {background:transparent}
+.ml-quick-overflow{display:none;position:relative}
+.ml-quick-overflow summary {
+  display:grid;place-items:center;width:40px;height:40px;
+  border:1px solid transparent;border-radius:5px;color:var(--ml-text);
+  background:transparent;cursor:pointer;list-style:none;
+}
+.ml-quick-overflow summary::-webkit-details-marker{display:none}
+.ml-quick-overflow summary:hover,.ml-quick-overflow[open] summary {background:var(--ml-selected)}
+.ml-quick-overflow summary:focus-visible {outline:2px solid var(--ml-brand-blue)}
+.ml-quick-overflow>div {
+  position:fixed;z-index:130;top:49px;left:clamp(8px,12vw,180px);
+  display:flex;flex-direction:column;gap:3px;width:min(245px,calc(100vw - 16px));
+  padding:7px;border-radius:8px;border:1px solid var(--ml-border);
+  box-shadow:0 12px 30px #0004;background:var(--ml-surface);
+}
+.ml-quick-overflow button {
+  border:0;background:transparent;color:var(--ml-text);
+  text-align:left;border-radius:5px;font-size:12px;padding:10px;
+  cursor:pointer;min-height:40px;
+}
+.ml-quick-overflow button:hover:not(:disabled) {background:var(--ml-selected)}
+.ml-quick-overflow button:disabled {opacity:.4;cursor:not-allowed}
+.ml-quick-overflow button:focus-visible{outline:2px solid var(--ml-brand-blue)}
+.app-shell-top-only .ml-desktop-status {
+  display:flex;align-items:center;gap:17px;padding:0 14px;
+  height:30px;flex:0 0 30px;border-top:1px solid var(--ml-border);
+  background:var(--ml-toolbar);color:var(--ml-muted);font-size:11px;
+  line-height:1;min-width:0;overflow:hidden;
+}
+.app-shell-top-only .ml-desktop-status span:first-child{
+  min-width:0;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--ml-text);
+}
+.app-shell-top-only .ml-desktop-status span:nth-child(2) {white-space:nowrap}
+.app-shell-top-only .ml-status-document-count{margin-left:auto;white-space:nowrap}
+.app-shell-top-only .ml-status-shortcuts{white-space:nowrap;font-size:10px}
+@media(max-width:1150px) {
+  .app-shell-top-only .topbar-primary .ml-quick-inline{display:none}
+  .ml-quick-overflow{display:block;flex:0 0 40px}
+}
+@media(max-width:800px) {
+  .app-shell-top-only .search{display:none}
+  .app-shell-top-only .topbar {justify-content:space-between}
+  .app-shell-top-only .topbar .topbar-actions {margin-left:auto}
+  .app-shell-top-only .ml-status-shortcuts{display:none}
+}
+@media(max-width:520px) {
+  .app-shell-top-only .topbar{gap:1px;padding:0 3px}
+  .app-shell-top-only .suite-title small{display:none}
+  .app-shell-top-only .topbar-primary .command,
+  .app-shell-top-only .topbar-actions .command {min-width:36px;width:36px;flex-basis:36px}
+  .app-shell-top-only .ml-desktop-status{padding:0 7px;gap:6px;font-size:10px}
+  .ml-quick-overflow>div{left:8px}
+}

@@ -59,6 +59,18 @@ async function main(){
   requireEvidence(await page.getByRole('button',{name:'MALENJO AI',exact:true}).count()===1,
     'AI control missing from the top command bar');
 
+  // Master v2 top bar has real command-controller-based quick actions.
+  const quickSave=page.getByRole('button',{name:'Save current document'});
+  requireEvidence(await quickSave.count()===1 && await quickSave.isDisabled(),
+    'Save must be unavailable before a real editable document is loaded');
+  requireEvidence(await page.getByRole('button',{name:'Undo PDF edit'}).isDisabled() &&
+    await page.getByRole('button',{name:'Redo PDF edit'}).isDisabled(),
+    'Undo/Redo must be disabled without a reversible PDF edit');
+  requireEvidence(await page.getByRole('button',{name:'Settings',exact:true}).count()===1 &&
+    await page.locator('.ml-desktop-status').isVisible(),
+    'Top settings or compact bottom application status bar is missing');
+  console.log('MASTER v2: real top Save/Undo/Redo and desktop status at Home: PASS');
+
   // UI/UX Phase 3: Home and PDF share one Windows-style ribbon shell.
   // Verify a real palette switch, persistence after reload and same-window
   // navigation rather than only checking the presence of a decorative toggle.
@@ -277,8 +289,11 @@ async function main(){
       requireEvidence(metrics.documentWidth<=width+2 && metrics.bodyWidth<=width+2 &&
         metrics.barRight<=width+2 && metrics.ribbonRight<=width+2,
         'Shell or document horizontally overflows at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
-      requireEvidence(metrics.searchWidth>45 && metrics.commands.every((c)=>c.left>=0&&c.right<=width+2&&c.width>=30),
-        'Essential titlebar commands clipped at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
+      requireEvidence((metrics.searchWidth>45 ||
+          await page.getByRole('button',{name:'Open command palette'}).isVisible()) &&
+        await page.getByRole('button',{name:'MALENJO AI'}).isVisible() &&
+        metrics.commands.every((c)=>c.left>=0&&c.right<=width+2&&c.width>=30),
+        'Essential titlebar commands clipped or no compact search access at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
       requireEvidence(context.pages().length===1,'Responsive layout launched a second browser window');
     }
   }
@@ -484,6 +499,24 @@ async function main(){
   }
   await page.setViewportSize({width:1440,height:900});
   console.log('MALENJO PDF icon ribbon non-overlap, hidden sidebars, side-chat coexistence: PASS');
+  await page.waitForFunction(()=>{
+    const save=document.querySelector('button[aria-label="Save current document"]');
+    return save && !save.hasAttribute('disabled');
+  },null,{timeout:30000});
+  requireEvidence(await page.locator('.ml-desktop-status').innerText()!=='' &&
+    await page.getByRole('button',{name:'Undo PDF edit'}).isDisabled(),
+    'Document-specific Save availability or safe Undo state did not synchronize');
+  await page.setViewportSize({width:768,height:600});
+  const overflow=page.locator('.ml-quick-overflow');
+  requireEvidence(await overflow.isVisible() &&
+    await overflow.locator('summary[aria-label="More quick actions"]').isVisible(),
+    'Narrow desktop quick actions were clipped instead of moving into overflow');
+  await overflow.locator('summary').click();
+  requireEvidence(await overflow.getByRole('button',{name:'Save a PDF copy'}).isEnabled(),
+    'Real Save operation is unreachable from compact quick-actions menu');
+  await overflow.locator('summary').click();
+  await page.setViewportSize({width:1440,height:900});
+  console.log('MASTER v2: loaded PDF Save and accessible narrow viewport quick actions: PASS');
   console.log('MALENJO browser document tab opened');
   await page.waitForFunction(()=>
     Array.from(document.querySelectorAll('.pdf-text-layer span')).some(
