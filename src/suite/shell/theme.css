@@ -800,3 +800,176 @@
 @media print{
   .workspace{display:block!important;height:auto!important;overflow:visible!important}
 }
+
+
+/* Phase 3 MALENJO ribbon shell: Windows-style command organization, not
+   proprietary viewer artwork or branding. The established MALENJO blue/cyan
+   accents are identical in both themes; only neutral surfaces/ink change. */
+:root {
+  --ml-brand-blue:#2b8cff;
+  --ml-brand-cyan:#33d4e5;
+  --ml-surface:#081723;
+  --ml-elevated:#0d2235;
+  --ml-background:#07131f;
+  --ml-border:#1e3850;
+  --ml-text:#dce9f5;
+  --ml-muted:#8ca4b8;
+  --ml-document-surround:#111820;
+  color-scheme:dark;
+}
+:root[data-theme="light"] {
+  --ml-surface:#ffffff;
+  --ml-elevated:#eaf1f6;
+  --ml-background:#f1f5f8;
+  --ml-border:#becfdb;
+  --ml-text:#152c3f;
+  --ml-muted:#49677a;
+  --ml-document-surround:#d8e0e7;
+  color-scheme:light;
+}
+body { background:var(--ml-background);color:var(--ml-text); }
+.app-shell { background:var(--ml-background); }
+.sidebar { background:var(--ml-surface);border-right-color:var(--ml-border); }
+.topbar {
+  position:relative;
+  top:auto;
+  height:49px;
+  min-height:49px;
+  padding:0 14px;
+  gap:16px;
+  background:var(--ml-surface);
+  border-bottom-color:var(--ml-border);
+  color:var(--ml-text);
+}
+.suite-title { display:flex;align-items:center;gap:9px;min-width:180px;max-width:28%;white-space:nowrap;overflow:hidden; }
+.suite-title strong {font-size:12px;letter-spacing:.025em;color:var(--ml-text)}
+.suite-title small {font-size:10px;color:var(--ml-muted);overflow:hidden;text-overflow:ellipsis;}
+.topbar .search {width:min(530px,38vw);min-width:150px;border-color:var(--ml-border);background:var(--ml-elevated);}
+.topbar .search input {color:var(--ml-text)}
+.topbar .search input::placeholder{color:var(--ml-muted)}
+.topbar .search kbd{border-color:var(--ml-border);color:var(--ml-muted)}
+.topbar-actions{display:flex;align-items:center;gap:7px;flex-shrink:0}
+.topbar .command {background:var(--ml-elevated);color:var(--ml-text);border-color:var(--ml-border)}
+.theme-toggle{display:flex;align-items:center;gap:6px;cursor:pointer}
+.suite-ribbon {
+  flex:0 0 auto;min-height:118px;display:flex;flex-direction:column;
+  background:var(--ml-surface);border-bottom:1px solid var(--ml-border);
+  color:var(--ml-text);
+}
+.suite-ribbon-tabs {
+  min-height:34px;display:flex;align-items:stretch;gap:2px;
+  padding:0 10px;border-bottom:1px solid var(--ml-border);
+  overflow-x:auto;
+}
+.suite-ribbon-tabs button {
+  flex:0 0 auto;padding:0 12px;border:0;border-bottom:3px solid transparent;
+  background:transparent;color:var(--ml-muted);font-size:11px;cursor:pointer;
+}
+.suite-ribbon-tabs button[aria-selected="true"] {
+  border-bottom-color:var(--ml-brand-cyan);color:var(--ml-text);
+  font-weight:650;background:var(--ml-elevated);
+}
+.suite-ribbon-tabs button:hover{color:var(--ml-text)}
+.suite-ribbon-actions {display:flex;align-items:center;gap:5px;padding:7px 12px;min-height:83px;overflow-x:auto;}
+.suite-ribbon-action {
+  flex:0 0 auto;min-width:76px;max-width:122px;min-height:65px;padding:7px 10px;
+  border:1px solid transparent;border-radius:5px;background:transparent;color:var(--ml-text);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+  text-align:center;font-size:10px;cursor:pointer;
+}
+.suite-ribbon-action svg{color:var(--ml-brand-blue);}
+.suite-ribbon-action:hover:not(:disabled) {background:var(--ml-elevated);border-color:var(--ml-border)}
+.suite-ribbon-action:disabled{cursor:not-allowed;opacity:.58}
+.suite-ribbon-hint{max-width:355px;margin:0 10px;padding:8px 10px;color:var(--ml-muted);font-size:11px;line-height:1.4;border-left:2px solid var(--ml-brand-cyan)}
+.suite-ribbon button:focus-visible,.theme-toggle:focus-visible {
+  outline:2px solid var(--ml-brand-blue);outline-offset:-3px;
+}
+.workspace>.topbar,.workspace>.suite-ribbon,.workspace>.document-tabs{flex-shrink:0}
+.workspace>.pdf-workspace,.workspace>.office-workspace{flex:1 1 auto;min-height:0;height:auto;}
+.document-session-stack .pdf-workspace,.document-session-stack .office-workspace{height:100%;max-height:100%}
+:root[data-theme="light"] .sidebar .nav-item {color:var(--ml-text)}
+:root[data-theme="light"] .sidebar .nav-item.active,
+:root[data-theme="light"] .sidebar .nav-item:hover {background:#dceafa;color:#123c61}
+:root[data-theme="light"] .sidebar-toggle {background:var(--ml-elevated);color:var(--ml-text);border-color:var(--ml-border)}
+:root[data-theme="light"] .sidebar .brand-copy span {color:#116e9a}
+:root[data-theme="light"] .document-tabs,
+:root[data-theme="light"] .pdf-workspace,
+:root[data-theme="light"] .office-workspace,
+:root[data-theme="light"] .scanner-workspace,
+:root[data-theme="light"] .ai-workspace,
+:root[data-theme="light"] .security-workspace,
+:root[data-theme="light"] .enterprise-workspace,
+:root[data-theme="light"] .library-view,
+:root[data-theme="light"] .home-start-center {
+  background:var(--ml-background);color:var(--ml-text);
+}
+:root[data-theme="light"] .document-tabs,
+:root[data-theme="light"] .pdf-toolbar,
+:root[data-theme="light"] .pdf-task-toolbar,
+:root[data-theme="light"] .pdf-task-categories,
+:root[data-theme="light"] .office-toolbar,
+:root[data-theme="light"] .scanner-toolbar,
+:root[data-theme="light"] .ai-toolbar,
+:root[data-theme="light"] .security-toolbar,
+:root[data-theme="light"] .enterprise-toolbar {
+  background:var(--ml-surface);color:var(--ml-text);border-color:var(--ml-border);
+}
+:root[data-theme="light"] .document-tab,
+:root[data-theme="light"] .document-tab-main,
+:root[data-theme="light"] .pdf-task-categories button,
+:root[data-theme="light"] .pdf-context-toolbar button,
+:root[data-theme="light"] .pdf-view-controls button,
+:root[data-theme="light"] .office-toolbar button,
+:root[data-theme="light"] .library-toolbar button {
+  color:var(--ml-text);
+}
+:root[data-theme="light"] .pdf-layout,
+:root[data-theme="light"] .pdf-left-shell,
+:root[data-theme="light"] .pdf-left-rail,
+:root[data-theme="light"] .pdf-left-panel,
+:root[data-theme="light"] .pdf-inspector,
+:root[data-theme="light"] .office-inspector,
+:root[data-theme="light"] .ai-sources,
+:root[data-theme="light"] .ai-chat,
+:root[data-theme="light"] .security-card,
+:root[data-theme="light"] .enterprise-card,
+:root[data-theme="light"] .library-row,
+:root[data-theme="light"] .ml-co-action-card,
+:root[data-theme="light"] .ml-home-session,
+:root[data-theme="light"] .ml-home-location,
+:root[data-theme="light"] .ml-home-status-row>div {
+  background:var(--ml-surface);border-color:var(--ml-border);color:var(--ml-text);
+}
+:root[data-theme="light"] .pdf-scroll{background:var(--ml-document-surround);scrollbar-color:#9baeba var(--ml-document-surround)}
+:root[data-theme="light"] .pdf-page-shell{box-shadow:0 3px 12px #324e6026;border:1px solid #b9c8d3}
+:root[data-theme="light"] .pdf-task-categories button.active{background:#dceafa;color:#143d62}
+:root[data-theme="light"] .pdf-context-toolbar button,
+:root[data-theme="light"] .pdf-view-controls button,
+:root[data-theme="light"] .office-toolbar button {background:var(--ml-elevated);border-color:var(--ml-border)}
+:root[data-theme="light"] .ml-co-home-head h1,
+:root[data-theme="light"] .ml-co-section-head h2,
+:root[data-theme="light"] .ml-co-recent-head h2,
+:root[data-theme="light"] .ml-co-action-title{color:var(--ml-text)}
+:root[data-theme="light"] .ml-co-action-sub,
+:root[data-theme="light"] .ml-co-home-head>div:first-child>p:not(.eyebrow){color:var(--ml-muted)}
+:root[data-theme="light"] .ml-home-shortcuts button,
+:root[data-theme="light"] .ml-co-recent-card,
+:root[data-theme="light"] .ml-co-empty,
+:root[data-theme="light"] .ml-co-segmented,
+:root[data-theme="light"] .ml-co-search,
+:root[data-theme="light"] .library-toolbar,
+:root[data-theme="light"] .library-row.header {
+  background:var(--ml-surface);border-color:var(--ml-border);color:var(--ml-text);
+}
+:root[data-theme="light"] input:not([type="checkbox"]):not([type="range"]),
+:root[data-theme="light"] textarea,
+:root[data-theme="light"] select {color-scheme:light}
+@media(max-width:1210px){
+  .topbar .search{width:min(320px,32vw)}
+  .suite-title small{display:none}
+  .suite-ribbon-action{min-width:70px}
+}
+@media print{
+  .suite-ribbon,.theme-toggle{display:none!important}
+  .workspace>.pdf-workspace{height:auto}
+}
