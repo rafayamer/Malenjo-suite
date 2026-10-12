@@ -67,6 +67,7 @@ export default function App() {
   }, [theme]);
   const [sessions, setSessions] = useState<DocumentSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [pdfViews,setPdfViews]=useState<Record<string,{page:number;pageCount:number;zoom:string}>>({});
   const [workspaceNotices, setWorkspaceNotices] = useState<Record<string,string>>({});
   const [paletteDocuments, setPaletteDocuments] = useState<LibraryDocument[]>([]);
   const commandControllersRef = useRef(new Map<string, DocumentCommandController>());
@@ -225,6 +226,11 @@ export default function App() {
 
     const remaining = sessions.filter((session) => !remove.has(session.id));
     setSessions(remaining);
+    setPdfViews(current=>{
+      const next={...current};
+      sessionIds.forEach(id=>delete next[id]);
+      return next;
+    });
     setWorkspaceNotices((current) => {
       const next = { ...current };
       sessionIds.forEach((id) => {
@@ -255,6 +261,12 @@ export default function App() {
 
     const remaining = sessions.filter((session) => session.id !== sessionId);
     setSessions(remaining);
+    setPdfViews(current=>{
+      if(!(sessionId in current))return current;
+      const next={...current};
+      delete next[sessionId];
+      return next;
+    });
     setWorkspaceNotices((current) => {
       const next = { ...current };
       delete next[sessionId];
@@ -513,6 +525,12 @@ export default function App() {
         onNavigateModule={(id)=>selectModule(id)}
         onDirtyChange={(dirty)=>markSessionDirty(session.id,dirty)}
         onSavingChange={(saving)=>updateSession(session.id,(current)=>markDocumentSaving(current,saving))}
+        onViewStatusChange={(status)=>setPdfViews(current=>{
+          const previous=current[session.id];
+          if(previous?.page===status.page&&previous.pageCount===status.pageCount&&previous.zoom===status.zoom)
+            return current;
+          return {...current,[session.id]:status};
+        })}
         registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
       />;
     }
@@ -564,6 +582,9 @@ export default function App() {
       onBackToFiles={() => selectModule('files')}
     />;
   }
+
+  const activePdfView=activeSession?.document.kind==='pdf'
+    ? pdfViews[activeSession.id] : undefined;
 
   return <div className="app-shell app-shell-top-only" data-shell="malenjo-ribbon">
     <a className="skip-to-workspace" href="#malenjo-workspace-content">Skip to workspace content</a>
@@ -785,7 +806,11 @@ export default function App() {
                                     : <ModuleView module={module} session={null} notice="" onSaveAs={async()=>{}} onBackToFiles={()=>selectModule('files')}/>)}
       <footer className="ml-bottom-statusbar" aria-label="MALENJO document status">
         <span title={activeSession?.document.name??module.name}>{activeSession?.document.name??module.name}</span>
-        <span>{sessions.length} open {sessions.length===1?'file':'files'}</span>
+        {activePdfView?.pageCount
+          ? <span className="ml-status-pdf-view" aria-label={`PDF page ${activePdfView.page} of ${activePdfView.pageCount}, zoom ${activePdfView.zoom}`}>
+              Page {activePdfView.page} / {activePdfView.pageCount} · {activePdfView.zoom}
+            </span>
+          : <span>{sessions.length} open {sessions.length===1?'file':'files'}</span>}
         <span>{activeSession?.dirty?'Unsaved changes':activeSession?'Working copy':'Local-first'}</span>
         <span className="ml-bottom-status-end">{theme==='light'?'Light':'Dark'} · {aiOpen?'AI open':'AI closed'}</span>
       </footer>
