@@ -2280,8 +2280,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   }));
   const activeTaskActions=[...plannedActions,...taskActions[taskCategory]]
     .filter(action=>action.id!=='local-provider-tools'||masterTab==='tools');
-  const primaryTaskActions=activeTaskActions.slice(0,5);
-  const overflowTaskActions=activeTaskActions.slice(5);
+  const ribbonVisibleCount=viewport.width<540?2:viewport.width<900?3:5;
+  const primaryTaskActions=activeTaskActions.slice(0,ribbonVisibleCount);
+  const overflowTaskActions=activeTaskActions.slice(ribbonVisibleCount);
   const shortActionLabel=(action:PdfToolbarAction)=>action.label
     .replace(/^Local tools$/,'Local').replace(/^PDF to /,'To ').replace(/^Open /,'').replace(/^Show /,'')
     .replace(/^Hide /,'').replace(/^Add /,'').replace(/\u2026/g,'')
