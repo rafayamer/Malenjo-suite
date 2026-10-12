@@ -4,7 +4,6 @@ import { readFileSync } from 'node:fs';
 const css = readFileSync(new URL('./theme.css', import.meta.url), 'utf8');
 
 function palette(mode: 'dark' | 'light'): Map<string, string> {
-  const selector = mode === 'dark' ? ':root' : ':root\\[data-theme="light"\\]';
   const match = css.match(new RegExp('/\\* Semantic MALENJO surfaces[\\s\\S]*?\\*/\\s*:root\\s*\\{([\\s\\S]*?)\\}\\s*:root\\[data-theme="light"\\]\\s*\\{([\\s\\S]*?)\\}'));
   if (!match) throw new Error('Semantic MALENJO dark/light palettes are missing.');
   const lines = mode === 'dark' ? match[1] : match[2];
