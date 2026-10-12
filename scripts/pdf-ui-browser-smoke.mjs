@@ -49,7 +49,7 @@ async function main(){
   for(const label of ['PDF to Word','PDF to Excel','PDF to Slides']){
     const action=page.locator('.ml-co-actions .ml-co-action-card').filter({hasText:label});
     await action.waitFor({timeout:15000});
-    requireEvidence(await action.isDisabled() && (await action.getAttribute('title'))?.includes('conversion'),
+    requireEvidence(await action.isDisabled() && (await action.getAttribute('aria-description'))?.includes('conversion'),
       'Home incorrectly advertises an unverified independent Office launch: '+label);
   }
   const topColor=await page.locator('.topbar').evaluate((node)=>getComputedStyle(node).backgroundColor);
