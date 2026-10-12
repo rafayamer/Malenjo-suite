@@ -3,6 +3,12 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  // Navigation loads specialist workspaces on demand. Pre-bundle their
+  // heavyweight libraries at dev-server start so first use cannot trigger
+  // a mid-session dependency-optimizer full page reload (data-loss risk).
+  optimizeDeps: {
+    include: ['pdf-lib','pdfjs-dist','tesseract.js','fflate','lucide-react'],
+  },
   clearScreen: false,
   server: {
     port: 1420,
