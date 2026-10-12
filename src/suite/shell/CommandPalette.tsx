@@ -19,6 +19,10 @@ export default function CommandPalette({ open, query, items, onQueryChange, onCl
   const [selected, setSelected] = useState(0);
   const dialogRef = useRef<HTMLElement>(null);
   const filtered = useMemo(() => filterCommandPaletteItems(items, query), [items, query]);
+  // Rendering must not transiently point at an unavailable/stale selection
+  // between query changes and the normal selection-reset effect.
+  const activeIndex = selected >= 0 && filtered[selected] && !filtered[selected].disabled
+    ? selected : firstAvailableCommand(filtered);
 
   useEffect(() => { setSelected(firstAvailableCommand(filtered)); }, [query, open]);
 
@@ -48,9 +52,9 @@ export default function CommandPalette({ open, query, items, onQueryChange, onCl
       } else if (event.key === 'ArrowUp') {
         event.preventDefault();
         setSelected((value) => moveAvailableCommand(filtered, value, -1));
-      } else if (event.key === 'Enter' && filtered[selected]) {
+      } else if (event.key === 'Enter' && filtered[activeIndex]) {
         event.preventDefault();
-        const item = filtered[selected];
+        const item = filtered[activeIndex];
         if (item.disabled) return;
         item.run();
         onClose();
@@ -58,7 +62,7 @@ export default function CommandPalette({ open, query, items, onQueryChange, onCl
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [filtered, onClose, open, selected]);
+  }, [filtered, onClose, open, activeIndex]);
 
   if (!open) return null;
 
@@ -76,7 +80,7 @@ export default function CommandPalette({ open, query, items, onQueryChange, onCl
           aria-expanded={open}
           aria-autocomplete="list"
           aria-controls="malenjo-command-results"
-          aria-activedescendant={selected >= 0 ? 'malenjo-command-option-' + selected : undefined}
+          aria-activedescendant={activeIndex >= 0 ? 'malenjo-command-option-' + activeIndex : undefined}
         />
         <kbd>Esc</kbd>
         <button aria-label="Close command palette" onClick={onClose}><X size={15}/></button>
@@ -87,8 +91,8 @@ export default function CommandPalette({ open, query, items, onQueryChange, onCl
           key={item.id}
           id={'malenjo-command-option-' + index}
           role="option"
-          aria-selected={index===selected}
-          className={index===selected?'selected':''}
+          aria-selected={index===activeIndex}
+          className={index===activeIndex?'selected':''}
           disabled={item.disabled}
           title={item.disabled ? item.disabledReason : undefined}
           onMouseEnter={()=>{if(!item.disabled)setSelected(index);}}
