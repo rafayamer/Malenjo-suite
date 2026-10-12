@@ -34,6 +34,7 @@ import SignWorkspace from '../security/SignWorkspace';
 import EnterpriseWorkspace from '../enterprise/EnterpriseWorkspace';
 import HelpWorkspace from '../help/HelpWorkspace';
 import HomeWorkspace from '../home/HomeWorkspace';
+import SettingsWorkspace from './SettingsWorkspace';
 import DocumentTabs from './DocumentTabs';
 import RibbonShell from './RibbonShell';
 import { ModuleNavIcon } from './moduleNavIcons';
@@ -659,9 +660,11 @@ export default function App() {
                             ? <EnterpriseWorkspace mode="backup" onBackToFiles={()=>selectModule('files')}/>
                             : active === 'admin'
                               ? <EnterpriseWorkspace mode="admin" onBackToFiles={()=>selectModule('files')}/>
-                              : active === 'help'
-                                ? <HelpWorkspace openDocumentCount={sessions.length}/>
-                                : <ModuleView module={module} session={null} notice="" onSaveAs={async()=>{}} onBackToFiles={()=>selectModule('files')}/>)}
+                              : active === 'settings'
+                                ? <SettingsWorkspace theme={theme} onThemeChange={setTheme}/>
+                                : active === 'help'
+                                  ? <HelpWorkspace openDocumentCount={sessions.length}/>
+                                  : <ModuleView module={module} session={null} notice="" onSaveAs={async()=>{}} onBackToFiles={()=>selectModule('files')}/>)}
     </main>
   </div>
 }
