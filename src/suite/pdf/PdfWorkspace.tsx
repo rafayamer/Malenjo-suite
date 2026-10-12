@@ -25,7 +25,7 @@ import type { DocumentSession } from '../files/session';
 import type { RegisterDocumentCommands } from '../commands/types';
 import { isDesktopRuntime } from '../files/api';
 import { exportPdfBytes, exportPdfPlainText, exportPdfEmbeddedAttachment, exportPdfPageImagesZip, readPdfDocumentBytes } from './api';
-import { exportPdfPagesAsPngZip } from './pageImageExport';
+import { exportPdfPagesAsJpegZip, exportPdfPagesAsPngZip } from './pageImageExport';
 import {finishPdfInstallCommit} from './pdfInstallCommit';
 import {
   comparePdfSelectableText, formatPdfTextComparison, type PdfTextComparison,
@@ -1511,6 +1511,39 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }
   }
 
+  async function exportJpegPages(){
+    if(!pdf||exportingPageImages||mutating||loading)return;
+    const controller=new AbortController();
+    pageImageAbortRef.current=controller;
+    setExportingPageImages(true);
+    setPageImageProgress(0);
+    setError('');
+    setActionNotice('Rendering PDF pages as JPEG images…');
+    onSavingChange?.(true);
+    try{
+      const zip=await exportPdfPagesAsJpegZip(pdf.document,{
+        signal:controller.signal,
+        scale:1.5,
+        quality:0.9,
+        onProgress:(completed,total)=>setPageImageProgress(Math.round(completed*100/total)),
+      });
+      if(controller.signal.aborted)throw new DOMException('Cancelled','AbortError');
+      const base=sourceName.replace(/\\.pdf$/i,'').replace(/[\\/\\\\\\u0000-\\u001F]/g,'_').slice(0,120)||'MALENJO-document';
+      const saved=await exportPdfPageImagesZip(base+'-pages-jpg.zip',zip);
+      if(saved)setActionNotice('Exported '+pdf.document.numPages+' JPEG page images to ZIP. The original PDF is unchanged.');
+    }catch(reason){
+      if(reason instanceof Error&&reason.name==='AbortError'){
+        setActionNotice('PDF-to-JPEG cancelled; no partial file was saved.');
+      }else{
+        setError(reason instanceof Error?reason.message:String(reason));
+      }
+    }finally{
+      if(pageImageAbortRef.current===controller)pageImageAbortRef.current=null;
+      setExportingPageImages(false);
+      onSavingChange?.(false);
+    }
+  }
+
   async function chooseImagesForPdf(event:React.ChangeEvent<HTMLInputElement>){
     const files=Array.from(event.target.files??[]);
     event.target.value='';
@@ -2138,6 +2171,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     convert:[
       {id:'export-text',label:exportingText?'Extracting text '+textExportProgress+'%':'PDF to text (.txt)',enabled:!!pdf&&!mutating&&!exportingText,disabledReason:!pdf?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':exportingText?'PDF text export is running.':undefined,run:exportText},
       {id:'export-page-images',label:exportingPageImages?'PNG '+pageImageProgress+'%':'PDF pages to PNG ZIP',enabled:!!pdf&&!mutating&&!loading&&!exportingPageImages,disabledReason:!pdf?'No PDF is loaded.':exportingPageImages?'An image export is in progress.':'Wait for the current PDF operation to finish.',run:exportPageImages},
+      {id:'export-page-jpeg',label:exportingPageImages?'JPG '+pageImageProgress+'%':'PDF to JPG',enabled:!!pdf&&!mutating&&!loading&&!exportingPageImages,disabledReason:!pdf?'No PDF is loaded.':exportingPageImages?'An image export is in progress.':'Wait for the current PDF operation to finish.',run:exportJpegPages},
       ...(exportingPageImages?[{id:'cancel-page-images',label:'Cancel PNG export',enabled:true,run:()=>pageImageAbortRef.current?.abort()}]:[]),
       {id:'images-to-pdf',label:creatingImagePdf?'Images '+imagePdfProgress+'%':'Images to PDF…',enabled:!creatingImagePdf&&!mutating,disabledReason:creatingImagePdf?'Image conversion is running.':mutating?'Wait for the current PDF mutation to finish.':undefined,run:()=>imagesInputRef.current?.click()},
       {id:'compare-pdf',label:comparingPdf?'Compare '+comparisonProgress+'%':'Compare PDF text…',enabled:!!pdf&&!loading&&!mutating&&!comparingPdf,disabledReason:!pdf?'Open a PDF first.':comparingPdf?'Comparison is in progress.':'Wait for the current PDF operation.',run:()=>comparisonInputRef.current?.click()},
