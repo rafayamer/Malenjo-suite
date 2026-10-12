@@ -2238,3 +2238,32 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
   .app-shell-top-only .scanner-quickstart{grid-template-columns:minmax(0,1fr)}
   .app-shell-top-only .scanner-quickstart>button{min-height:74px}
 }
+
+
+/* Resize is true user customization, not a pretend drag handle. The grid
+   responds to pointer motion and the keyboard, with widths saved locally.
+   Narrow widths always protect a minimum document-canvas area. */
+.app-shell-top-only .pdf-layout.left-panel-collapsed:not(.inspector-hidden){
+  grid-template-columns:min(var(--ml-inspector-width,256px),42vw) minmax(0,1fr)!important;
+}
+.app-shell-top-only .pdf-layout:not(.left-panel-collapsed):not(.inspector-hidden){
+  grid-template-columns:clamp(150px,19vw,225px) min(var(--ml-inspector-width,256px),30vw) minmax(0,1fr)!important;
+}
+.app-shell-top-only .pdf-layout>.pdf-inspector{
+  position:relative;
+}
+.app-shell-top-only .pdf-inspector-resize-handle{
+  position:absolute;top:0;bottom:0;right:0;width:9px;
+  z-index:35;cursor:col-resize;touch-action:none;
+  border-left:2px solid transparent;background:transparent;
+}
+.app-shell-top-only .pdf-inspector-resize-handle:hover,
+.app-shell-top-only .pdf-inspector-resize-handle:focus-visible{
+  border-left-color:var(--ml-brand-blue);
+  background:var(--ml-selected);outline:none;
+}
+@media(max-width:700px){
+  .app-shell-top-only .pdf-layout.left-panel-collapsed:not(.inspector-hidden){
+    grid-template-columns:min(var(--ml-inspector-width,256px),42vw) minmax(0,1fr)!important;
+  }
+}
