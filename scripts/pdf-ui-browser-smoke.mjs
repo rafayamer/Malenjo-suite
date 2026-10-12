@@ -488,7 +488,7 @@ async function main(){
   const jpgDownload=await downloadPromise;
   requireEvidence(jpgDownload.suggestedFilename().endsWith('-pages-jpg.zip'),
     'PDF-to-JPG emitted the wrong file type: '+jpgDownload.suggestedFilename());
-  const jpgPath=join(acceptanceDir,'independent-pdf-to-jpg.zip');
+  const jpgPath=join(mkdtempSync(join(tmpdir(),'malenjo-pdf-to-jpg-')),'independent-pdf-to-jpg.zip');
   await jpgDownload.saveAs(jpgPath);
   const jpgFiles=unzipSync(new Uint8Array(readFileSync(jpgPath)));
   requireEvidence(JSON.stringify(Object.keys(jpgFiles))===JSON.stringify(['page-0001.jpg','page-0002.jpg']),
