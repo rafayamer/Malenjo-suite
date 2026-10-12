@@ -281,9 +281,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [bookmarkError, setBookmarkError] = useState('');
   const [attachmentError, setAttachmentError] = useState('');
   const [extractingAttachment, setExtractingAttachment] = useState(false);
-  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(true);
   const [inspectorTab, setInspectorTab] = useState<DocumentInspectorTab>('properties');
-  const [inspectorHidden, setInspectorHidden] = useState(false);
+  const [inspectorHidden, setInspectorHidden] = useState(true);
   const [taskCategory, setTaskCategory] = useState<PdfTaskCategory>('home');
   const [providerPanelOpen, setProviderPanelOpen] = useState(false);
   const [textOverlay, setTextOverlay] = useState({ text:'', x:0.12, y:0.82, size:12 });
@@ -2273,6 +2273,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
         <div className="pdf-view-controls">
           <div className="pdf-toolbar-group pdf-page-nav">
+            <button type="button" disabled={!pdf}
+              aria-label={leftPanelCollapsed?'Show pages panel':'Hide pages panel'}
+              title={leftPanelCollapsed?'Show pages panel':'Hide pages panel'}
+              onClick={()=>{setLeftPanel('pages');setLeftPanelCollapsed((value)=>!value);}}>
+              <FileText size={17} aria-hidden="true"/>
+            </button>
             <button disabled={!pdf || currentPage <= 1} onClick={() => goToPage(currentPage - 1)} aria-label="Previous page"><ChevronLeft size={16}/></button>
             <input
               aria-label="Current PDF page"
