@@ -3266,5 +3266,35 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         </div>}
       </aside>}
     </div>}
+    <footer className="pdf-bottom-status" aria-label="PDF document status and page navigation">
+      <div className="pdf-bottom-status-pages" aria-live="off">
+        <span>{pdf ? `Page ${currentPage} / ${pageCount}` : 'No PDF open'}</span>
+      </div>
+      <div className="pdf-bottom-status-nav">
+        <button type="button" disabled={!pdf||currentPage<=1}
+          aria-label="Previous PDF page" title="Previous page"
+          onClick={()=>goToPage(currentPage-1)}><ChevronLeft size={17} aria-hidden="true"/></button>
+        <button type="button" disabled={!pdf||currentPage>=pageCount}
+          aria-label="Next PDF page" title="Next page"
+          onClick={()=>goToPage(currentPage+1)}><ChevronRight size={17} aria-hidden="true"/></button>
+      </div>
+      <div className="pdf-bottom-status-zoom">
+        <button type="button" disabled={!pdf} title="Zoom out"
+          aria-label="Status bar zoom out"
+          onClick={()=>{setFitMode('custom');setZoom(v=>stepPdfZoom(v,-1));}}>
+          <Minus size={17} aria-hidden="true"/>
+        </button>
+        <span aria-label="Current zoom level">{zoomLabel}</span>
+        <button type="button" disabled={!pdf} title="Zoom in"
+          aria-label="Status bar zoom in"
+          onClick={()=>{setFitMode('custom');setZoom(v=>stepPdfZoom(v,1));}}>
+          <Plus size={17} aria-hidden="true"/>
+        </button>
+        <button type="button" disabled={!pdf} title="Fit PDF width" aria-label="Fit PDF width"
+          onClick={()=>setFitMode('width')}>Fit width</button>
+        <button type="button" disabled={!pdf} title="Fit entire PDF page" aria-label="Fit PDF page"
+          onClick={()=>setFitMode('page')}>Fit page</button>
+      </div>
+    </footer>
   </div>;
 }
