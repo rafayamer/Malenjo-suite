@@ -603,16 +603,20 @@ async function main(){
   console.log('MALENJO PDF icon ribbon non-overlap, hidden sidebars, side-chat coexistence: PASS');
   console.log('MALENJO browser document tab opened');
   await page.waitForFunction(()=>
-    Array.from(document.querySelectorAll('.pdf-text-layer span')).some(
+    Array.from(document.querySelectorAll('.document-session-panel.active .pdf-text-layer span')).some(
       node=>node.textContent?.includes('MALENJO BROWSER UI TEXT SELECT FIND'),
     ),null,{timeout:30000});
   await page.waitForFunction(() =>
-    [...document.querySelectorAll('.pdf-text-layer span')].some(node =>
+    [...document.querySelectorAll('.document-session-panel.active .pdf-text-layer span')].some(node =>
       node.isConnected &&
       node.textContent?.includes('MALENJO BROWSER UI TEXT SELECT FIND') &&
       getComputedStyle(node).cursor==='text'
     ),null,{timeout:30000});
-  const span=page.locator('.pdf-text-layer span').filter({hasText:'MALENJO BROWSER UI TEXT SELECT FIND'}).first();
+  const span=page.locator('.document-session-panel.active .pdf-text-layer span')
+    .filter({hasText:'MALENJO BROWSER UI TEXT SELECT FIND'}).first();
+  // Exercise a real pointer hit on the active document; an unrelated parked
+  // PDF layer can finish rendering independently and must not satisfy this gate.
+  await span.hover({timeout:20000});
   console.log('MALENJO real PDF.js selectable text spans rendered with working I-beam');
   const selected=await span.evaluate(node=>{
     const range=document.createRange(),selection=window.getSelection();
@@ -621,16 +625,20 @@ async function main(){
     selection?.addRange(range);
     const text=selection?.toString()??'';
     selection?.removeAllRanges();
-    return {cursor:getComputedStyle(node).cursor,selection:text,
+    const box=node.getBoundingClientRect();
+    const hit=document.elementFromPoint(box.left+box.width/2,box.top+box.height/2);
+    return {cursor:getComputedStyle(node).cursor,
+      hitCursor:hit?getComputedStyle(hit).cursor:'none',selection:text,
       connected:node.isConnected,parentClass:node.parentElement?.className??'',
       className:node.className,tag:node.tagName,html:node.outerHTML.slice(0,350),
-      candidates:[...document.querySelectorAll('.pdf-text-layer span')]
+      candidates:[...document.querySelectorAll('.document-session-panel.active .pdf-text-layer span')]
         .filter(item=>item.textContent?.includes('MALENJO BROWSER UI TEXT SELECT FIND'))
         .slice(0,5).map(item=>({tag:item.tagName,className:item.className,
           cursor:getComputedStyle(item).cursor,connected:item.isConnected,
           parentClass:item.parentElement?.className??''}))};
   });
-  requireEvidence(selected.cursor==='text','PDF hover does not show I-beam: '+JSON.stringify(selected));
+  requireEvidence(selected.connected && selected.cursor==='text' && selected.hitCursor==='text',
+    'PDF hover does not show I-beam on active page: '+JSON.stringify(selected));
   requireEvidence(selected.selection.includes('MALENJO BROWSER UI'),
     'PDF text cannot be selected and copied');
   console.log('MALENJO UI text selection: PASS');
