@@ -526,7 +526,7 @@ export default function App() {
           <button className={!activeSessionId && active===item.id?'nav-item active':'nav-item'} onClick={()=>selectModule(item.id)} key={item.id} title={item.name} aria-label={item.name}>
             <span className="nav-glyph" aria-hidden="true">{item.name.slice(0,2).toUpperCase()}</span>
             <span className="nav-label">{item.name}</span>
-            <small>{item.status==='complete'?'●':item.status==='partial'?'◐':'○'}</small>
+            <small aria-hidden="true">›</small>
           </button>
         )}</section>)}
       </nav>
@@ -556,8 +556,8 @@ export default function App() {
         <div className="suite-title"><strong>MALENJO Suite</strong><small>{activeSession?.document.name ?? module.name}</small></div>
         <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);openCommandPalette();}} placeholder="Search files, tools and commands"/><kbd>Ctrl K</kbd></div>
         <div className="topbar-actions">
-          <button className="command" onClick={()=>void openDocumentsFromPicker()}><FolderOpen size={17}/> Open</button>
-          <button className="command" onClick={()=>setCommandOpen(true)}><Command size={17}/> Commands</button>
+          <button className="command" aria-label="Open files" title="Open files" onClick={()=>void openDocumentsFromPicker()}><FolderOpen size={17}/><span>Open</span></button>
+          <button className="command" aria-label="Open command palette" title="Open command palette" onClick={()=>setCommandOpen(true)}><Command size={17}/><span>Commands</span></button>
           <button
             className="theme-toggle command"
             type="button"
