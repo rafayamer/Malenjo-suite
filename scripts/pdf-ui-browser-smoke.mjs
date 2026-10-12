@@ -40,6 +40,11 @@ async function main(){
   const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.goto(base,{waitUntil:'domcontentloaded'});
+  const coldHomeTiming=await page.evaluate(()=>{
+    const nav=performance.getEntriesByType('navigation')[0];
+    return nav ? Math.round(nav.domContentLoadedEventEnd-nav.startTime) : null;
+  });
+  console.log('PHASE1 measured cold Home DOMContentLoaded: '+coldHomeTiming+' ms (not a release budget)');
   async function openModule(name){
     const trigger=page.getByRole('button',{name:'All tools',exact:true});
     if((await trigger.getAttribute('aria-expanded'))!=='true')await trigger.click();
@@ -469,6 +474,7 @@ async function main(){
   // real conversion->editor browser acceptance is still NOT RELEASE-READY.
   await openModule('Home');
   console.log('MALENJO loaded in Chromium; opening PDF via browser input');
+  const pdfFirstCanvasStarted=Date.now();
   await page.locator('.workspace > input[type="file"]').setInputFiles({
     name:'browser-ui-acceptance.pdf',mimeType:'application/pdf',buffer:source,
   });
@@ -478,6 +484,7 @@ async function main(){
   const activePdf=page.locator('.document-session-panel.active');
   await activePdf.locator('.pdf-layout').waitFor({state:'visible',timeout:30000});
   await activePdf.locator('.pdf-page-shell canvas').first().waitFor({state:'visible',timeout:30000});
+  console.log('PHASE1 measured two-page PDF first canvas: '+(Date.now()-pdfFirstCanvasStarted)+' ms (not a release budget)');
   requireEvidence(await activePdf.locator('.pdf-layout.left-panel-collapsed.inspector-hidden').count()===1 &&
     await activePdf.locator('.pdf-left-shell').isHidden() &&
     await activePdf.locator('.pdf-inspector').count()===0,
