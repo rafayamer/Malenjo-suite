@@ -35,6 +35,7 @@ import EnterpriseWorkspace from '../enterprise/EnterpriseWorkspace';
 import HelpWorkspace from '../help/HelpWorkspace';
 import HomeWorkspace from '../home/HomeWorkspace';
 import SettingsWorkspace from './SettingsWorkspace';
+import CapabilityWorkspace from './CapabilityWorkspace';
 import DocumentTabs from './DocumentTabs';
 import RibbonShell from './RibbonShell';
 import { ModuleNavIcon } from './moduleNavIcons';
@@ -506,6 +507,11 @@ export default function App() {
       />;
     }
 
+    if (route === 'cad' || route === 'dicom') {
+      return <CapabilityWorkspace module={route}
+        documentName={session.document.name} onNavigate={selectModule}/>;
+    }
+
     const targetModule = modules.find((item) => item.id === route) ?? modules[0];
     return <ModuleView
       module={targetModule}
@@ -664,7 +670,9 @@ export default function App() {
                                 ? <SettingsWorkspace theme={theme} onThemeChange={setTheme}/>
                                 : active === 'help'
                                   ? <HelpWorkspace openDocumentCount={sessions.length}/>
-                                  : <ModuleView module={module} session={null} notice="" onSaveAs={async()=>{}} onBackToFiles={()=>selectModule('files')}/>)}
+                                  : active === 'cad' || active === 'dicom' || active === 'invoice' || active === 'account'
+                                    ? <CapabilityWorkspace module={active} onNavigate={selectModule}/>
+                                    : <ModuleView module={module} session={null} notice="" onSaveAs={async()=>{}} onBackToFiles={()=>selectModule('files')}/>)}
     </main>
   </div>
 }
