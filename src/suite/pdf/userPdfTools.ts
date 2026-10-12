@@ -47,7 +47,7 @@ export const USER_PDF_TOOLS: readonly UserPdfTool[] = [
 
   {id:'rotate-pdf',label:'Rotate PDF',group:'Edit PDF',category:'organize',actionId:'turn-pages',explanation:'Apply a permanent rotation to selected pages.'},
   {id:'page-numbers',label:'Page numbers',group:'Edit PDF',category:'organize',actionId:'open-page-numbers',explanation:'Burned-in configurable page-number positioning and validation are not release-ready.'},
-  {id:'watermark-pdf',label:'Watermark',group:'Edit PDF',category:'edit',explanation:'Verified text/image watermarks with placement, opacity and external reader fidelity remain required.'},
+  {id:'watermark-pdf',label:'Watermark',group:'Edit PDF',category:'edit',actionId:'watermark-settings',explanation:'Create a text watermark with opacity, size, angle and position in the PDF inspector; image watermarks are not verified.'},
   {id:'crop-pdf',label:'Crop PDF',group:'Edit PDF',category:'edit',actionId:'open-crop-settings',explanation:'Interactive crop boxes with independent page-boundary verification are not release-ready.'},
   {id:'edit-pdf',label:'Edit PDF',group:'Edit PDF',category:'edit',actionId:'configure-edit',explanation:'Use the existing text/rectangle overlay tools; replacement of original text is not yet supported.'},
   {id:'pdf-forms',label:'PDF Forms',group:'Edit PDF',category:'forms',actionId:'configure-forms',explanation:'Add and fill supported AcroForm fields; complete automatic field detection is not release-ready.'},

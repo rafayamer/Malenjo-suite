@@ -109,6 +109,7 @@ import PdfPageCanvas from './PdfPageCanvas';
 import { PdfFeatureIcon } from './PdfFeatureIcon';
 import { plannedPdfFeatures } from './featureCatalog';
 import { USER_PDF_TOOLS, USER_PDF_TOOL_GROUPS } from './userPdfTools';
+import { applyPdfTextWatermark, type PdfWatermarkPosition } from './watermark';
 import {extractPdfPageSearchText,findPdfTextMatches} from './pdfTextHighlights';
 import PdfThumbnail from './PdfThumbnail';
 import PdfProviderToolsPanel from './PdfProviderToolsPanel';
@@ -367,6 +368,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [pageLabelRanges, setPageLabelRanges] = useState<PdfPageLabelRange[]>([]);
   const [logicalPageLabels, setLogicalPageLabels] = useState<string[]>([]);
   const [pageLabelError, setPageLabelError] = useState('');
+  const [watermarkDraft, setWatermarkDraft] = useState({
+    text:'DRAFT',size:24,opacity:0.3,angle:0,
+    position:'center' as PdfWatermarkPosition,
+    scope:'all' as 'all'|'selected',
+  });
   const [pageBoxDraft, setPageBoxDraft] = useState({
     scope:'selected' as 'selected'|'all',
     box:'crop' as 'crop'|'trim'|'bleed'|'art',
@@ -1339,6 +1345,17 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     );
   }
 
+  async function applyWatermark(){
+    await mutate(
+      'Applied a selectable text watermark to '+(watermarkDraft.scope==='all'?'all pages':'selected pages')+'.',
+      bytes=>applyPdfTextWatermark(bytes,{
+        ...watermarkDraft,
+        pageNumbers:pagesForScope(watermarkDraft.scope),
+      }),
+      currentPage,
+    );
+  }
+
   async function applyBates(){
     await mutate(
       `Applied Bates numbering to ${batesDraft.scope==='selected' ? operationPages.length : pageCount} page(s).`,
@@ -2169,6 +2186,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'place-text',label:'Place text',enabled:!!sourceBytes&&!mutating&&!!textOverlay.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!textOverlay.text.trim()?'Enter text in the Properties inspector first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Added permanent text to the PDF.',bytes=>addPdfTextOverlay(bytes,{pageNumber:currentPage,...textOverlay}),currentPage)},
       {id:'rectangle',label:shapeOverlay.mode==='highlight'?'Highlight rectangle':'Outline rectangle',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage)},
       {id:'configure-edit',label:'Edit settings',enabled:true,run:configureProperties},
+      {id:'watermark-settings',label:'Text watermark',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF first.':mutating?'Wait for the current PDF edit.':undefined,run:configureProperties},
       {id:'open-crop-settings',label:'Crop PDF settings',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF before cropping.':mutating?'Wait for the current PDF edit.':undefined,run:configureProperties},
       providerAction,
     ],
@@ -3099,6 +3117,38 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           <label>Footer align<select value={headerFooterDraft.footerAlign} onChange={(event)=>setHeaderFooterDraft({...headerFooterDraft,footerAlign:event.target.value as 'left'|'center'|'right'})}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
           <button disabled={mutating||!(headerFooterDraft.header.trim()||headerFooterDraft.footer.trim())} onClick={()=>void applyHeaderFooter()}>Apply header / footer</button>
           <small>Supported tokens: <code>{'{page}'}</code>, <code>{'{pages}'}</code>, <code>{'{date}'}</code>. This writes permanent PDF text and is tracked in Undo/Redo.</small>
+        </div>
+
+        <div className="pdf-pane-title">Text watermark</div>
+        <div className="pdf-edit-form">
+          <small>Applies transparent PDF text to a working copy. Image watermarks,
+            full Unicode fonts and signed-PDF changes are not supported.</small>
+          <label>Watermark text<input aria-label="Watermark text"
+            maxLength={80} value={watermarkDraft.text}
+            onChange={event=>setWatermarkDraft({...watermarkDraft,text:event.target.value})}/></label>
+          <label>Pages<select aria-label="Watermark scope" value={watermarkDraft.scope}
+            onChange={event=>setWatermarkDraft({...watermarkDraft,scope:event.target.value as 'selected'|'all'})}>
+            <option value="all">All pages</option>
+            <option value="selected">Selected pages</option>
+          </select></label>
+          <label>Position<select aria-label="Watermark position" value={watermarkDraft.position}
+            onChange={event=>setWatermarkDraft({...watermarkDraft,position:event.target.value as PdfWatermarkPosition})}>
+            <option value="center">Center</option>
+            <option value="top-left">Top left</option>
+            <option value="top-right">Top right</option>
+            <option value="bottom-left">Bottom left</option>
+            <option value="bottom-right">Bottom right</option>
+          </select></label>
+          <div className="pdf-coordinate-grid">
+            <label>Size (pt)<input aria-label="Watermark size" type="number" min="8" max="90"
+              value={watermarkDraft.size} onChange={event=>setWatermarkDraft({...watermarkDraft,size:Number(event.target.value)})}/></label>
+            <label>Opacity<input aria-label="Watermark opacity" type="number" min="0.05" max="1" step="0.05"
+              value={watermarkDraft.opacity} onChange={event=>setWatermarkDraft({...watermarkDraft,opacity:Number(event.target.value)})}/></label>
+            <label>Angle<input aria-label="Watermark angle" type="number" min="-75" max="75" step="5"
+              value={watermarkDraft.angle} onChange={event=>setWatermarkDraft({...watermarkDraft,angle:Number(event.target.value)})}/></label>
+          </div>
+          <button type="button" disabled={!sourceBytes||mutating||!watermarkDraft.text.trim()}
+            onClick={()=>void applyWatermark()}>Apply text watermark</button>
         </div>
 
         <div className="pdf-pane-title">Bates numbering</div>
