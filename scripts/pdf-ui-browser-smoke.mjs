@@ -58,6 +58,10 @@ async function main(){
     await page.locator('.ml-start-utilities:not([open])').count()===1 &&
     await page.locator('#ml-home-recent-panel').isHidden(),
     'Home must initially show Open/Recent, not a permanent dashboard or recent list');
+  requireEvidence(await page.locator('.ml-start-minimal').evaluate(node=>
+    getComputedStyle(node).overflowY==='hidden' &&
+    !node.textContent?.includes('Codespaces session')),
+    'Home must be a fixed start screen without its own scrollbar or developer runtime disclaimer');
   requireEvidence(await page.getByRole('button',{name:'MALENJO AI',exact:true}).count()===1,
     'AI control missing from the top command bar');
 
@@ -478,6 +482,27 @@ async function main(){
     await activePdf.locator('.pdf-left-shell').isHidden() &&
     await activePdf.locator('.pdf-inspector').count()===0,
     'PDF canvas started with an unwanted left or right sidebar');
+  await activePdf.getByRole('button',{name:'Show left document inspector'}).click();
+  const inspectDock=await activePdf.locator('.pdf-layout').evaluate(node=>{
+    const inspector=node.querySelector('.pdf-inspector')?.getBoundingClientRect();
+    const reader=node.querySelector('.pdf-scroll')?.getBoundingClientRect();
+    return {inspectorRight:inspector?.right??0,readerLeft:reader?.left??0};
+  });
+  requireEvidence(inspectDock.inspectorRight<=inspectDock.readerLeft+2,
+    'Properties/form editor opened on the right instead of the LEFT: '+JSON.stringify(inspectDock));
+  await activePdf.getByRole('button',{name:'Hide left document inspector'}).first().click();
+  await activePdf.getByRole('button',{name:'Show document navigation'}).click();
+  requireEvidence(await activePdf.getByRole('navigation',{name:'PDF navigation'})
+    .getByRole('button',{name:'Bookmarks'}).isVisible(),
+    'PDF left bookmarks navigation was invisible/unlabeled');
+  const bookmarks=activePdf.getByRole('navigation',{name:'PDF navigation'}).getByRole('button',{name:'Bookmarks'});
+  await bookmarks.focus();
+  await bookmarks.press('Alt+ArrowDown');
+  requireEvidence(await activePdf.getByRole('navigation',{name:'PDF navigation'})
+    .locator('button').nth(2).getAttribute('aria-label')==='Bookmarks',
+    'Keyboard/customizable left-panel order failed');
+  await activePdf.getByRole('button',{name:'Hide document navigation'}).click();
+  console.log('PHASE1 fixed Home and LEFT properties / labeled customizable navigation: PASS');
 
   // Phase 1: an icon-only ribbon that conceals its features is not acceptable.
   // Working actions have captions; planned conversions remain visible and
