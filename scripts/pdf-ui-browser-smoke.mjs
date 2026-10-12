@@ -637,6 +637,80 @@ async function main(){
   requireEvidence(/2 match/i.test(await page.locator('.pdf-search-status').innerText()),
     'Find did not report matches from two real PDF pages');
   console.log('MALENJO UI Find + visible text highlights: PASS');
+
+  // Master v2 Phase 1 responsive + appearance matrix on a REAL open PDF.
+  // Keep PDF.js selectable text functional through live theme changes,
+  // viewport resizing and opening/closing the document AI drawer.
+  const viewportMatrix=[[1920,1080],[1440,900],[1366,768],[1024,768],[768,600],[430,720]];
+  const topAi=page.getByRole('button',{name:'MALENJO AI',exact:true});
+  for (const expectedTheme of ['light','dark']) {
+    const initialTheme=await page.evaluate(()=>document.documentElement.dataset.theme);
+    if(initialTheme!==expectedTheme) {
+      await page.getByRole('button',{
+        name:expectedTheme==='light'?'Switch to light theme':'Switch to dark theme',
+      }).click();
+    }
+    await page.waitForFunction(theme=>document.documentElement.dataset.theme===theme,
+      expectedTheme,{timeout:15000});
+    for (const [width,height] of viewportMatrix) {
+      await page.setViewportSize({width,height});
+      const dimensions=await page.evaluate(()=>{
+        const rect=(selector)=>{
+          const bounds=document.querySelector(selector)?.getBoundingClientRect();
+          return bounds?{left:bounds.left,right:bounds.right,top:bounds.top,bottom:bounds.bottom}:null;
+        };
+        return {
+          viewport:innerWidth, documentWidth:document.documentElement.scrollWidth,
+          ai:rect('.ml-top-ai'),
+          ribbon:rect('.suite-ribbon'),
+          status:rect('.ml-bottom-statusbar'),
+          pdfToolbar:rect('.document-session-panel.active .pdf-context-toolbar'),
+        };
+      });
+      requireEvidence(dimensions.ai && dimensions.ai.left>=-1 &&
+        dimensions.ai.right<=width+2 &&
+        dimensions.ribbon && dimensions.ribbon.right<=width+2 &&
+        dimensions.status && dimensions.status.right<=width+2 &&
+        dimensions.pdfToolbar && dimensions.pdfToolbar.right<=width+2 &&
+        dimensions.documentWidth<=width+2,
+        'Phase 1 '+expectedTheme+' viewport '+width+'x'+height+
+        ' clips global/PDF controls or overflows the window: '+JSON.stringify(dimensions));
+      await page.screenshot({path:resolve(root,
+        '.build/pdf-ui-browser/theme-review/phase1-pdf-'+expectedTheme+'-'+width+'x'+height+'.png')});
+    }
+    await page.setViewportSize({width:1440,height:900});
+    // Selectable text must survive the actual theme change and optional AI.
+    for (const drawerOpen of [true,false]) {
+      if(drawerOpen)await topAi.click();
+      else await page.getByRole('button',{name:'Close MALENJO AI'}).click();
+      await page.waitForFunction(()=>
+        [...document.querySelectorAll('.document-session-panel.active .pdf-text-layer span')]
+          .some(node=>node.isConnected &&
+            node.textContent?.includes('MALENJO BROWSER UI TEXT SELECT FIND') &&
+            getComputedStyle(node).cursor==='text'),
+      null,{timeout:30000});
+      const activeText=page.locator('.document-session-panel.active .pdf-text-layer span')
+        .filter({hasText:'MALENJO BROWSER UI TEXT SELECT FIND'}).first();
+      // Playwright performs a real Chromium mouse hover over the PDF text,
+      // rather than testing only an isolated CSS selector in a unit test.
+      await activeText.hover({timeout:20000});
+      const interaction=await activeText.evaluate(node=>{
+        const rect=node.getBoundingClientRect();
+        const target=document.elementFromPoint(rect.left+rect.width/2,
+          rect.top+rect.height/2);
+        return {spanCursor:getComputedStyle(node).cursor,
+          hitCursor:target?getComputedStyle(target).cursor:'none',
+          connected:node.isConnected};
+      });
+      requireEvidence(interaction.connected && interaction.spanCursor==='text' &&
+        interaction.hitCursor==='text',
+        'PDF lost real text-hover cursor with '+expectedTheme+
+        ' theme and AI '+(drawerOpen?'open':'closed')+': '+JSON.stringify(interaction));
+    }
+  }
+  await page.setViewportSize({width:1440,height:900});
+  console.log('PHASE1 real PDF, two themes, six viewport sizes, AI drawer and I-beam hover matrix: PASS');
+
   await openModule('Home');
   await documentTab.click();
   await page.locator('.pdf-page-shell canvas').first().waitFor({timeout:30000});
