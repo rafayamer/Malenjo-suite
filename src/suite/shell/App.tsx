@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { Activity, Command, FolderOpen, Search, ShieldCheck, Moon, Sun } from 'lucide-react';
+import { ChevronDown, Command, FolderOpen, House, LayoutGrid, Search, ShieldCheck, Moon, Sun, X } from 'lucide-react';
 import { modules } from '../modules/registry';
 import type { ModuleId } from '../core/types';
 import FileLibrary from '../files/FileLibrary';
@@ -50,8 +50,8 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [commandOpen, setCommandOpen] = useState(false);
   const [dropActive, setDropActive] = useState(false);
-  // A compact suite rail keeps the canvas dominant; the ribbon is global.
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [moduleMenuOpen, setModuleMenuOpen] = useState(false);
+  const moduleMenuButtonRef = useRef<HTMLButtonElement>(null);
   const [theme, setTheme] = useState<SuiteTheme>(() => {
     try { return readSuiteTheme(window.localStorage); } catch { return 'dark'; }
   });
@@ -70,6 +70,17 @@ export default function App() {
   const browserOpenInputRef = useRef<HTMLInputElement>(null);
   const module = modules.find((item) => item.id === active) ?? modules[0];
   const groups = useMemo(() => ['Core','Create','Intelligence','Enterprise','System'] as const, []);
+  useEffect(() => {
+    if (!moduleMenuOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && !target.closest('.ml-tools-popup') &&
+        !target.closest('.topbar-tool-trigger')) setModuleMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    return () => document.removeEventListener('pointerdown', closeOutside);
+  }, [moduleMenuOpen]);
+
 
   const activeSession = useMemo(
     () => sessions.find((session) => session.id === activeSessionId) ?? null,
@@ -81,6 +92,7 @@ export default function App() {
   );
 
   function selectModule(id: ModuleId) {
+    setModuleMenuOpen(false);
     setActive(id);
     setActiveSessionId(null);
   }
@@ -522,24 +534,37 @@ export default function App() {
     />;
   }
 
-  return <div className={sidebarCollapsed?'app-shell sidebar-collapsed':'app-shell'} data-shell="malenjo-ribbon">
+  return <div className="app-shell app-shell-top-only" data-shell="malenjo-ribbon">
     <a className="skip-to-workspace" href="#malenjo-workspace-content">Skip to workspace content</a>
-    <aside className="sidebar" aria-label="MALENJO workspace navigation">
-      <div className="brand">
-        <div className="brand-mark">M</div>
-        <div className="brand-copy"><strong>MALENJO</strong><span>SUITE</span></div>
-        <button className="sidebar-toggle" onClick={()=>setSidebarCollapsed((value)=>!value)} aria-label={sidebarCollapsed?'Expand workspace navigation':'Collapse workspace navigation'} title={sidebarCollapsed?'Expand navigation':'Collapse navigation'}>{sidebarCollapsed?'›':'‹'}</button>
-      </div>
-      <nav>
-        {groups.map(group => <section key={group}><h3>{group}</h3>{modules.filter(item=>item.group===group).map(item =>
-          <button className={!activeSessionId && active===item.id?'nav-item active':'nav-item'} onClick={()=>selectModule(item.id)} key={item.id} title={item.name} aria-label={item.name}>
-            <span className="nav-glyph" aria-hidden="true"><ModuleNavIcon module={item.id}/></span>
-            <span className="nav-label">{item.name}</span>
-            <small aria-hidden="true">›</small>
-          </button>
-        )}</section>)}
+    <aside className={moduleMenuOpen ? 'sidebar ml-tools-popup is-open' : 'sidebar ml-tools-popup'}
+      role="dialog" aria-label="All MALENJO tools" aria-hidden={!moduleMenuOpen}
+      inert={!moduleMenuOpen}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault(); setModuleMenuOpen(false);
+          moduleMenuButtonRef.current?.focus();
+        }
+      }}>
+      <header className="ml-tools-popup-head">
+        <strong>Tools</strong><span>All MALENJO workspaces</span>
+        <button aria-label="Close tools menu" title="Close tools menu"
+          onClick={() => { setModuleMenuOpen(false); moduleMenuButtonRef.current?.focus(); }}>
+          <X size={17} aria-hidden="true"/>
+        </button>
+      </header>
+      <nav aria-label="All workspaces">
+        {groups.map(group => <section key={group} aria-label={group}>
+          <h3>{group}</h3>
+          {modules.filter(item=>item.group===group).map(item =>
+            <button className={!activeSessionId && active===item.id?'nav-item active':'nav-item'}
+              onClick={()=>selectModule(item.id)} key={item.id}
+              title={item.name} aria-label={item.name}>
+              <span className="nav-glyph" aria-hidden="true"><ModuleNavIcon module={item.id}/></span>
+              <span className="nav-label">{item.name}</span>
+            </button>
+          )}
+        </section>)}
       </nav>
-      <div className="local-state"><Activity size={16}/><div className="local-state-copy"><b>Local-first</b><span>{sessions.length} document{sessions.length===1?'':'s'} open · network optional</span></div></div>
     </aside>
 
     <main
