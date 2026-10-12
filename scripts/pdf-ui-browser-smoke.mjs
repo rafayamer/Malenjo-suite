@@ -607,12 +607,18 @@ async function main(){
         const actions=toolbar.querySelector('.pdf-task-actions')?.getBoundingClientRect();
         const controls=toolbar.querySelector('.pdf-view-controls')?.getBoundingClientRect();
         const bounds=toolbar.getBoundingClientRect();
-        return {actionsRight:actions?.right??0,controlsLeft:controls?.left??0,
-          controlsRight:controls?.right??0,toolbarRight:bounds.right};
+        const overlaps=Boolean(actions&&controls&&
+          actions.left<controls.right-2&&actions.right>controls.left+2&&
+          actions.top<controls.bottom-2&&actions.bottom>controls.top+2);
+        return {overlaps,actionsTop:actions?.top,actionsBottom:actions?.bottom,
+          controlsTop:controls?.top,controlsBottom:controls?.bottom,
+          controlsLeft:controls?.left??0,controlsRight:controls?.right??0,
+          toolbarRight:bounds.right,viewportWidth:innerWidth,viewportHeight:innerHeight};
       });
-    requireEvidence(collision.actionsRight<=collision.controlsLeft+3 &&
-      collision.controlsRight<=collision.toolbarRight+3,
-      'PDF buttons/panels overlap at '+width+'px: '+JSON.stringify(collision));
+    requireEvidence(!collision.overlaps&&collision.controlsLeft>=0&&
+      collision.controlsRight<=collision.viewportWidth+2&&
+      collision.controlsBottom<=collision.viewportHeight+2,
+      'PDF top and bottom controls overlap or leave viewport at '+width+'px: '+JSON.stringify(collision));
   }
   await page.setViewportSize({width:1440,height:900});
   console.log('MALENJO PDF icon ribbon non-overlap, hidden sidebars, side-chat coexistence: PASS');
