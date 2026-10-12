@@ -218,6 +218,19 @@ async function main(){
     .getByRole('button',{name:/PDF Editing/}).click();
   requireEvidence(await page.locator('main.workspace > .pdf-workspace').count()===1,
     'Ribbon PDF Viewer command did not navigate inside MALENJO');
+  const bottomNav=await page.evaluate(()=>{
+    const controls=document.querySelector('.pdf-view-controls')?.getBoundingClientRect();
+    const footer=document.querySelector('.ml-suite-status')?.getBoundingClientRect();
+    return controls&&footer?{
+      top:controls.top,bottom:controls.bottom,left:controls.left,right:controls.right,
+      footerTop:footer.top,viewportWidth:innerWidth,viewportHeight:innerHeight,
+    }:null;
+  });
+  requireEvidence(bottomNav&&bottomNav.top>=bottomNav.footerTop-1 &&
+    bottomNav.bottom<=bottomNav.viewportHeight+2 &&
+    bottomNav.left>=0 && bottomNav.right<=bottomNav.viewportWidth+2,
+    'PDF page and zoom controls are not contained in the bottom status bar: '+JSON.stringify(bottomNav));
+
   requireEvidence(await page.locator('.suite-ribbon').count()===0 &&
     await page.locator('main.workspace > .pdf-workspace .pdf-task-toolbar').isVisible(),
     'PDF workspace stacked two ribbons or lost its actual PDF task ribbon');
