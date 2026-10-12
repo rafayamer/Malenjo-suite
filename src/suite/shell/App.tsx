@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { ChevronDown, Command, FolderOpen, House, LayoutGrid, Search, ShieldCheck, Moon, Sun, X } from 'lucide-react';
+import { Bot, ChevronDown, Command, FolderOpen, House, LayoutGrid, Search, ShieldCheck, Moon, Sun, X } from 'lucide-react';
 import { modules } from '../modules/registry';
 import type { ModuleId } from '../core/types';
 import FileLibrary from '../files/FileLibrary';
@@ -51,6 +51,8 @@ export default function App() {
   const [commandOpen, setCommandOpen] = useState(false);
   const [dropActive, setDropActive] = useState(false);
   const [moduleMenuOpen, setModuleMenuOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiHasOpened, setAiHasOpened] = useState(false);
   const moduleMenuButtonRef = useRef<HTMLButtonElement>(null);
   const [theme, setTheme] = useState<SuiteTheme>(() => {
     try { return readSuiteTheme(window.localStorage); } catch { return 'dark'; }
@@ -93,6 +95,7 @@ export default function App() {
 
   function selectModule(id: ModuleId) {
     setModuleMenuOpen(false);
+    if (id === 'ai') { setAiHasOpened(true); setAiOpen(true); return; }
     setActive(id);
     setActiveSessionId(null);
   }
@@ -395,7 +398,7 @@ export default function App() {
       kind:'action',
       run:()=>{ void openDocumentsFromPicker(); },
     },
-    ...modules.map((item) => ({
+    ...modules.filter(item=>!['word','spreadsheet','presentation','ai'].includes(item.id)).map((item) => ({
       id:`workspace-${item.id}`,
       label:item.id === 'home' ? 'Home' : `Open ${item.name}`,
       group:item.id === 'settings' ? 'Settings' : 'Workspaces',
@@ -555,7 +558,8 @@ export default function App() {
       <nav aria-label="All workspaces">
         {groups.map(group => <section key={group} aria-label={group}>
           <h3>{group}</h3>
-          {modules.filter(item=>item.group===group).map(item =>
+          {modules.filter(item=>item.group===group &&
+            !['word','spreadsheet','presentation','ai'].includes(item.id)).map(item =>
             <button className={!activeSessionId && active===item.id?'nav-item active':'nav-item'}
               onClick={()=>selectModule(item.id)} key={item.id}
               title={item.name} aria-label={item.name}>
@@ -570,7 +574,7 @@ export default function App() {
     <main
       id="malenjo-workspace-content"
       tabIndex={-1}
-      className={dropActive ? 'workspace drop-active' : 'workspace'}
+      className={'workspace'+(dropActive ? ' drop-active' : '')+(aiOpen ? ' ai-panel-open' : '')}
       onDragEnter={(event) => { if (!isDesktopRuntime() && event.dataTransfer.types.includes('Files')) setDropActive(true); }}
       onDragOver={(event) => { if (!isDesktopRuntime() && event.dataTransfer.types.includes('Files')) event.preventDefault(); }}
       onDragLeave={(event) => { if (!isDesktopRuntime() && event.currentTarget === event.target) setDropActive(false); }}
@@ -604,6 +608,12 @@ export default function App() {
         </div>
         <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);openCommandPalette();}} placeholder="Search commands" aria-label="Search commands"/><kbd>Ctrl K</kbd></div>
         <div className="topbar-actions">
+          <button type="button" className="command ml-top-ai" aria-label="MALENJO AI"
+            title="MALENJO AI — document assistant" aria-expanded={aiOpen}
+            aria-controls="ml-ai-assistant"
+            onClick={()=>{setAiHasOpened(true);setAiOpen(value=>!value);setModuleMenuOpen(false);}}>
+            <Bot size={20} aria-hidden="true"/>
+          </button>
           <button className="command" aria-label="Open files" title="Open a file (Ctrl+O)" onClick={()=>void openDocumentsFromPicker()}><FolderOpen size={19}/></button>
           <button className="command" aria-label="Open command palette" title="Commands (Ctrl+K)" onClick={()=>setCommandOpen(true)}><Command size={19}/></button>
           <button className="theme-toggle command" type="button"
@@ -635,6 +645,18 @@ export default function App() {
         onCloseAll={() => closeSessions(sessions.map((session) => session.id))}
         onReorder={reorderSessions}
       />
+
+      {aiHasOpened && <aside id="ml-ai-assistant" className={aiOpen?'ml-ai-drawer is-open':'ml-ai-drawer'}
+        aria-label="MALENJO AI document assistant" aria-hidden={!aiOpen} inert={!aiOpen}>
+        <div className="ml-ai-drawer-title">
+          <Bot size={19} aria-hidden="true"/><strong>MALENJO AI</strong>
+          <span>Local assistant</span>
+          <button type="button" aria-label="Close MALENJO AI" title="Close assistant"
+            onClick={()=>setAiOpen(false)}><X size={18} aria-hidden="true"/></button>
+        </div>
+        <AiWorkspace compact openDocuments={openDocumentsForAi}
+          onBackToFiles={()=>{setAiOpen(false);selectModule('files');}}/>
+      </aside>}
 
       <CommandPalette
         open={commandOpen}
