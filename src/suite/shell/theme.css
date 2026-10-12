@@ -1109,3 +1109,16 @@ body { background:var(--ml-background);color:var(--ml-text); }
 .sidebar-collapsed .sidebar .nav-item {justify-content:center;padding:8px 4px;gap:0}
 .sidebar-collapsed .sidebar .nav-glyph {width:28px;min-width:28px}
 .sidebar .nav-item:focus-visible {outline:2px solid var(--ml-brand-blue);outline-offset:-2px}
+
+
+/* Home only exposes executable Office entry points after verified PDF conversion.
+   Inoperative capability cards must look disabled, not like active commands. */
+.ml-co-action-card:disabled {cursor:not-allowed;opacity:.69;border-style:dashed}
+.ml-co-action-card:disabled:hover {background:var(--ml-card);border-color:var(--ml-border);transform:none}
+.ml-co-action-card:disabled .ml-co-action-icon {filter:grayscale(.5)}
+:root[data-theme="light"] .ml-home-runtime {
+  background:var(--ml-success-bg);
+  border-color:#9dcfb7;
+  color:var(--ml-success-fg);
+}
+:root[data-theme="light"] .ml-home-runtime small {color:var(--ml-success-fg)}
