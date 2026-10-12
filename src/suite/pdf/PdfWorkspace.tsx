@@ -108,6 +108,7 @@ import {
 import PdfPageCanvas from './PdfPageCanvas';
 import { PdfFeatureIcon } from './PdfFeatureIcon';
 import { plannedPdfFeatures } from './featureCatalog';
+import { USER_PDF_TOOLS, USER_PDF_TOOL_GROUPS } from './userPdfTools';
 import {extractPdfPageSearchText,findPdfTextMatches} from './pdfTextHighlights';
 import PdfThumbnail from './PdfThumbnail';
 import PdfProviderToolsPanel from './PdfProviderToolsPanel';
@@ -301,6 +302,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [inspectorHidden, setInspectorHidden] = useState(true);
   const [taskCategory, setTaskCategory] = useState<PdfTaskCategory>('home');
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
+  const [featureGalleryMode, setFeatureGalleryMode] = useState<'category'|'all'>('category');
+  const [featureGallerySearch, setFeatureGallerySearch] = useState('');
   const [providerPanelOpen, setProviderPanelOpen] = useState(false);
   const [textOverlay, setTextOverlay] = useState({ text:'', x:0.12, y:0.82, size:12 });
   const [shapeOverlay, setShapeOverlay] = useState({ x:0.12, y:0.68, width:0.35, height:0.08, mode:'highlight' as 'highlight'|'outline' });
@@ -2220,6 +2223,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     scan:[navigateAction('Open Scanner','scanner'),providerAction],
     automate:[navigateAction('Open Automation Studio','automation'),providerAction],
   };
+  const directoryVisible=USER_PDF_TOOLS.filter(tool=>
+    (tool.label+' '+tool.group).toLowerCase().includes(featureGallerySearch.trim().toLowerCase()));
+  const directoryAction=(id:string,category:PdfTaskCategory)=>
+    taskActions[category].find(action=>action.id===id);
   const plannedActions:PdfToolbarAction[]=plannedPdfFeatures(taskCategory).map(feature=>({
     id:feature.id,label:feature.label,enabled:false,disabledReason:feature.reason,planned:true,
     run:()=>undefined,
@@ -2413,12 +2420,59 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         aria-label={`${PDF_TASK_CATEGORY_LABELS[taskCategory]} PDF features`}
         onKeyDown={event=>{if(event.key==='Escape'){setFeatureGalleryOpen(false);event.stopPropagation();}}}>
         <header>
-          <div><strong>{PDF_TASK_CATEGORY_LABELS[taskCategory]} features</strong>
-            <p>Select a working action. Unavailable features remain visible with their requirements.</p></div>
+          <div><strong>PDF features</strong>
+            <p>All 33 requested tools are listed. Only operational controls can be selected.</p></div>
           <button type="button" onClick={()=>setFeatureGalleryOpen(false)}
             aria-label="Close PDF features" title="Close PDF features">×</button>
         </header>
-        <div className="pdf-feature-gallery-grid">
+        <div className="pdf-feature-gallery-tabs" role="group" aria-label="PDF feature view">
+          <button type="button" aria-pressed={featureGalleryMode==='category'}
+            onClick={()=>setFeatureGalleryMode('category')}>Current ribbon</button>
+          <button type="button" aria-pressed={featureGalleryMode==='all'}
+            onClick={()=>setFeatureGalleryMode('all')}>All 33 PDF tools</button>
+        </div>
+        {featureGalleryMode==='all' ? <div className="pdf-user-tool-directory">
+          <label htmlFor={`${domIdPrefix}-feature-search`}>Find PDF tool</label>
+          <input id={`${domIdPrefix}-feature-search`} type="search"
+            placeholder="Search all PDF features"
+            value={featureGallerySearch} onChange={event=>setFeatureGallerySearch(event.target.value)}/>
+          {USER_PDF_TOOL_GROUPS.map(group=>{
+            const tools=directoryVisible.filter(tool=>tool.group===group);
+            if(!tools.length)return null;
+            return <section className="pdf-user-tool-group" key={group} aria-label={group}>
+              <h3>{group}</h3>
+              <div className="pdf-feature-gallery-grid">
+                {tools.map(tool=>{
+                  const action=tool.actionId ? directoryAction(tool.actionId,tool.category) : undefined;
+                  const canOrganize=tool.id==='organize-pdf' && !!pdf;
+                  const canNavigate=!!tool.destination && !!onNavigateModule;
+                  const enabled=canOrganize||canNavigate||Boolean(action?.enabled);
+                  const reason=action?.disabledReason ?? tool.explanation;
+                  return <span key={tool.id} data-user-pdf-tool={tool.id}
+                    className={'pdf-feature-gallery-cell'+(!enabled?' planned':'')}
+                    title={enabled?tool.explanation:tool.label+' — '+reason}>
+                    <button type="button" disabled={!enabled}
+                      aria-label={tool.label + (enabled?'':' — Unavailable: '+reason)}
+                      title={enabled?tool.explanation:'Unavailable: '+reason}
+                      onClick={()=>{
+                        if(!enabled)return;
+                        setFeatureGalleryOpen(false);
+                        setTaskCategory(tool.category);
+                        if(canOrganize){openLeftPanel('pages');return;}
+                        if(tool.destination){onNavigateModule?.(tool.destination);return;}
+                        if(action)void action.run();
+                      }}>
+                      <PdfFeatureIcon id={tool.actionId ?? tool.id} label={tool.label} size={22}/>
+                      <span className="pdf-feature-gallery-label">{tool.label}</span>
+                      <small>{enabled?'Open tool':'Not ready'}</small>
+                    </button>
+                  </span>;
+                })}
+              </div>
+            </section>;
+          })}
+          {!directoryVisible.length&&<p role="status">No matching PDF tools.</p>}
+        </div> : <div className="pdf-feature-gallery-grid">
           {activeTaskActions.map(action=><span className={'pdf-feature-gallery-cell'+(action.planned?' planned':'')}
             key={action.id} data-pdf-feature={action.id} title={taskActionTitle(action)}>
             <button type="button" disabled={!action.enabled}
@@ -2430,7 +2484,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               <small>{action.planned?'Not ready':action.enabled?'Available':'Unavailable now'}</small>
             </button>
           </span>)}
-        </div>
+        </div>}
       </section>}
     </div>
 
