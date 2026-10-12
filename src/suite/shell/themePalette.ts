@@ -26,8 +26,7 @@ export const MALENJO_BRAND_ACCENTS = {
 } as const;
 
 export function applySuitePalette(style: Pick<CSSStyleDeclaration, 'setProperty'>, theme: SuiteTheme): void {
-  const palette: Record<string,string> = MALENJO_THEME_PALETTES[theme];
-  for (const [key,value] of Object.entries(palette)) style.setProperty('--ml-' + key,value);
+  for (const [key,value] of Object.entries(MALENJO_THEME_PALETTES[theme])) style.setProperty('--ml-' + key,value);
   style.setProperty('--ml-brand-blue',MALENJO_BRAND_ACCENTS.blue);
   style.setProperty('--ml-brand-cyan',MALENJO_BRAND_ACCENTS.cyan);
 }
