@@ -1052,7 +1052,7 @@ body { background:var(--ml-background);color:var(--ml-text); }
 }
 :root[data-theme="light"] .suite-ribbon-action svg {color:#145cab}
 :root[data-theme="light"] .suite-ribbon-action:disabled {color:var(--ml-muted)}
-@media (max-width:980px) {
+@media (max-width:1200px) {
   .topbar {
     display:grid;
     grid-template-columns:minmax(100px,22%) minmax(100px,1fr) max-content;
@@ -1091,3 +1091,8 @@ body { background:var(--ml-background);color:var(--ml-text); }
     scroll-behavior:auto!important;
   }
 }
+
+/* Prevent intrinsic grid child width from extending the desktop window. */
+.app-shell {width:100%;max-width:100vw;grid-template-columns:238px minmax(0,1fr)}
+.app-shell.sidebar-collapsed {grid-template-columns:60px minmax(0,1fr)}
+.workspace {min-width:0;max-width:100%;overflow-x:hidden}
