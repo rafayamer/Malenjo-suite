@@ -133,7 +133,6 @@ import {
   type DocumentInspectorTab,
 } from '../shell/inspector';
 import {
-  PDF_TASK_CATEGORIES,
   PDF_TASK_CATEGORY_LABELS,
   PDF_TASK_CATEGORY_SHORTCUTS,
   PDF_MASTER_RIBBON_TABS,
