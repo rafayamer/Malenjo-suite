@@ -36,6 +36,7 @@ import HelpWorkspace from '../help/HelpWorkspace';
 import HomeWorkspace from '../home/HomeWorkspace';
 import DocumentTabs from './DocumentTabs';
 import RibbonShell from './RibbonShell';
+import { ModuleNavIcon } from './moduleNavIcons';
 import { nextSuiteTheme, readSuiteTheme, saveSuiteTheme, type SuiteTheme } from './appearance';
 import { applySuitePalette } from './themePalette';
 import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
@@ -524,7 +525,7 @@ export default function App() {
       <nav>
         {groups.map(group => <section key={group}><h3>{group}</h3>{modules.filter(item=>item.group===group).map(item =>
           <button className={!activeSessionId && active===item.id?'nav-item active':'nav-item'} onClick={()=>selectModule(item.id)} key={item.id} title={item.name} aria-label={item.name}>
-            <span className="nav-glyph" aria-hidden="true">{item.name.slice(0,2).toUpperCase()}</span>
+            <span className="nav-glyph" aria-hidden="true"><ModuleNavIcon module={item.id}/></span>
             <span className="nav-label">{item.name}</span>
             <small aria-hidden="true">›</small>
           </button>
