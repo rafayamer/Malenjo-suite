@@ -289,8 +289,11 @@ async function main(){
       requireEvidence(metrics.documentWidth<=width+2 && metrics.bodyWidth<=width+2 &&
         metrics.barRight<=width+2 && metrics.ribbonRight<=width+2,
         'Shell or document horizontally overflows at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
-      requireEvidence(metrics.searchWidth>45 && metrics.commands.every((c)=>c.left>=0&&c.right<=width+2&&c.width>=30),
-        'Essential titlebar commands clipped at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
+      requireEvidence((metrics.searchWidth>45 ||
+          await page.getByRole('button',{name:'Open command palette'}).isVisible()) &&
+        await page.getByRole('button',{name:'MALENJO AI'}).isVisible() &&
+        metrics.commands.every((c)=>c.left>=0&&c.right<=width+2&&c.width>=30),
+        'Essential titlebar commands clipped or no compact search access at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
       requireEvidence(context.pages().length===1,'Responsive layout launched a second browser window');
     }
   }
