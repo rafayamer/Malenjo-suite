@@ -251,6 +251,7 @@ export default function App() {
       sessionIds.forEach((id) => {
         delete next[id];
         commandControllersRef.current.delete(id);
+        registerCallbacksRef.current.delete(id);
       });
       return next;
     });
@@ -286,6 +287,7 @@ export default function App() {
       const next = { ...current };
       delete next[sessionId];
       commandControllersRef.current.delete(sessionId);
+      registerCallbacksRef.current.delete(sessionId);
       return next;
     });
 
