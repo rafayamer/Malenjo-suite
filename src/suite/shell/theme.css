@@ -2154,3 +2154,53 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
     display:none!important;
   }
 }
+
+
+/* Owner requirement: a toolbar is fixed chrome, not an independently scrolling
+   document. All ten tabs stay visible at every supported width. The More
+   control remains visible when the row cannot accommodate every quick action. */
+.app-shell-top-only .pdf-task-categories,
+.app-shell-top-only .suite-ribbon-tabs {
+  overflow-x:hidden!important;overflow-y:hidden!important;
+  scrollbar-width:none!important;
+}
+.app-shell-top-only .suite-ribbon-actions{
+  overflow-x:hidden!important;overflow-y:hidden!important;
+  position:relative;scrollbar-width:none!important;
+}
+.app-shell-top-only .suite-ribbon-more{
+  order:-1;flex:0 0 42px!important;
+  min-width:42px!important;background:var(--ml-surface)!important;
+  border-color:var(--ml-border)!important;z-index:3;
+}
+.app-shell-top-only .pdf-workspace .pdf-task-actions{
+  overflow:hidden!important;
+}
+.app-shell-top-only .pdf-workspace .pdf-task-overflow>div{
+  overflow-y:auto!important;
+}
+@media(max-width:820px){
+  .app-shell-top-only .pdf-task-categories,
+  .app-shell-top-only .suite-ribbon-tabs{
+    display:grid!important;
+    grid-template-columns:repeat(5,minmax(0,1fr))!important;
+    grid-template-rows:repeat(2,31px)!important;
+    gap:0!important;
+    box-sizing:border-box!important;
+    min-height:62px!important;height:62px!important;max-height:62px!important;
+    padding:0 4px!important;
+  }
+  .app-shell-top-only .pdf-task-categories button,
+  .app-shell-top-only .suite-ribbon-tabs button{
+    min-width:0!important;max-width:100%;
+    padding:0 2px!important;text-overflow:ellipsis;overflow:hidden;
+    white-space:nowrap!important;font-size:clamp(10px,1.5vw,12px)!important;
+  }
+}
+.app-shell-top-only .suite-title .malenjo-brand-logo,
+.app-shell-top-only .ml-start-hero .malenjo-brand-logo{
+  width:25px;height:25px;object-fit:contain;flex-shrink:0;
+}
+.app-shell-top-only .ml-start-hero .malenjo-brand-logo{
+  width:45px;height:45px;
+}
