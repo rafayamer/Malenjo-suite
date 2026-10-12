@@ -202,9 +202,9 @@ async function main(){
   await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
   requireEvidence(await page.locator('.topbar').evaluate((node)=>getComputedStyle(node).backgroundColor)===topColor,
     'The dark appearance failed to restore MALENJO colors');
-  await page.getByRole('tab',{name:'PDF Viewer'}).click();
-  await page.getByRole('tabpanel',{name:'PDF Viewer',exact:true})
-    .getByRole('button',{name:'PDF Workspace'}).click();
+  await page.getByRole('tab',{name:'Edit',exact:true}).click();
+  await page.getByRole('tabpanel',{name:'Edit',exact:true})
+    .getByRole('button',{name:/PDF Editing/}).click();
   requireEvidence(await page.locator('main.workspace > .pdf-workspace').count()===1,
     'Ribbon PDF Viewer command did not navigate inside MALENJO');
   requireEvidence(await page.locator('.suite-ribbon').count()===0 &&
@@ -217,22 +217,48 @@ async function main(){
     'Home did not restore the shared MALENJO ribbon');
   console.log('PHASE3 MALENJO ribbon Home/PDF and persistent light/dark appearance: PASS');
 
+  // Master Specification v2.0: ten categories, and a genuinely searchable
+  // list of ALL 90 commands without pretending incomplete editing is enabled.
+  const canonical=['Home','Edit','Organize','Optimize','Convert','Forms','Review','Protect','Automate','Tools'];
+  const ribbonTabs=page.getByRole('tablist',{name:'Ribbon categories'});
+  requireEvidence(JSON.stringify(await ribbonTabs.getByRole('tab').allTextContents())===JSON.stringify(canonical),
+    'Main ribbon does not contain the ten Master v2 canonical categories');
+  await page.getByRole('button',{name:'Browse PDF features'}).click();
+  const allFeatures=page.locator('#malenjo-ribbon-gallery');
+  await allFeatures.waitFor({state:'visible',timeout:15000});
+  requireEvidence(await allFeatures.locator('.ml-feature-gallery-item').count()===90,
+    'Master v2 Home gallery did not expose all 90 PDF features');
+  await allFeatures.locator('input[type="search"]').fill('MAL-037');
+  const entry=allFeatures.locator('.ml-feature-gallery-item');
+  requireEvidence(await entry.count()===1 &&
+    await entry.first().getByRole('button',{name:/MAL-037 PDF to Word/}).isDisabled(),
+    'PDF-to-Word feature was missing or misleadingly executable');
+  await page.keyboard.press('Escape');
+  requireEvidence(await allFeatures.count()===0,'Escape did not close the PDF feature gallery');
+  await page.getByRole('tab',{name:'Convert',exact:true}).click();
+  await page.getByRole('button',{name:'Browse PDF features'}).click();
+  requireEvidence(await allFeatures.locator('.ml-feature-gallery-item').count()===16,
+    'Convert ribbon gallery does not show the 16 source-truth conversion capabilities');
+  await allFeatures.getByRole('button',{name:'Close PDF tools'}).click();
+  await page.getByRole('tab',{name:'Home',exact:true}).click();
+  console.log('MASTER v2: all 90 tools discoverable in ten ribbons, disabled execution: PASS');
+
   // Phase 1 real keyboard-navigation contract. Arrow keys move among ribbon
   // categories, ArrowDown enters enabled commands, Escape returns to the tab.
   const homeRibbonTab=page.getByRole('tab',{name:'Home',exact:true});
   await homeRibbonTab.focus();
   await page.keyboard.press('ArrowRight');
-  const pdfRibbonTab=page.getByRole('tab',{name:'PDF Viewer',exact:true});
+  const pdfRibbonTab=page.getByRole('tab',{name:'Edit',exact:true});
   requireEvidence(await pdfRibbonTab.getAttribute('aria-selected')==='true',
     'Right arrow did not select the next ribbon category');
   await page.keyboard.press('ArrowDown');
-  requireEvidence(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label'))==='Open PDF',
+  requireEvidence((await page.evaluate(()=>document.activeElement?.getAttribute('aria-label')||'')).includes('PDF Editing'),
     'ArrowDown did not focus the first enabled ribbon command');
   await page.keyboard.press('Escape');
   requireEvidence(await pdfRibbonTab.evaluate((node)=>node===document.activeElement),
     'Escape did not restore focus to the selected ribbon category');
   await page.keyboard.press('End');
-  requireEvidence(await page.getByRole('tab',{name:'Suite Tools'}).getAttribute('aria-selected')==='true',
+  requireEvidence(await page.getByRole('tab',{name:'Tools',exact:true}).getAttribute('aria-selected')==='true',
     'End did not select the final ribbon category');
   await page.keyboard.press('Home');
   requireEvidence(await homeRibbonTab.getAttribute('aria-selected')==='true',
