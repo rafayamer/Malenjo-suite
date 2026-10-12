@@ -42,6 +42,7 @@ import {
 interface Props {
   onBackToFiles(): void;
   openDocuments: LibraryDocument[];
+  compact?: boolean;
 }
 
 interface ChatMessage {
@@ -62,7 +63,7 @@ function formatBytes(value: number | null): string {
   return `${(value / 1024 ** 3).toFixed(1)} GB`;
 }
 
-export default function AiWorkspace({ onBackToFiles, openDocuments }: Props) {
+export default function AiWorkspace({ onBackToFiles, openDocuments, compact = false }: Props) {
   const sourceInputRef = useRef<HTMLInputElement>(null);
   const activeJobRef = useRef<string | null>(null);
   const [manualSources, setManualSources] = useState<SourceDocument[]>([]);
@@ -281,7 +282,7 @@ export default function AiWorkspace({ onBackToFiles, openDocuments }: Props) {
     setNotice('Local AI request cancelled.');
   }
 
-  return <div className="ai-workspace">
+  return <div className={compact ? "ai-workspace ai-workspace-compact" : "ai-workspace"}>
     <input
       ref={sourceInputRef}
       className="visually-hidden"
@@ -330,7 +331,7 @@ export default function AiWorkspace({ onBackToFiles, openDocuments }: Props) {
                 : <button title="Remove source" onClick={() => removeSource(source.id)}><X size={14}/></button>}
             </div>;
           })}
-          {!sources.length && <p>Open PDF/Office documents in MALENJO or add local sources here. Open supported tabs are linked automatically.</p>}
+          {!sources.length && <p>Open PDF documents in MALENJO or add local sources here. Open supported tabs are linked automatically.</p>}
         </div>
 
         <div className="ai-security-card">
