@@ -67,6 +67,30 @@ async function main(){
     'The topbar theme switch did not synchronize the Settings selection');
   await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
   await page.getByRole('tab',{name:'Home',exact:true}).waitFor({timeout:15000});
+  // Phase 1 command-palette acceptance: unsupported actions cannot be run
+  // with Enter, and keyboard selection exposes a real ARIA active result.
+  await page.keyboard.press('Control+k');
+  const commandSearch=page.getByRole('combobox',{name:'Search MALENJO actions, documents and settings'});
+  await commandSearch.waitFor({timeout:15000});
+  await commandSearch.fill('Convert to Word');
+  await page.getByRole('option',{name:/Convert to Word/}).waitFor({timeout:15000});
+  requireEvidence(await page.getByRole('option',{name:/Convert to Word/}).isDisabled(),
+    'Unverified PDF-to-Word command was executable in the global palette');
+  await page.keyboard.press('ArrowDown');
+  requireEvidence(await commandSearch.getAttribute('aria-activedescendant')===null,
+    'Disabled-only palette results incorrectly received keyboard selection');
+  await page.keyboard.press('Enter');
+  requireEvidence(await page.getByRole('dialog',{name:'MALENJO command palette'}).isVisible(),
+    'Enter executed a disabled command');
+  await commandSearch.fill('Open Settings');
+  await page.getByRole('option',{name:/Open Settings/}).waitFor({timeout:15000});
+  requireEvidence(Boolean(await commandSearch.getAttribute('aria-activedescendant')),
+    'Enabled command was not exposed through the accessible combobox');
+  await page.keyboard.press('Enter');
+  await page.getByRole('heading',{name:'Appearance'}).waitFor({timeout:15000});
+  await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
+  await page.getByRole('tab',{name:'Home',exact:true}).waitFor({timeout:15000});
+  console.log('PHASE1 keyboard command palette skips unavailable conversion and executes available settings: PASS');
   const topColor=await page.locator('.topbar').evaluate((node)=>getComputedStyle(node).backgroundColor);
   await page.getByRole('button',{name:'Switch to light theme'}).click();
   await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');

@@ -103,10 +103,20 @@ export function filterCommandPaletteItems<T extends CommandPaletteSearchItem>(
   if (!normalized) return items.filter((item) => !item.hiddenWhenEmpty).slice(0, emptyLimit);
 
   const terms = normalized.split(/\s+/).filter(Boolean);
-  return items
-    .filter((item) => {
-      const haystack = searchableText(item);
-      return terms.every((term) => haystack.includes(term));
+  // Search descriptions are useful for discovery, but an exact command
+  // name must take precedence over a different workspace whose description
+  // happens to mention the same words (e.g. Open Settings vs Administration).
+  const ranked = items
+    .map((item, index) => {
+      const label = item.label.toLowerCase();
+      const matches = terms.every((term) => searchableText(item).includes(term));
+      const rank = label === normalized ? 0
+        : label.startsWith(normalized) ? 1
+        : terms.every((term) => label.includes(term)) ? 2
+        : 3;
+      return { item, index, matches, rank };
     })
-    .slice(0, queryLimit);
+    .filter((candidate) => candidate.matches)
+    .sort((a, b) => a.rank - b.rank || a.index - b.index);
+  return ranked.slice(0, queryLimit).map(({ item }) => item);
 }
