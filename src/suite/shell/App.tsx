@@ -45,7 +45,7 @@ import { applySuitePalette } from './themePalette';
 import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
 import { CANONICAL_COMMAND_PALETTE_EXAMPLES } from './commandPaletteModel';
 import { pdfCatalogDiscovery } from '../commands/masterCatalog';
-import type { DocumentCommandController } from '../commands/types';
+import type { DocumentCommandController, RegisterDocumentCommands } from '../commands/types';
 
 export default function App() {
   const [active, setActive] = useState<ModuleId>('home');
@@ -71,6 +71,10 @@ export default function App() {
   const [workspaceNotices, setWorkspaceNotices] = useState<Record<string,string>>({});
   const [paletteDocuments, setPaletteDocuments] = useState<LibraryDocument[]>([]);
   const commandControllersRef = useRef(new Map<string, DocumentCommandController>());
+  // Keep one stable registration function per document tab. Parent renders
+  // must not re-register controllers and create an effect feedback loop.
+  const registerCallbacksRef = useRef(new Map<string,RegisterDocumentCommands>());
+  const [,refreshDocumentCommands] = useState(0);
   const commandPaletteOpenerRef = useRef<HTMLElement | null>(null);
   const browserOpenInputRef = useRef<HTMLInputElement>(null);
   const module = modules.find((item) => item.id === active) ?? modules[0];
@@ -200,6 +204,17 @@ export default function App() {
   function registerSessionCommands(sessionId: string, controller: DocumentCommandController | null) {
     if (controller) commandControllersRef.current.set(sessionId, controller);
     else commandControllersRef.current.delete(sessionId);
+    // The top bar and command palette derive enabled states from this map.
+    // A ref write alone does not re-render them when PDF undo/redo changes.
+    refreshDocumentCommands(revision=>revision+1);
+  }
+
+  function registrationForSession(sessionId:string):RegisterDocumentCommands{
+    const previous=registerCallbacksRef.current.get(sessionId);
+    if(previous)return previous;
+    const callback:RegisterDocumentCommands=(controller)=>registerSessionCommands(sessionId,controller);
+    registerCallbacksRef.current.set(sessionId,callback);
+    return callback;
   }
 
   // Local browser files remain available in tabs when navigating, but have
@@ -236,6 +251,7 @@ export default function App() {
       sessionIds.forEach((id) => {
         delete next[id];
         commandControllersRef.current.delete(id);
+        registerCallbacksRef.current.delete(id);
       });
       return next;
     });
@@ -271,6 +287,7 @@ export default function App() {
       const next = { ...current };
       delete next[sessionId];
       commandControllersRef.current.delete(sessionId);
+      registerCallbacksRef.current.delete(sessionId);
       return next;
     });
 
@@ -531,7 +548,7 @@ export default function App() {
             return current;
           return {...current,[session.id]:status};
         })}
-        registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
+        registerCommands={registrationForSession(session.id)}
       />;
     }
     if (route === 'word') {
