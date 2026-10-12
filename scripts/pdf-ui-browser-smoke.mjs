@@ -233,6 +233,21 @@ async function main(){
       const probe=themeProbes[name]??'.canvas-placeholder';
       const visible=page.locator('main.workspace').locator(probe).first();
       await visible.waitFor({state:'visible',timeout:15000});
+      // Real computed-font audit across interactive elements in every module.
+      // This catches CSS overrides missed by the source-level typography pass.
+      const undersized=await page.locator('main.workspace').locator('button,input,select,textarea,label,[role="tab"]')
+        .evaluateAll(elements=>elements.filter((element)=>{
+          const bounds=element.getBoundingClientRect();
+          const style=getComputedStyle(element);
+          return bounds.width>8&&bounds.height>8&&
+            style.display!=='none'&&style.visibility!=='hidden'&&
+            Number.parseFloat(style.fontSize)<11;
+        }).slice(0,8).map((element)=>({
+          tag:element.tagName,name:(element.getAttribute('aria-label')||element.textContent||'').trim().slice(0,60),
+          font:getComputedStyle(element).fontSize,
+        })));
+      requireEvidence(undersized.length===0,
+        'Microscopic interactive labels in '+name+' / '+theme+': '+JSON.stringify(undersized));
       const bg=await visible.evaluate((element)=>getComputedStyle(element).backgroundColor);
       const rgb=bg.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
       requireEvidence(Boolean(rgb),'Theme has no opaque panel background: '+name+' / '+theme+' ('+bg+')');
