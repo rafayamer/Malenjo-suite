@@ -621,9 +621,16 @@ async function main(){
     selection?.addRange(range);
     const text=selection?.toString()??'';
     selection?.removeAllRanges();
-    return {cursor:getComputedStyle(node).cursor,selection:text};
+    return {cursor:getComputedStyle(node).cursor,selection:text,
+      connected:node.isConnected,parentClass:node.parentElement?.className??'',
+      className:node.className,tag:node.tagName,html:node.outerHTML.slice(0,350),
+      candidates:[...document.querySelectorAll('.pdf-text-layer span')]
+        .filter(item=>item.textContent?.includes('MALENJO BROWSER UI TEXT SELECT FIND'))
+        .slice(0,5).map(item=>({tag:item.tagName,className:item.className,
+          cursor:getComputedStyle(item).cursor,connected:item.isConnected,
+          parentClass:item.parentElement?.className??''}))};
   });
-  requireEvidence(selected.cursor==='text','PDF hover does not show I-beam');
+  requireEvidence(selected.cursor==='text','PDF hover does not show I-beam: '+JSON.stringify(selected));
   requireEvidence(selected.selection.includes('MALENJO BROWSER UI'),
     'PDF text cannot be selected and copied');
   console.log('MALENJO UI text selection: PASS');
