@@ -1843,3 +1843,78 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
     grid-template-columns:repeat(2,minmax(0,1fr));
   }
 }
+
+
+/* Master v2.0: five-area window: quick actions, PDF ribbon, document tabs,
+   maximized document canvas, functional compact bottom page/zoom status. */
+.app-shell-top-only .topbar-primary .ml-top-quick-divider{
+  display:block;flex:0 0 1px;width:1px;height:20px;
+  background:var(--ml-border);margin:0 3px;
+}
+.app-shell-top-only .topbar-primary .command:disabled{
+  opacity:.4;cursor:not-allowed;
+}
+.app-shell-top-only .topbar-primary .command:disabled:hover{
+  background:transparent;border-color:transparent;
+}
+.app-shell-top-only .pdf-workspace{height:100%;min-height:0;display:flex;flex-direction:column}
+.app-shell-top-only .pdf-view-controls{display:none!important}
+.app-shell-top-only .pdf-context-toolbar{min-height:50px;max-height:68px;flex:0 0 auto;overflow:visible}
+.app-shell-top-only .pdf-context-toolbar>.pdf-task-actions{flex:1 1 auto;width:100%;min-width:0}
+.app-shell-top-only .pdf-task-overflow{position:relative;flex:0 0 auto;z-index:16}
+.app-shell-top-only .pdf-task-overflow>summary{min-width:44px;min-height:38px;padding:8px;
+  border:1px solid var(--ml-border);border-radius:5px;background:var(--ml-control);
+  color:var(--ml-text);font-size:11px;cursor:pointer;}
+.app-shell-top-only .pdf-task-overflow>div{position:absolute;right:0;top:100%;
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;
+  background:var(--ml-surface);border:1px solid var(--ml-border);
+  box-shadow:0 9px 24px #0003;padding:10px;border-radius:5px;width:290px;
+  max-width:calc(100vw - 16px);max-height:50vh;overflow-y:auto;z-index:100;}
+.app-shell-top-only .pdf-task-overflow button{min-height:40px;padding:8px;text-align:left;
+  color:var(--ml-text);border-radius:4px;border:1px solid var(--ml-border);
+  background:var(--ml-card);font-size:12px;cursor:pointer}
+.app-shell-top-only .pdf-task-overflow button:disabled{cursor:not-allowed;opacity:.57}
+.app-shell-top-only .pdf-bottom-status{display:flex;flex:0 0 33px;height:33px;
+  min-height:33px;align-items:center;justify-content:space-between;gap:12px;
+  padding:0 12px;border-top:1px solid var(--ml-border);background:var(--ml-toolbar);
+  color:var(--ml-text);font-size:11px;min-width:0;max-width:100%;
+  overflow:hidden;z-index:3}
+.pdf-bottom-status-pages{flex:0 0 auto;white-space:nowrap;color:var(--ml-muted)}
+.pdf-bottom-status-nav,.pdf-bottom-status-zoom{display:flex;align-items:center;gap:5px;min-width:0}
+.pdf-bottom-status-nav{margin-left:auto}
+.pdf-bottom-status-zoom>span{min-width:44px;text-align:center;white-space:nowrap;font-size:12px}
+.app-shell-top-only .pdf-bottom-status button{display:grid;place-items:center;
+  height:28px;min-width:30px;padding:3px 7px;
+  border:1px solid transparent;border-radius:4px;
+  color:var(--ml-text);background:transparent;cursor:pointer;
+  font-size:11px;white-space:nowrap}
+.app-shell-top-only .pdf-bottom-status button:hover:not(:disabled){
+  border-color:var(--ml-border);background:var(--ml-hover)}
+.app-shell-top-only .pdf-bottom-status button:disabled{opacity:.4;cursor:not-allowed}
+.app-shell-top-only .pdf-bottom-status button:focus-visible{
+  outline:2px solid var(--ml-brand-blue);outline-offset:-2px}
+@media(max-width:1050px){
+  .app-shell-top-only .suite-title{flex-basis:92px}
+  .app-shell-top-only .suite-title small{display:none}
+  .app-shell-top-only .search{max-width:180px}
+}
+@media(max-width:780px){
+  .app-shell-top-only .topbar{gap:4px;padding:0 5px}
+  .app-shell-top-only .suite-title{flex:0 0 62px}
+  .app-shell-top-only .topbar-primary{gap:0}
+  .app-shell-top-only .search{display:none}
+}
+@media(max-width:490px){
+  .app-shell-top-only .topbar-primary .ml-top-quick-divider{display:none}
+  .app-shell-top-only .topbar-primary .ml-top-document-action{width:29px;min-width:29px;flex-basis:29px}
+  .app-shell-top-only .topbar-primary .ml-top-document-action svg{width:15px}
+  .app-shell-top-only .topbar-actions .command{width:32px;min-width:32px;flex-basis:32px}
+  .app-shell-top-only .pdf-bottom-status{padding:0 5px;gap:3px}
+  .app-shell-top-only .pdf-bottom-status button{min-width:26px;padding:2px 4px}
+  .app-shell-top-only .pdf-bottom-status-zoom{gap:1px}
+  .app-shell-top-only .pdf-bottom-status-zoom button:last-child{display:none}
+}
+@media(prefers-reduced-motion:reduce){
+  .app-shell-top-only .pdf-bottom-status *, .app-shell-top-only .topbar-primary *{
+    animation:none!important;transition:none!important}
+}
