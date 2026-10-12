@@ -3,7 +3,7 @@ import {
   FolderOpen, FormInput, Highlighter, Image, Languages, LayoutTemplate, LockKeyhole,
   MessageSquare, PanelRight, PenTool, Presentation, Printer, Redo2,
   RotateCw, ScanText, Scissors, Settings2, ShieldCheck, Sparkles, Table2,
-  Trash2, Undo2, Workflow, ArrowDownToLine, Crop, FileCode2, GitCompare,
+  Trash2, Undo2, Workflow, Crop, FileCode2, GitCompare,
   Hash, LockOpen, Minimize2, Stamp, Wrench, type LucideIcon,
 } from 'lucide-react';
 
