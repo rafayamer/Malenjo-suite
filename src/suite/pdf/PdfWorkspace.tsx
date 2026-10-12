@@ -2148,7 +2148,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     disabledReason:onNavigateModule?undefined:'Suite navigation is unavailable in this workspace.',
     run:()=>onNavigateModule?.(id),
   });
-  const providerCategory = taskCategory === 'tools' ? null : taskCategory as PdfProviderToolCategory;
+  // Preserve reviewed backend provider routing while exposing the canonical
+  // Master v2 tab labels to users.
+  const providerCategory:PdfProviderToolCategory|null =
+    taskCategory === 'tools' ? null
+      : taskCategory === 'optimize' ? 'scan'
+      : taskCategory === 'review' ? 'comment'
+      : taskCategory as PdfProviderToolCategory;
   const providerAction:PdfToolbarAction={
     id:'local-provider-tools',
     label:'Local tools',
