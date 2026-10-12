@@ -259,43 +259,55 @@ export default function HomeWorkspace({
     </div>;
   }
 
-  return <div className="content home-start-center ml-co-launcher">
-    <header className="ml-co-home-head">
-      <div>
-        <p className="eyebrow">MALENJO START CENTER</p>
-        <h1>Welcome to Malenjo Suite</h1>
-        <p>Open something, or start a local document task.</p>
+  return <div className="content home-start-center ml-co-launcher ml-start-minimal">
+    <header className="ml-start-hero" aria-label="MALENJO start screen">
+      <span className="ml-start-symbol" aria-hidden="true"><FileText size={24} strokeWidth={1.5}/></span>
+      <h1>Welcome to MALENJO</h1>
+      <p>Open a file to begin.</p>
+      <div className="ml-start-primary" aria-label="Start actions">
+        <button className="ml-start-open" type="button" title="Open a file from this device"
+          onClick={()=>void onOpenDocuments()}>
+          <span className="ml-start-folder" aria-hidden="true">
+            <svg viewBox="0 0 58 52" width="45" height="42" fill="none">
+              <rect className="ml-start-sheet one" x="19" y="5" width="26" height="34" rx="2" fill="#FFFFFF"/>
+              <rect className="ml-start-sheet two" x="14" y="8" width="26" height="34" rx="2" fill="#C3DCFF"/>
+              <path d="M5 15V10a4 4 0 0 1 4-4h13l5 6h21a4 4 0 0 1 4 4v26a5 5 0 0 1-5 5H10a5 5 0 0 1-5-5V15Z" fill="#2B8CFF"/>
+              <path className="ml-start-folder-flap" d="M8 26h43l-5 20H8a4 4 0 0 1-4-5l4-15Z" fill="#33D4E5"/>
+            </svg>
+          </span>
+          <span>Open File</span>
+        </button>
+        <button className="ml-start-recent" type="button" title="View recently opened documents"
+          onClick={()=>document.getElementById('ml-home-files-title')?.scrollIntoView({behavior:'smooth',block:'start'})}>
+          <span className="ml-start-recent-icon" aria-hidden="true"><FolderOpen size={27}/></span>
+          <span>Recent Files</span>
+        </button>
       </div>
-      <div className="ml-home-runtime"><ShieldCheck size={16}/><span><b>Local-first</b><small>{desktop?'Windows desktop':'Browser / Codespaces'}</small></span></div>
+      <p className="ml-start-privacy"><ShieldCheck size={14} aria-hidden="true"/> {desktop?'Local Windows documents':'Browser / Codespaces session'} · files stay under your control</p>
     </header>
 
-    <section className="ml-co-actions" aria-label="Start a document task">
-      {HOME_PRIMARY_ACTIONS.map((action)=>{
-        const Icon=ACTION_ICONS[action.id as keyof typeof ACTION_ICONS]??FileText;
-        return <OfficeActionCard
-          key={action.id}
-          title={action.label}
-          subtitle={action.detail}
-          icon={<Icon size={21}/>} 
-          tone={actionTone(action.id)}
-          dashed={action.id==='open'}
-          disabled={Boolean(action.unavailableReason)}
-          aria-description={action.unavailableReason}
-          onClick={()=>{
-            if(action.unavailableReason)return;
-            if(action.opensFiles)void onOpenDocuments();
-            else if(action.target)onSelectModule(action.target);
-          }}
-        />;
-      })}
-    </section>
-
-    <div className="ml-home-shortcuts" aria-label="Home shortcuts">
-      <button onClick={onOpenCommandPalette}><Search size={13}/>Search everything <kbd>Ctrl K</kbd></button>
-      <button onClick={()=>onSelectModule('files')}><FolderOpen size={13}/>Files / Library</button>
-      <button onClick={()=>onSelectModule('automation')}><Workflow size={13}/>New workflow</button>
-      <span>{desktop?'Local Windows files':'Session files'} · network optional</span>
-    </div>
+    <details className="ml-start-more-tools">
+      <summary title="Show additional MALENJO shortcuts"><Sparkles size={15} aria-hidden="true"/> More tools</summary>
+      <section className="ml-co-actions" aria-label="More document actions">
+        {HOME_PRIMARY_ACTIONS.filter(action=>action.id!=='open').map((action)=>{
+          const Icon=ACTION_ICONS[action.id as keyof typeof ACTION_ICONS]??FileText;
+          return <OfficeActionCard
+            key={action.id}
+            title={action.label}
+            subtitle={action.detail}
+            icon={<Icon size={21}/>}
+            tone={actionTone(action.id)}
+            disabled={Boolean(action.unavailableReason)}
+            aria-description={action.unavailableReason}
+            onClick={()=>{
+              if(action.unavailableReason)return;
+              if(action.opensFiles)void onOpenDocuments();
+              else if(action.target)onSelectModule(action.target);
+            }}
+          />;
+        })}
+      </section>
+    </details>
 
     {continueSessions.length>0&&<section className="ml-home-section" aria-labelledby="ml-home-continue-title">
       <div className="ml-co-section-head"><div><h2 id="ml-home-continue-title">Continue working</h2><p>Existing MALENJO tabs keep independent editor state.</p></div></div>
