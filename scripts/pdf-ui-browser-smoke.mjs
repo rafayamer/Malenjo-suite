@@ -520,6 +520,25 @@ async function main(){
   });
   requireEvidence(inspectDock.inspectorRight<=inspectDock.readerLeft+2,
     'Properties/form editor opened on the right instead of the LEFT: '+JSON.stringify(inspectDock));
+  const dockResizer=activePdf.getByRole('separator',{name:'Resize document properties panel'});
+  await dockResizer.waitFor({state:'visible',timeout:15000});
+  const originalDockWidth=Number(await dockResizer.getAttribute('aria-valuenow'));
+  await dockResizer.focus();
+  await dockResizer.press('ArrowRight');
+  requireEvidence(Number(await dockResizer.getAttribute('aria-valuenow'))===originalDockWidth+16,
+    'Left inspector width did not respond to its keyboard separator');
+  const splitter=await dockResizer.boundingBox();
+  requireEvidence(Boolean(splitter),'Inspector drag/resize handle is not visible');
+  await page.mouse.move(splitter.x+splitter.width/2,splitter.y+Math.min(60,splitter.height/2));
+  await page.mouse.down();
+  await page.mouse.move(splitter.x+splitter.width/2+40,splitter.y+Math.min(60,splitter.height/2),{steps:5});
+  await page.mouse.up();
+  requireEvidence(Number(await dockResizer.getAttribute('aria-valuenow'))>originalDockWidth+16,
+    'Dragging the left dock separator did not resize the reader layout');
+  await page.waitForFunction(()=>
+    localStorage.getItem('malenjo:pdf-inspector-width-v1')===
+    document.querySelector('.document-session-panel.active [aria-label="Resize document properties panel"]')?.getAttribute('aria-valuenow'),
+    null,{timeout:15000});
   await activePdf.getByRole('button',{name:'Hide left document inspector'}).first().click();
   await activePdf.getByRole('button',{name:'Show document navigation'}).click();
   requireEvidence(await activePdf.getByRole('navigation',{name:'PDF navigation'})

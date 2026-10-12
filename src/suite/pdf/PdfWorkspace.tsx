@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -281,6 +281,18 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     return defaults;
   });
   const draggedPanelRef=useRef<PdfLeftPanelId|null>(null);
+  const [inspectorWidth,setInspectorWidth]=useState(()=>{
+    try{
+      const preferred=Number(window.localStorage.getItem('malenjo:pdf-inspector-width-v1'));
+      if(Number.isFinite(preferred)&&preferred>=180&&preferred<=440)return preferred;
+    }catch{ /* optional local preference */ }
+    return 256;
+  });
+  const inspectorResizeRef=useRef<{startX:number;startWidth:number}|null>(null);
+  useEffect(()=>{
+    try{window.localStorage.setItem('malenjo:pdf-inspector-width-v1',String(inspectorWidth));}
+    catch{ /* optional local preference */ }
+  },[inspectorWidth]);
   useEffect(()=>{
     try{window.localStorage.setItem('malenjo:pdf-left-panel-order-v1',JSON.stringify(leftPanelOrder));}
     catch{ /* optional local preference */ }
@@ -2606,7 +2618,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       <small>Open more PDFs with Open File to keep them in separate document tabs.</small>
     </div>}
 
-    {pdf && <div className={pdfLayoutClass}>
+    {pdf && <div className={pdfLayoutClass} style={{'--ml-inspector-width':`${inspectorWidth}px`} as CSSProperties}>
       <aside className={leftPanelCollapsed ? 'pdf-left-shell collapsed' : 'pdf-left-shell'} aria-label="PDF navigation rail and panel">
         <nav className="pdf-left-rail" aria-label="PDF navigation">
           {leftPanelOrder.map(id=>{
@@ -2933,6 +2945,35 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       </div>
 
       {!inspectorHidden&&<aside className="pdf-inspector" aria-label="Left document properties and edit inspector">
+        <div className="pdf-inspector-resize-handle" role="separator" tabIndex={0}
+          aria-orientation="vertical" aria-label="Resize document properties panel"
+          aria-valuemin={180} aria-valuemax={440} aria-valuenow={inspectorWidth}
+          title="Drag to resize Properties, or use Left/Right arrow keys"
+          onKeyDown={event=>{
+            if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+            event.preventDefault();
+            if(event.key==='Home')setInspectorWidth(180);
+            else if(event.key==='End')setInspectorWidth(440);
+            else setInspectorWidth(width=>Math.max(180,Math.min(440,width+(event.key==='ArrowRight'?16:-16))));
+          }}
+          onPointerDown={event=>{
+            if(event.button!==0)return;
+            inspectorResizeRef.current={startX:event.clientX,startWidth:inspectorWidth};
+            event.currentTarget.setPointerCapture(event.pointerId);
+            event.preventDefault();
+          }}
+          onPointerMove={event=>{
+            const drag=inspectorResizeRef.current;
+            if(!drag)return;
+            setInspectorWidth(Math.max(180,Math.min(440,drag.startWidth+event.clientX-drag.startX)));
+          }}
+          onPointerUp={event=>{
+            inspectorResizeRef.current=null;
+            if(event.currentTarget.hasPointerCapture(event.pointerId))
+              event.currentTarget.releasePointerCapture(event.pointerId);
+          }}
+          onPointerCancel={()=>{inspectorResizeRef.current=null;}}
+        />
         <div className="pdf-inspector-tabs" role="tablist" aria-label="Document inspector">
           {DOCUMENT_INSPECTOR_TABS.map((tab)=><button
             key={tab}
