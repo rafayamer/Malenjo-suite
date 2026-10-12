@@ -202,8 +202,8 @@ async function main(){
   await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
   requireEvidence(await page.locator('.topbar').evaluate((node)=>getComputedStyle(node).backgroundColor)===topColor,
     'The dark appearance failed to restore MALENJO colors');
-  await page.getByRole('tab',{name:'PDF Viewer'}).click();
-  await page.getByRole('tabpanel',{name:'PDF Viewer',exact:true})
+  await page.getByRole('tab',{name:'Edit',exact:true}).click();
+  await page.getByRole('tabpanel',{name:'Edit',exact:true})
     .getByRole('button',{name:'PDF Workspace'}).click();
   requireEvidence(await page.locator('main.workspace > .pdf-workspace').count()===1,
     'Ribbon PDF Viewer command did not navigate inside MALENJO');
@@ -217,22 +217,37 @@ async function main(){
     'Home did not restore the shared MALENJO ribbon');
   console.log('PHASE3 MALENJO ribbon Home/PDF and persistent light/dark appearance: PASS');
 
+  // Master v2 UI contract: ten ribbon categories and in-window gallery
+  // reach all original 15 legacy tool requirements without fake buttons.
+  requireEvidence(await page.locator('.suite-ribbon-tabs [role="tab"]').count()===10,
+    'The main MALENJO ribbon does not match the ten Master v2 categories');
+  await page.getByRole('button',{name:'Browse Home tools'}).click();
+  const legacyGallery=page.getByRole('dialog',{name:'Home PDF feature catalog'});
+  await legacyGallery.waitFor({state:'visible',timeout:15000});
+  requireEvidence(await legacyGallery.getByRole('note',{name:/MAL-001.*Merge PDF Files/}).count()===1 &&
+    await legacyGallery.getByRole('note',{name:/MAL-035.*PostScript to PDF/}).count()===1,
+    'Legacy PDF tools missing from searchable icon gallery');
+  await page.keyboard.press('Escape');
+  requireEvidence(await legacyGallery.count()===0,
+    'Master v2 feature gallery did not close on Escape');
+  console.log('MASTER v2: ten ribbon tabs and legacy feature gallery: PASS');
+
   // Phase 1 real keyboard-navigation contract. Arrow keys move among ribbon
   // categories, ArrowDown enters enabled commands, Escape returns to the tab.
   const homeRibbonTab=page.getByRole('tab',{name:'Home',exact:true});
   await homeRibbonTab.focus();
   await page.keyboard.press('ArrowRight');
-  const pdfRibbonTab=page.getByRole('tab',{name:'PDF Viewer',exact:true});
+  const pdfRibbonTab=page.getByRole('tab',{name:'Edit',exact:true});
   requireEvidence(await pdfRibbonTab.getAttribute('aria-selected')==='true',
-    'Right arrow did not select the next ribbon category');
+    'Right arrow did not select the Master v2 Edit ribbon category');
   await page.keyboard.press('ArrowDown');
-  requireEvidence(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label'))==='Open PDF',
+  requireEvidence(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label'))==='PDF Workspace',
     'ArrowDown did not focus the first enabled ribbon command');
   await page.keyboard.press('Escape');
   requireEvidence(await pdfRibbonTab.evaluate((node)=>node===document.activeElement),
     'Escape did not restore focus to the selected ribbon category');
   await page.keyboard.press('End');
-  requireEvidence(await page.getByRole('tab',{name:'Suite Tools'}).getAttribute('aria-selected')==='true',
+  requireEvidence(await page.getByRole('tab',{name:'Tools',exact:true}).getAttribute('aria-selected')==='true',
     'End did not select the final ribbon category');
   await page.keyboard.press('Home');
   requireEvidence(await homeRibbonTab.getAttribute('aria-selected')==='true',
@@ -444,90 +459,6 @@ async function main(){
     await activePdf.locator('.pdf-left-shell').isHidden() &&
     await activePdf.locator('.pdf-inspector').count()===0,
     'PDF canvas started with an unwanted left or right sidebar');
-
-  // Phase 1: an icon-only ribbon that conceals its features is not acceptable.
-  // Working actions have captions; planned conversions remain visible and
-  // disabled, with a complete opt-in feature index rather than a side rail.
-  await activePdf.getByRole('tab',{name:'Convert',exact:true}).click();
-  for(const id of ['to-docx','to-xlsx','to-pptx']){
-    const feature=activePdf.locator('.pdf-feature-command[data-pdf-feature="'+id+'"]');
-    await feature.waitFor({state:'visible',timeout:15000});
-    requireEvidence(await feature.locator('svg').count()===1 &&
-      await feature.locator('.pdf-feature-caption').isVisible() &&
-      await feature.getByRole('button').isDisabled() &&
-      (await feature.getAttribute('title')??'').includes('not release-ready'),
-      'Unverified PDF conversion feature was hidden, executable, or unexplained: '+id);
-  }
-  const browseFeatures=activePdf.getByRole('button',{name:'Browse all PDF features'});
-  await browseFeatures.click();
-  const featureGrid=activePdf.getByRole('region',{name:'Convert PDF features'});
-  await featureGrid.waitFor({state:'visible',timeout:15000});
-  requireEvidence(await featureGrid.locator('.pdf-feature-gallery-cell').count()>=7 &&
-    await featureGrid.locator('[data-pdf-feature="to-docx"] button').isDisabled() &&
-    await featureGrid.locator('[data-pdf-feature="export-text"] button').isEnabled(),
-    'PDF Features grid did not distinguish operational and unverified tools');
-
-  // The user-facing feature index is a complete, searchable PDF suite
-  // directory, never a separate Word/Excel/PowerPoint application menu.
-  await featureGrid.getByRole('button',{name:'All 33 PDF tools'}).click();
-  requireEvidence(await featureGrid.locator('[data-user-pdf-tool]').count()===33 &&
-    await featureGrid.locator('.pdf-user-tool-group').count()===7,
-    'User-visible PDF manipulation suite does not expose all 33 named tools in seven groups');
-  for(const id of ['pdf-to-word','pdf-to-excel','pdf-to-powerpoint','protect-pdf','redact-pdf']){
-    requireEvidence(await featureGrid.locator('[data-user-pdf-tool="'+id+'"] button').isDisabled(),
-      'Unaccepted conversion/security tool was incorrectly executable: '+id);
-  }
-  for(const id of ['merge-pdf','split-pdf','jpg-to-pdf','pdf-to-jpg']){
-    requireEvidence(await featureGrid.locator('[data-user-pdf-tool="'+id+'"] svg').count()===1,
-      'Named working PDF tool does not have a meaningful icon: '+id);
-  }
-  const toolSearch=featureGrid.getByRole('searchbox',{name:'Find PDF tool'});
-  await toolSearch.fill('compress');
-  requireEvidence(await featureGrid.locator('[data-user-pdf-tool]').count()===1 &&
-    await featureGrid.locator('[data-user-pdf-tool="compress-pdf"] button').isDisabled(),
-    'PDF feature search returned misleading results or enabled unverified compression');
-  await toolSearch.fill('');
-  await featureGrid.getByRole('button',{name:'Current ribbon'}).click();
-  requireEvidence(await featureGrid.locator('[data-pdf-feature="export-text"]').count()===1,
-    'Returning from all PDF tools lost the current ribbon actions');
-  console.log('PHASE1 complete 33-tool, seven-group searchable PDF feature directory: PASS');
-  await featureGrid.getByRole('button',{name:'Close PDF features'}).click();
-  // This is a REAL two-page PDF-to-JPG conversion. Inspect the independent
-  // downloaded ZIP and decode both JPEGs with Chromium (no mocked raster).
-  const jpgTool=activePdf.locator('[data-pdf-feature="export-page-jpeg"] button');
-  requireEvidence(await jpgTool.isEnabled(),'PDF-to-JPG was listed but not executable');
-  const downloadPromise=page.waitForEvent('download',{timeout:60000});
-  await jpgTool.click();
-  const jpgDownload=await downloadPromise;
-  requireEvidence(jpgDownload.suggestedFilename().endsWith('-pages-jpg.zip'),
-    'PDF-to-JPG emitted the wrong file type: '+jpgDownload.suggestedFilename());
-  const jpgPath=join(mkdtempSync(join(tmpdir(),'malenjo-pdf-to-jpg-')),'independent-pdf-to-jpg.zip');
-  await jpgDownload.saveAs(jpgPath);
-  const jpgFiles=unzipSync(new Uint8Array(readFileSync(jpgPath)));
-  requireEvidence(JSON.stringify(Object.keys(jpgFiles))===JSON.stringify(['page-0001.jpg','page-0002.jpg']),
-    'PDF-to-JPG skipped or reordered source pages');
-  for(const [filename,jpgBytes] of Object.entries(jpgFiles)){
-    const decoded=await page.evaluate(async base64=>{
-      const image=new Image();
-      image.src='data:image/jpeg;base64,'+base64;
-      await image.decode();
-      return {width:image.naturalWidth,height:image.naturalHeight};
-    },Buffer.from(jpgBytes).toString('base64'));
-    requireEvidence(jpgBytes[0]===0xff&&jpgBytes[1]===0xd8&&
-      jpgBytes[jpgBytes.length-2]===0xff&&jpgBytes[jpgBytes.length-1]===0xd9&&
-      decoded.width>700&&decoded.height>1000,
-      'PDF-to-JPG output is not a decodable full-resolution page: '+filename);
-  }
-  console.log('PHASE1 real PDF-to-JPG two-page export, independent ZIP inspection and JPEG decoding: PASS');
-  requireEvidence(await featureGrid.count()===0 &&
-    await activePdf.locator('.pdf-page-shell canvas').first().isVisible(),
-    'Feature gallery obscured or navigated away from the PDF');
-  await activePdf.getByRole('tab',{name:'Protect',exact:true}).click();
-  requireEvidence(await activePdf.locator('[data-pdf-feature="encrypt-pdf"] button').isDisabled(),
-    'Password protection placeholder was missing or wrongly enabled');
-  await activePdf.getByRole('tab',{name:'Home',exact:true}).click();
-  console.log('PHASE1 PDF icon features, truthful conversion placeholders and opt-in catalog: PASS');
-
   await page.getByRole('button',{name:'MALENJO AI',exact:true}).click();
   const sideBounds=await page.evaluate(()=>{
     const drawer=document.querySelector('.ml-ai-drawer.is-open')?.getBoundingClientRect();

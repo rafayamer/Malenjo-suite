@@ -25,7 +25,7 @@ import type { DocumentSession } from '../files/session';
 import type { RegisterDocumentCommands } from '../commands/types';
 import { isDesktopRuntime } from '../files/api';
 import { exportPdfBytes, exportPdfPlainText, exportPdfEmbeddedAttachment, exportPdfPageImagesZip, readPdfDocumentBytes } from './api';
-import { exportPdfPagesAsJpegZip, exportPdfPagesAsPngZip } from './pageImageExport';
+import { exportPdfPagesAsPngZip } from './pageImageExport';
 import {finishPdfInstallCommit} from './pdfInstallCommit';
 import {
   comparePdfSelectableText, formatPdfTextComparison, type PdfTextComparison,
@@ -106,9 +106,7 @@ import {
   type PdfFitMode,
 } from './layout';
 import PdfPageCanvas from './PdfPageCanvas';
-import { PdfFeatureIcon } from './PdfFeatureIcon';
-import { plannedPdfFeatures } from './featureCatalog';
-import { USER_PDF_TOOLS, USER_PDF_TOOL_GROUPS } from './userPdfTools';
+import PdfCatalogGallery from '../shell/PdfCatalogGallery';
 import {extractPdfPageSearchText,findPdfTextMatches} from './pdfTextHighlights';
 import PdfThumbnail from './PdfThumbnail';
 import PdfProviderToolsPanel from './PdfProviderToolsPanel';
@@ -146,7 +144,7 @@ interface Props {
   notice: string;
   onBackToFiles(): void;
   onOpenBrowserPdf?(file:File):void;
-  onNavigateModule?(id:'ai'|'security'|'sign'|'scanner'|'automation'): void;
+  onNavigateModule?(id:'ai'|'security'|'sign'|'scanner'|'automation'|'cad'|'dicom'): void;
   onDirtyChange?(dirty:boolean): void;
   onSavingChange?(saving:boolean): void;
   registerCommands?: RegisterDocumentCommands;
@@ -169,7 +167,6 @@ interface PdfToolbarAction {
   enabled:boolean;
   disabledReason?:string;
   run():void|Promise<void>;
-  planned?:boolean;
 }
 
 function PdfLeftPanelIcon({id}:{id:PdfLeftPanelId}) {
@@ -301,9 +298,6 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [inspectorTab, setInspectorTab] = useState<DocumentInspectorTab>('properties');
   const [inspectorHidden, setInspectorHidden] = useState(true);
   const [taskCategory, setTaskCategory] = useState<PdfTaskCategory>('home');
-  const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
-  const [featureGalleryMode, setFeatureGalleryMode] = useState<'category'|'all'>('category');
-  const [featureGallerySearch, setFeatureGallerySearch] = useState('');
   const [providerPanelOpen, setProviderPanelOpen] = useState(false);
   const [textOverlay, setTextOverlay] = useState({ text:'', x:0.12, y:0.82, size:12 });
   const [shapeOverlay, setShapeOverlay] = useState({ x:0.12, y:0.68, width:0.35, height:0.08, mode:'highlight' as 'highlight'|'outline' });
@@ -1514,39 +1508,6 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }
   }
 
-  async function exportJpegPages(){
-    if(!pdf||exportingPageImages||mutating||loading)return;
-    const controller=new AbortController();
-    pageImageAbortRef.current=controller;
-    setExportingPageImages(true);
-    setPageImageProgress(0);
-    setError('');
-    setActionNotice('Rendering PDF pages as JPEG images…');
-    onSavingChange?.(true);
-    try{
-      const zip=await exportPdfPagesAsJpegZip(pdf.document,{
-        signal:controller.signal,
-        scale:1.5,
-        quality:0.9,
-        onProgress:(completed,total)=>setPageImageProgress(Math.round(completed*100/total)),
-      });
-      if(controller.signal.aborted)throw new DOMException('Cancelled','AbortError');
-      const base=sourceName.replace(/\.pdf$/i,'').replace(/[/\\\u0000-\u001F]/g,'_').slice(0,120)||'MALENJO-document';
-      const saved=await exportPdfPageImagesZip(base+'-pages-jpg.zip',zip);
-      if(saved)setActionNotice('Exported '+pdf.document.numPages+' JPEG page images to ZIP. The original PDF is unchanged.');
-    }catch(reason){
-      if(reason instanceof Error&&reason.name==='AbortError'){
-        setActionNotice('PDF-to-JPEG cancelled; no partial file was saved.');
-      }else{
-        setError(reason instanceof Error?reason.message:String(reason));
-      }
-    }finally{
-      if(pageImageAbortRef.current===controller)pageImageAbortRef.current=null;
-      setExportingPageImages(false);
-      onSavingChange?.(false);
-    }
-  }
-
   async function chooseImagesForPdf(event:React.ChangeEvent<HTMLInputElement>){
     const files=Array.from(event.target.files??[]);
     event.target.value='';
@@ -2139,14 +2100,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setLeftPanel(panel);
     setLeftPanelCollapsed(false);
   };
-  const navigateAction=(label:string,id:'ai'|'security'|'sign'|'scanner'|'automation'):PdfToolbarAction=>({
+  const navigateAction=(label:string,id:'ai'|'security'|'sign'|'scanner'|'automation'|'cad'|'dicom'):PdfToolbarAction=>({
     id:`navigate-${id}`,
     label,
     enabled:!!onNavigateModule,
     disabledReason:onNavigateModule?undefined:'Suite navigation is unavailable in this workspace.',
     run:()=>onNavigateModule?.(id),
   });
-  const providerCategory = taskCategory === 'ai' ? null : taskCategory as PdfProviderToolCategory;
+  const providerCategory:PdfProviderToolCategory = taskCategory==='review' ? 'comment' :
+    taskCategory==='optimize' ? 'scan' : taskCategory==='tools' ? 'home' : taskCategory;
   const providerAction:PdfToolbarAction={
     id:'local-provider-tools',
     label:'Local tools',
@@ -2169,13 +2131,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'place-text',label:'Place text',enabled:!!sourceBytes&&!mutating&&!!textOverlay.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!textOverlay.text.trim()?'Enter text in the Properties inspector first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Added permanent text to the PDF.',bytes=>addPdfTextOverlay(bytes,{pageNumber:currentPage,...textOverlay}),currentPage)},
       {id:'rectangle',label:shapeOverlay.mode==='highlight'?'Highlight rectangle':'Outline rectangle',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage)},
       {id:'configure-edit',label:'Edit settings',enabled:true,run:configureProperties},
-      {id:'open-crop-settings',label:'Crop PDF settings',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF before cropping.':mutating?'Wait for the current PDF edit.':undefined,run:configureProperties},
       providerAction,
     ],
     convert:[
       {id:'export-text',label:exportingText?'Extracting text '+textExportProgress+'%':'PDF to text (.txt)',enabled:!!pdf&&!mutating&&!exportingText,disabledReason:!pdf?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':exportingText?'PDF text export is running.':undefined,run:exportText},
       {id:'export-page-images',label:exportingPageImages?'PNG '+pageImageProgress+'%':'PDF pages to PNG ZIP',enabled:!!pdf&&!mutating&&!loading&&!exportingPageImages,disabledReason:!pdf?'No PDF is loaded.':exportingPageImages?'An image export is in progress.':'Wait for the current PDF operation to finish.',run:exportPageImages},
-      {id:'export-page-jpeg',label:exportingPageImages?'JPG '+pageImageProgress+'%':'PDF to JPG',enabled:!!pdf&&!mutating&&!loading&&!exportingPageImages,disabledReason:!pdf?'No PDF is loaded.':exportingPageImages?'An image export is in progress.':'Wait for the current PDF operation to finish.',run:exportJpegPages},
       ...(exportingPageImages?[{id:'cancel-page-images',label:'Cancel PNG export',enabled:true,run:()=>pageImageAbortRef.current?.abort()}]:[]),
       {id:'images-to-pdf',label:creatingImagePdf?'Images '+imagePdfProgress+'%':'Images to PDF…',enabled:!creatingImagePdf&&!mutating,disabledReason:creatingImagePdf?'Image conversion is running.':mutating?'Wait for the current PDF mutation to finish.':undefined,run:()=>imagesInputRef.current?.click()},
       {id:'compare-pdf',label:comparingPdf?'Compare '+comparisonProgress+'%':'Compare PDF text…',enabled:!!pdf&&!loading&&!mutating&&!comparingPdf,disabledReason:!pdf?'Open a PDF first.':comparingPdf?'Comparison is in progress.':'Wait for the current PDF operation.',run:()=>comparisonInputRef.current?.click()},
@@ -2194,24 +2154,20 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'append',label:'Append PDF…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>appendInputRef.current?.click()},
       {id:'blank',label:'Blank after',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Inserted a blank page after page ${currentPage}.`,bytes=>insertBlankPdfPage(bytes,currentPage),currentPage+1)},
       {id:'page-labels',label:'Set page label',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF first.':'Wait for PDF edit.',run:applyPageLabel},
-      {id:'open-page-numbers',label:'Page numbers settings',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF before adding page numbers.':mutating?'Wait for the current PDF edit.':undefined,run:configureProperties},
       {id:'earlier',label:'Move earlier',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&currentPage>1,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':currentPage<=1?'The first page cannot move earlier.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Moved page earlier.',bytes=>movePdfPage(bytes,currentPage,currentPage-1),currentPage-1)},
       {id:'later',label:'Move later',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&currentPage<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':currentPage>=pageCount?'The final page cannot move later.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)},
       providerAction,
     ],
-    comment:[
+    review:[
       {id:'comments-panel',label:'Comments panel',enabled:true,run:()=>openLeftPanel('comments')},
       {id:'add-comment',label:'Add comment',enabled:!!sourceBytes&&!mutating&&!!commentDraft.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!commentDraft.text.trim()?'Enter comment text in the Comments panel first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addComment},
       {id:'markup-region',label:'Add '+markupDraft.kind+' region',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addReviewMarkup},
       providerAction,
     ],
-    sign:[
-      navigateAction('Open Sign workspace','sign'),
-      {id:'signatures-panel',label:'Signature fields',enabled:true,run:()=>openLeftPanel('signatures')},
-      providerAction,
-    ],
     protect:[
       navigateAction('Open Security Center','security'),
+      navigateAction('Open Sign workspace','sign'),
+      {id:'signatures-panel',label:'Signature fields',enabled:true,run:()=>openLeftPanel('signatures')},
       providerAction,
     ],
     forms:[
@@ -2221,30 +2177,16 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'configure-forms',label:'Form settings',enabled:true,run:configureProperties},
       providerAction,
     ],
-    ai:[navigateAction('Open Malenjo AI','ai')],
-    scan:[navigateAction('Open Scanner','scanner'),providerAction],
+    optimize:[navigateAction('Open Scanner','scanner'),providerAction],
+    tools:[navigateAction('Open CAD viewer','cad'),navigateAction('Open DICOM viewer','dicom'),providerAction],
     automate:[navigateAction('Open Automation Studio','automation'),providerAction],
   };
-  const directoryVisible=USER_PDF_TOOLS.filter(tool=>
-    (tool.label+' '+tool.group).toLowerCase().includes(featureGallerySearch.trim().toLowerCase()));
-  const directoryAction=(id:string,category:PdfTaskCategory)=>
-    taskActions[category].find(action=>action.id===id);
-  const plannedActions:PdfToolbarAction[]=plannedPdfFeatures(taskCategory).map(feature=>({
-    id:feature.id,label:feature.label,enabled:false,disabledReason:feature.reason,planned:true,
-    run:()=>undefined,
-  }));
-  const activeTaskActions=[...plannedActions,...taskActions[taskCategory]];
+  const activeTaskActions=taskActions[taskCategory];
   const primaryTaskActions=activeTaskActions.slice(0,6);
   const overflowTaskActions=activeTaskActions.slice(6);
-  const shortActionLabel=(action:PdfToolbarAction)=>action.label
-    .replace(/^PDF to /,'To ').replace(/^Open /,'').replace(/^Show /,'')
-    .replace(/^Hide /,'').replace(/^Add /,'').replace(/\u2026/g,'')
-    .replace(/\s*\(\.txt\)/,'').replace(/\s*ZIP$/,'')
-    .slice(0,20);
   const taskActionTitle=(action:PdfToolbarAction)=>action.enabled?action.label:`${action.label} — ${action.disabledReason??'Unavailable'}`;
   const focusTaskCategory=(category:PdfTaskCategory)=>{
     setTaskCategory(category);
-    setFeatureGalleryOpen(false);
     window.requestAnimationFrame(()=>document.getElementById(`${domIdPrefix}-task-${category}`)?.focus());
   };
 
@@ -2307,7 +2249,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           tabIndex={taskCategory===category?0:-1}
           className={taskCategory===category?'active':''}
           title={`${PDF_TASK_CATEGORY_LABELS[category]} · ${PDF_TASK_CATEGORY_SHORTCUTS[category]}`}
-          onClick={()=>{setTaskCategory(category);setFeatureGalleryOpen(false);if(category==='ai')setProviderPanelOpen(false);}}
+          onClick={()=>setTaskCategory(category)}
           onKeyDown={(event)=>{
             if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
             event.preventDefault();
@@ -2318,33 +2260,16 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
       <div id={`${domIdPrefix}-task-tools`} className="pdf-context-toolbar" role="toolbar" aria-label={`${PDF_TASK_CATEGORY_LABELS[taskCategory]} PDF tools`}>
         <div className="pdf-task-actions">
-          <button type="button" className="pdf-feature-index-trigger"
-            aria-label="Browse all PDF features"
-            title="Browse PDF features and availability"
-            aria-expanded={featureGalleryOpen}
-            aria-controls={`${domIdPrefix}-feature-gallery`}
-            onClick={()=>setFeatureGalleryOpen(value=>!value)}>
-            <FileText size={19} aria-hidden="true"/>
-            <span className="pdf-feature-caption">Features</span>
-          </button>
-          {primaryTaskActions.map((action)=><span
-            className={'pdf-feature-command'+(action.planned?' planned':'')}
+          {primaryTaskActions.map((action)=><button
             key={action.id}
-            data-pdf-feature={action.id}
+            disabled={!action.enabled}
             title={taskActionTitle(action)}
-            aria-label={action.planned?action.label+' — Not available yet':undefined}>
-            <button type="button"
-              disabled={!action.enabled}
-              aria-label={taskActionTitle(action)}
-              title={taskActionTitle(action)}
-              onClick={()=>{void action.run();}}>
-              <PdfFeatureIcon id={action.id} label={action.label}/>
-              <span className="pdf-feature-caption">{shortActionLabel(action)}</span>
-            </button>
-            {action.planned&&<span className="pdf-feature-planned-dot" aria-hidden="true"/>}
-          </span>)}
+            aria-label={taskActionTitle(action)}
+            onClick={()=>{void action.run();}}
+          ><PdfMinimalCommandIcon label={action.label}/></button>)}
+          <PdfCatalogGallery category={PDF_TASK_CATEGORY_LABELS[taskCategory]}/>
           {!activeTaskActions.length&&<span className="pdf-task-empty">No operational {PDF_TASK_CATEGORY_LABELS[taskCategory].toLowerCase()} commands are available in this build yet. Use Ctrl+K to discover available document actions.</span>}
-          {false&&overflowTaskActions.length>0&&<details className="pdf-task-overflow">
+          {overflowTaskActions.length>0&&<details className="pdf-task-overflow">
             <summary aria-label={`More ${PDF_TASK_CATEGORY_LABELS[taskCategory]} tools`}>More</summary>
             <div>
               {overflowTaskActions.map((action)=><button
@@ -2417,77 +2342,6 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           </div>
         </div>
       </div>
-      {featureGalleryOpen&&<section id={`${domIdPrefix}-feature-gallery`}
-        className="pdf-feature-gallery"
-        aria-label={`${PDF_TASK_CATEGORY_LABELS[taskCategory]} PDF features`}
-        onKeyDown={event=>{if(event.key==='Escape'){setFeatureGalleryOpen(false);event.stopPropagation();}}}>
-        <header>
-          <div><strong>PDF features</strong>
-            <p>All 33 requested tools are listed. Only operational controls can be selected.</p></div>
-          <button type="button" onClick={()=>setFeatureGalleryOpen(false)}
-            aria-label="Close PDF features" title="Close PDF features">×</button>
-        </header>
-        <div className="pdf-feature-gallery-tabs" role="group" aria-label="PDF feature view">
-          <button type="button" aria-pressed={featureGalleryMode==='category'}
-            onClick={()=>setFeatureGalleryMode('category')}>Current ribbon</button>
-          <button type="button" aria-pressed={featureGalleryMode==='all'}
-            onClick={()=>setFeatureGalleryMode('all')}>All 33 PDF tools</button>
-        </div>
-        {featureGalleryMode==='all' ? <div className="pdf-user-tool-directory">
-          <label htmlFor={`${domIdPrefix}-feature-search`}>Find PDF tool</label>
-          <input id={`${domIdPrefix}-feature-search`} type="search"
-            placeholder="Search all PDF features"
-            value={featureGallerySearch} onChange={event=>setFeatureGallerySearch(event.target.value)}/>
-          {USER_PDF_TOOL_GROUPS.map(group=>{
-            const tools=directoryVisible.filter(tool=>tool.group===group);
-            if(!tools.length)return null;
-            return <section className="pdf-user-tool-group" key={group} aria-label={group}>
-              <h3>{group}</h3>
-              <div className="pdf-feature-gallery-grid">
-                {tools.map(tool=>{
-                  const action=tool.actionId ? directoryAction(tool.actionId,tool.category) : undefined;
-                  const canOrganize=tool.id==='organize-pdf' && !!pdf;
-                  const canNavigate=!!tool.destination && !!onNavigateModule;
-                  const enabled=canOrganize||canNavigate||Boolean(action?.enabled);
-                  const reason=action?.disabledReason ?? tool.explanation;
-                  return <span key={tool.id} data-user-pdf-tool={tool.id}
-                    className={'pdf-feature-gallery-cell'+(!enabled?' planned':'')}
-                    title={enabled?tool.explanation:tool.label+' — '+reason}>
-                    <button type="button" disabled={!enabled}
-                      aria-label={tool.label + (enabled?'':' — Unavailable: '+reason)}
-                      title={enabled?tool.explanation:'Unavailable: '+reason}
-                      onClick={()=>{
-                        if(!enabled)return;
-                        setFeatureGalleryOpen(false);
-                        setTaskCategory(tool.category);
-                        if(canOrganize){openLeftPanel('pages');return;}
-                        if(tool.destination){onNavigateModule?.(tool.destination);return;}
-                        if(action)void action.run();
-                      }}>
-                      <PdfFeatureIcon id={tool.actionId ?? tool.id} label={tool.label} size={22}/>
-                      <span className="pdf-feature-gallery-label">{tool.label}</span>
-                      <small>{enabled?'Open tool':'Not ready'}</small>
-                    </button>
-                  </span>;
-                })}
-              </div>
-            </section>;
-          })}
-          {!directoryVisible.length&&<p role="status">No matching PDF tools.</p>}
-        </div> : <div className="pdf-feature-gallery-grid">
-          {activeTaskActions.map(action=><span className={'pdf-feature-gallery-cell'+(action.planned?' planned':'')}
-            key={action.id} data-pdf-feature={action.id} title={taskActionTitle(action)}>
-            <button type="button" disabled={!action.enabled}
-              title={taskActionTitle(action)}
-              aria-label={taskActionTitle(action)}
-              onClick={()=>{setFeatureGalleryOpen(false);void action.run();}}>
-              <PdfFeatureIcon id={action.id} label={action.label} size={22}/>
-              <span className="pdf-feature-gallery-label">{action.label}</span>
-              <small>{action.planned?'Not ready':action.enabled?'Available':'Unavailable now'}</small>
-            </button>
-          </span>)}
-        </div>}
-      </section>}
     </div>
 
 
