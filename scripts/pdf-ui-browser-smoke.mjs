@@ -140,6 +140,9 @@ async function main(){
     await page.waitForFunction(expected=>
       document.querySelector('.sidebar nav .nav-item.active')?.getAttribute('aria-label')===expected,
       name,{timeout:15000});
+    requireEvidence(await entry.locator('.nav-glyph svg').count()===1 &&
+      await entry.getAttribute('aria-label')===name,
+      'Module navigation did not provide a real accessible icon: '+name);
     const content=(await page.locator('main.workspace').innerText()).trim();
     requireEvidence(content.length>15,
       'Workspace '+name+' has no usable page or clear capability status');
