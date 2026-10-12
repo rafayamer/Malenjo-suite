@@ -639,6 +639,12 @@ export default function App() {
         </div>
       </header>
 
+      {workspaceNotices.__open && <div className="ml-open-feedback" role="status">
+        <span>{workspaceNotices.__open}</span>
+        <button type="button" title="Dismiss file notice" aria-label="Dismiss file notice"
+          onClick={()=>setWorkspaceNotices(current=>({...current,__open:''}))}><X size={14} aria-hidden="true"/></button>
+      </div>}
+
       {(activeSession ? workspaceForDocument(activeSession.document.kind) : active) !== 'pdf' && <RibbonShell
         workspace={activeSession ? workspaceForDocument(activeSession.document.kind) : active}
         onNavigate={selectModule}
