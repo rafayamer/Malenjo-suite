@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import type { ModuleId } from '../core/types';
 import { defaultRibbonTab, RIBBON_TABS, specialistRibbonActions, type RibbonTabId } from './ribbonModel';
+import PdfCatalogGallery from './PdfCatalogGallery';
 
 interface Props {
   workspace: ModuleId;
@@ -91,6 +92,7 @@ export default function RibbonShell({ workspace, onNavigate, onOpenFiles }: Prop
           }}
         ><Icon size={22} strokeWidth={1.7}/><span>{action.label}</span></button>;
       })}
+      <PdfCatalogGallery category={current.label}/>
       {selected === 'convert' && <p className="suite-ribbon-hint" role="note">
         Office outputs will open only after verified PDF conversion. Direct Office file imports remain a temporary development path until the replacement workflow is ready.
       </p>}
