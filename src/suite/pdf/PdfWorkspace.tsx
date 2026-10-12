@@ -241,6 +241,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [rotation, setRotation] = useState(0);
   const [viewMode, setViewMode] = useState<PdfViewMode>('continuous');
   const [presentationMode, setPresentationMode] = useState(false);
+  const previousPresentationViewRef=useRef<{mode:PdfViewMode;fit:PdfFitMode}|null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mutating, setMutating] = useState(false);
@@ -2189,7 +2190,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     function onFullscreenChange(){
       const active=Boolean(document.fullscreenElement);
       setFullscreen(active);
-      if(!active)setPresentationMode(false);
+      if(!active){
+        setPresentationMode(false);
+        const previous=previousPresentationViewRef.current;
+        if(previous){
+          previousPresentationViewRef.current=null;
+          setViewMode(previous.mode);
+          setFitMode(previous.fit);
+        }
+      }
     }
     document.addEventListener('fullscreenchange',onFullscreenChange);
     return()=>document.removeEventListener('fullscreenchange',onFullscreenChange);
@@ -2206,14 +2215,40 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       await element.requestFullscreen();
       setPresentationMode(presentation);
       if(presentation){
+        previousPresentationViewRef.current={mode:viewMode,fit:fitMode};
         setViewMode('single');
         setFitMode('page');
+        window.requestAnimationFrame(()=>scrollRef.current?.focus({preventScroll:true}));
       }
     }catch(reason){
       setPresentationMode(false);
       setError('MAL-PDF-VIEW-002: Fullscreen is unavailable: '+(reason instanceof Error?reason.message:String(reason)));
     }
   };
+
+  // Presentation is a true immersive reading mode. Document navigation
+  // continues even though the toolbar/footer is deliberately hidden.
+  useEffect(()=>{
+    if(!active||!presentationMode)return;
+    const onPresentationKey=(event:KeyboardEvent)=>{
+      if(event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey)return;
+      const target=event.target as HTMLElement|null;
+      if(target?.closest('input,textarea,select,[contenteditable="true"]'))return;
+      if(['PageDown','ArrowRight',' ','Spacebar'].includes(event.key)){
+        event.preventDefault();goToPage(currentPage+1);
+      }else if(['PageUp','ArrowLeft','Backspace'].includes(event.key)){
+        event.preventDefault();goToPage(currentPage-1);
+      }else if(event.key==='Home'){
+        event.preventDefault();goToPage(1);
+      }else if(event.key==='End'){
+        event.preventDefault();goToPage(pageCount);
+      }else if(event.key==='Escape'&&document.fullscreenElement){
+        event.preventDefault();void document.exitFullscreen();
+      }
+    };
+    window.addEventListener('keydown',onPresentationKey);
+    return()=>window.removeEventListener('keydown',onPresentationKey);
+  },[active,presentationMode,currentPage,pageCount,goToPage]);
 
   const thumbnailsRenderAllowed = forceRenderAll
     || pdfCriticalPassReady(currentPage, pageCount, renderedPages);
