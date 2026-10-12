@@ -106,6 +106,8 @@ import {
   type PdfFitMode,
 } from './layout';
 import PdfPageCanvas from './PdfPageCanvas';
+import { PdfFeatureIcon } from './PdfFeatureIcon';
+import { plannedPdfFeatures } from './featureCatalog';
 import {extractPdfPageSearchText,findPdfTextMatches} from './pdfTextHighlights';
 import PdfThumbnail from './PdfThumbnail';
 import PdfProviderToolsPanel from './PdfProviderToolsPanel';
@@ -166,6 +168,7 @@ interface PdfToolbarAction {
   enabled:boolean;
   disabledReason?:string;
   run():void|Promise<void>;
+  planned?:boolean;
 }
 
 function PdfLeftPanelIcon({id}:{id:PdfLeftPanelId}) {
@@ -297,6 +300,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [inspectorTab, setInspectorTab] = useState<DocumentInspectorTab>('properties');
   const [inspectorHidden, setInspectorHidden] = useState(true);
   const [taskCategory, setTaskCategory] = useState<PdfTaskCategory>('home');
+  const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
   const [providerPanelOpen, setProviderPanelOpen] = useState(false);
   const [textOverlay, setTextOverlay] = useState({ text:'', x:0.12, y:0.82, size:12 });
   const [shapeOverlay, setShapeOverlay] = useState({ x:0.12, y:0.68, width:0.35, height:0.08, mode:'highlight' as 'highlight'|'outline' });
@@ -2182,12 +2186,22 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     scan:[navigateAction('Open Scanner','scanner'),providerAction],
     automate:[navigateAction('Open Automation Studio','automation'),providerAction],
   };
-  const activeTaskActions=taskActions[taskCategory];
+  const plannedActions:PdfToolbarAction[]=plannedPdfFeatures(taskCategory).map(feature=>({
+    id:feature.id,label:feature.label,enabled:false,disabledReason:feature.reason,planned:true,
+    run:()=>undefined,
+  }));
+  const activeTaskActions=[...plannedActions,...taskActions[taskCategory]];
   const primaryTaskActions=activeTaskActions.slice(0,6);
   const overflowTaskActions=activeTaskActions.slice(6);
+  const shortActionLabel=(action:PdfToolbarAction)=>action.label
+    .replace(/^PDF to /,'To ').replace(/^Open /,'').replace(/^Show /,'')
+    .replace(/^Hide /,'').replace(/^Add /,'').replace(/\u2026/g,'')
+    .replace(/\s*\(\.txt\)/,'').replace(/\s*ZIP$/,'')
+    .slice(0,20);
   const taskActionTitle=(action:PdfToolbarAction)=>action.enabled?action.label:`${action.label} — ${action.disabledReason??'Unavailable'}`;
   const focusTaskCategory=(category:PdfTaskCategory)=>{
     setTaskCategory(category);
+    setFeatureGalleryOpen(false);
     window.requestAnimationFrame(()=>document.getElementById(`${domIdPrefix}-task-${category}`)?.focus());
   };
 
@@ -2250,7 +2264,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           tabIndex={taskCategory===category?0:-1}
           className={taskCategory===category?'active':''}
           title={`${PDF_TASK_CATEGORY_LABELS[category]} · ${PDF_TASK_CATEGORY_SHORTCUTS[category]}`}
-          onClick={()=>{setTaskCategory(category);if(category==='ai')setProviderPanelOpen(false);}}
+          onClick={()=>{setTaskCategory(category);setFeatureGalleryOpen(false);if(category==='ai')setProviderPanelOpen(false);}}
           onKeyDown={(event)=>{
             if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
             event.preventDefault();
@@ -2261,15 +2275,33 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
       <div id={`${domIdPrefix}-task-tools`} className="pdf-context-toolbar" role="toolbar" aria-label={`${PDF_TASK_CATEGORY_LABELS[taskCategory]} PDF tools`}>
         <div className="pdf-task-actions">
-          {primaryTaskActions.map((action)=><button
+          {primaryTaskActions.map((action)=><span
+            className={'pdf-feature-command'+(action.planned?' planned':'')}
             key={action.id}
-            disabled={!action.enabled}
+            data-pdf-feature={action.id}
             title={taskActionTitle(action)}
-            aria-label={taskActionTitle(action)}
-            onClick={()=>{void action.run();}}
-          ><PdfMinimalCommandIcon label={action.label}/></button>)}
+            aria-label={action.planned?action.label+' — Not available yet':undefined}>
+            <button type="button"
+              disabled={!action.enabled}
+              aria-label={taskActionTitle(action)}
+              title={taskActionTitle(action)}
+              onClick={()=>{void action.run();}}>
+              <PdfFeatureIcon id={action.id} label={action.label}/>
+              <span className="pdf-feature-caption">{shortActionLabel(action)}</span>
+            </button>
+            {action.planned&&<span className="pdf-feature-planned-dot" aria-hidden="true"/>}
+          </span>)}
+          <button type="button" className="pdf-feature-index-trigger"
+            aria-label="Browse all PDF features"
+            title="Browse PDF features and availability"
+            aria-expanded={featureGalleryOpen}
+            aria-controls={`${domIdPrefix}-feature-gallery`}
+            onClick={()=>setFeatureGalleryOpen(value=>!value)}>
+            <FileText size={19} aria-hidden="true"/>
+            <span className="pdf-feature-caption">Features</span>
+          </button>
           {!activeTaskActions.length&&<span className="pdf-task-empty">No operational {PDF_TASK_CATEGORY_LABELS[taskCategory].toLowerCase()} commands are available in this build yet. Use Ctrl+K to discover available document actions.</span>}
-          {overflowTaskActions.length>0&&<details className="pdf-task-overflow">
+          {false&&overflowTaskActions.length>0&&<details className="pdf-task-overflow">
             <summary aria-label={`More ${PDF_TASK_CATEGORY_LABELS[taskCategory]} tools`}>More</summary>
             <div>
               {overflowTaskActions.map((action)=><button
@@ -2342,6 +2374,30 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           </div>
         </div>
       </div>
+      {featureGalleryOpen&&<section id={`${domIdPrefix}-feature-gallery`}
+        className="pdf-feature-gallery"
+        aria-label={`${PDF_TASK_CATEGORY_LABELS[taskCategory]} PDF features`}
+        onKeyDown={event=>{if(event.key==='Escape'){setFeatureGalleryOpen(false);event.stopPropagation();}}}>
+        <header>
+          <div><strong>{PDF_TASK_CATEGORY_LABELS[taskCategory]} features</strong>
+            <p>Select a working action. Unavailable features remain visible with their requirements.</p></div>
+          <button type="button" onClick={()=>setFeatureGalleryOpen(false)}
+            aria-label="Close PDF features" title="Close PDF features">×</button>
+        </header>
+        <div className="pdf-feature-gallery-grid">
+          {activeTaskActions.map(action=><span className={'pdf-feature-gallery-cell'+(action.planned?' planned':'')}
+            key={action.id} data-pdf-feature={action.id} title={taskActionTitle(action)}>
+            <button type="button" disabled={!action.enabled}
+              title={taskActionTitle(action)}
+              aria-label={taskActionTitle(action)}
+              onClick={()=>{setFeatureGalleryOpen(false);void action.run();}}>
+              <PdfFeatureIcon id={action.id} label={action.label} size={22}/>
+              <span className="pdf-feature-gallery-label">{action.label}</span>
+              <small>{action.planned?'Not ready':action.enabled?'Available':'Unavailable now'}</small>
+            </button>
+          </span>)}
+        </div>
+      </section>}
     </div>
 
 
