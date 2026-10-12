@@ -60,7 +60,7 @@ describe('Home CasualOffice structural/accessibility baseline',()=>{
     expect((html.match(/class="ml-co-action-card/g)??[]).length).toBe(7);
     expect(html).toContain('aria-controls="ml-home-recent-panel"');
     expect(html).toContain('aria-expanded="false"');
-    expect(html).not.toContain('id="ml-home-recent-panel"');
+    expect(html).toContain('id="ml-home-recent-panel" hidden=""');
     expect(html).toContain('ml-start-utilities');
     expect(html).toContain('More options');
     expect(html).toContain('Continue working');
