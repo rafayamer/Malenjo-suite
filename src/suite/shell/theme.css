@@ -1808,3 +1808,85 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
   flex:0 0 71px;width:71px;min-width:71px;
   background:var(--ml-surface);box-shadow:2px 0 4px #0002;
 }
+
+
+/* MALENJO Master v2.0 Phase 1: compact 10-tab, PDF-first ribbon and
+   comprehensive feature discovery. Only the flyout scrolls; the app does not. */
+.app-shell-top-only .suite-ribbon-tabs {
+  display:flex;align-items:center;min-height:36px;height:36px;max-width:100%;
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;overscroll-behavior-x:contain;
+}
+.app-shell-top-only .suite-ribbon-tabs button {
+  min-height:34px;height:34px;white-space:nowrap;padding:0 11px;flex-shrink:0;
+}
+.app-shell-top-only .suite-ribbon-actions {max-height:58px;min-height:56px;overflow-x:auto}
+.app-shell-top-only .suite-ribbon-action,
+.app-shell-top-only .suite-ribbon-more {
+  display:inline-flex;align-items:center;justify-content:center;flex:0 0 40px!important;
+  min-width:40px!important;width:40px!important;height:40px!important;min-height:40px!important;
+  border-radius:5px;background:transparent;border:1px solid transparent;
+  color:var(--ml-text);cursor:pointer;
+}
+.app-shell-top-only .suite-ribbon-more>span {display:none}
+.app-shell-top-only .suite-ribbon-more:hover,
+.app-shell-top-only .suite-ribbon-more:focus-visible {
+  background:var(--ml-hover);border-color:var(--ml-border);
+}
+.app-shell-top-only .suite-ribbon-more:focus-visible {
+  outline:2px solid var(--ml-brand-blue);outline-offset:-2px;
+}
+.app-shell-top-only .suite-ribbon-action:disabled {
+  cursor:not-allowed;opacity:.55
+}
+.app-shell-top-only .pdf-task-categories {min-height:36px;height:36px;
+  max-width:100%;overflow-x:auto;scrollbar-width:thin;overscroll-behavior-x:contain}
+.app-shell-top-only .pdf-task-categories button {
+  min-height:34px;white-space:nowrap;flex:0 0 auto;
+}
+.app-shell-top-only .pdf-feature-gallery-tabs {flex-wrap:wrap}
+.app-shell-top-only .pdf-feature-gallery-tabs button {min-height:36px}
+
+/* The complete registry is one discoverable popover, not a dashboard or sidebar. */
+.ml-command-catalog {
+  position:absolute;left:clamp(4px,2vw,18px);top:100%;z-index:80;
+  width:min(830px,calc(100vw - 12px));max-height:min(72vh,690px);
+  border:1px solid var(--ml-border);border-radius:8px;background:var(--ml-surface);
+  color:var(--ml-text);box-shadow:0 14px 34px #0003;
+  display:flex;flex-direction:column;min-width:0;overflow:hidden;
+}
+.suite-ribbon {position:relative}
+.ml-command-catalog>header {
+  display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 14px;
+  border-bottom:1px solid var(--ml-border)
+}
+.ml-command-catalog>header>div {display:flex;flex-direction:column;gap:4px}
+.ml-command-catalog>header strong {font-size:14px}
+.ml-command-catalog>header small {font-size:11px;color:var(--ml-muted)}
+.ml-command-catalog>header button {display:grid;place-items:center;border:1px solid var(--ml-border);
+  min-height:36px;min-width:36px;border-radius:4px;background:transparent;color:var(--ml-text);cursor:pointer}
+.ml-command-catalog>label {font-size:11px;color:var(--ml-muted);padding:12px 14px 4px}
+.ml-command-catalog>input {height:38px;min-height:38px;margin:0 14px 7px;padding:6px 11px;border-radius:5px;
+  border:1px solid var(--ml-border);background:var(--ml-field);color:var(--ml-text);font-size:13px}
+.ml-command-catalog-scroll {min-height:0;overflow-y:auto;padding:1px 14px 14px;overscroll-behavior:contain}
+.ml-command-catalog-scroll section>h3 {
+  position:sticky;top:0;z-index:1;padding:9px 4px;border-bottom:1px solid var(--ml-border);
+  background:var(--ml-surface);font-size:12px;margin:12px 0 8px;
+}
+.ml-command-catalog-scroll section>h3 small {font-size:11px;color:var(--ml-muted);margin-left:6px}
+.ml-command-catalog-grid {display:grid;grid-template-columns:repeat(auto-fill,minmax(225px,1fr));gap:7px}
+.ml-command-catalog-entry {min-height:64px;display:flex;align-items:center;gap:9px;padding:9px 10px;
+  border:1px solid var(--ml-border);border-radius:5px;background:var(--ml-card);min-width:0}
+.ml-command-catalog-entry:focus-visible {outline:2px solid var(--ml-brand-blue);outline-offset:-2px}
+.ml-command-catalog-icon {display:grid;place-items:center;flex:0 0 24px;color:var(--ml-brand-blue)}
+.ml-command-catalog-label {display:flex;flex:1;min-width:0;flex-direction:column;gap:4px}
+.ml-command-catalog-label>b {font-size:12px;font-weight:600;line-height:1.3}
+.ml-command-catalog-label>small {font-size:11px;color:var(--ml-muted)}
+.ml-command-catalog-entry>button {display:none}
+@media(max-width:630px) {
+  .ml-command-catalog {left:4px;width:calc(100vw - 8px);max-height:66vh}
+  .ml-command-catalog-grid {grid-template-columns:minmax(0,1fr)}
+  .app-shell-top-only .suite-ribbon-hint {display:none}
+}
+@media(prefers-reduced-motion:reduce) {
+  .ml-command-catalog * {transition:none!important;animation:none!important}
+}
