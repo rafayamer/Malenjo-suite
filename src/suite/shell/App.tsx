@@ -783,6 +783,12 @@ export default function App() {
                                   : active === 'cad' || active === 'dicom' || active === 'invoice' || active === 'account'
                                     ? <CapabilityWorkspace module={active} onNavigate={selectModule}/>
                                     : <ModuleView module={module} session={null} notice="" onSaveAs={async()=>{}} onBackToFiles={()=>selectModule('files')}/>)}
+      <footer className="ml-bottom-statusbar" aria-label="MALENJO document status">
+        <span title={activeSession?.document.name??module.name}>{activeSession?.document.name??module.name}</span>
+        <span>{sessions.length} open {sessions.length===1?'file':'files'}</span>
+        <span>{activeSession?.dirty?'Unsaved changes':activeSession?'Working copy':'Local-first'}</span>
+        <span className="ml-bottom-status-end">{theme==='light'?'Light':'Dark'} · {aiOpen?'AI open':'AI closed'}</span>
+      </footer>
     </main>
   </div>
 }
