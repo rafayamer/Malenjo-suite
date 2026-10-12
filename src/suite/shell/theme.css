@@ -1808,3 +1808,38 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
   flex:0 0 71px;width:71px;min-width:71px;
   background:var(--ml-surface);box-shadow:2px 0 4px #0002;
 }
+
+
+/* Master v2: complete 90-command discovery remains in an opt-in gallery.
+   It never occupies the central PDF canvas or the primary icon ribbon. */
+.app-shell-top-only .pdf-master-tool-directory {
+  min-width:0;min-height:0;overscroll-behavior:contain;scrollbar-width:thin;
+}
+.app-shell-top-only .pdf-master-tool-directory .pdf-feature-gallery-grid {
+  grid-template-columns:repeat(auto-fill,minmax(135px,1fr));
+}
+.app-shell-top-only .pdf-master-tool-directory .pdf-feature-gallery-cell>button {
+  min-height:114px;height:auto;min-width:0;gap:5px;
+  padding:9px 6px;border-color:var(--ml-border);
+}
+.app-shell-top-only .pdf-master-tool-directory .pdf-feature-gallery-label {
+  font-size:12px;font-weight:600;line-height:1.35;
+}
+.app-shell-top-only .pdf-master-command-id {
+  font-size:11px;font-weight:700;letter-spacing:.035em;color:var(--ml-muted);
+}
+.app-shell-top-only .pdf-master-group-count {
+  float:right;font-weight:400;font-size:11px;color:var(--ml-muted);
+}
+.app-shell-top-only .pdf-master-discovery-note {
+  font-size:12px;line-height:1.4;color:var(--ml-muted);
+  border-top:1px solid var(--ml-border);padding-top:12px;margin:12px 0 0;
+}
+.app-shell-top-only .pdf-feature-gallery-tabs {
+  flex-wrap:wrap;min-height:40px;
+}
+@media(max-width:570px) {
+  .app-shell-top-only .pdf-master-tool-directory .pdf-feature-gallery-grid {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}
