@@ -110,6 +110,7 @@ export default function HomeWorkspace({
   const [state,setState]=useState<HomeStateV1>(()=>loadHomeState());
   const [homeHydrated,setHomeHydrated]=useState(()=>!desktop);
   const [query,setQuery]=useState('');
+  const [recentOpen,setRecentOpen]=useState(false);
   const [filter,setFilter]=useState<HomeFileFilter>('all');
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
@@ -278,7 +279,8 @@ export default function HomeWorkspace({
           <span>Open File</span>
         </button>
         <button className="ml-start-recent" type="button" title="View recently opened documents"
-          onClick={()=>document.getElementById('ml-home-files-title')?.scrollIntoView({behavior:'smooth',block:'start'})}>
+          aria-expanded={recentOpen} aria-controls="ml-home-recent-panel"
+          onClick={()=>setRecentOpen(current=>!current)}>
           <span className="ml-start-recent-icon" aria-hidden="true"><FolderOpen size={27}/></span>
           <span>Recent Files</span>
         </button>
@@ -286,6 +288,35 @@ export default function HomeWorkspace({
       <p className="ml-start-privacy"><ShieldCheck size={14} aria-hidden="true"/> {desktop?'Local Windows documents':'Browser / Codespaces session'} · files stay under your control</p>
     </header>
 
+    {recentOpen&&<section id="ml-home-recent-panel" className="ml-home-section ml-co-files" aria-labelledby="ml-home-files-title">
+      <div className="ml-co-recent-head">
+        <div><h2 id="ml-home-files-title">Recent Files</h2><p>Recent and pinned items from the canonical MALENJO library.</p></div>
+        <div className="ml-co-recent-tools">
+          <OfficeSearchInput value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Search recent…" aria-label="Search recent MALENJO files"/>
+          <OfficeSegmentedFilter<HomeFileFilter> aria-label="Filter recent files by type" value={filter} onChange={setFilter} options={FILTERS}/>
+        </div>
+      </div>
+
+      {loading?<div className="ml-co-empty">Loading recent files…</div>:<>
+        {pinnedDocuments.length>0&&<div className="ml-co-recent-group">
+          <div className="ml-co-group-head"><h3>Pinned</h3><span>{pinnedDocuments.length}</span></div>
+          <div className="ml-co-recent-grid">{pinnedDocuments.map((document)=>renderDocumentCard(document,true))}</div>
+        </div>}
+        {recentGroups.map((group)=><div className="ml-co-recent-group" key={group.label}>
+          <div className="ml-co-group-head"><h3>{group.label}</h3><span>{group.documents.length}</span></div>
+          <div className="ml-co-recent-grid">{group.documents.map((document)=>renderDocumentCard(document,false))}</div>
+        </div>)}
+        {!pinnedDocuments.length&&!recentGroups.length&&<div className="ml-co-empty">
+          <ClockEmpty/>
+          <b>{query?'No recent files match that search.':'No recent files yet.'}</b>
+          <span>{query?'Change the search or file-type filter.':'Open a local document to get started.'}</span>
+          <button onClick={()=>void onOpenDocuments()}><FolderOpen size={14}/>Open file</button>
+        </div>}
+      </>}
+    </section>}
+
+    <details className="ml-start-utilities">
+      <summary title="Show optional Home tools, open document shortcuts and locations">More options</summary>
     <details className="ml-start-more-tools">
       <summary title="Show additional MALENJO shortcuts"><Sparkles size={15} aria-hidden="true"/> More tools</summary>
       <section className="ml-co-actions" aria-label="More document actions">
@@ -320,33 +351,6 @@ export default function HomeWorkspace({
       </div>
     </section>}
 
-    <section className="ml-home-section ml-co-files" aria-labelledby="ml-home-files-title">
-      <div className="ml-co-recent-head">
-        <div><h2 id="ml-home-files-title">Your files</h2><p>Recent and pinned items from the canonical MALENJO library.</p></div>
-        <div className="ml-co-recent-tools">
-          <OfficeSearchInput value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Search recent…" aria-label="Search recent MALENJO files"/>
-          <OfficeSegmentedFilter<HomeFileFilter> aria-label="Filter recent files by type" value={filter} onChange={setFilter} options={FILTERS}/>
-        </div>
-      </div>
-
-      {loading?<div className="ml-co-empty">Loading recent files…</div>:<>
-        {pinnedDocuments.length>0&&<div className="ml-co-recent-group">
-          <div className="ml-co-group-head"><h3>Pinned</h3><span>{pinnedDocuments.length}</span></div>
-          <div className="ml-co-recent-grid">{pinnedDocuments.map((document)=>renderDocumentCard(document,true))}</div>
-        </div>}
-        {recentGroups.map((group)=><div className="ml-co-recent-group" key={group.label}>
-          <div className="ml-co-group-head"><h3>{group.label}</h3><span>{group.documents.length}</span></div>
-          <div className="ml-co-recent-grid">{group.documents.map((document)=>renderDocumentCard(document,false))}</div>
-        </div>)}
-        {!pinnedDocuments.length&&!recentGroups.length&&<div className="ml-co-empty">
-          <ClockEmpty/>
-          <b>{query?'No recent files match that search.':'No recent files yet.'}</b>
-          <span>{query?'Change the search or file-type filter.':'Open a local document to get started.'}</span>
-          <button onClick={()=>void onOpenDocuments()}><FolderOpen size={14}/>Open file</button>
-        </div>}
-      </>}
-    </section>
-
     <section className="ml-home-section" aria-labelledby="ml-home-locations-title">
       <div className="ml-co-section-head">
         <div><h2 id="ml-home-locations-title">Pinned locations</h2><p>Shortcuts to folders you use often. MALENJO does not crawl them in the background.</p></div>
@@ -375,6 +379,8 @@ export default function HomeWorkspace({
       <span><kbd>Ctrl</kbd>+<kbd>Tab</kbd> Next document</span>
       <button className="text-action" onClick={()=>onSelectModule('help')}>About this build</button>
     </footer>
+
+    </details>
 
     {notice&&<div className="home-status" role="status">{notice}</div>}
   </div>;
