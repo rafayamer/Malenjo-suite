@@ -589,19 +589,30 @@ export default function App() {
         }}
       />
       <header className="topbar">
-        <div className="suite-title"><strong>MALENJO Suite</strong><small>{activeSession?.document.name ?? module.name}</small></div>
-        <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);openCommandPalette();}} placeholder="Search files, tools and commands"/><kbd>Ctrl K</kbd></div>
+        <div className="suite-title"><strong>MALENJO</strong><small title={activeSession?.document.name ?? module.name}>{activeSession?.document.name ?? module.name}</small></div>
+        <div className="topbar-primary">
+          <button type="button" className="command topbar-home"
+            aria-label="Home" title="Home — start and recent files" onClick={()=>selectModule('home')}>
+            <House size={18} aria-hidden="true"/>
+          </button>
+          <button type="button" className="command topbar-tool-trigger" ref={moduleMenuButtonRef}
+            aria-label="All tools" title="All tools — browse MALENJO modules"
+            aria-expanded={moduleMenuOpen} aria-haspopup="dialog"
+            onClick={()=>setModuleMenuOpen(value=>!value)}>
+            <LayoutGrid size={18} aria-hidden="true"/><span>Tools</span><ChevronDown size={12} aria-hidden="true"/>
+          </button>
+        </div>
+        <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);openCommandPalette();}} placeholder="Search commands" aria-label="Search commands"/><kbd>Ctrl K</kbd></div>
         <div className="topbar-actions">
-          <button className="command" aria-label="Open files" title="Open files" onClick={()=>void openDocumentsFromPicker()}><FolderOpen size={17}/><span>Open</span></button>
-          <button className="command" aria-label="Open command palette" title="Open command palette" onClick={()=>setCommandOpen(true)}><Command size={17}/><span>Commands</span></button>
-          <button
-            className="theme-toggle command"
-            type="button"
+          <button className="command" aria-label="Open files" title="Open a file (Ctrl+O)" onClick={()=>void openDocumentsFromPicker()}><FolderOpen size={19}/></button>
+          <button className="command" aria-label="Open command palette" title="Commands (Ctrl+K)" onClick={()=>setCommandOpen(true)}><Command size={19}/></button>
+          <button className="theme-toggle command" type="button"
             aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
             aria-pressed={theme === 'light'}
             title={theme === 'dark' ? 'Light appearance' : 'Dark appearance'}
-            onClick={() => setTheme((current) => nextSuiteTheme(current))}
-          >{theme === 'dark' ? <Sun size={17}/> : <Moon size={17}/>}<span>{theme === 'dark' ? 'Light' : 'Dark'}</span></button>
+            onClick={() => setTheme(current=>nextSuiteTheme(current))}>
+            {theme === 'dark' ? <Sun size={18}/> : <Moon size={18}/>}
+          </button>
         </div>
       </header>
 
