@@ -54,8 +54,10 @@ async function main(){
   requireEvidence(await page.locator('.ml-start-hero').getByRole('button',{name:'Open File',exact:true}).isVisible() &&
     await page.locator('.ml-start-hero').getByRole('button',{name:'Recent Files',exact:true}).isVisible(),
     'Minimal central Home Open File / Recent Files entry points are missing');
-  requireEvidence(await page.locator('.ml-start-more-tools:not([open])').count()===1,
-    'Extra Home dashboard tools must remain hidden until requested');
+  requireEvidence(await page.locator('.ml-start-more-tools:not([open])').count()===1 &&
+    await page.locator('.ml-start-utilities:not([open])').count()===1 &&
+    await page.locator('#ml-home-recent-panel').count()===0,
+    'Home must initially show Open/Recent, not a permanent dashboard or recent list');
   requireEvidence(await page.getByRole('button',{name:'MALENJO AI',exact:true}).count()===1,
     'AI control missing from the top command bar');
 
@@ -86,6 +88,7 @@ async function main(){
 
   // Home is not an independent Word/Excel/PowerPoint opener. Those outputs
   // must originate from a successful PDF conversion (still a release blocker).
+  await page.locator('.ml-start-utilities > summary').click();
   await page.locator('.ml-start-more-tools summary').click();
   for(const label of ['PDF to Word','PDF to Excel','PDF to Slides']){
     const action=page.locator('.ml-co-actions .ml-co-action-card').filter({hasText:label});
@@ -139,6 +142,11 @@ async function main(){
   console.log('PHASE1 top-bar AI messenger drawer and chat state retention: PASS');
   // Phase 1 Home filtering is a real keyboard-operated tablist, not a
   // sequence of unreachable decorative pills.
+  const recentButton=page.locator('.ml-start-hero').getByRole('button',{name:'Recent Files',exact:true});
+  await recentButton.click();
+  requireEvidence(await recentButton.getAttribute('aria-expanded')==='true' &&
+    await page.locator('#ml-home-recent-panel').isVisible(),
+    'Recent Files did not open its real searchable document collection');
   const homeFileFilters=page.getByRole('tablist',{name:'Filter recent files by type'});
   const allFilter=homeFileFilters.getByRole('tab',{name:'All',exact:true});
   await allFilter.focus();
