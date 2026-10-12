@@ -598,8 +598,14 @@ async function main(){
     Array.from(document.querySelectorAll('.pdf-text-layer span')).some(
       node=>node.textContent?.includes('MALENJO BROWSER UI TEXT SELECT FIND'),
     ),null,{timeout:30000});
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('.pdf-text-layer span')].some(node =>
+      node.isConnected &&
+      node.textContent?.includes('MALENJO BROWSER UI TEXT SELECT FIND') &&
+      getComputedStyle(node).cursor==='text'
+    ),null,{timeout:30000});
   const span=page.locator('.pdf-text-layer span').filter({hasText:'MALENJO BROWSER UI TEXT SELECT FIND'}).first();
-  console.log('MALENJO real PDF.js selectable text spans rendered');
+  console.log('MALENJO real PDF.js selectable text spans rendered with working I-beam');
   const selected=await span.evaluate(node=>{
     const range=document.createRange(),selection=window.getSelection();
     range.selectNodeContents(node);
