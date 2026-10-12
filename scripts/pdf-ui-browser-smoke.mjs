@@ -104,6 +104,17 @@ async function main(){
     await aiDrawer.locator('.ai-bubble').count()===0 &&
     await aiDrawer.locator('.ai-composer textarea').isVisible(),
     'AI top icon did not open the actual local chat interface');
+  const aiDock=await page.evaluate(()=>{
+    const drawer=document.querySelector('#ml-ai-assistant').getBoundingClientRect();
+    const footer=document.querySelector('.ml-suite-status').getBoundingClientRect();
+    const composer=document.querySelector('#ml-ai-assistant .ai-composer').getBoundingClientRect();
+    return {drawerRight:drawer.right,drawerBottom:drawer.bottom,composerBottom:composer.bottom,
+      footerTop:footer.top,viewport:innerWidth};
+  });
+  requireEvidence(aiDock.drawerRight<=aiDock.viewport+2 &&
+    aiDock.drawerBottom<=aiDock.footerTop+2 &&
+    aiDock.composerBottom<=aiDock.footerTop+2,
+    'AI panel overlapped footer/document controls: '+JSON.stringify(aiDock));
   await aiDrawer.locator('.ai-composer textarea').fill('Help me review a PDF');
   await aiDrawer.getByRole('button',{name:'Send'}).click();
   await aiDrawer.locator('.ai-bubble.user').filter({hasText:'Help me review a PDF'}).waitFor({timeout:15000});
