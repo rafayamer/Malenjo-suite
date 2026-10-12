@@ -40,18 +40,50 @@ async function main(){
   const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.goto(base,{waitUntil:'domcontentloaded'});
+  async function openModule(name){
+    const trigger=page.getByRole('button',{name:'All tools',exact:true});
+    if((await trigger.getAttribute('aria-expanded'))!=='true')await trigger.click();
+    const entry=page.locator('.sidebar nav .nav-item').filter({hasText:name}).first();
+    await entry.click({timeout:15000});
+    requireEvidence((await trigger.getAttribute('aria-expanded'))==='false',
+      'Top toolbar tools menu did not dismiss after choosing '+name);
+  }
+  requireEvidence(await page.locator('.sidebar:not(.ml-tools-popup)').count()===0 &&
+    await page.locator('.app-shell-top-only').count()===1,
+    'Permanent module sidebar was not eliminated');
+  requireEvidence(await page.getByRole('button',{name:'Open File',exact:true}).isVisible() &&
+    await page.getByRole('button',{name:'Recent Files',exact:true}).isVisible(),
+    'Minimal central Home Open File / Recent Files entry points are missing');
+  requireEvidence(await page.locator('.ml-start-more-tools:not([open])').count()===1,
+    'Extra Home dashboard tools must remain hidden until requested');
+  requireEvidence(await page.getByRole('button',{name:'MALENJO AI',exact:true}).count()===1,
+    'AI control missing from the top command bar');
+
   // UI/UX Phase 3: Home and PDF share one Windows-style ribbon shell.
   // Verify a real palette switch, persistence after reload and same-window
   // navigation rather than only checking the presence of a decorative toggle.
   await page.getByRole('tab',{name:'Home',exact:true}).waitFor({timeout:15000});
   // Home is not an independent Word/Excel/PowerPoint opener. Those outputs
   // must originate from a successful PDF conversion (still a release blocker).
+  await page.locator('.ml-start-more-tools summary').click();
   for(const label of ['PDF to Word','PDF to Excel','PDF to Slides']){
     const action=page.locator('.ml-co-actions .ml-co-action-card').filter({hasText:label});
     await action.waitFor({timeout:15000});
     requireEvidence(await action.isDisabled() && (await action.getAttribute('aria-description'))?.includes('conversion'),
       'Home incorrectly advertises an unverified independent Office launch: '+label);
   }
+  // Office documents are not independent MALENJO imports.
+  requireEvidence((await page.locator('.workspace > input[type="file"]').getAttribute('accept'))===
+      '.pdf,.dxf,.dwg,.dcm,.dicom',
+    'Public opener still accepts standalone Office files');
+  await page.locator('.workspace > input[type="file"]').setInputFiles({
+    name:'forbidden-standalone.docx',
+    mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    buffer:Buffer.from('This file must not open as an independent editor'),
+  });
+  requireEvidence(await page.locator('.document-tab-main').filter({hasText:'forbidden-standalone.docx'}).count()===0,
+    'Independent Word document opened without successful PDF conversion');
+  console.log('PHASE1 PDF/CAD/DICOM-only direct open, Office conversion-only gating: PASS');
   // Phase 1 Home filtering is a real keyboard-operated tablist, not a
   // sequence of unreachable decorative pills.
   const homeFileFilters=page.getByRole('tablist',{name:'Filter recent files by type'});
@@ -72,7 +104,7 @@ async function main(){
     'Home file filter Home failed to restore first tab');
   console.log('PHASE1 Home file filters accessible keyboard navigation: PASS');
   // The Settings page must provide exactly two real native radio controls.
-  await page.locator('.sidebar nav .nav-item').filter({hasText:'Settings'}).first().click();
+  await openModule('Settings');
   await page.getByRole('heading',{name:'Appearance'}).waitFor({timeout:15000});
   requireEvidence(await page.getByRole('radio').count()===2,
     'Settings did not offer exactly Light and Dark');
@@ -84,7 +116,7 @@ async function main(){
   await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
   requireEvidence(await page.getByRole('radio',{name:'Dark'}).isChecked(),
     'The topbar theme switch did not synchronize the Settings selection');
-  await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
+  await openModule('Home');
   await page.getByRole('tab',{name:'Home',exact:true}).waitFor({timeout:15000});
   // Phase 1 command-palette acceptance: unsupported actions cannot be run
   // with Enter, and keyboard selection exposes a real ARIA active result.
@@ -107,7 +139,7 @@ async function main(){
     'Enabled command was not exposed through the accessible combobox');
   await page.keyboard.press('Enter');
   await page.getByRole('heading',{name:'Appearance'}).waitFor({timeout:15000});
-  await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
+  await openModule('Home');
   await page.getByRole('tab',{name:'Home',exact:true}).waitFor({timeout:15000});
   console.log('PHASE1 keyboard command palette skips unavailable conversion and executes available settings: PASS');
   const topColor=await page.locator('.topbar').evaluate((node)=>getComputedStyle(node).backgroundColor);
@@ -128,13 +160,13 @@ async function main(){
   await page.getByRole('tab',{name:'PDF Viewer'}).click();
   await page.getByRole('tabpanel',{name:'PDF Viewer',exact:true})
     .getByRole('button',{name:'PDF Workspace'}).click();
-  requireEvidence(await page.locator('.sidebar .nav-item.active').getAttribute('aria-label')==='PDF Workspace',
+  requireEvidence(await page.locator('main.workspace > .pdf-workspace').count()===1,
     'Ribbon PDF Viewer command did not navigate inside MALENJO');
   requireEvidence(await page.locator('.suite-ribbon').count()===0 &&
     await page.locator('main.workspace > .pdf-workspace .pdf-task-toolbar').isVisible(),
     'PDF workspace stacked two ribbons or lost its actual PDF task ribbon');
   requireEvidence(context.pages().length===1,'Ribbon navigation opened another window instead of the single workbench');
-  await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
+  await openModule('Home');
   await page.getByRole('tab',{name:'Home',exact:true}).waitFor({timeout:15000});
   requireEvidence(await page.locator('.suite-ribbon').count()===1,
     'Home did not restore the shared MALENJO ribbon');
@@ -204,12 +236,13 @@ async function main(){
   // Phase 3: exercise every real navigation surface, not only the PDF tab.
   // This proves shell launchability, not the underlying domain workflows.
   const modulesText=readFileSync(resolve(root,'src/suite/modules/registry.ts'),'utf8');
-  const moduleNames=Array.from(modulesText.matchAll(/\{\s*id:'[^']+',\s*name:'([^']+)'/g),match=>match[1]);
-  requireEvidence(moduleNames.length===22&&new Set(moduleNames).size===22,
+  const sourceModules=Array.from(modulesText.matchAll(/\{\s*id:'[^']+',\s*name:'([^']+)'/g),match=>match[1]);
+  const moduleNames=sourceModules.filter(name=>!['Document Workspace','Spreadsheet','Presentation','Malenjo AI'].includes(name));
+  requireEvidence(sourceModules.length===22&&moduleNames.length===18&&new Set(moduleNames).size===18,
     'not all 22 source-defined workspaces are available for browser verification');
   for(const name of moduleNames){
+    await openModule(name);
     const entry=page.locator('.sidebar nav .nav-item').filter({hasText:name}).first();
-    await entry.click({timeout:15000});
     await page.waitForFunction(expected=>
       document.querySelector('.sidebar nav .nav-item.active')?.getAttribute('aria-label')===expected,
       name,{timeout:15000});
@@ -229,7 +262,7 @@ async function main(){
   for(const [name,kind] of [
     ['CAD','cad'],['DICOM','dicom'],['Invoice Studio','invoice'],['Account','account'],
   ]){
-    await page.locator('.sidebar nav .nav-item').filter({hasText:name}).first().click();
+    await openModule(name);
     const surface=page.locator('[data-capability-module="'+kind+'"]');
     await surface.waitFor({state:'visible',timeout:15000});
     requireEvidence(await surface.locator('.capability-inspector').isVisible() &&
@@ -249,7 +282,7 @@ async function main(){
   }
   await page.locator('.suite-ribbon-actions').getByRole('button',{name:'Appearance settings'}).click();
   await page.getByRole('heading',{name:'Appearance'}).waitFor({timeout:15000});
-  await page.locator('.sidebar nav .nav-item').filter({hasText:'CAD'}).first().click();
+  await openModule('CAD');
   await page.locator('.suite-ribbon-actions').getByRole('button',{name:'Files / Library',exact:true}).click();
   requireEvidence(await page.locator('.library-view').count()===1,
     'CAD Files command did not navigate to actual library');
@@ -304,7 +337,7 @@ async function main(){
     requireEvidence(accents[0]==='#2b8cff'&&accents[1]==='#33d4e5',
       'MALENJO accent colors changed in '+theme+' mode');
     for(const name of moduleNames){
-      await page.locator('.sidebar nav .nav-item').filter({hasText:name}).first().click();
+      await openModule(name);
       await page.waitForFunction(expected=>
         document.querySelector('.sidebar nav .nav-item.active')?.getAttribute('aria-label')===expected,name,{timeout:15000});
       const probe=themeProbes[name]??'.canvas-placeholder';
@@ -345,7 +378,7 @@ async function main(){
   console.log('PHASE1 '+releaseGateScreenshotCount+' module appearance screenshots captured for HUMAN acceptance (not sign-off)');
   requireEvidence(JSON.stringify(paletteEvidence.dark)===JSON.stringify(paletteEvidence.light),
     'Brand colors were inconsistent between the two themes');
-  await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
+  await openModule('Home');
   await page.getByRole('button',{name:'Switch to dark theme'}).click();
   await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
   console.log('PHASE3 two-theme surface review and MALENJO brand parity: PASS');
@@ -438,7 +471,7 @@ async function main(){
       await page.locator('.document-tab').count()===tabCountBeforeTheme,
       'Appearance switching remounted the editor or changed document sessions: '+item.module);
     // The editor must not silently discard unsaved edits after leaving.
-    await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
+    await openModule('Home');
     await officeTab.click();
     requireEvidence(await editor.inputValue()===item.updated,
       'Office session lost edits when switching modules: '+item.module);
@@ -477,7 +510,7 @@ async function main(){
   };
   const multiSheetSource=Buffer.from(zipSync(Object.fromEntries(
     Object.entries(multiSheetParts).map(([name,value])=>[name,strToU8(value)]))));
-  await page.locator('.sidebar nav .nav-item').filter({hasText:'Spreadsheet'}).first().click();
+  await openModule('Spreadsheet');
   await page.locator('main.workspace > .office-workspace input[type="file"]').first()
     .setInputFiles({name:'multi-worksheet.xlsx',
       mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -498,7 +531,7 @@ async function main(){
   await workbookUi.getByRole('tab',{name:'Budget'}).click();
   requireEvidence(await workbookUi.getByRole('textbox',{name:'Cell A1',exact:true}).inputValue()==='Budget browser edited',
     'Spreadsheet lost previous worksheet edits when switching tabs');
-  await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
+  await openModule('Home');
   await multiTab.click();
   requireEvidence(await workbookUi.getByRole('textbox',{name:'Cell A1',exact:true}).inputValue()==='Budget browser edited',
     'Spreadsheet lost multi-sheet editing state after workspace navigation');
@@ -520,7 +553,7 @@ async function main(){
     'Unrelated OOXML package part was altered during multi-sheet export');
   requireEvidence(strFromU8(unzipSync(multiSheetSource)['xl/worksheets/sheet7.xml']).includes('Budget original'),
     'Original imported multi-sheet file was modified');
-  await page.locator('.sidebar nav .nav-item').filter({hasText:'Spreadsheet'}).first().click();
+  await openModule('Spreadsheet');
   await page.locator('main.workspace > .office-workspace input[type="file"]').first()
     .setInputFiles({name:'multi-worksheet-export-reopened.xlsx',
       mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -537,7 +570,7 @@ async function main(){
   requireEvidence(errors.length===0,'Multi-sheet browser exception: '+errors.join(' | '));
   console.log('PHASE3 XLSX multi-tab UI/edit/export/independent ZIP inspection/reimport: PASS (synthetic fixture)');
 
-  await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
+  await openModule('Home');
   console.log('MALENJO loaded in Chromium; opening PDF via browser input');
   await page.locator('.workspace > input[type="file"]').setInputFiles({
     name:'browser-ui-acceptance.pdf',mimeType:'application/pdf',buffer:source,
@@ -574,14 +607,14 @@ async function main(){
   requireEvidence(/2 match/i.test(await page.locator('.pdf-search-status').innerText()),
     'Find did not report matches from two real PDF pages');
   console.log('MALENJO UI Find + visible text highlights: PASS');
-  await page.locator('.sidebar .nav-item').filter({hasText:'Home'}).first().click();
+  await openModule('Home');
   await documentTab.click();
   await page.locator('.pdf-page-shell canvas').first().waitFor({timeout:30000});
   requireEvidence(await documentTab.count()===1,'browser PDF tab vanished after navigation');
   console.log('MALENJO browser tab retention: PASS');
   // Also exercise the exact direct PDF Workspace -> Choose PDF path, which
   // previously opened a disposable preview that vanished on navigation.
-  await page.locator('.sidebar .nav-item').filter({hasText:'PDF Workspace'}).first().click();
+  await openModule('PDF Workspace');
   await page.locator('main.workspace > .pdf-workspace > input[type="file"][accept="application/pdf,.pdf"]').first()
     .setInputFiles({
       name:'standalone-picker-keeps-tab.pdf',
@@ -590,7 +623,7 @@ async function main(){
     });
   const pickerTab=page.locator('.document-tab-main').filter({hasText:'standalone-picker-keeps-tab.pdf'});
   await pickerTab.waitFor({timeout:20000});
-  await page.locator('.sidebar .nav-item').filter({hasText:'Home'}).first().click();
+  await openModule('Home');
   await pickerTab.click();
   requireEvidence(await pickerTab.count()===1,
     'the PDF Workspace picker did not keep the opened document in a regular tab');
@@ -627,7 +660,7 @@ async function main(){
   }));
   firstLinkPage.node.set(PDFName.of('Annots'),linked.context.obj([annotation]));
   const linkedBytes=Buffer.from(await linked.save({useObjectStreams:false}));
-  await page.locator('.sidebar .nav-item').filter({hasText:'PDF Workspace'}).first().click();
+  await openModule('PDF Workspace');
   await page.locator('main.workspace > .pdf-workspace > input[type="file"][accept="application/pdf,.pdf"]').first()
     .setInputFiles({name:'safe-link-acceptance.pdf',mimeType:'application/pdf',buffer:linkedBytes});
   const linkTab=page.locator('.document-tab-main').filter({hasText:'safe-link-acceptance.pdf'});
