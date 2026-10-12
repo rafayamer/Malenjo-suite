@@ -2247,7 +2247,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const primaryTaskActions=activeTaskActions.slice(0,6);
   const overflowTaskActions=activeTaskActions.slice(6);
   const shortActionLabel=(action:PdfToolbarAction)=>action.label
-    .replace(/^PDF to /,'To ').replace(/^Open /,'').replace(/^Show /,'')
+    .replace(/^Local tools$/,'Local').replace(/^PDF to /,'To ').replace(/^Open /,'').replace(/^Show /,'')
     .replace(/^Hide /,'').replace(/^Add /,'').replace(/\u2026/g,'')
     .replace(/\s*\(\.txt\)/,'').replace(/\s*ZIP$/,'')
     .slice(0,20);
@@ -2581,7 +2581,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     {error && <div className="pdf-notice error">{error}</div>}
 
     {!pdf && <div className="pdf-empty">
-      <div className="empty-icon">M</div>
+      <div className="pdf-empty-icon" aria-hidden="true"><FileText size={32} strokeWidth={1.6}/></div>
       <h1>PDF Workspace</h1>
       <p>{loading
         ? 'Loading PDF with the local PDF.js renderer…'
