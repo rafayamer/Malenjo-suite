@@ -51,7 +51,7 @@ async function main(){
   requireEvidence(await page.locator('.sidebar:not(.ml-tools-popup)').count()===0 &&
     await page.locator('.app-shell-top-only').count()===1,
     'Permanent module sidebar was not eliminated');
-  requireEvidence(await page.getByRole('button',{name:'Open File',exact:true}).isVisible() &&
+  requireEvidence(await page.locator('.ml-start-hero').getByRole('button',{name:'Open File',exact:true}).isVisible() &&
     await page.getByRole('button',{name:'Recent Files',exact:true}).isVisible(),
     'Minimal central Home Open File / Recent Files entry points are missing');
   requireEvidence(await page.locator('.ml-start-more-tools:not([open])').count()===1,
