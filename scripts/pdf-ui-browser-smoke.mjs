@@ -110,7 +110,7 @@ async function main(){
       await page.getByRole('button',{name:theme==='light'?'Switch to light theme':'Switch to dark theme'}).click();
       await page.waitForFunction(value=>document.documentElement.dataset.theme===value,theme);
     }
-    for(const width of [1024,800,680,430]){
+    for(const width of [1024,800,680,430,320]){
       await page.setViewportSize({width,height:850});
       const metrics=await page.evaluate(()=>{
         const bar=document.querySelector('.topbar').getBoundingClientRect();
@@ -120,11 +120,13 @@ async function main(){
           const box=button.getBoundingClientRect();
           return {left:box.left,right:box.right,width:box.width};
         });
-        return {viewport:innerWidth,barRight:bar.right,ribbonRight:ribbon.right,
+        return {viewport:innerWidth,documentWidth:document.documentElement.scrollWidth,
+          bodyWidth:document.body.scrollWidth,barRight:bar.right,ribbonRight:ribbon.right,
           searchWidth:search.width,commands};
       });
-      requireEvidence(metrics.barRight<=width+2 && metrics.ribbonRight<=width+2,
-        'Shell extends off-screen at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
+      requireEvidence(metrics.documentWidth<=width+2 && metrics.bodyWidth<=width+2 &&
+        metrics.barRight<=width+2 && metrics.ribbonRight<=width+2,
+        'Shell or document horizontally overflows at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
       requireEvidence(metrics.searchWidth>45 && metrics.commands.every((c)=>c.left>=0&&c.right<=width+2&&c.width>=30),
         'Essential titlebar commands clipped at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
       requireEvidence(context.pages().length===1,'Responsive layout launched a second browser window');
@@ -133,6 +135,11 @@ async function main(){
   await page.setViewportSize({width:1440,height:900});
   await page.getByRole('button',{name:'Switch to dark theme'}).click();
   await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+  // A keyboard user can bypass the 22-module sidebar and reach the working area.
+  await page.locator('.skip-to-workspace').focus();
+  await page.keyboard.press('Enter');
+  requireEvidence(await page.evaluate(()=>document.activeElement?.id)==='malenjo-workspace-content',
+    'Skip navigation did not move keyboard focus to the active workspace');
   console.log('PHASE1 ribbon keyboard, resized layout, two-theme command access: PASS');
 
 
@@ -285,6 +292,27 @@ async function main(){
     const editor=page.locator('.document-session-panel.active').locator(item.editor);
     await editor.waitFor({timeout:30000});
     await editor.fill(item.updated);
+    const tabItems=page.locator('.document-tab-main');
+    const countBeforeKeyboard=await tabItems.count();
+    if(countBeforeKeyboard>1){
+      await officeTab.focus();
+      await page.keyboard.press('ArrowLeft');
+      const prior=tabItems.nth(countBeforeKeyboard-2);
+      requireEvidence(await prior.getAttribute('aria-selected')==='true' &&
+        await prior.evaluate((element)=>element===document.activeElement),
+        'Document tab Left arrow failed to activate/focus previous session: '+item.module);
+      await page.keyboard.press('ArrowRight');
+      requireEvidence(await officeTab.getAttribute('aria-selected')==='true' &&
+        await officeTab.evaluate((element)=>element===document.activeElement),
+        'Document tab Right arrow failed to restore the editing session: '+item.module);
+      const actionMenu=page.getByRole('button',{name:'Tab actions for '+item.filename});
+      await actionMenu.click();
+      const popup=page.getByRole('menu',{name:'Tab actions for '+item.filename});
+      await popup.waitFor({state:'visible'});
+      await page.keyboard.press('Escape');
+      requireEvidence(await popup.count()===0 && await actionMenu.evaluate((element)=>element===document.activeElement),
+        'Tab actions menu failed to close and restore keyboard focus: '+item.module);
+    }
     // Theme changes must not remount or discard a dirty Office session.
     // The original OOXML/source byte protection is independently verified below.
     const tabCountBeforeTheme=await page.locator('.document-tab').count();

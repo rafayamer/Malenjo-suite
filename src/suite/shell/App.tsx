@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { Activity, Command, FolderOpen, Search, ShieldCheck, Moon, Sun } from 'lucide-react';
 import { modules } from '../modules/registry';
 import type { ModuleId } from '../core/types';
@@ -53,7 +53,7 @@ export default function App() {
   const [theme, setTheme] = useState<SuiteTheme>(() => {
     try { return readSuiteTheme(window.localStorage); } catch { return 'dark'; }
   });
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
     applySuitePalette(document.documentElement.style, theme);
@@ -516,6 +516,7 @@ export default function App() {
   }
 
   return <div className={sidebarCollapsed?'app-shell sidebar-collapsed':'app-shell'} data-shell="malenjo-ribbon">
+    <a className="skip-to-workspace" href="#malenjo-workspace-content">Skip to workspace content</a>
     <aside className="sidebar" aria-label="MALENJO workspace navigation">
       <div className="brand">
         <div className="brand-mark">M</div>
@@ -535,6 +536,8 @@ export default function App() {
     </aside>
 
     <main
+      id="malenjo-workspace-content"
+      tabIndex={-1}
       className={dropActive ? 'workspace drop-active' : 'workspace'}
       onDragEnter={(event) => { if (!isDesktopRuntime() && event.dataTransfer.types.includes('Files')) setDropActive(true); }}
       onDragOver={(event) => { if (!isDesktopRuntime() && event.dataTransfer.types.includes('Files')) event.preventDefault(); }}
@@ -687,17 +690,14 @@ function ModuleView({
       </div>
       <div className="module-state">
         {session && <span className={session.saving ? 'session-state saving' : session.dirty ? 'session-state dirty' : 'session-state'}>{session.saving ? 'Saving…' : session.dirty ? 'Unsaved changes' : 'Saved'}</span>}
-        <span className={'status large '+module.status}>{module.status}</span>
+        <span className="status large foundation">NOT RELEASE-READY</span>
       </div>
     </div>
     <div className="canvas-placeholder">
       <div className="canvas-toolbar">
         <button onClick={onBackToFiles}>Files</button>
-        <button disabled={!session?.dirty}>Save</button>
-        <button disabled={!document || session?.saving || !!document?.browserFile} onClick={() => void onSaveAs()}>Save As</button>
-        <button disabled={!document}>Export</button>
-        <button disabled={!document}>Print</button>
-        <button>More</button>
+        <button disabled={!document || session?.saving || !!document?.browserFile} onClick={() => void onSaveAs()}>Save a copy</button>
+        <span className="module-unavailable-reason">Editing, export and printing are unavailable in this workspace.</span>
       </div>
       {notice && <div className="workspace-notice">{notice}</div>}
       <div className="empty-state">

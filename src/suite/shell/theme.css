@@ -1122,3 +1122,52 @@ body { background:var(--ml-background);color:var(--ml-text); }
   color:var(--ml-success-fg);
 }
 :root[data-theme="light"] .ml-home-runtime small {color:var(--ml-success-fg)}
+
+
+/* Phase 1 release-readiness gate: the legacy CSS began with
+   body{min-width:1080px}, which made resized desktop/Codespaces windows
+   horizontally overflow despite a responsive titlebar. */
+html, body, #root {max-width:100%;min-width:0}
+body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
+.app-shell {min-width:0;max-width:100%;width:100%}
+.workspace {min-width:0;max-width:100%;overflow-x:hidden}
+.workspace .content, .workspace .home-start-center {max-width:100%;min-width:0}
+.document-tabs, .document-tabs-scroll {min-width:0;max-width:100%}
+.skip-to-workspace {
+  position:fixed;left:8px;top:8px;z-index:10000;
+  padding:10px 14px;background:var(--ml-surface);
+  color:var(--ml-text);border:2px solid var(--ml-brand-blue);
+  border-radius:6px;transform:translateY(-150%);
+}
+.skip-to-workspace:focus {transform:translateY(0)}
+.document-tab-main:focus-visible,.document-tab-menu-button:focus-visible,
+.document-tab-close:focus-visible,.document-tab-menu button:focus-visible,
+.module-view button:focus-visible {
+  outline:2px solid var(--ml-brand-blue);
+  outline-offset:-2px;
+}
+.module-unavailable-reason {
+  display:inline-flex;align-items:center;padding:4px 8px;
+  color:var(--ml-muted);font-size:12px;
+}
+@media(max-width:800px) {
+  .app-shell {grid-template-columns:52px minmax(0,1fr)!important}
+  .sidebar {padding:10px 3px;min-width:0}
+  .sidebar .brand {padding:0 0 12px;flex-direction:column}
+  .sidebar .brand-copy, .sidebar .nav-label,
+  .sidebar section h3,.sidebar .local-state-copy,.sidebar .nav-item small {display:none}
+  .sidebar .sidebar-toggle {width:38px;height:28px;margin:0}
+  .sidebar .nav-item {justify-content:center;padding:9px 4px}
+  .sidebar .nav-glyph {display:grid}
+  .sidebar .local-state {justify-content:center;margin:8px 1px;padding:4px}
+  .workspace>.document-tabs {max-width:100%;min-width:0}
+}
+@media(max-width:520px) {
+  .topbar {padding:0 5px;gap:4px}
+  .topbar .search {padding:5px;gap:3px}
+  .topbar .search kbd {display:none}
+  .topbar-actions {gap:2px}
+  .topbar-actions .command {min-width:30px;height:32px;padding:4px}
+  .suite-ribbon-actions {overflow-x:auto}
+  .document-tab {max-width:165px}
+}
