@@ -431,6 +431,38 @@ async function main(){
     await activePdf.locator('.pdf-left-shell').isHidden() &&
     await activePdf.locator('.pdf-inspector').count()===0,
     'PDF canvas started with an unwanted left or right sidebar');
+
+  // Phase 1: an icon-only ribbon that conceals its features is not acceptable.
+  // Working actions have captions; planned conversions remain visible and
+  // disabled, with a complete opt-in feature index rather than a side rail.
+  await activePdf.getByRole('tab',{name:'Convert',exact:true}).click();
+  for(const id of ['to-docx','to-xlsx','to-pptx']){
+    const feature=activePdf.locator('.pdf-feature-command[data-pdf-feature="'+id+'"]');
+    await feature.waitFor({state:'visible',timeout:15000});
+    requireEvidence(await feature.locator('svg').count()===1 &&
+      await feature.locator('.pdf-feature-caption').isVisible() &&
+      await feature.getByRole('button').isDisabled() &&
+      (await feature.getAttribute('title')??'').includes('not release-ready'),
+      'Unverified PDF conversion feature was hidden, executable, or unexplained: '+id);
+  }
+  const browseFeatures=activePdf.getByRole('button',{name:'Browse all PDF features'});
+  await browseFeatures.click();
+  const featureGrid=activePdf.getByRole('region',{name:'Convert PDF features'});
+  await featureGrid.waitFor({state:'visible',timeout:15000});
+  requireEvidence(await featureGrid.locator('.pdf-feature-gallery-cell').count()>=7 &&
+    await featureGrid.locator('[data-pdf-feature="to-docx"] button').isDisabled() &&
+    await featureGrid.locator('[data-pdf-feature="export-text"] button').isEnabled(),
+    'PDF Features grid did not distinguish operational and unverified tools');
+  await featureGrid.getByRole('button',{name:'Close PDF features'}).click();
+  requireEvidence(await featureGrid.count()===0 &&
+    await activePdf.locator('.pdf-page-shell canvas').first().isVisible(),
+    'Feature gallery obscured or navigated away from the PDF');
+  await activePdf.getByRole('tab',{name:'Protect',exact:true}).click();
+  requireEvidence(await activePdf.locator('[data-pdf-feature="encrypt-pdf"] button').isDisabled(),
+    'Password protection placeholder was missing or wrongly enabled');
+  await activePdf.getByRole('tab',{name:'Home',exact:true}).click();
+  console.log('PHASE1 PDF icon features, truthful conversion placeholders and opt-in catalog: PASS');
+
   await page.getByRole('button',{name:'MALENJO AI',exact:true}).click();
   const sideBounds=await page.evaluate(()=>{
     const drawer=document.querySelector('.ml-ai-drawer.is-open')?.getBoundingClientRect();
