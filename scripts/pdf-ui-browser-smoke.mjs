@@ -52,6 +52,21 @@ async function main(){
     requireEvidence(await action.isDisabled() && (await action.getAttribute('aria-description'))?.includes('conversion'),
       'Home incorrectly advertises an unverified independent Office launch: '+label);
   }
+  // The Settings page must provide exactly two real native radio controls.
+  await page.locator('.sidebar nav .nav-item').filter({hasText:'Settings'}).first().click();
+  await page.getByRole('heading',{name:'Appearance'}).waitFor({timeout:15000});
+  requireEvidence(await page.getByRole('radio').count()===2,
+    'Settings did not offer exactly Light and Dark');
+  await page.getByRole('radio',{name:'Light'}).check();
+  await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
+  requireEvidence(await page.getByRole('radio',{name:'Light'}).isChecked(),
+    'The Light preference radio did not update the running suite');
+  await page.getByRole('button',{name:'Switch to dark theme'}).click();
+  await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+  requireEvidence(await page.getByRole('radio',{name:'Dark'}).isChecked(),
+    'The topbar theme switch did not synchronize the Settings selection');
+  await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
+  await page.getByRole('tab',{name:'Home',exact:true}).waitFor({timeout:15000});
   const topColor=await page.locator('.topbar').evaluate((node)=>getComputedStyle(node).backgroundColor);
   await page.getByRole('button',{name:'Switch to light theme'}).click();
   await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
@@ -188,11 +203,12 @@ async function main(){
     'Administration':'.enterprise-toolbar',
     'Backup / DR':'.enterprise-toolbar',
     'Help / Support':'.help-panel',
+    'Settings':'.appearance-panel',
   };
   const screenshotModules=new Set([
     'Home','Files / Library','PDF Workspace','Document Workspace',
     'Spreadsheet','Presentation','Scanner','Malenjo AI','Security Center',
-    'CAD','DICOM','Help / Support',
+    'CAD','DICOM','Help / Support','Settings',
   ]);
   const reviewDir=resolve(root,'.build/pdf-ui-browser/theme-review');
   mkdirSync(reviewDir,{recursive:true});
