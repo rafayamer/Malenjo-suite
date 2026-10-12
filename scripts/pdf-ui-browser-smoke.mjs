@@ -603,16 +603,20 @@ async function main(){
   console.log('MALENJO PDF icon ribbon non-overlap, hidden sidebars, side-chat coexistence: PASS');
   console.log('MALENJO browser document tab opened');
   await page.waitForFunction(()=>
-    Array.from(document.querySelectorAll('.pdf-text-layer span')).some(
+    Array.from(document.querySelectorAll('.document-session-panel.active .pdf-text-layer span')).some(
       node=>node.textContent?.includes('MALENJO BROWSER UI TEXT SELECT FIND'),
     ),null,{timeout:30000});
   await page.waitForFunction(() =>
-    [...document.querySelectorAll('.pdf-text-layer span')].some(node =>
+    [...document.querySelectorAll('.document-session-panel.active .pdf-text-layer span')].some(node =>
       node.isConnected &&
       node.textContent?.includes('MALENJO BROWSER UI TEXT SELECT FIND') &&
       getComputedStyle(node).cursor==='text'
     ),null,{timeout:30000});
-  const span=page.locator('.pdf-text-layer span').filter({hasText:'MALENJO BROWSER UI TEXT SELECT FIND'}).first();
+  const span=page.locator('.document-session-panel.active .pdf-text-layer span')
+    .filter({hasText:'MALENJO BROWSER UI TEXT SELECT FIND'}).first();
+  // Exercise a real pointer hit on the active document; an unrelated parked
+  // PDF layer can finish rendering independently and must not satisfy this gate.
+  await span.hover({timeout:20000});
   console.log('MALENJO real PDF.js selectable text spans rendered with working I-beam');
   const selected=await span.evaluate(node=>{
     const range=document.createRange(),selection=window.getSelection();
@@ -621,9 +625,20 @@ async function main(){
     selection?.addRange(range);
     const text=selection?.toString()??'';
     selection?.removeAllRanges();
-    return {cursor:getComputedStyle(node).cursor,selection:text};
+    const box=node.getBoundingClientRect();
+    const hit=document.elementFromPoint(box.left+box.width/2,box.top+box.height/2);
+    return {cursor:getComputedStyle(node).cursor,
+      hitCursor:hit?getComputedStyle(hit).cursor:'none',selection:text,
+      connected:node.isConnected,parentClass:node.parentElement?.className??'',
+      className:node.className,tag:node.tagName,html:node.outerHTML.slice(0,350),
+      candidates:[...document.querySelectorAll('.document-session-panel.active .pdf-text-layer span')]
+        .filter(item=>item.textContent?.includes('MALENJO BROWSER UI TEXT SELECT FIND'))
+        .slice(0,5).map(item=>({tag:item.tagName,className:item.className,
+          cursor:getComputedStyle(item).cursor,connected:item.isConnected,
+          parentClass:item.parentElement?.className??''}))};
   });
-  requireEvidence(selected.cursor==='text','PDF hover does not show I-beam');
+  requireEvidence(selected.connected && selected.cursor==='text' && selected.hitCursor==='text',
+    'PDF hover does not show I-beam on active page: '+JSON.stringify(selected));
   requireEvidence(selected.selection.includes('MALENJO BROWSER UI'),
     'PDF text cannot be selected and copied');
   console.log('MALENJO UI text selection: PASS');
@@ -637,6 +652,80 @@ async function main(){
   requireEvidence(/2 match/i.test(await page.locator('.pdf-search-status').innerText()),
     'Find did not report matches from two real PDF pages');
   console.log('MALENJO UI Find + visible text highlights: PASS');
+
+  // Master v2 Phase 1 responsive + appearance matrix on a REAL open PDF.
+  // Keep PDF.js selectable text functional through live theme changes,
+  // viewport resizing and opening/closing the document AI drawer.
+  const viewportMatrix=[[1920,1080],[1440,900],[1366,768],[1024,768],[768,600],[430,720]];
+  const topAi=page.getByRole('button',{name:'MALENJO AI',exact:true});
+  for (const expectedTheme of ['light','dark']) {
+    const initialTheme=await page.evaluate(()=>document.documentElement.dataset.theme);
+    if(initialTheme!==expectedTheme) {
+      await page.getByRole('button',{
+        name:expectedTheme==='light'?'Switch to light theme':'Switch to dark theme',
+      }).click();
+    }
+    await page.waitForFunction(theme=>document.documentElement.dataset.theme===theme,
+      expectedTheme,{timeout:15000});
+    for (const [width,height] of viewportMatrix) {
+      await page.setViewportSize({width,height});
+      const dimensions=await page.evaluate(()=>{
+        const rect=(selector)=>{
+          const bounds=document.querySelector(selector)?.getBoundingClientRect();
+          return bounds?{left:bounds.left,right:bounds.right,top:bounds.top,bottom:bounds.bottom}:null;
+        };
+        return {
+          viewport:innerWidth, documentWidth:document.documentElement.scrollWidth,
+          ai:rect('.ml-top-ai'),
+          ribbon:rect('.document-session-panel.active .pdf-task-categories'),
+          status:rect('.ml-bottom-statusbar'),
+          pdfToolbar:rect('.document-session-panel.active .pdf-context-toolbar'),
+        };
+      });
+      requireEvidence(dimensions.ai && dimensions.ai.left>=-1 &&
+        dimensions.ai.right<=width+2 &&
+        dimensions.ribbon && dimensions.ribbon.right<=width+2 &&
+        dimensions.status && dimensions.status.right<=width+2 &&
+        dimensions.pdfToolbar && dimensions.pdfToolbar.right<=width+2 &&
+        dimensions.documentWidth<=width+2,
+        'Phase 1 '+expectedTheme+' viewport '+width+'x'+height+
+        ' clips global/PDF controls or overflows the window: '+JSON.stringify(dimensions));
+      await page.screenshot({path:resolve(root,
+        '.build/pdf-ui-browser/theme-review/phase1-pdf-'+expectedTheme+'-'+width+'x'+height+'.png')});
+    }
+    await page.setViewportSize({width:1440,height:900});
+    // Selectable text must survive the actual theme change and optional AI.
+    for (const drawerOpen of [true,false]) {
+      if(drawerOpen)await topAi.click();
+      else await page.getByRole('button',{name:'Close MALENJO AI'}).click();
+      await page.waitForFunction(()=>
+        [...document.querySelectorAll('.document-session-panel.active .pdf-text-layer span')]
+          .some(node=>node.isConnected &&
+            node.textContent?.includes('MALENJO BROWSER UI TEXT SELECT FIND') &&
+            getComputedStyle(node).cursor==='text'),
+      null,{timeout:30000});
+      const activeText=page.locator('.document-session-panel.active .pdf-text-layer span')
+        .filter({hasText:'MALENJO BROWSER UI TEXT SELECT FIND'}).first();
+      // Playwright performs a real Chromium mouse hover over the PDF text,
+      // rather than testing only an isolated CSS selector in a unit test.
+      await activeText.hover({timeout:20000});
+      const interaction=await activeText.evaluate(node=>{
+        const rect=node.getBoundingClientRect();
+        const target=document.elementFromPoint(rect.left+rect.width/2,
+          rect.top+rect.height/2);
+        return {spanCursor:getComputedStyle(node).cursor,
+          hitCursor:target?getComputedStyle(target).cursor:'none',
+          connected:node.isConnected};
+      });
+      requireEvidence(interaction.connected && interaction.spanCursor==='text' &&
+        interaction.hitCursor==='text',
+        'PDF lost real text-hover cursor with '+expectedTheme+
+        ' theme and AI '+(drawerOpen?'open':'closed')+': '+JSON.stringify(interaction));
+    }
+  }
+  await page.setViewportSize({width:1440,height:900});
+  console.log('PHASE1 real PDF, two themes, six viewport sizes, AI drawer and I-beam hover matrix: PASS');
+
   await openModule('Home');
   await documentTab.click();
   await page.locator('.pdf-page-shell canvas').first().waitFor({timeout:30000});
