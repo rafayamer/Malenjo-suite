@@ -1960,3 +1960,20 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
   .app-shell-top-only .topbar-primary .command{min-width:34px!important}
   .ml-suite-status{font-size:10px}
 }
+
+
+/* On reduced-width windows the essential always-visible quick actions are
+   Home, Tools, Open, AI and Theme. Save, Undo, Redo and Settings remain
+   available through PDF ribbon actions / Ctrl+K / the Tools gallery. */
+@media(max-width:760px) {
+  .app-shell-top-only .ml-top-quick-save,
+  .app-shell-top-only .ml-top-quick-undo,
+  .app-shell-top-only .ml-top-quick-redo,
+  .app-shell-top-only .ml-top-settings {display:none!important}
+}
+@media(max-width:420px) {
+  .app-shell-top-only .topbar-actions>button[aria-label="Open command palette"]{
+    display:none!important
+  }
+  .app-shell-top-only .search {max-width:none;min-width:42px}
+}
