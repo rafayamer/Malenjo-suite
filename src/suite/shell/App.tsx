@@ -1,3 +1,4 @@
+import MalenjoBrandIcon from '../../../src-tauri/icons/icon.png';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { Bot, ChevronDown, Command, FolderOpen, House, LayoutGrid, Search, ShieldCheck, Moon, Sun, X, Save, Undo2, Redo2, UserRound } from 'lucide-react';
 import { modules } from '../modules/registry';
@@ -659,7 +660,7 @@ export default function App() {
         }}
       />
       <header className="topbar">
-        <div className="suite-title"><strong>MALENJO</strong><small title={activeSession?.document.name ?? module.name}>{activeSession?.document.name ?? module.name}</small></div>
+        <div className="suite-title"><img src={MalenjoBrandIcon} className="malenjo-brand-logo" alt="" aria-hidden="true"/><strong>MALENJO</strong><small title={activeSession?.document.name ?? module.name}>{activeSession?.document.name ?? module.name}</small></div>
         <div className="topbar-primary">
           <button type="button" className="command topbar-home"
             aria-label="Home" title="Home — start and recent files" onClick={()=>selectModule('home')}>

@@ -33,6 +33,17 @@ export default function RibbonShell({ workspace, onNavigate, onOpenFiles }: Prop
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const moreSearchRef = useRef<HTMLInputElement>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  // Large per-requirement icon pack loads only when the 90-command catalogue
+  // is opened; it must not penalize first paint of Home or other workspaces.
+  const [requirementIcons,setRequirementIcons]=useState<Readonly<Record<string,LucideIcon>>|null>(null);
+  useEffect(()=>{
+    if(!moreOpen||requirementIcons)return;
+    let alive=true;
+    void import('../pdf/masterFeatureIcons').then(module=>{
+      if(alive)setRequirementIcons(module.MASTER_FEATURE_ICON_BY_ID);
+    });
+    return()=>{alive=false;};
+  },[moreOpen,requirementIcons]);
   const [moreQuery, setMoreQuery] = useState('');
   useEffect(() => {setSelected(defaultRibbonTab(workspace));setMoreOpen(false);}, [workspace]);
   useEffect(() => { if(moreOpen)moreSearchRef.current?.focus(); }, [moreOpen]);
@@ -137,14 +148,15 @@ export default function RibbonShell({ workspace, onNavigate, onOpenFiles }: Prop
         {categories.map(category=>{
           const subset=matchingCommands.filter(item=>item.category===category);
           if(!subset.length)return null;
-          const Icon=commandIcons[category];
           return <section key={category} aria-label={category+' features'}>
             <h3>{category} <small>{subset.length}</small></h3>
             <div className="ml-command-catalog-grid">
               {subset.map(command=><div key={command.id} className="ml-command-catalog-entry" tabIndex={0}
                 role="group" aria-label={command.id+' '+command.label+' — Not release-ready. '+command.tooltip}
                 title={command.tooltip} data-mal-command={command.id}>
-                <span className="ml-command-catalog-icon"><Icon size={20} aria-hidden="true"/></span>
+                <span className="ml-command-catalog-icon">
+                  {(() => {const Glyph=requirementIcons?.[command.id] ?? commandIcons[category];return <Glyph size={20} aria-hidden="true"/>;})()}
+                </span>
                 <span className="ml-command-catalog-label"><b>{command.label}</b><small>{command.id} · Not release-ready</small></span>
                 <button type="button" disabled aria-label={command.label+' — '+command.id+' unavailable'}
                   title={command.tooltip}>Unavailable</button>
