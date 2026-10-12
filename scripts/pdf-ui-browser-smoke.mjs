@@ -345,6 +345,27 @@ async function main(){
     console.log('PHASE3 module launch/navigation: '+name+' PASS (shell only)');
   }
   console.log('PHASE3 18/18 user-facing module shell-navigation smoke (22 registry entries): PASS (not module functionality sign-off)');
+  // A scanner click must lead to genuine local-image/camera acquisition,
+  // not a decorative launcher that cannot import or capture.
+  await openModule('Scanner');
+  const scanner=page.locator('.scanner-workspace');
+  await scanner.getByRole('button',{name:/Open camera/}).waitFor({state:'visible',timeout:30000});
+  requireEvidence(await scanner.getByRole('button',{name:/Choose images/}).isVisible(),
+    'Scanner did not expose the actual local image picker at first use');
+  const scanData=await page.evaluate(()=>{
+    const surface=document.createElement('canvas');surface.width=600;surface.height=800;
+    const ctx=surface.getContext('2d');
+    ctx.fillStyle='#ffffff';ctx.fillRect(0,0,600,800);
+    ctx.fillStyle='#000000';ctx.font='32px sans-serif';ctx.fillText('MALENJO SCAN TEST',42,120);
+    return surface.toDataURL('image/png').split(',')[1];
+  });
+  await scanner.locator('input[type="file"][accept*="image/png"]').setInputFiles({
+    name:'scanner-real-image.png',mimeType:'image/png',buffer:Buffer.from(scanData,'base64'),
+  });
+  await scanner.locator('.scan-pages > button').first().waitFor({state:'visible',timeout:30000});
+  requireEvidence((await scanner.locator('.scan-pages > button').count())===1,
+    'Scanner rejected valid generated image instead of creating a scan page');
+  console.log('PHASE1 scanner real image import and visible camera/image acquisition: PASS');
   // Release-oriented Phase 1: specialist screens must not share a generic
   // branded placeholder or expose nonfunctional editor commands as clickable.
   for(const [name,kind] of [
