@@ -60,7 +60,7 @@ async function main(){
   requireEvidence(await page.locator('.topbar').evaluate((node)=>getComputedStyle(node).backgroundColor)===topColor,
     'The dark appearance failed to restore MALENJO colors');
   await page.getByRole('tab',{name:'PDF Viewer'}).click();
-  await page.getByRole('tabpanel',{name:'PDF Viewer commands'})
+  await page.getByRole('tabpanel',{name:'PDF Viewer',exact:true})
     .getByRole('button',{name:'PDF Workspace'}).click();
   requireEvidence(await page.locator('.sidebar .nav-item.active').getAttribute('aria-label')==='PDF Workspace',
     'Ribbon PDF Viewer command did not navigate inside MALENJO');
