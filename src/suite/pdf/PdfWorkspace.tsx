@@ -2519,7 +2519,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                         if(tool.destination){onNavigateModule?.(tool.destination);return;}
                         if(action)void action.run();
                       }}>
-                      <PdfFeatureIcon id={tool.actionId ?? tool.id} label={tool.label} size={22}/>
+                      <PdfFeatureIcon id={tool.id} label={tool.label} size={22}/>
                       <span className="pdf-feature-gallery-label">{tool.label}</span>
                       <small>{enabled?'Open tool':'Not ready'}</small>
                     </button>
