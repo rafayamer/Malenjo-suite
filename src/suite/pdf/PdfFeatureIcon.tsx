@@ -3,7 +3,8 @@ import {
   FolderOpen, FormInput, Highlighter, Image, Languages, LayoutTemplate, LockKeyhole,
   MessageSquare, PanelRight, PenTool, Presentation, Printer, Redo2,
   RotateCw, ScanText, Scissors, Settings2, ShieldCheck, Sparkles, Table2,
-  Trash2, Undo2, Workflow, type LucideIcon,
+  Trash2, Undo2, Workflow, ArrowDownToLine, Crop, FileCode2, GitCompare,
+  Hash, LockOpen, Minimize2, Stamp, Wrench, type LucideIcon,
 } from 'lucide-react';
 
 /** Meaningful, stable symbols rather than the same generic document icon for every command. */
@@ -23,6 +24,18 @@ const icons: Record<string,LucideIcon> = {
   'form-designer':LayoutTemplate,'configure-forms':Settings2,
   'ai-summarize':Sparkles,'ai-translate':Languages,'searchable-ocr':ScanText,
   'batch-pdf':Workflow,
+  'merge-pdf':FilePlus2,'split-pdf':Scissors,'remove-pages':Trash2,
+  'extract-pages':Download,'organize-pdf':FileText,'scan-to-pdf':ScanText,
+  'compress-pdf':Minimize2,'repair-pdf':Wrench,'ocr-pdf':ScanText,
+  'jpg-to-pdf':FileImage,'word-to-pdf':FileType,'powerpoint-to-pdf':Presentation,
+  'excel-to-pdf':Table2,'html-to-pdf':FileCode2,
+  'pdf-to-jpg':FileImage,'pdf-to-word':FileType,'pdf-to-powerpoint':Presentation,
+  'pdf-to-excel':Table2,'pdf-to-pdfa':FileText,'rotate-pdf':RotateCw,
+  'page-numbers':Hash,'watermark-pdf':Stamp,'crop-pdf':Crop,
+  'edit-pdf':FileType,'pdf-forms':FormInput,'unlock-pdf':LockOpen,
+  'protect-pdf':LockKeyhole,'sign-pdf':PenTool,'redact-pdf':ShieldCheck,
+  'compare-pdf':GitCompare,'ai-summarizer':Sparkles,'translate-pdf':Languages,
+  'pdf-to-markdown':FileText,
 };
 export function PdfFeatureIcon({id,label,size=20}:{id:string;label:string;size?:number}) {
   const fallback = /sign/i.test(label) ? PenTool
