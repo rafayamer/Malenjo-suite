@@ -109,6 +109,7 @@ import PdfPageCanvas from './PdfPageCanvas';
 import { PdfFeatureIcon } from './PdfFeatureIcon';
 import { plannedPdfFeatures } from './featureCatalog';
 import { USER_PDF_TOOLS, USER_PDF_TOOL_GROUPS } from './userPdfTools';
+import { PDF_COMMANDS, type PDFRibbonCategory } from '../commands/masterCatalog';
 import {extractPdfPageSearchText,findPdfTextMatches} from './pdfTextHighlights';
 import PdfThumbnail from './PdfThumbnail';
 import PdfProviderToolsPanel from './PdfProviderToolsPanel';
@@ -302,7 +303,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [inspectorHidden, setInspectorHidden] = useState(true);
   const [taskCategory, setTaskCategory] = useState<PdfTaskCategory>('home');
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
-  const [featureGalleryMode, setFeatureGalleryMode] = useState<'category'|'all'>('category');
+  const [featureGalleryMode, setFeatureGalleryMode] = useState<'category'|'all'|'catalog'>('category');
   const [featureGallerySearch, setFeatureGallerySearch] = useState('');
   const [providerPanelOpen, setProviderPanelOpen] = useState(false);
   const [textOverlay, setTextOverlay] = useState({ text:'', x:0.12, y:0.82, size:12 });
@@ -2225,6 +2226,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     scan:[navigateAction('Open Scanner','scanner'),providerAction],
     automate:[navigateAction('Open Automation Studio','automation'),providerAction],
   };
+  const catalogVisible=PDF_COMMANDS.filter(command=>(
+    command.id+' '+command.label+' '+command.category+' '+command.requirementGroup+' '+command.expectedOutput
+  ).toLowerCase().includes(featureGallerySearch.trim().toLowerCase()));
   const directoryVisible=USER_PDF_TOOLS.filter(tool=>
     (tool.label+' '+tool.group).toLowerCase().includes(featureGallerySearch.trim().toLowerCase()));
   const directoryAction=(id:string,category:PdfTaskCategory)=>
@@ -2423,17 +2427,50 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         onKeyDown={event=>{if(event.key==='Escape'){setFeatureGalleryOpen(false);event.stopPropagation();}}}>
         <header>
           <div><strong>PDF features</strong>
-            <p>All 33 requested tools are listed. Only operational controls can be selected.</p></div>
+            <p>90 master requirements are searchable here. Unverified features are explicitly disabled; operational tools remain available in the current ribbon and classic directory.</p></div>
           <button type="button" onClick={()=>setFeatureGalleryOpen(false)}
             aria-label="Close PDF features" title="Close PDF features">×</button>
         </header>
         <div className="pdf-feature-gallery-tabs" role="group" aria-label="PDF feature view">
           <button type="button" aria-pressed={featureGalleryMode==='category'}
             onClick={()=>setFeatureGalleryMode('category')}>Current ribbon</button>
+          <button type="button" aria-pressed={featureGalleryMode==='catalog'}
+            onClick={()=>setFeatureGalleryMode('catalog')}>All 90 capabilities</button>
           <button type="button" aria-pressed={featureGalleryMode==='all'}
             onClick={()=>setFeatureGalleryMode('all')}>All 33 PDF tools</button>
         </div>
-        {featureGalleryMode==='all' ? <div className="pdf-user-tool-directory">
+        {featureGalleryMode==='catalog' ? <div className="pdf-user-tool-directory pdf-master-tool-directory" data-master-feature-directory>
+          <label htmlFor={`${domIdPrefix}-master-feature-search`}>Search all 90 MALENJO PDF commands</label>
+          <input id={`${domIdPrefix}-master-feature-search`} type="search"
+            aria-label="Search 90 PDF capabilities" placeholder="Name, command ID or expected output"
+            value={featureGallerySearch} onChange={event=>setFeatureGallerySearch(event.target.value)}/>
+          {(['Edit','Organize','Optimize','Convert','Forms','Review','Protect','Automate','Tools'] as PDFRibbonCategory[]).map(group=>{
+            const commands=catalogVisible.filter(command=>command.category===group);
+            if(!commands.length)return null;
+            return <section className="pdf-user-tool-group" key={group}
+              aria-label={group+' PDF capabilities'} data-pdf-command-category={group}>
+              <h3>{group} <span className="pdf-master-group-count">{commands.length} commands</span></h3>
+              <div className="pdf-feature-gallery-grid">
+                {commands.map(command=><span key={command.id}
+                  data-master-command={command.id} className="pdf-feature-gallery-cell planned"
+                  title={command.tooltip}>
+                  <button type="button" disabled
+                    aria-label={command.id+' '+command.label+' — not release-ready'}
+                    title={command.tooltip}>
+                    <PdfFeatureIcon id={command.icon} label={command.label} size={22}/>
+                    <small className="pdf-master-command-id">{command.id}</small>
+                    <span className="pdf-feature-gallery-label">{command.label}</span>
+                    <small>Not ready</small>
+                  </button>
+                </span>)}
+              </div>
+            </section>;
+          })}
+          {!catalogVisible.length&&<p role="status">No matching MALENJO requirements.</p>}
+          <p className="pdf-master-discovery-note" role="note">
+            Capability discovery is not implementation acceptance. Unsupported actions cannot run.
+          </p>
+        </div> : featureGalleryMode==='all' ? <div className="pdf-user-tool-directory">
           <label htmlFor={`${domIdPrefix}-feature-search`}>Find PDF tool</label>
           <input id={`${domIdPrefix}-feature-search`} type="search"
             placeholder="Search all PDF features"
