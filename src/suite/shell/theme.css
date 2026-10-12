@@ -1096,3 +1096,16 @@ body { background:var(--ml-background);color:var(--ml-text); }
 .app-shell {width:100%;max-width:100vw;grid-template-columns:238px minmax(0,1fr)}
 .app-shell.sidebar-collapsed {grid-template-columns:60px minmax(0,1fr)}
 .workspace {min-width:0;max-width:100%;overflow-x:hidden}
+
+
+/* Phase 1: professional icon-only compact rail; full module names remain
+   available to screen readers through the navigation button aria-label. */
+.sidebar .nav-item {display:flex;align-items:center;justify-content:flex-start;gap:8px;min-height:40px;text-align:left}
+.sidebar .nav-glyph {display:grid;place-items:center;width:26px;min-width:26px;color:var(--ml-muted)}
+.sidebar .nav-label {flex:1;min-width:0;text-overflow:ellipsis;overflow:hidden;white-space:nowrap}
+.sidebar .nav-item small {margin-left:auto;color:var(--ml-muted)}
+.sidebar .nav-item.active .nav-glyph {color:var(--ml-brand-cyan)}
+:root[data-theme="light"] .sidebar .nav-item.active .nav-glyph {color:#145cab}
+.sidebar-collapsed .sidebar .nav-item {justify-content:center;padding:8px 4px;gap:0}
+.sidebar-collapsed .sidebar .nav-glyph {width:28px;min-width:28px}
+.sidebar .nav-item:focus-visible {outline:2px solid var(--ml-brand-blue);outline-offset:-2px}
