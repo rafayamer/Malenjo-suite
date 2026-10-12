@@ -280,7 +280,7 @@ export default function HomeWorkspace({
           tone={actionTone(action.id)}
           dashed={action.id==='open'}
           disabled={Boolean(action.unavailableReason)}
-          title={action.unavailableReason ?? action.label}
+          aria-description={action.unavailableReason}
           onClick={()=>{
             if(action.unavailableReason)return;
             if(action.opensFiles)void onOpenDocuments();
