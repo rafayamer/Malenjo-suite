@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { Bot, ChevronDown, Command, FolderOpen, House, LayoutGrid, Search, ShieldCheck, Moon, Sun, X } from 'lucide-react';
+import { Bot, ChevronDown, Command, Ellipsis, FolderOpen, House, LayoutGrid, Redo2, Save, Search, Settings2, ShieldCheck, Undo2, Moon, Sun, X } from 'lucide-react';
 import { modules } from '../modules/registry';
 import type { ModuleId } from '../core/types';
 import FileLibrary from '../files/FileLibrary';
@@ -45,7 +45,7 @@ import { applySuitePalette } from './themePalette';
 import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
 import { CANONICAL_COMMAND_PALETTE_EXAMPLES } from './commandPaletteModel';
 import { pdfCatalogDiscovery } from '../commands/masterCatalog';
-import type { DocumentCommandController } from '../commands/types';
+import type { DocumentCommandController, RegisterDocumentCommands } from '../commands/types';
 
 export default function App() {
   const [active, setActive] = useState<ModuleId>('home');
@@ -70,6 +70,9 @@ export default function App() {
   const [workspaceNotices, setWorkspaceNotices] = useState<Record<string,string>>({});
   const [paletteDocuments, setPaletteDocuments] = useState<LibraryDocument[]>([]);
   const commandControllersRef = useRef(new Map<string, DocumentCommandController>());
+  const registrationCallbacksRef = useRef(new Map<string,RegisterDocumentCommands>());
+  const commandFingerprintsRef = useRef(new Map<string,string>());
+  const [commandRevision,setCommandRevision] = useState(0);
   const commandPaletteOpenerRef = useRef<HTMLElement | null>(null);
   const browserOpenInputRef = useRef<HTMLInputElement>(null);
   const module = modules.find((item) => item.id === active) ?? modules[0];
@@ -196,9 +199,24 @@ export default function App() {
     updateSession(sessionId, (session) => setDocumentDirty(session, dirty));
   }
 
-  function registerSessionCommands(sessionId: string, controller: DocumentCommandController | null) {
-    if (controller) commandControllersRef.current.set(sessionId, controller);
-    else commandControllersRef.current.delete(sessionId);
+  function registrationForSession(sessionId:string):RegisterDocumentCommands {
+    const cached=registrationCallbacksRef.current.get(sessionId);
+    if(cached)return cached;
+    // Stable callback identity prevents child registration effects from
+    // repeatedly tearing down when the topbar updates its disabled state.
+    const register:RegisterDocumentCommands=(controller)=>{
+      if(controller)commandControllersRef.current.set(sessionId,controller);
+      else commandControllersRef.current.delete(sessionId);
+      const next=controller ? JSON.stringify(controller.list().map(command=>[
+        command.id,command.enabled,command.disabledReason,
+      ])) : '';
+      if(commandFingerprintsRef.current.get(sessionId)!==next){
+        commandFingerprintsRef.current.set(sessionId,next);
+        setCommandRevision(revision=>revision+1);
+      }
+    };
+    registrationCallbacksRef.current.set(sessionId,register);
+    return register;
   }
 
   // Local browser files remain available in tabs when navigating, but have
@@ -405,9 +423,12 @@ export default function App() {
     });
   }
 
-  const activeDocumentCommands = activeSession
-    ? commandControllersRef.current.get(activeSession.id)?.list() ?? []
-    : [];
+  const activeDocumentCommands = useMemo(() => activeSessionId
+    ? commandControllersRef.current.get(activeSessionId)?.list() ?? []
+    : [], [activeSessionId, commandRevision, sessions]);
+  const saveQuickCommand = activeDocumentCommands.find(command=>command.id==='save'||command.id==='export');
+  const undoQuickCommand = activeDocumentCommands.find(command=>command.id==='undo');
+  const redoQuickCommand = activeDocumentCommands.find(command=>command.id==='redo');
 
   const commandItems: CommandPaletteItem[] = [
     {
@@ -510,7 +531,7 @@ export default function App() {
         onNavigateModule={(id)=>selectModule(id)}
         onDirtyChange={(dirty)=>markSessionDirty(session.id,dirty)}
         onSavingChange={(saving)=>updateSession(session.id,(current)=>markDocumentSaving(current,saving))}
-        registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
+        registerCommands={registrationForSession(session.id)}
       />;
     }
     if (route === 'word') {
@@ -521,7 +542,7 @@ export default function App() {
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
         onSavingChange={(saving)=>updateSession(session.id,(current)=>markDocumentSaving(current,saving))}
-        registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
+        registerCommands={registrationForSession(session.id)}
       />;
     }
     if (route === 'spreadsheet') {
@@ -532,7 +553,7 @@ export default function App() {
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
         onSavingChange={(saving)=>updateSession(session.id,(current)=>markDocumentSaving(current,saving))}
-        registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
+        registerCommands={registrationForSession(session.id)}
       />;
     }
     if (route === 'presentation') {
@@ -543,7 +564,7 @@ export default function App() {
         onBackToFiles={() => selectModule('files')}
         onDirtyChange={(dirty) => markSessionDirty(session.id, dirty)}
         onSavingChange={(saving)=>updateSession(session.id,(current)=>markDocumentSaving(current,saving))}
-        registerCommands={(controller)=>registerSessionCommands(session.id,controller)}
+        registerCommands={registrationForSession(session.id)}
       />;
     }
 
@@ -630,6 +651,40 @@ export default function App() {
             onClick={()=>setModuleMenuOpen(value=>!value)}>
             <LayoutGrid size={18} aria-hidden="true"/><span>Tools</span><ChevronDown size={12} aria-hidden="true"/>
           </button>
+          <button type="button" className="command ml-primary-open"
+            aria-label="Open files" title="Open file (Ctrl+O)"
+            onClick={()=>void openDocumentsFromPicker()}>
+            <FolderOpen size={19} aria-hidden="true"/>
+          </button>
+          <button type="button" className="command ml-quick-inline"
+            aria-label="Save current document" title={saveQuickCommand?.enabled?'Save a new copy of the current document':'Save is unavailable until a document can be exported'}
+            disabled={!saveQuickCommand?.enabled}
+            onClick={()=>{if(saveQuickCommand?.enabled)void saveQuickCommand.run();}}>
+            <Save size={18} aria-hidden="true"/>
+          </button>
+          <button type="button" className="command ml-quick-inline" aria-label="Undo PDF edit"
+            title={undoQuickCommand?.enabled?'Undo last PDF edit':'Nothing available to undo'}
+            disabled={!undoQuickCommand?.enabled}
+            onClick={()=>{if(undoQuickCommand?.enabled)void undoQuickCommand.run();}}>
+            <Undo2 size={18} aria-hidden="true"/>
+          </button>
+          <button type="button" className="command ml-quick-inline" aria-label="Redo PDF edit"
+            title={redoQuickCommand?.enabled?'Redo next PDF edit':'Nothing available to redo'}
+            disabled={!redoQuickCommand?.enabled}
+            onClick={()=>{if(redoQuickCommand?.enabled)void redoQuickCommand.run();}}>
+            <Redo2 size={18} aria-hidden="true"/>
+          </button>
+          <details className="ml-quick-overflow">
+            <summary aria-label="More quick actions" title="Save, undo and redo"><Ellipsis size={19} aria-hidden="true"/></summary>
+            <div role="group" aria-label="Document quick actions">
+              <button disabled={!saveQuickCommand?.enabled}
+                onClick={()=>{if(saveQuickCommand?.enabled)void saveQuickCommand.run();}}>Save a PDF copy</button>
+              <button disabled={!undoQuickCommand?.enabled}
+                onClick={()=>{if(undoQuickCommand?.enabled)void undoQuickCommand.run();}}>Undo PDF edit</button>
+              <button disabled={!redoQuickCommand?.enabled}
+                onClick={()=>{if(redoQuickCommand?.enabled)void redoQuickCommand.run();}}>Redo PDF edit</button>
+            </div>
+          </details>
         </div>
         <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);openCommandPalette();}} placeholder="Search commands" aria-label="Search commands"/><kbd>Ctrl K</kbd></div>
         <div className="topbar-actions">
@@ -639,8 +694,9 @@ export default function App() {
             onClick={()=>{setAiHasOpened(true);setAiOpen(value=>!value);setModuleMenuOpen(false);}}>
             <Bot size={20} aria-hidden="true"/>
           </button>
-          <button className="command" aria-label="Open files" title="Open a file (Ctrl+O)" onClick={()=>void openDocumentsFromPicker()}><FolderOpen size={19}/></button>
           <button className="command" aria-label="Open command palette" title="Commands (Ctrl+K)" onClick={()=>setCommandOpen(true)}><Command size={19}/></button>
+          <button type="button" className="command" aria-label="Settings" title="MALENJO settings"
+            onClick={()=>selectModule('settings')}><Settings2 size={19} aria-hidden="true"/></button>
           <button className="theme-toggle command" type="button"
             aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
             aria-pressed={theme === 'light'}
@@ -762,6 +818,14 @@ export default function App() {
                                   : active === 'cad' || active === 'dicom' || active === 'invoice' || active === 'account'
                                     ? <CapabilityWorkspace module={active} onNavigate={selectModule}/>
                                     : <ModuleView module={module} session={null} notice="" onSaveAs={async()=>{}} onBackToFiles={()=>selectModule('files')}/>)}
+      <footer className="ml-desktop-status" role="status" aria-label="MALENJO document status">
+        <span>{activeSession?.document.name ?? 'Ready'}</span>
+        <span>{activeSession
+          ? activeSession.saving ? 'Saving…' : activeSession.dirty ? 'Unsaved changes' : 'Source preserved'
+          : 'PDF-first workspace'}</span>
+        <span className="ml-status-document-count">{sessions.length} open document{sessions.length===1?'':'s'}</span>
+        <span className="ml-status-shortcuts">Ctrl+O Open · Ctrl+K Commands</span>
+      </footer>
     </main>
   </div>
 }
