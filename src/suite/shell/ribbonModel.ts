@@ -28,7 +28,7 @@ export const RIBBON_TABS: RibbonTab[] = [
   { id:'home', label:'Home', actions:[
     {id:'open',label:'Open File',opensFiles:true,tooltip:'Choose a PDF, CAD or DICOM file'},
     {id:'start',label:'Start Center',destination:'home'},
-    {id:'library',label:'Recent Files',destination:'files'},
+    {id:'library',label:'File Library',destination:'files',tooltip:'Browse all available PDF, CAD and DICOM files'},
     {id:'pdf',label:'PDF Viewer',destination:'pdf'},
   ]},
   { id:'edit', label:'Edit', actions:[
