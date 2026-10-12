@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import {
   Bot, Database, FileOutput, FileText, FolderOpen, HardDrive, HelpCircle,
   Home, ScanLine, Search, Settings, ShieldCheck, Stethoscope, Receipt, UserRound, Ruler,
-  Workflow, PenTool, FileStack, type LucideIcon,
+  Workflow, PenTool, FileStack, Pencil, Layers, WandSparkles, FormInput, Eye, Lock, Grid2X2,
+  Ellipsis, X, type LucideIcon,
 } from 'lucide-react';
 import type { ModuleId } from '../core/types';
+import { PDF_COMMANDS, type PDFRibbonCategory } from '../commands/masterCatalog';
 import { defaultRibbonTab, RIBBON_TABS, specialistRibbonActions, type RibbonTabId } from './ribbonModel';
 
 interface Props {
@@ -28,11 +30,27 @@ export default function RibbonShell({ workspace, onNavigate, onOpenFiles }: Prop
   const [selected, setSelected] = useState<RibbonTabId>(() => defaultRibbonTab(workspace));
   const tabListRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
-  useEffect(() => setSelected(defaultRibbonTab(workspace)), [workspace]);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const moreSearchRef = useRef<HTMLInputElement>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [moreQuery, setMoreQuery] = useState('');
+  useEffect(() => {setSelected(defaultRibbonTab(workspace));setMoreOpen(false);}, [workspace]);
+  useEffect(() => { if(moreOpen)moreSearchRef.current?.focus(); }, [moreOpen]);
   const current = RIBBON_TABS.find((tab) => tab.id === selected)!;
   const specialistCommands = selected === defaultRibbonTab(workspace)
     ? specialistRibbonActions(workspace) : null;
   const actions = specialistCommands ?? current.actions;
+  const matchingCommands = useMemo(() => PDF_COMMANDS.filter(command => {
+    const q=moreQuery.trim().toLowerCase();
+    return !q || (command.id+' '+command.label+' '+command.category+' '+command.requirementGroup)
+      .toLowerCase().includes(q);
+  }), [moreQuery]);
+  const categories = useMemo(() => Array.from(new Set(PDF_COMMANDS.map(item=>item.category))), []);
+  const commandIcons:Record<PDFRibbonCategory,LucideIcon> = {
+    Home:Home, Edit:Pencil, Organize:Layers, Optimize:WandSparkles,
+    Convert:FileOutput, Forms:FormInput, Review:Eye, Protect:Lock,
+    Automate:Workflow, Tools:Grid2X2,
+  };
   const specialistIcon = workspace === 'cad' ? Ruler : workspace === 'dicom' ? Stethoscope
     : workspace === 'invoice' ? Receipt : UserRound;
 
@@ -70,12 +88,12 @@ export default function RibbonShell({ workspace, onNavigate, onOpenFiles }: Prop
     <div className="suite-ribbon-actions" id="suite-ribbon-actions" ref={actionsRef} role="tabpanel"
       aria-labelledby={'suite-ribbon-tab-' + selected}>
       {actions.map((action) => {
-        const Icon = icons[action.id] ?? (specialistCommands ? specialistIcon : FileText);
+        const Icon = icons[action.id] ?? (specialistCommands ? specialistIcon : commandIcons[current.label as PDFRibbonCategory] ?? FileText);
         return <button
           key={action.id}
           type="button"
           className="suite-ribbon-action"
-          title={action.unavailableReason || action.label}
+          title={action.unavailableReason || action.description || action.label}
           disabled={Boolean(action.unavailableReason)}
           aria-label={action.label}
           onClick={() => {
@@ -91,9 +109,50 @@ export default function RibbonShell({ workspace, onNavigate, onOpenFiles }: Prop
           }}
         ><Icon size={22} strokeWidth={1.7}/><span>{action.label}</span></button>;
       })}
+      <button type="button" ref={moreButtonRef} className="suite-ribbon-more"
+        aria-label="More PDF tools" title="More PDF tools — search all 90 requirements"
+        aria-expanded={moreOpen} aria-controls="malenjo-complete-feature-catalog"
+        onClick={()=>setMoreOpen(value=>!value)}>
+        <Ellipsis size={20} aria-hidden="true"/><span>More Tools</span>
+      </button>
       {selected === 'convert' && <p className="suite-ribbon-hint" role="note">
         Office outputs will open only after verified PDF conversion. Direct Office file imports remain a temporary development path until the replacement workflow is ready.
       </p>}
     </div>
+    {moreOpen && <section id="malenjo-complete-feature-catalog" role="dialog"
+      aria-label="All 90 PDF tools" className="ml-command-catalog"
+      onKeyDown={event=>{
+        if(event.key==='Escape'){event.preventDefault();setMoreOpen(false);moreButtonRef.current?.focus();}
+      }}>
+      <header>
+        <div><strong>PDF Tools</strong><small>All 90 features · unverified tools are unavailable</small></div>
+        <button type="button" aria-label="Close PDF tools" title="Close PDF tools"
+          onClick={()=>{setMoreOpen(false);moreButtonRef.current?.focus();}}><X size={18}/></button>
+      </header>
+      <label htmlFor="malenjo-feature-search">Find a PDF tool</label>
+      <input id="malenjo-feature-search" ref={moreSearchRef} type="search"
+        value={moreQuery} onChange={event=>setMoreQuery(event.target.value)}
+        placeholder="Search 90 PDF features by name or MAL number"/>
+      <div className="ml-command-catalog-scroll">
+        {categories.map(category=>{
+          const subset=matchingCommands.filter(item=>item.category===category);
+          if(!subset.length)return null;
+          const Icon=commandIcons[category];
+          return <section key={category} aria-label={category+' features'}>
+            <h3>{category} <small>{subset.length}</small></h3>
+            <div className="ml-command-catalog-grid">
+              {subset.map(command=><div key={command.id} className="ml-command-catalog-entry"
+                title={command.tooltip} data-mal-command={command.id}>
+                <span className="ml-command-catalog-icon"><Icon size={20} aria-hidden="true"/></span>
+                <span className="ml-command-catalog-label"><b>{command.label}</b><small>{command.id} · Not release-ready</small></span>
+                <button type="button" disabled aria-label={command.label+' — '+command.id+' unavailable'}
+                  title={command.tooltip}>Unavailable</button>
+              </div>)}
+            </div>
+          </section>;
+        })}
+        {!matchingCommands.length && <p role="status">No PDF tools match your search.</p>}
+      </div>
+    </section>}
   </section>;
 }
