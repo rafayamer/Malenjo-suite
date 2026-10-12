@@ -2063,3 +2063,94 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 .app-shell-top-only .pdf-layout:not(.inspector-hidden) .pdf-inspector{
   min-width:0;max-width:100%;overflow:auto;
 }
+
+
+/* Owner Phase 1 acceptance: Home is a fixed start surface. Its OPTIONAL
+   collections are pop-in surfaces with internal scrolling, never document-
+   destroying workspace scrollbars. */
+.app-shell-top-only .ml-start-minimal{
+  position:relative;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;overflow:hidden!important;min-height:0;max-height:100%;
+  padding:clamp(8px,2vh,18px) clamp(12px,3vw,40px)!important;
+}
+.app-shell-top-only .ml-start-minimal .ml-start-hero{
+  min-height:0;height:auto;flex:0 1 auto;width:100%;
+  padding:clamp(6px,2vh,20px) 10px;gap:clamp(3px,1vh,12px);
+}
+.app-shell-top-only .ml-start-minimal .ml-start-primary{
+  margin:clamp(5px,2vh,16px) 0 0;
+}
+.app-shell-top-only .ml-start-minimal .ml-start-primary>button{
+  width:clamp(114px,13vw,150px);height:clamp(78px,15vh,116px);
+}
+.app-shell-top-only .ml-start-minimal #ml-home-recent-panel:not([hidden]){
+  position:absolute;left:clamp(8px,7vw,110px);right:clamp(8px,7vw,110px);
+  top:clamp(124px,33%,220px);bottom:8px;z-index:24;width:auto;margin:0;
+  display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;
+  padding:12px;border:1px solid var(--ml-border);border-radius:8px;
+  background:var(--ml-surface);box-shadow:0 14px 35px #0005;
+}
+.app-shell-top-only .ml-start-minimal .ml-start-utilities{flex:0 0 auto;max-width:100%}
+.app-shell-top-only .ml-start-minimal .ml-start-utilities[open]{
+  position:absolute;top:clamp(120px,32%,215px);bottom:8px;
+  left:clamp(8px,7vw,110px);right:clamp(8px,7vw,110px);
+  width:auto;max-width:none;overflow-y:auto;overscroll-behavior:contain;
+  z-index:22;background:var(--ml-surface);border:1px solid var(--ml-border);
+  border-radius:8px;padding:12px;box-shadow:0 14px 35px #0005;
+}
+/* If both disclosures are open, Recent is the deliberate foreground panel. */
+.app-shell-top-only .ml-start-minimal #ml-home-recent-panel:not([hidden]){z-index:25}
+@media(max-height:570px){
+  .app-shell-top-only .ml-start-minimal .ml-start-symbol{display:none}
+  .app-shell-top-only .ml-start-minimal .ml-start-hero h1{font-size:19px}
+  .app-shell-top-only .ml-start-minimal .ml-start-primary>button{height:76px}
+}
+
+/* Property inspector and tools reside to the LEFT of the reader.
+   The right edge is reserved exclusively for MALENJO AI. Do not discard
+   any existing form, annotation, signing or metadata inspector content. */
+.app-shell-top-only .pdf-layout>.pdf-left-shell{order:-2}
+.app-shell-top-only .pdf-layout>.pdf-inspector{
+  order:-1;border-left:0;border-right:1px solid var(--ml-border);
+  width:100%;min-width:0;overflow-y:auto;
+}
+.app-shell-top-only .pdf-layout>.pdf-scroll{order:0}
+.app-shell-top-only .pdf-layout.left-panel-collapsed:not(.inspector-hidden){
+  grid-template-columns:clamp(190px,23vw,290px) minmax(0,1fr)!important;
+}
+.app-shell-top-only .pdf-layout:not(.left-panel-collapsed):not(.inspector-hidden){
+  grid-template-columns:clamp(150px,19vw,225px) clamp(180px,21vw,260px) minmax(0,1fr)!important;
+}
+.app-shell-top-only .pdf-inspector-tabs{
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  height:auto;min-height:64px;
+}
+.app-shell-top-only .pdf-inspector-tabs button{
+  min-height:32px;padding:6px 2px;font-size:10px;
+  white-space:normal;overflow-wrap:anywhere;text-overflow:clip;
+}
+.app-shell-top-only .pdf-left-rail button:not(.pdf-left-collapse){
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:1px;height:41px;
+}
+.app-shell-top-only .pdf-left-rail .pdf-left-nav-label{
+  display:block;font-size:8px;line-height:1.1;max-width:100%;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.app-shell-top-only .pdf-left-rail button[draggable="true"]{cursor:grab}
+.app-shell-top-only .pdf-left-rail button[draggable="true"]:active{cursor:grabbing}
+.app-shell-top-only .pdf-left-rail button:focus-visible{
+  outline:2px solid var(--ml-brand-blue);outline-offset:-2px;
+}
+@media(max-width:700px){
+  .app-shell-top-only .pdf-layout.left-panel-collapsed:not(.inspector-hidden){
+    grid-template-columns:minmax(158px,38vw) minmax(0,1fr)!important;
+  }
+  .app-shell-top-only .pdf-layout:not(.left-panel-collapsed):not(.inspector-hidden){
+    grid-template-columns:155px minmax(156px,1fr)!important;
+  }
+  /* A narrow window cannot sustain two auxiliary docks side-by-side. */
+  .app-shell-top-only .pdf-layout:not(.left-panel-collapsed):not(.inspector-hidden)>.pdf-left-shell{
+    display:none!important;
+  }
+}
