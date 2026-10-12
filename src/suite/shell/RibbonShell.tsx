@@ -1,7 +1,7 @@
 import { useEffect, useState, type KeyboardEvent } from 'react';
 import {
   Bot, Database, FileOutput, FileText, FolderOpen, HardDrive, HelpCircle,
-  Home, Lock, ScanLine, Search, Settings, ShieldCheck, Stethoscope,
+  Home, ScanLine, Search, Settings, ShieldCheck, Stethoscope,
   Workflow, PenTool, FileStack, type LucideIcon,
 } from 'lucide-react';
 import type { ModuleId } from '../core/types';
