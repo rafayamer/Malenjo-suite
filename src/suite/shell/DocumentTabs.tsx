@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState, type KeyboardEvent } from 'react';
 import { FileText, MoreHorizontal, X } from 'lucide-react';
 import type { DocumentSession } from '../files/session';
 
@@ -26,6 +26,37 @@ export default function DocumentTabs({
   const [menu, setMenu] = useState<{id:string;left:number;top:number} | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!menu) return;
+    const dismiss = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && (target.closest('.document-tab-menu') ||
+        target.closest('.document-tab-menu-button'))) return;
+      setMenu(null);
+    };
+    document.addEventListener('pointerdown', dismiss);
+    return () => document.removeEventListener('pointerdown', dismiss);
+  }, [menu]);
+
+  useEffect(() => {
+    if (menu && !sessions.some((session) => session.id === menu.id)) setMenu(null);
+  }, [menu, sessions]);
+
+  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const direction = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+    const next = event.key === 'Home' ? 0 : event.key === 'End'
+      ? sessions.length - 1 : direction
+        ? (index + direction + sessions.length) % sessions.length : null;
+    if (next === null) return;
+    event.preventDefault();
+    const nextTab = event.currentTarget.closest('.document-tabs-scroll')
+      ?.querySelectorAll<HTMLButtonElement>('.document-tab-main')[next];
+    onActivate(sessions[next].id);
+    nextTab?.focus();
+    nextTab?.scrollIntoView({block: 'nearest', inline: 'nearest'});
+  }
+
   if (!sessions.length) return null;
 
   return <div className="document-tabs" role="tablist" aria-label="Open documents">
@@ -79,7 +110,10 @@ export default function DocumentTabs({
               setDragOverId(null);
             }}
             aria-selected={active}
+            tabIndex={active || (!activeSessionId && index===0) ? 0 : -1}
+            aria-label={session.document.name + (session.dirty ? ' — unsaved changes' : session.saving ? ' — saving' : '')}
             title={session.document.name}
+            onKeyDown={(event) => handleTabKeyDown(event, index)}
             onClick={() => onActivate(session.id)}
           >
             <FileText size={14}/>
@@ -91,6 +125,7 @@ export default function DocumentTabs({
             aria-label={`Tab actions for ${session.document.name}`}
             title="Tab actions"
             aria-expanded={open}
+            aria-haspopup="menu"
             onClick={(event) => {
               if (open) {
                 setMenu(null);
