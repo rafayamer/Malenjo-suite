@@ -1944,3 +1944,22 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
   .app-shell-top-only .ml-bottom-statusbar{gap:8px;padding:0 7px}
   .app-shell-top-only .ml-bottom-statusbar>span:nth-child(3){display:none}
 }
+
+
+/* Master v2: professional document-first empty view with no ornamental halo,
+   splash logo or continuously animated decoration. */
+.app-shell-top-only .pdf-empty {
+  background:var(--ml-background)!important;
+  color:var(--ml-muted);
+  padding:clamp(16px,4vw,44px);
+}
+.app-shell-top-only .pdf-empty-icon {
+  width:58px;height:58px;display:grid;place-items:center;
+  border-radius:11px;background:var(--ml-surface);border:1px solid var(--ml-border);
+  color:var(--ml-brand-blue);
+}
+:root[data-theme="light"] .app-shell-top-only .pdf-empty-icon {color:#145cab}
+.app-shell-top-only .pdf-empty h1 {font-size:21px;font-weight:650;letter-spacing:-.02em;margin:14px 0 3px}
+.app-shell-top-only .pdf-empty p {max-width:440px;font-size:13px;line-height:1.5;margin:0 0 15px}
+.app-shell-top-only .pdf-empty small {font-size:11px;max-width:450px;line-height:1.55}
+.app-shell-top-only .ai-chat {background:var(--ml-surface)}
