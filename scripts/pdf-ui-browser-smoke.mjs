@@ -205,11 +205,10 @@ async function main(){
     'Help / Support':'.help-panel',
     'Settings':'.appearance-panel',
   };
-  const screenshotModules=new Set([
-    'Home','Files / Library','PDF Workspace','Document Workspace',
-    'Spreadsheet','Presentation','Scanner','Malenjo AI','Security Center',
-    'CAD','DICOM','Help / Support','Settings',
-  ]);
+  // Release gate: no cherry-picked representative-only screenshots.
+  // Capture EVERY registered module in BOTH MALENJO themes.
+  const screenshotModules=new Set(moduleNames);
+  let releaseGateScreenshotCount=0;
   const reviewDir=resolve(root,'.build/pdf-ui-browser/theme-review');
   mkdirSync(reviewDir,{recursive:true});
   const paletteEvidence={};
@@ -257,11 +256,15 @@ async function main(){
       if(screenshotModules.has(name)){
         const safe=name.toLowerCase().replace(/[^a-z0-9]+/g,'-');
         await page.screenshot({path:join(reviewDir,theme+'-'+safe+'.png'),animations:'disabled',timeout:15000});
+        releaseGateScreenshotCount++;
       }
       requireEvidence(errors.length===0,'Browser error during '+theme+' theme of '+name+': '+errors.join(' | '));
     }
     console.log('PHASE3 '+theme+' palette rendered in 22/22 module shells: PASS (visual review pending)');
   }
+  requireEvidence(releaseGateScreenshotCount===moduleNames.length*2,
+    'Complete Light/Dark visual evidence missing some module views: '+releaseGateScreenshotCount);
+  console.log('PHASE1 '+releaseGateScreenshotCount+' module appearance screenshots captured for HUMAN acceptance (not sign-off)');
   requireEvidence(JSON.stringify(paletteEvidence.dark)===JSON.stringify(paletteEvidence.light),
     'Brand colors were inconsistent between the two themes');
   await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
