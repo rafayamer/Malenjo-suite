@@ -569,11 +569,11 @@ export default function App() {
         </div>
       </header>
 
-      <RibbonShell
+      {(activeSession ? workspaceForDocument(activeSession.document.kind) : active) !== 'pdf' && <RibbonShell
         workspace={activeSession ? workspaceForDocument(activeSession.document.kind) : active}
         onNavigate={selectModule}
         onOpenFiles={() => void openDocumentsFromPicker()}
-      />
+      />}
 
       <DocumentTabs
         sessions={sessions}
