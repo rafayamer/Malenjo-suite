@@ -2318,6 +2318,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
       <div id={`${domIdPrefix}-task-tools`} className="pdf-context-toolbar" role="toolbar" aria-label={`${PDF_TASK_CATEGORY_LABELS[taskCategory]} PDF tools`}>
         <div className="pdf-task-actions">
+          <button type="button" className="pdf-feature-index-trigger"
+            aria-label="Browse all PDF features"
+            title="Browse PDF features and availability"
+            aria-expanded={featureGalleryOpen}
+            aria-controls={`${domIdPrefix}-feature-gallery`}
+            onClick={()=>setFeatureGalleryOpen(value=>!value)}>
+            <FileText size={19} aria-hidden="true"/>
+            <span className="pdf-feature-caption">Features</span>
+          </button>
           {primaryTaskActions.map((action)=><span
             className={'pdf-feature-command'+(action.planned?' planned':'')}
             key={action.id}
@@ -2334,15 +2343,6 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             </button>
             {action.planned&&<span className="pdf-feature-planned-dot" aria-hidden="true"/>}
           </span>)}
-          <button type="button" className="pdf-feature-index-trigger"
-            aria-label="Browse all PDF features"
-            title="Browse PDF features and availability"
-            aria-expanded={featureGalleryOpen}
-            aria-controls={`${domIdPrefix}-feature-gallery`}
-            onClick={()=>setFeatureGalleryOpen(value=>!value)}>
-            <FileText size={19} aria-hidden="true"/>
-            <span className="pdf-feature-caption">Features</span>
-          </button>
           {!activeTaskActions.length&&<span className="pdf-task-empty">No operational {PDF_TASK_CATEGORY_LABELS[taskCategory].toLowerCase()} commands are available in this build yet. Use Ctrl+K to discover available document actions.</span>}
           {false&&overflowTaskActions.length>0&&<details className="pdf-task-overflow">
             <summary aria-label={`More ${PDF_TASK_CATEGORY_LABELS[taskCategory]} tools`}>More</summary>
