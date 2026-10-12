@@ -211,7 +211,7 @@ async function main(){
     await page.locator('main.workspace > .pdf-workspace .pdf-task-toolbar').isVisible(),
     'PDF workspace stacked two ribbons or lost its actual PDF task ribbon');
   requireEvidence(JSON.stringify(await page.getByRole('tablist',{name:'PDF task categories'})
-    .getByRole('tab').allTextContents())===JSON.stringify(canonical),
+    .getByRole('tab').allTextContents())===JSON.stringify(['Home','Edit','Organize','Optimize','Convert','Forms','Review','Protect','Automate','Tools']),
     'Actual PDF document ribbon did not match the ten Master v2 categories');
   const allNinety=page.getByRole('button',{name:'Browse all 90 PDF capabilities'});
   await allNinety.click();
