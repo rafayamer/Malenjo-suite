@@ -2476,7 +2476,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                   <button type="button" disabled
                     title={command.tooltip}
                     aria-label={command.id+' '+command.label+' — Not release-ready'}>
-                    <PdfFeatureIcon id={command.icon} label={command.label} size={22}/>
+                    <PdfFeatureIcon id={command.id} label={command.label} size={22}/>
                     <span className="pdf-feature-gallery-label">{command.label}</span>
                     <small>{command.id} · Not ready</small>
                   </button>
