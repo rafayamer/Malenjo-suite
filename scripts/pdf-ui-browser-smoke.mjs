@@ -268,6 +268,18 @@ async function main(){
     const editor=page.locator('.document-session-panel.active').locator(item.editor);
     await editor.waitFor({timeout:30000});
     await editor.fill(item.updated);
+    // Theme changes must not remount or discard a dirty Office session.
+    // The original OOXML/source byte protection is independently verified below.
+    const tabCountBeforeTheme=await page.locator('.document-tab').count();
+    await page.getByRole('button',{name:'Switch to light theme'}).click();
+    await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
+    requireEvidence(await editor.inputValue()===item.updated,
+      'Light appearance discarded unsaved content: '+item.module);
+    await page.getByRole('button',{name:'Switch to dark theme'}).click();
+    await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+    requireEvidence(await editor.inputValue()===item.updated &&
+      await page.locator('.document-tab').count()===tabCountBeforeTheme,
+      'Appearance switching remounted the editor or changed document sessions: '+item.module);
     // The editor must not silently discard unsaved edits after leaving.
     await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
     await officeTab.click();
