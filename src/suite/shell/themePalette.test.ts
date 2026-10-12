@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-
-const css = readFileSync(new URL('./theme.css', import.meta.url), 'utf8');
+// Vite imports the original stylesheet text without requiring Node typings
+// in the Windows frontend's browser-only TypeScript compilation.
+import css from './theme.css?raw';
 
 function palette(mode: 'dark' | 'light'): Map<string, string> {
   const match = css.match(new RegExp('/\\* Semantic MALENJO surfaces[\\s\\S]*?\\*/\\s*:root\\s*\\{([\\s\\S]*?)\\}\\s*:root\\[data-theme="light"\\]\\s*\\{([\\s\\S]*?)\\}'));
