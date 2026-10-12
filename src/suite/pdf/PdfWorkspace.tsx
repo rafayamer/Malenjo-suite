@@ -2228,7 +2228,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'configure-forms',label:'Form settings',enabled:true,run:configureProperties},
       providerAction,
     ],
-    ai:[navigateAction('Open CAD viewer','cad'),navigateAction('Open DICOM viewer','dicom'),providerAction],
+    ai:[navigateAction('Open CAD viewer','cad'),navigateAction('Open DICOM viewer','dicom')],
     scan:[navigateAction('Open Scanner','scanner'),providerAction],
     automate:[navigateAction('Open Automation Studio','automation'),providerAction],
   };
@@ -2236,7 +2236,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     (tool.label+' '+tool.group).toLowerCase().includes(featureGallerySearch.trim().toLowerCase()));
   const directoryAction=(id:string,category:PdfTaskCategory)=>
     taskActions[category].find(action=>action.id===id);
-  const plannedActions:PdfToolbarAction[]=(masterTab==='tools'?[]:plannedPdfFeatures(taskCategory)).map(feature=>({
+  const plannedForMaster=masterTab==='tools'?[]
+    :masterTab==='protect'?[...plannedPdfFeatures('protect'),...plannedPdfFeatures('sign')]
+    :plannedPdfFeatures(taskCategory);
+  const plannedActions:PdfToolbarAction[]=plannedForMaster.map(feature=>({
     id:feature.id,label:feature.label,enabled:false,disabledReason:feature.reason,planned:true,
     run:()=>undefined,
   }));
@@ -2324,7 +2327,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         >{tab.label}</button>)}
       </div>
 
-      <div id={`${domIdPrefix}-task-tools`} className="pdf-context-toolbar" role="toolbar" aria-label={`${PDF_TASK_CATEGORY_LABELS[taskCategory]} PDF tools`}>
+      <div id={`${domIdPrefix}-task-tools`} className="pdf-context-toolbar" role="toolbar" aria-label={`${PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label} PDF tools`}>
         <div className="pdf-task-actions">
           <button type="button" className="pdf-feature-index-trigger"
             aria-label="Browse all PDF features"
@@ -2351,9 +2354,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             </button>
             {action.planned&&<span className="pdf-feature-planned-dot" aria-hidden="true"/>}
           </span>)}
-          {!activeTaskActions.length&&<span className="pdf-task-empty">No operational {PDF_TASK_CATEGORY_LABELS[taskCategory].toLowerCase()} commands are available in this build yet. Use Ctrl+K to discover available document actions.</span>}
+          {!activeTaskActions.length&&<span className="pdf-task-empty">No operational {PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label.toLowerCase()} commands are available in this build yet. Use Ctrl+K to discover available document actions.</span>}
           {false&&overflowTaskActions.length>0&&<details className="pdf-task-overflow">
-            <summary aria-label={`More ${PDF_TASK_CATEGORY_LABELS[taskCategory]} tools`}>More</summary>
+            <summary aria-label={`More ${PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label} tools`}>More</summary>
             <div>
               {overflowTaskActions.map((action)=><button
                 key={action.id}
@@ -2427,7 +2430,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       </div>
       {featureGalleryOpen&&<section id={`${domIdPrefix}-feature-gallery`}
         className="pdf-feature-gallery"
-        aria-label={`${PDF_TASK_CATEGORY_LABELS[taskCategory]} PDF features`}
+        aria-label={`${PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label} PDF features`}
         onKeyDown={event=>{if(event.key==='Escape'){setFeatureGalleryOpen(false);event.stopPropagation();}}}>
         <header>
           <div><strong>PDF features</strong>
