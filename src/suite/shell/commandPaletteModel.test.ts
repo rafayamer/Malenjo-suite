@@ -34,6 +34,17 @@ describe('suite-wide command palette search', () => {
     expect(result[0].disabledReason).toContain('not operational');
   });
 
+  it('prioritizes the exact requested command over broad workspace metadata matches', () => {
+    const commands: CommandPaletteSearchItem[] = [
+      { id:'administration',label:'Open Administration',group:'Workspaces',detail:'Policies and settings' },
+      { id:'settings',label:'Open Settings',group:'Settings',detail:'Suite preferences' },
+      { id:'settings-shortcut',label:'Settings',group:'Tools' },
+    ];
+    expect(filterCommandPaletteItems(commands,'Open Settings').map((item)=>item.id))
+      .toEqual(['settings','administration']);
+    expect(filterCommandPaletteItems(commands,'settings')[0].id).toBe('settings-shortcut');
+  });
+
   it('tracks every canonical 53.10 example with an operational destination or explicit unavailable reason', () => {
     expect(CANONICAL_COMMAND_PALETTE_EXAMPLES.map((item) => item.phrase)).toEqual([
       'Compress this PDF',
