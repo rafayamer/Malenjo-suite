@@ -4,6 +4,7 @@ import {mkdtempSync,readFileSync,mkdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {PDFDocument,PDFName,StandardFonts} from 'pdf-lib';
+import {getDocument} from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {zipSync,strToU8,strFromU8,unzipSync} from 'fflate';
 import {chromium} from 'playwright';
 const root=resolve(import.meta.dirname,'..');
@@ -591,9 +592,44 @@ async function main(){
   requireEvidence(await pickerTab.count()===1,
     'the PDF Workspace picker did not keep the opened document in a regular tab');
   console.log('MALENJO PDF Workspace Choose PDF tab retention: PASS');
-  // Return to the original PDF to verify edit/export without altering it.
+  // Return to original PDF and use the actual Watermark feature catalog.
+  // Export and reopen through independent PDF.js text extraction.
   await documentTab.click();
-  await page.locator('.document-session-panel.active .pdf-task-categories button').filter({hasText:'Organize'}).click();
+  const watermarkPdf=page.locator('.document-session-panel.active .pdf-workspace');
+  await watermarkPdf.getByRole('button',{name:'Browse all PDF features'}).click();
+  const watermarkCatalog=watermarkPdf.locator('.pdf-feature-gallery');
+  await watermarkCatalog.getByRole('button',{name:'All 33 PDF tools'}).click();
+  await watermarkCatalog.locator('[data-user-pdf-tool="watermark-pdf"] button').click();
+  const watermarkText=watermarkPdf.getByRole('textbox',{name:'Watermark text'});
+  await watermarkText.waitFor({state:'visible',timeout:15000});
+  await watermarkText.fill('MALENJO UI WATERMARK');
+  await watermarkPdf.getByRole('button',{name:'Apply text watermark'}).click();
+  await page.waitForFunction(()=>
+    Array.from(document.querySelectorAll('.document-session-panel.active .pdf-notice'))
+      .some(node=>node.textContent?.includes('Applied a selectable text watermark')),
+    null,{timeout:30000});
+  await watermarkPdf.getByRole('tab',{name:'Home',exact:true}).click();
+  const watermarkDownloadPromise=page.waitForEvent('download',{timeout:30000});
+  await watermarkPdf.locator('.pdf-context-toolbar').getByRole('button',{name:/^Export/}).click();
+  const watermarkDownload=await watermarkDownloadPromise;
+  const watermarkDest=join(mkdtempSync(join(tmpdir(),'malenjo-watermark-')),'output.pdf');
+  await watermarkDownload.saveAs(watermarkDest);
+  const watermarkBytes=new Uint8Array(readFileSync(watermarkDest));
+  const watermarkReader=await getDocument({data:watermarkBytes,useSystemFonts:true}).promise;
+  try {
+    requireEvidence(watermarkReader.numPages===2,'Watermark PDF silently dropped source pages');
+    for(let n=1;n<=2;n++){
+      const content=await (await watermarkReader.getPage(n)).getTextContent();
+      const text=content.items.map(item=>'str' in item?item.str:'').join(' ');
+      requireEvidence(text.includes('MALENJO UI WATERMARK')&&
+        text.includes('MALENJO BROWSER UI TEXT SELECT FIND '+n),
+        'Independent reader could not find overlay and original text on page '+n);
+    }
+  }finally{
+    await watermarkReader.destroy();
+  }
+  console.log('PHASE1 Watermark PDF real input, native export and independent two-page text verification: PASS');
+  await watermarkPdf.getByRole('tab',{name:'Organize',exact:true}).click();
   await page.locator('.document-session-panel.active .pdf-context-toolbar').getByRole('button',{name:/Rotate selected/}).click();
   await page.waitForFunction(()=>
     Array.from(document.querySelectorAll('.pdf-notice')).some(
