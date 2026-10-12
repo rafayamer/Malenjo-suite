@@ -1239,3 +1239,77 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 :root[data-theme="light"] .pdf-left-rail button.active {
   box-shadow:inset 2px 0 0 #145cab;
 }
+
+
+/* Phase 1 — domain-specific desktop surfaces, no generic "M" placeholder.
+   Actual CAD/DICOM/Invoice/Account engines remain unavailable until separately
+   verified; the UI consistently distinguishes working commands from disabled. */
+.capability-workspace {display:flex;flex:1;flex-direction:column;min-width:0;min-height:0;
+  background:var(--ml-background);color:var(--ml-text);overflow:auto}
+.capability-header {display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:19px 22px;border-bottom:1px solid var(--ml-border);background:var(--ml-surface)}
+.capability-identity {display:flex;gap:14px;align-items:center;min-width:0}
+.capability-big-icon {width:53px;height:53px;border-radius:11px;display:grid;place-items:center;
+  flex:0 0 53px;background:var(--ml-selected);color:var(--ml-brand-blue)}
+.capability-identity .eyebrow {margin:0;color:var(--ml-muted);font-size:11px;letter-spacing:.1em}
+.capability-identity h1 {margin:2px 0 4px;font-size:21px;line-height:1.15}
+.capability-identity p:last-child {margin:0;color:var(--ml-muted);font-size:12px;line-height:1.5}
+.capability-status {display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
+  font-size:11px;font-weight:700;padding:7px 10px;border:1px solid var(--ml-border);
+  border-radius:6px;background:var(--ml-warn-bg);color:var(--ml-warn-fg)}
+.capability-command-strip {display:flex;gap:5px;padding:8px 12px;border-bottom:1px solid var(--ml-border);
+  background:var(--ml-toolbar);min-height:71px;align-items:stretch;overflow-x:auto;scrollbar-width:thin}
+.capability-command-strip button {flex:0 0 auto;display:flex;flex-direction:column;
+  gap:6px;align-items:center;justify-content:center;min-width:87px;
+  padding:6px 9px;border-radius:5px;border:1px solid transparent;
+  background:transparent;color:var(--ml-text);font-size:12px}
+.capability-command-strip button svg {color:var(--ml-brand-blue)}
+.capability-command-strip button:disabled {opacity:.50;cursor:not-allowed}
+.capability-command-strip .capability-live-command {cursor:pointer;border-color:var(--ml-border);
+  background:var(--ml-control);font-weight:600}
+.capability-command-strip .capability-live-command:hover {background:var(--ml-hover)}
+.capability-command-strip button:focus-visible,.capability-canvas-actions button:focus-visible {
+  outline:2px solid var(--ml-brand-blue);outline-offset:2px}
+.capability-body {flex:1;min-height:0;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) 270px}
+.capability-canvas {min-width:0;display:grid;place-items:center;padding:25px;
+  background:var(--ml-surround)}
+.capability-empty {max-width:490px;display:flex;flex-direction:column;align-items:center;
+  gap:11px;text-align:center;border:1px solid var(--ml-border);border-radius:12px;
+  background:var(--ml-card);padding:32px 26px}
+.capability-empty>svg {color:var(--ml-brand-blue)}
+.capability-empty h2 {margin:0;font-size:18px;line-height:1.35}
+.capability-empty p {margin:0;color:var(--ml-muted);font-size:13px;line-height:1.6}
+.capability-canvas-actions button {padding:10px 16px;border-radius:6px;
+  border:1px solid var(--ml-border);background:var(--ml-control);
+  color:var(--ml-text);cursor:pointer;font-size:13px;font-weight:650}
+.capability-canvas-actions button:hover {background:var(--ml-hover)}
+.capability-inspector {border-left:1px solid var(--ml-border);background:var(--ml-surface);
+  padding:21px 16px;min-width:0;overflow:auto}
+.capability-inspector h2 {font-size:13px;display:flex;align-items:center;gap:7px;margin:0 0 12px}
+.capability-inspector h2:not(:first-child) {margin-top:27px}
+.capability-inspector ul {list-style:none;margin:0;padding:0}
+.capability-inspector li {border-bottom:1px solid var(--ml-border);padding:10px 0;
+  font-size:12px;line-height:1.45;color:var(--ml-muted)}
+.capability-checks li>span {color:var(--ml-warn-fg);margin-right:5px}
+.capability-local-note {font-size:12px;color:var(--ml-muted);line-height:1.5;margin-top:24px}
+:root[data-theme="light"] .capability-big-icon svg,
+:root[data-theme="light"] .capability-empty>svg,
+:root[data-theme="light"] .capability-command-strip button svg {color:#145cab}
+@media(max-width:1050px) {
+  .capability-body {grid-template-columns:minmax(0,1fr) 220px}
+  .capability-header {padding:14px 13px}
+  .capability-inspector {padding:15px 12px}
+}
+@media(max-width:750px) {
+  .capability-body {display:flex;flex-direction:column;overflow:visible}
+  .capability-canvas {min-height:330px;padding:14px}
+  .capability-inspector {border-left:0;border-top:1px solid var(--ml-border);overflow:visible}
+  .capability-header {align-items:flex-start;flex-wrap:wrap}
+  .capability-status {margin-left:0}
+  .capability-empty {padding:24px 18px}
+}
+@media(max-width:430px) {
+  .capability-big-icon {width:42px;height:42px;flex-basis:42px}
+  .capability-identity h1 {font-size:19px}
+  .capability-command-strip button {min-width:77px}
+}

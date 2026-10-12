@@ -181,6 +181,33 @@ async function main(){
     console.log('PHASE3 module launch/navigation: '+name+' PASS (shell only)');
   }
   console.log('PHASE3 22/22 module shell-navigation smoke: PASS (not module functionality sign-off)');
+  // Release-oriented Phase 1: specialist screens must not share a generic
+  // branded placeholder or expose nonfunctional editor commands as clickable.
+  for(const [name,kind] of [
+    ['CAD','cad'],['DICOM','dicom'],['Invoice Studio','invoice'],['Account','account'],
+  ]){
+    await page.locator('.sidebar nav .nav-item').filter({hasText:name}).first().click();
+    const surface=page.locator('[data-capability-module="'+kind+'"]');
+    await surface.waitFor({state:'visible',timeout:15000});
+    requireEvidence(await surface.locator('.capability-inspector').isVisible() &&
+      await surface.locator('.capability-canvas').isVisible(),
+      'Missing contextual canvas/inspector for '+name);
+    const commands=surface.locator('.capability-command-strip button');
+    requireEvidence(await commands.count()===6 &&
+      await commands.filter({hasText:'Help'}).isEnabled() &&
+      await surface.locator('.capability-command-strip button:disabled').count()===4,
+      'Unsupported specialist actions appear executable in '+name);
+    requireEvidence(await surface.getByText('NOT RELEASE-READY').isVisible(),
+      'Missing honest readiness status in '+name);
+  }
+  await page.locator('[data-capability-module="account"]').getByRole('button',{name:'Appearance settings'}).click();
+  await page.getByRole('heading',{name:'Appearance'}).waitFor({timeout:15000});
+  await page.locator('.sidebar nav .nav-item').filter({hasText:'CAD'}).first().click();
+  await page.locator('[data-capability-module="cad"]').getByRole('button',{name:'Files / Library',exact:true}).click();
+  requireEvidence(await page.locator('.library-view').count()===1,
+    'CAD Files command did not navigate to actual library');
+  console.log('PHASE1 specialist CAD/DICOM/Invoice/Account honest desktop UI: PASS');
+
 
   // Theme overhaul: every workspace must render an actual neutral UI surface
   // in both themes. Photograph representative module views for human visual QA
@@ -204,6 +231,10 @@ async function main(){
     'Backup / DR':'.enterprise-toolbar',
     'Help / Support':'.help-panel',
     'Settings':'.appearance-panel',
+    'CAD':'.capability-header',
+    'DICOM':'.capability-header',
+    'Invoice Studio':'.capability-header',
+    'Account':'.capability-header',
   };
   // Release gate: no cherry-picked representative-only screenshots.
   // Capture EVERY registered module in BOTH MALENJO themes.
