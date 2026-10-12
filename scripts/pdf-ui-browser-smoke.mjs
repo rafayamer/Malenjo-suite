@@ -244,6 +244,7 @@ async function main(){
   await page.getByRole('tab',{name:'Home',exact:true}).click();
   await page.getByRole('tabpanel',{name:'Home',exact:true})
     .getByRole('button',{name:'PDF Viewer'}).click();
+  await page.locator('main.workspace > .pdf-workspace .pdf-task-toolbar').waitFor({state:'visible',timeout:30000});
   requireEvidence(await page.locator('main.workspace > .pdf-workspace').count()===1,
     'Ribbon PDF Viewer command did not navigate inside MALENJO');
   requireEvidence(await page.locator('.suite-ribbon').count()===0 &&
