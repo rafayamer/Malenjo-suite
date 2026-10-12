@@ -1528,7 +1528,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         onProgress:(completed,total)=>setPageImageProgress(Math.round(completed*100/total)),
       });
       if(controller.signal.aborted)throw new DOMException('Cancelled','AbortError');
-      const base=sourceName.replace(/\\.pdf$/i,'').replace(/[\\/\\\\\\u0000-\\u001F]/g,'_').slice(0,120)||'MALENJO-document';
+      const base=sourceName.replace(/\.pdf$/i,'').replace(/[/\\\u0000-\u001F]/g,'_').slice(0,120)||'MALENJO-document';
       const saved=await exportPdfPageImagesZip(base+'-pages-jpg.zip',zip);
       if(saved)setActionNotice('Exported '+pdf.document.numPages+' JPEG page images to ZIP. The original PDF is unchanged.');
     }catch(reason){
