@@ -932,6 +932,15 @@ async function main(){
   // Return to the original PDF and verify top-bar actions are genuine
   // document-controller commands with honest disabled history state.
   await documentTab.click();
+  // The presentation test just navigated to page 2. Page rotation operates
+  // on the explicitly selected page, not implicitly on the first document
+  // page; navigate back to page 1 and verify selection before editing.
+  const pageSelector=page.locator('.document-session-panel.active .pdf-reader-footer input[aria-label="Current PDF page"]');
+  await pageSelector.fill('1');
+  await pageSelector.press('Enter');
+  await page.waitForFunction(()=>
+    document.querySelector('.document-session-panel.active [aria-label="Pages selected for editing: 1"]')!==null,
+    null,{timeout:15000});
   const saveQuick=page.getByRole('button',{name:'Save PDF copy',exact:true});
   const undoQuick=page.getByRole('button',{name:'Undo PDF edit',exact:true});
   const redoQuick=page.getByRole('button',{name:'Redo PDF edit',exact:true});
