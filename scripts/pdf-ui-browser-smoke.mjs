@@ -60,13 +60,73 @@ async function main(){
   requireEvidence(await page.locator('.topbar').evaluate((node)=>getComputedStyle(node).backgroundColor)===topColor,
     'The dark appearance failed to restore MALENJO colors');
   await page.getByRole('tab',{name:'PDF Viewer'}).click();
-  await page.getByRole('tabpanel',{name:'PDF Viewer commands'})
+  await page.getByRole('tabpanel',{name:'PDF Viewer',exact:true})
     .getByRole('button',{name:'PDF Workspace'}).click();
   requireEvidence(await page.locator('.sidebar .nav-item.active').getAttribute('aria-label')==='PDF Workspace',
     'Ribbon PDF Viewer command did not navigate inside MALENJO');
+  requireEvidence(await page.locator('.suite-ribbon').count()===0 &&
+    await page.locator('main.workspace > .pdf-workspace .pdf-task-toolbar').isVisible(),
+    'PDF workspace stacked two ribbons or lost its actual PDF task ribbon');
   requireEvidence(context.pages().length===1,'Ribbon navigation opened another window instead of the single workbench');
   await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
+  await page.getByRole('tab',{name:'Home',exact:true}).waitFor({timeout:15000});
+  requireEvidence(await page.locator('.suite-ribbon').count()===1,
+    'Home did not restore the shared MALENJO ribbon');
   console.log('PHASE3 MALENJO ribbon Home/PDF and persistent light/dark appearance: PASS');
+
+  // Phase 1 real keyboard-navigation contract. Arrow keys move among ribbon
+  // categories, ArrowDown enters enabled commands, Escape returns to the tab.
+  const homeRibbonTab=page.getByRole('tab',{name:'Home',exact:true});
+  await homeRibbonTab.focus();
+  await page.keyboard.press('ArrowRight');
+  const pdfRibbonTab=page.getByRole('tab',{name:'PDF Viewer',exact:true});
+  requireEvidence(await pdfRibbonTab.getAttribute('aria-selected')==='true',
+    'Right arrow did not select the next ribbon category');
+  await page.keyboard.press('ArrowDown');
+  requireEvidence(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label'))==='Open PDF',
+    'ArrowDown did not focus the first enabled ribbon command');
+  await page.keyboard.press('Escape');
+  requireEvidence(await pdfRibbonTab.evaluate((node)=>node===document.activeElement),
+    'Escape did not restore focus to the selected ribbon category');
+  await page.keyboard.press('End');
+  requireEvidence(await page.getByRole('tab',{name:'Suite Tools'}).getAttribute('aria-selected')==='true',
+    'End did not select the final ribbon category');
+  await page.keyboard.press('Home');
+  requireEvidence(await homeRibbonTab.getAttribute('aria-selected')==='true',
+    'Home did not select the first ribbon category');
+
+  // Resize the actual workbench in both MALENJO themes: controls must remain
+  // reachable without topbar overflow or a secondary browser window.
+  for(const theme of ['dark','light']){
+    if(await page.evaluate(()=>document.documentElement.dataset.theme)!==theme){
+      await page.getByRole('button',{name:theme==='light'?'Switch to light theme':'Switch to dark theme'}).click();
+      await page.waitForFunction(value=>document.documentElement.dataset.theme===value,theme);
+    }
+    for(const width of [1024,800,680,430]){
+      await page.setViewportSize({width,height:850});
+      const metrics=await page.evaluate(()=>{
+        const bar=document.querySelector('.topbar').getBoundingClientRect();
+        const ribbon=document.querySelector('.suite-ribbon').getBoundingClientRect();
+        const search=document.querySelector('.topbar .search').getBoundingClientRect();
+        const commands=[...document.querySelectorAll('.topbar-actions button')].map((button)=>{
+          const box=button.getBoundingClientRect();
+          return {left:box.left,right:box.right,width:box.width};
+        });
+        return {viewport:innerWidth,barRight:bar.right,ribbonRight:ribbon.right,
+          searchWidth:search.width,commands};
+      });
+      requireEvidence(metrics.barRight<=width+2 && metrics.ribbonRight<=width+2,
+        'Shell extends off-screen at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
+      requireEvidence(metrics.searchWidth>45 && metrics.commands.every((c)=>c.left>=0&&c.right<=width+2&&c.width>=30),
+        'Essential titlebar commands clipped at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
+      requireEvidence(context.pages().length===1,'Responsive layout launched a second browser window');
+    }
+  }
+  await page.setViewportSize({width:1440,height:900});
+  await page.getByRole('button',{name:'Switch to dark theme'}).click();
+  await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+  console.log('PHASE1 ribbon keyboard, resized layout, two-theme command access: PASS');
+
 
   // Phase 3: exercise every real navigation surface, not only the PDF tab.
   // This proves shell launchability, not the underlying domain workflows.
@@ -214,6 +274,18 @@ async function main(){
     const editor=page.locator('.document-session-panel.active').locator(item.editor);
     await editor.waitFor({timeout:30000});
     await editor.fill(item.updated);
+    // Theme changes must not remount or discard a dirty Office session.
+    // The original OOXML/source byte protection is independently verified below.
+    const tabCountBeforeTheme=await page.locator('.document-tab').count();
+    await page.getByRole('button',{name:'Switch to light theme'}).click();
+    await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
+    requireEvidence(await editor.inputValue()===item.updated,
+      'Light appearance discarded unsaved content: '+item.module);
+    await page.getByRole('button',{name:'Switch to dark theme'}).click();
+    await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+    requireEvidence(await editor.inputValue()===item.updated &&
+      await page.locator('.document-tab').count()===tabCountBeforeTheme,
+      'Appearance switching remounted the editor or changed document sessions: '+item.module);
     // The editor must not silently discard unsaved edits after leaving.
     await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
     await officeTab.click();

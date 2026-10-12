@@ -1,4 +1,4 @@
-import { useEffect, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import {
   Bot, Database, FileOutput, FileText, FolderOpen, HardDrive, HelpCircle,
   Home, ScanLine, Search, Settings, ShieldCheck, Stethoscope,
@@ -26,6 +26,8 @@ const icons: Record<string, LucideIcon> = {
 
 export default function RibbonShell({ workspace, onNavigate, onOpenFiles }: Props) {
   const [selected, setSelected] = useState<RibbonTabId>(() => defaultRibbonTab(workspace));
+  const tabListRef = useRef<HTMLDivElement>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
   useEffect(() => setSelected(defaultRibbonTab(workspace)), [workspace]);
   const current = RIBBON_TABS.find((tab) => tab.id === selected)!;
 
@@ -35,26 +37,33 @@ export default function RibbonShell({ workspace, onNavigate, onOpenFiles }: Prop
       ? RIBBON_TABS.length - 1 : direction
         ? (index + direction + RIBBON_TABS.length) % RIBBON_TABS.length
         : null;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      actionsRef.current?.querySelector<HTMLButtonElement>('.suite-ribbon-action:not(:disabled)')?.focus();
+      return;
+    }
     if (next === null) return;
     event.preventDefault();
     setSelected(RIBBON_TABS[next].id);
-    event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+    tabListRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
   }
 
   return <section className="suite-ribbon" aria-label="MALENJO document and workspace ribbon">
-    <div className="suite-ribbon-tabs" role="tablist" aria-label="Ribbon categories">
+    <div className="suite-ribbon-tabs" role="tablist" aria-label="Ribbon categories" ref={tabListRef}>
       {RIBBON_TABS.map((tab, index) => <button
         key={tab.id}
         type="button"
         role="tab"
         aria-selected={selected === tab.id}
         aria-controls="suite-ribbon-actions"
+        id={'suite-ribbon-tab-' + tab.id}
         tabIndex={selected === tab.id ? 0 : -1}
         onClick={() => setSelected(tab.id)}
         onKeyDown={(event) => tabKeyboard(event, index)}
       >{tab.label}</button>)}
     </div>
-    <div className="suite-ribbon-actions" id="suite-ribbon-actions" role="tabpanel" aria-label={current.label + ' commands'}>
+    <div className="suite-ribbon-actions" id="suite-ribbon-actions" ref={actionsRef} role="tabpanel"
+      aria-labelledby={'suite-ribbon-tab-' + selected}>
       {current.actions.map((action) => {
         const Icon = icons[action.id] ?? FileText;
         return <button
@@ -68,6 +77,12 @@ export default function RibbonShell({ workspace, onNavigate, onOpenFiles }: Prop
             if (action.unavailableReason) return;
             if (action.opensFiles) onOpenFiles();
             else if (action.destination) onNavigate(action.destination);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              tabListRef.current?.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.focus();
+            }
           }}
         ><Icon size={22} strokeWidth={1.7}/><span>{action.label}</span></button>;
       })}
