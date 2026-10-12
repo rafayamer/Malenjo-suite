@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import {
   Bot, Database, FileOutput, FileText, FolderOpen, HardDrive, HelpCircle,
-  Home, ScanLine, Search, Settings, ShieldCheck, Stethoscope,
+  Home, ScanLine, Search, Settings, ShieldCheck, Stethoscope, Receipt, UserRound, Ruler,
   Workflow, PenTool, FileStack, type LucideIcon,
 } from 'lucide-react';
 import type { ModuleId } from '../core/types';
-import { defaultRibbonTab, RIBBON_TABS, type RibbonTabId } from './ribbonModel';
+import { defaultRibbonTab, RIBBON_TABS, specialistRibbonActions, type RibbonTabId } from './ribbonModel';
 
 interface Props {
   workspace: ModuleId;
@@ -30,6 +30,11 @@ export default function RibbonShell({ workspace, onNavigate, onOpenFiles }: Prop
   const actionsRef = useRef<HTMLDivElement>(null);
   useEffect(() => setSelected(defaultRibbonTab(workspace)), [workspace]);
   const current = RIBBON_TABS.find((tab) => tab.id === selected)!;
+  const specialistCommands = selected === defaultRibbonTab(workspace)
+    ? specialistRibbonActions(workspace) : null;
+  const actions = specialistCommands ?? current.actions;
+  const specialistIcon = workspace === 'cad' ? Ruler : workspace === 'dicom' ? Stethoscope
+    : workspace === 'invoice' ? Receipt : UserRound;
 
   function tabKeyboard(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     const direction = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
@@ -64,8 +69,8 @@ export default function RibbonShell({ workspace, onNavigate, onOpenFiles }: Prop
     </div>
     <div className="suite-ribbon-actions" id="suite-ribbon-actions" ref={actionsRef} role="tabpanel"
       aria-labelledby={'suite-ribbon-tab-' + selected}>
-      {current.actions.map((action) => {
-        const Icon = icons[action.id] ?? FileText;
+      {actions.map((action) => {
+        const Icon = icons[action.id] ?? (specialistCommands ? specialistIcon : FileText);
         return <button
           key={action.id}
           type="button"
