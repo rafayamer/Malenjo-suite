@@ -58,10 +58,11 @@ describe('Home CasualOffice structural/accessibility baseline',()=>{
     expect(html).toContain('ml-start-more-tools');
     expect(html).toContain('More tools');
     expect((html.match(/class="ml-co-action-card/g)??[]).length).toBe(7);
-    expect(html).toContain('Your files');
-    expect(html).toContain('Search recent');
-    expect(html).toContain('Filter recent files by type');
-    expect(html).toContain('role="tablist"');
+    expect(html).toContain('aria-controls="ml-home-recent-panel"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('id="ml-home-recent-panel" hidden=""');
+    expect(html).toContain('ml-start-utilities');
+    expect(html).toContain('More options');
     expect(html).toContain('Continue working');
     expect(html).toContain('Unsaved changes');
     expect(html).not.toContain('shadcn-admin');
