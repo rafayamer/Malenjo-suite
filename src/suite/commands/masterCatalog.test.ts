@@ -24,6 +24,7 @@ describe('Master Specification v2.0 PDF capability contract',()=>{
       expect(command.status).toBe('NOT_RELEASE_READY');
     });
     expect(new Set(PDF_COMMANDS.map(c=>c.id)).size).toBe(90);
+    expect(new Set(PDF_COMMANDS.map(c=>c.icon)).size).toBe(90);
   });
 
   it('uses precisely the ten specified contextual ribbon categories',()=>{
