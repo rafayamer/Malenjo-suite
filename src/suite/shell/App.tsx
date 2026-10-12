@@ -1,5 +1,5 @@
 import MalenjoBrandIcon from '../../../src-tauri/icons/icon.png';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { Bot, ChevronDown, Command, FolderOpen, House, LayoutGrid, Search, ShieldCheck, Moon, Sun, X, Save, Undo2, Redo2, UserRound } from 'lucide-react';
 import { modules } from '../modules/registry';
 import type { ModuleId } from '../core/types';
@@ -26,18 +26,18 @@ import {
   saveAsLibraryDocument,
 } from '../files/api';
 import { listBrowserDocuments, markBrowserDocumentOpened, registerBrowserFiles } from '../files/browserStore';
-import PdfWorkspace from '../pdf/PdfWorkspace';
-import OfficeWorkspace from '../office/OfficeWorkspace';
-import ScannerWorkspace from '../scanner/ScannerWorkspace';
-import AiWorkspace from '../ai/AiWorkspace';
-import SecurityWorkspace from '../security/SecurityWorkspace';
-import MetadataWorkspace from '../security/MetadataWorkspace';
-import SignWorkspace from '../security/SignWorkspace';
-import EnterpriseWorkspace from '../enterprise/EnterpriseWorkspace';
-import HelpWorkspace from '../help/HelpWorkspace';
+const PdfWorkspace = lazy(() => import('../pdf/PdfWorkspace'));
+const OfficeWorkspace = lazy(() => import('../office/OfficeWorkspace'));
+const ScannerWorkspace = lazy(() => import('../scanner/ScannerWorkspace'));
+const AiWorkspace = lazy(() => import('../ai/AiWorkspace'));
+const SecurityWorkspace = lazy(() => import('../security/SecurityWorkspace'));
+const MetadataWorkspace = lazy(() => import('../security/MetadataWorkspace'));
+const SignWorkspace = lazy(() => import('../security/SignWorkspace'));
+const EnterpriseWorkspace = lazy(() => import('../enterprise/EnterpriseWorkspace'));
+const HelpWorkspace = lazy(() => import('../help/HelpWorkspace'));
 import HomeWorkspace from '../home/HomeWorkspace';
-import SettingsWorkspace from './SettingsWorkspace';
-import CapabilityWorkspace from './CapabilityWorkspace';
+const SettingsWorkspace = lazy(() => import('./SettingsWorkspace'));
+const CapabilityWorkspace = lazy(() => import('./CapabilityWorkspace'));
 import DocumentTabs from './DocumentTabs';
 import RibbonShell from './RibbonShell';
 import { ModuleNavIcon } from './moduleNavIcons';
@@ -60,6 +60,13 @@ export default function App() {
   const [theme, setTheme] = useState<SuiteTheme>(() => {
     try { return readSuiteTheme(window.localStorage); } catch { return 'dark'; }
   });
+  // The Home screen must paint before the expensive PDF parser/viewer code.
+  // Prewarm the primary reader after first paint so a subsequent Open PDF
+  // reuses its module without making cold application startup slower.
+  useEffect(()=>{
+    const task=window.setTimeout(()=>{void import('../pdf/PdfWorkspace').catch(()=>undefined);},1100);
+    return()=>window.clearTimeout(task);
+  },[]);
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
@@ -745,8 +752,10 @@ export default function App() {
           <button type="button" aria-label="Close MALENJO AI" title="Close assistant"
             onClick={()=>setAiOpen(false)}><X size={18} aria-hidden="true"/></button>
         </div>
-        <AiWorkspace compact openDocuments={openDocumentsForAi}
-          onBackToFiles={()=>{setAiOpen(false);selectModule('files');}}/>
+        <Suspense fallback={<div className="ml-open-feedback" role="status">Opening MALENJO AI…</div>}>
+          <AiWorkspace compact openDocuments={openDocumentsForAi}
+            onBackToFiles={()=>{setAiOpen(false);selectModule('files');}}/>
+        </Suspense>
       </aside>}
 
       <CommandPalette
@@ -757,6 +766,7 @@ export default function App() {
         onClose={closeCommandPalette}
       />
 
+      <Suspense fallback={<div className="ml-open-feedback" role="status">Opening workspace…</div>}>
       {!!sessions.length && <div className={activeSession ? 'document-session-stack' : 'document-session-stack parked'} aria-hidden={!activeSession}>
         {sessions.map((session) => <section
           className={session.id === activeSessionId ? 'document-session-panel active' : 'document-session-panel'}
@@ -822,6 +832,7 @@ export default function App() {
                                   : active === 'cad' || active === 'dicom' || active === 'invoice' || active === 'account'
                                     ? <CapabilityWorkspace module={active} onNavigate={selectModule}/>
                                     : <ModuleView module={module} session={null} notice="" onSaveAs={async()=>{}} onBackToFiles={()=>selectModule('files')}/>)}
+      </Suspense>
       <footer className="ml-bottom-statusbar" aria-label="MALENJO document status">
         <span title={activeSession?.document.name??module.name}>{activeSession?.document.name??module.name}</span>
         {activePdfView?.pageCount
