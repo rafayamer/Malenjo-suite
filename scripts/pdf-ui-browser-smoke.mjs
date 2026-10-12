@@ -742,9 +742,11 @@ async function main(){
   // Master v2 bottom status must be driven by the active PDF reader, not a
   // constant "working copy" badge. Exercise zoom and actual page numbers.
   const liveStatus=page.locator('.ml-bottom-statusbar .ml-status-pdf-view');
-  await liveStatus.waitFor({state:'visible',timeout:15000});
-  requireEvidence(/Page [12] \/ 2 · Fit width/.test(await liveStatus.innerText()),
-    'Compact status bar does not reflect real two-page PDF and fit mode: '+await liveStatus.innerText());
+  await activePdf.locator('.pdf-reader-footer .pdf-page-nav').waitFor({state:'visible',timeout:15000});
+  requireEvidence(await page.locator('.ml-bottom-statusbar').isHidden(),
+    'PDF still displays a duplicate application status footer underneath the reader footer');
+  requireEvidence(/Page [12] \/ 2 · Fit width/.test(await liveStatus.textContent()??''),
+    'Live PDF page/zoom controller lost its real status synchronisation');
   await page.getByRole('button',{name:'Actual size'}).click();
   await page.waitForFunction(()=>
     document.querySelector('.ml-bottom-statusbar .ml-status-pdf-view')?.textContent?.includes('100%'),
