@@ -1977,3 +1977,11 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
   }
   .app-shell-top-only .search {max-width:none;min-width:42px}
 }
+
+
+/* Chat composer stays above the actual bottom status strip; closing AI
+   restores the document width because the right-side dock remains temporary. */
+.app-shell-top-only .ml-ai-drawer{bottom:30px}
+@media(max-width:680px){
+  .app-shell-top-only .ml-ai-drawer {bottom:30px;max-height:calc(100dvh - 80px)}
+}
