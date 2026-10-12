@@ -1474,6 +1474,18 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 .ml-start-minimal .ml-home-shortcuts,.ml-start-minimal .ml-home-status-row,
 .ml-start-minimal .ml-co-shortcut-footer {display:none}
 .ml-start-minimal .ml-home-section:not(.ml-co-files):not(:has(.ml-home-session-grid)){display:none}
+/* Master v2 minimal Home: secondary panels are accessible only on demand.
+   Do not permanently hide pinned-location controls inside the disclosure. */
+.ml-start-utilities{width:min(900px,100%);margin:0 auto 12px}
+.ml-start-utilities>summary{width:max-content;max-width:100%;margin:0 auto;cursor:pointer;
+  list-style:none;font-size:12px;color:var(--ml-muted);padding:9px 12px;border-radius:7px}
+.ml-start-utilities>summary::-webkit-details-marker{display:none}
+.ml-start-utilities>summary:hover{color:var(--ml-text);background:var(--ml-hover)}
+.ml-start-utilities>summary:focus-visible{outline:2px solid var(--ml-brand-blue);outline-offset:2px}
+.ml-start-minimal .ml-start-utilities[open] .ml-home-section:not(.ml-co-files):not(:has(.ml-home-session-grid)){display:block}
+.ml-start-minimal .ml-start-utilities[open] :is(.ml-home-status-row,.ml-co-shortcut-footer){display:flex}
+.ml-start-minimal .ml-start-utilities .ml-home-section{width:100%;margin:12px 0}
+
 @media(max-width:760px){
   .app-shell-top-only .topbar{padding:0 7px;gap:4px}
   .app-shell-top-only .suite-title{flex:0 1 auto}
