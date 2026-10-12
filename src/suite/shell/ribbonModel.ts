@@ -1,4 +1,5 @@
 import type { ModuleId } from '../core/types';
+import { CAPABILITY_WORKSPACES, type CapabilityModuleId } from './CapabilityWorkspace';
 
 export type RibbonTabId = 'home' | 'pdf' | 'convert' | 'review' | 'scan' | 'specialist' | 'tools';
 
@@ -66,4 +67,26 @@ export function defaultRibbonTab(workspace: ModuleId): RibbonTabId {
   if (workspace === 'cad' || workspace === 'dicom') return 'specialist';
   if (workspace === 'home' || workspace === 'files') return 'home';
   return 'tools';
+}
+
+/**
+ * A specialist module uses the existing shared ribbon action surface rather
+ * than stacking a second, disconnected command strip under it.
+ * Working navigation is separated from unavailable domain engine operations.
+ */
+export function specialistRibbonActions(workspace: ModuleId): RibbonAction[] | null {
+  if (!(workspace in CAPABILITY_WORKSPACES)) return null;
+  const id = workspace as CapabilityModuleId;
+  const model = CAPABILITY_WORKSPACES[id];
+  const navigation = id === 'account' ? 'settings' : 'files';
+  return [
+    ...model.tools.map((label, index) => ({
+      id: 'capability-' + id + '-tool-' + index,
+      label,
+      unavailableReason: model.limitation,
+    })),
+    { id: 'capability-' + id + '-navigate', label: navigation === 'settings' ? 'Appearance settings' : 'Files / Library',
+      destination: navigation },
+    { id: 'capability-' + id + '-help', label: 'Help', destination: 'help' },
+  ];
 }
