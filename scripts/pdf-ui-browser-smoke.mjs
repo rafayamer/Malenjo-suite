@@ -44,6 +44,14 @@ async function main(){
   // Verify a real palette switch, persistence after reload and same-window
   // navigation rather than only checking the presence of a decorative toggle.
   await page.getByRole('tab',{name:'Home',exact:true}).waitFor({timeout:15000});
+  // Home is not an independent Word/Excel/PowerPoint opener. Those outputs
+  // must originate from a successful PDF conversion (still a release blocker).
+  for(const label of ['PDF to Word','PDF to Excel','PDF to Slides']){
+    const action=page.locator('.ml-co-actions .ml-co-action-card').filter({hasText:label});
+    await action.waitFor({timeout:15000});
+    requireEvidence(await action.isDisabled() && (await action.getAttribute('title'))?.includes('conversion'),
+      'Home incorrectly advertises an unverified independent Office launch: '+label);
+  }
   const topColor=await page.locator('.topbar').evaluate((node)=>getComputedStyle(node).backgroundColor);
   await page.getByRole('button',{name:'Switch to light theme'}).click();
   await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
