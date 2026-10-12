@@ -84,6 +84,28 @@ async function main(){
   requireEvidence(await page.locator('.document-tab-main').filter({hasText:'forbidden-standalone.docx'}).count()===0,
     'Independent Word document opened without successful PDF conversion');
   console.log('PHASE1 PDF/CAD/DICOM-only direct open, Office conversion-only gating: PASS');
+  // AI belongs in the top bar and behaves as a persistent Messenger-like
+  // chat drawer, not a standalone module or a second browser window.
+  const aiButton=page.getByRole('button',{name:'MALENJO AI',exact:true});
+  await aiButton.click();
+  const aiDrawer=page.locator('#ml-ai-assistant');
+  await aiDrawer.waitFor({state:'visible',timeout:15000});
+  requireEvidence(await aiButton.getAttribute('aria-expanded')==='true' &&
+    await aiDrawer.locator('.ai-bubble').count()===0 &&
+    await aiDrawer.locator('.ai-composer textarea').isVisible(),
+    'AI top icon did not open the actual local chat interface');
+  await aiDrawer.locator('.ai-composer textarea').fill('Help me review a PDF');
+  await aiDrawer.getByRole('button',{name:'Send'}).click();
+  await aiDrawer.locator('.ai-bubble.user').filter({hasText:'Help me review a PDF'}).waitFor({timeout:15000});
+  await aiDrawer.getByRole('button',{name:'Close MALENJO AI'}).click();
+  requireEvidence(await aiDrawer.isHidden() && await aiButton.getAttribute('aria-expanded')==='false',
+    'AI did not close from the top bar without losing the main workspace');
+  await aiButton.click();
+  requireEvidence(await aiDrawer.locator('.ai-bubble.user').filter({hasText:'Help me review a PDF'}).count()===1,
+    'AI chat history vanished when the side panel was toggled');
+  await aiButton.click();
+  requireEvidence(context.pages().length===1,'MALENJO AI opened a new browser window');
+  console.log('PHASE1 top-bar AI messenger drawer and chat state retention: PASS');
   // Phase 1 Home filtering is a real keyboard-operated tablist, not a
   // sequence of unreachable decorative pills.
   const homeFileFilters=page.getByRole('tablist',{name:'Filter recent files by type'});
@@ -395,6 +417,37 @@ async function main(){
   });
   const documentTab=page.locator('.document-tab-main').filter({hasText:'browser-ui-acceptance.pdf'});
   await documentTab.waitFor({timeout:30000});
+  // The PDF viewer starts with no permanent navigation or inspector panes.
+  const activePdf=page.locator('.document-session-panel.active');
+  requireEvidence(await activePdf.locator('.pdf-layout.left-panel-collapsed.inspector-hidden').count()===1 &&
+    await activePdf.locator('.pdf-left-shell').isHidden() &&
+    await activePdf.locator('.pdf-inspector').count()===0,
+    'PDF canvas started with an unwanted left or right sidebar');
+  await page.getByRole('button',{name:'MALENJO AI',exact:true}).click();
+  const sideBounds=await page.evaluate(()=>{
+    const drawer=document.querySelector('.ml-ai-drawer.is-open')?.getBoundingClientRect();
+    const work=document.querySelector('.document-session-stack')?.getBoundingClientRect();
+    return {drawerLeft:drawer?.left??0,workRight:work?.right??0};
+  });
+  requireEvidence(sideBounds.workRight<=sideBounds.drawerLeft+2,
+    'AI drawer overlapped the PDF workspace instead of sharing the window: '+JSON.stringify(sideBounds));
+  await page.getByRole('button',{name:'Close MALENJO AI'}).click();
+  for(const width of [1024,800,680,430]){
+    await page.setViewportSize({width,height:830});
+    const collision=await page.locator('.document-session-panel.active .pdf-context-toolbar')
+      .evaluate(toolbar=>{
+        const actions=toolbar.querySelector('.pdf-task-actions')?.getBoundingClientRect();
+        const controls=toolbar.querySelector('.pdf-view-controls')?.getBoundingClientRect();
+        const bounds=toolbar.getBoundingClientRect();
+        return {actionsRight:actions?.right??0,controlsLeft:controls?.left??0,
+          controlsRight:controls?.right??0,toolbarRight:bounds.right};
+      });
+    requireEvidence(collision.actionsRight<=collision.controlsLeft+3 &&
+      collision.controlsRight<=collision.toolbarRight+3,
+      'PDF buttons/panels overlap at '+width+'px: '+JSON.stringify(collision));
+  }
+  await page.setViewportSize({width:1440,height:900});
+  console.log('MALENJO PDF icon ribbon non-overlap, hidden sidebars, side-chat coexistence: PASS');
   console.log('MALENJO browser document tab opened');
   await page.waitForFunction(()=>
     Array.from(document.querySelectorAll('.pdf-text-layer span')).some(
