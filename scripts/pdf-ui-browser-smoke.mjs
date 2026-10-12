@@ -104,6 +104,17 @@ async function main(){
     await aiDrawer.locator('.ai-bubble').count()===0 &&
     await aiDrawer.locator('.ai-composer textarea').isVisible(),
     'AI top icon did not open the actual local chat interface');
+  const aiDock=await page.evaluate(()=>{
+    const drawer=document.querySelector('#ml-ai-assistant').getBoundingClientRect();
+    const footer=document.querySelector('.ml-suite-status').getBoundingClientRect();
+    const composer=document.querySelector('#ml-ai-assistant .ai-composer').getBoundingClientRect();
+    return {drawerRight:drawer.right,drawerBottom:drawer.bottom,composerBottom:composer.bottom,
+      footerTop:footer.top,viewport:innerWidth};
+  });
+  requireEvidence(aiDock.drawerRight<=aiDock.viewport+2 &&
+    aiDock.drawerBottom<=aiDock.footerTop+2 &&
+    aiDock.composerBottom<=aiDock.footerTop+2,
+    'AI panel overlapped footer/document controls: '+JSON.stringify(aiDock));
   await aiDrawer.locator('.ai-composer textarea').fill('Help me review a PDF');
   await aiDrawer.getByRole('button',{name:'Send'}).click();
   await aiDrawer.locator('.ai-bubble.user').filter({hasText:'Help me review a PDF'}).waitFor({timeout:15000});
@@ -202,14 +213,37 @@ async function main(){
   await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
   requireEvidence(await page.locator('.topbar').evaluate((node)=>getComputedStyle(node).backgroundColor)===topColor,
     'The dark appearance failed to restore MALENJO colors');
-  await page.getByRole('tab',{name:'PDF Viewer'}).click();
-  await page.getByRole('tabpanel',{name:'PDF Viewer',exact:true})
-    .getByRole('button',{name:'PDF Workspace'}).click();
+  await page.getByRole('tab',{name:'Edit',exact:true}).click();
+  await page.getByRole('tabpanel',{name:'Edit',exact:true})
+    .getByRole('button',{name:/PDF Editing/}).click();
   requireEvidence(await page.locator('main.workspace > .pdf-workspace').count()===1,
     'Ribbon PDF Viewer command did not navigate inside MALENJO');
+  const bottomNav=await page.evaluate(()=>{
+    const controls=document.querySelector('.pdf-view-controls')?.getBoundingClientRect();
+    const footer=document.querySelector('.ml-suite-status')?.getBoundingClientRect();
+    return controls&&footer?{
+      top:controls.top,bottom:controls.bottom,left:controls.left,right:controls.right,
+      footerTop:footer.top,viewportWidth:innerWidth,viewportHeight:innerHeight,
+    }:null;
+  });
+  requireEvidence(bottomNav&&bottomNav.top>=bottomNav.footerTop-1 &&
+    bottomNav.bottom<=bottomNav.viewportHeight+2 &&
+    bottomNav.left>=0 && bottomNav.right<=bottomNav.viewportWidth+2,
+    'PDF page and zoom controls are not contained in the bottom status bar: '+JSON.stringify(bottomNav));
+
   requireEvidence(await page.locator('.suite-ribbon').count()===0 &&
     await page.locator('main.workspace > .pdf-workspace .pdf-task-toolbar').isVisible(),
     'PDF workspace stacked two ribbons or lost its actual PDF task ribbon');
+  requireEvidence(JSON.stringify(await page.getByRole('tablist',{name:'PDF task categories'})
+    .getByRole('tab').allTextContents())===JSON.stringify(['Home','Edit','Organize','Optimize','Convert','Forms','Review','Protect','Automate','Tools']),
+    'Actual PDF document ribbon did not match the ten Master v2 categories');
+  const allNinety=page.getByRole('button',{name:'Browse all 90 PDF capabilities'});
+  await allNinety.click();
+  const pdfCatalog=page.locator('.pdf-task-toolbar .ml-feature-gallery');
+  await pdfCatalog.waitFor({state:'visible',timeout:15000});
+  requireEvidence(await pdfCatalog.locator('.ml-feature-gallery-item').count()===90,
+    'Actual PDF workspace did not expose all 90 source-truth catalog entries');
+  await pdfCatalog.getByRole('button',{name:'Close PDF tools'}).click();
   requireEvidence(context.pages().length===1,'Ribbon navigation opened another window instead of the single workbench');
   await openModule('Home');
   await page.getByRole('tab',{name:'Home',exact:true}).waitFor({timeout:15000});
@@ -217,22 +251,48 @@ async function main(){
     'Home did not restore the shared MALENJO ribbon');
   console.log('PHASE3 MALENJO ribbon Home/PDF and persistent light/dark appearance: PASS');
 
+  // Master Specification v2.0: ten categories, and a genuinely searchable
+  // list of ALL 90 commands without pretending incomplete editing is enabled.
+  const canonical=['Home','Edit','Organize','Optimize','Convert','Forms','Review','Protect','Automate','Tools'];
+  const ribbonTabs=page.getByRole('tablist',{name:'Ribbon categories'});
+  requireEvidence(JSON.stringify(await ribbonTabs.getByRole('tab').allTextContents())===JSON.stringify(canonical),
+    'Main ribbon does not contain the ten Master v2 canonical categories');
+  await page.getByRole('button',{name:'Browse PDF features'}).click();
+  const allFeatures=page.locator('#malenjo-ribbon-gallery');
+  await allFeatures.waitFor({state:'visible',timeout:15000});
+  requireEvidence(await allFeatures.locator('.ml-feature-gallery-item').count()===90,
+    'Master v2 Home gallery did not expose all 90 PDF features');
+  await allFeatures.locator('input[type="search"]').fill('MAL-037');
+  const entry=allFeatures.locator('.ml-feature-gallery-item');
+  requireEvidence(await entry.count()===1 &&
+    await entry.first().getByRole('button',{name:/MAL-037 PDF to Word/}).isDisabled(),
+    'PDF-to-Word feature was missing or misleadingly executable');
+  await page.keyboard.press('Escape');
+  requireEvidence(await allFeatures.count()===0,'Escape did not close the PDF feature gallery');
+  await page.getByRole('tab',{name:'Convert',exact:true}).click();
+  await page.getByRole('button',{name:'Browse PDF features'}).click();
+  requireEvidence(await allFeatures.locator('.ml-feature-gallery-item').count()===16,
+    'Convert ribbon gallery does not show the 16 source-truth conversion capabilities');
+  await allFeatures.getByRole('button',{name:'Close PDF tools'}).click();
+  await page.getByRole('tab',{name:'Home',exact:true}).click();
+  console.log('MASTER v2: all 90 tools discoverable in ten ribbons, disabled execution: PASS');
+
   // Phase 1 real keyboard-navigation contract. Arrow keys move among ribbon
   // categories, ArrowDown enters enabled commands, Escape returns to the tab.
   const homeRibbonTab=page.getByRole('tab',{name:'Home',exact:true});
   await homeRibbonTab.focus();
   await page.keyboard.press('ArrowRight');
-  const pdfRibbonTab=page.getByRole('tab',{name:'PDF Viewer',exact:true});
+  const pdfRibbonTab=page.getByRole('tab',{name:'Edit',exact:true});
   requireEvidence(await pdfRibbonTab.getAttribute('aria-selected')==='true',
     'Right arrow did not select the next ribbon category');
   await page.keyboard.press('ArrowDown');
-  requireEvidence(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label'))==='Open PDF',
+  requireEvidence((await page.evaluate(()=>document.activeElement?.getAttribute('aria-label')||'')).includes('PDF Editing'),
     'ArrowDown did not focus the first enabled ribbon command');
   await page.keyboard.press('Escape');
   requireEvidence(await pdfRibbonTab.evaluate((node)=>node===document.activeElement),
     'Escape did not restore focus to the selected ribbon category');
   await page.keyboard.press('End');
-  requireEvidence(await page.getByRole('tab',{name:'Suite Tools'}).getAttribute('aria-selected')==='true',
+  requireEvidence(await page.getByRole('tab',{name:'Tools',exact:true}).getAttribute('aria-selected')==='true',
     'End did not select the final ribbon category');
   await page.keyboard.press('Home');
   requireEvidence(await homeRibbonTab.getAttribute('aria-selected')==='true',
@@ -245,13 +305,14 @@ async function main(){
       await page.getByRole('button',{name:theme==='light'?'Switch to light theme':'Switch to dark theme'}).click();
       await page.waitForFunction(value=>document.documentElement.dataset.theme===value,theme);
     }
-    for(const width of [1024,800,680,430,320]){
-      await page.setViewportSize({width,height:850});
+    for(const width of [1920,1440,1366,1024,800,768,680,430,320]){
+      await page.setViewportSize({width,height:width===1920?1080:width===1440?900:width===1366?768:width===1024?768:width===768?600:850});
       const metrics=await page.evaluate(()=>{
         const bar=document.querySelector('.topbar').getBoundingClientRect();
         const ribbon=document.querySelector('.suite-ribbon').getBoundingClientRect();
         const search=document.querySelector('.topbar .search').getBoundingClientRect();
-        const commands=[...document.querySelectorAll('.topbar-actions button')].map((button)=>{
+        const commands=[...document.querySelectorAll('.topbar-actions button')].filter(button=>
+          getComputedStyle(button).display!=='none').map((button)=>{
           const box=button.getBoundingClientRect();
           return {left:box.left,right:box.right,width:box.width};
         });
@@ -262,7 +323,7 @@ async function main(){
       requireEvidence(metrics.documentWidth<=width+2 && metrics.bodyWidth<=width+2 &&
         metrics.barRight<=width+2 && metrics.ribbonRight<=width+2,
         'Shell or document horizontally overflows at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
-      requireEvidence(metrics.searchWidth>45 && metrics.commands.every((c)=>c.left>=0&&c.right<=width+2&&c.width>=30),
+      requireEvidence(metrics.searchWidth>38 && metrics.commands.every((c)=>c.left>=0&&c.right<=width+2&&c.width>=30),
         'Essential titlebar commands clipped at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
       requireEvidence(context.pages().length===1,'Responsive layout launched a second browser window');
     }
@@ -313,14 +374,16 @@ async function main(){
     requireEvidence(await surface.locator('.capability-inspector').isVisible() &&
       await surface.locator('.capability-canvas').isVisible(),
       'Missing contextual canvas/inspector for '+name);
-    const commands=page.locator('.suite-ribbon-actions .suite-ribbon-action');
-    await page.waitForFunction(()=>document.querySelectorAll('.suite-ribbon-actions .suite-ribbon-action:disabled').length===4);
+    // Specialist primary commands are separate from the intentionally disabled
+    // MAL catalog preview buttons shown to help users discover future tools.
+    const commands=page.locator('.suite-ribbon-actions .ml-ribbon-primary-action');
+    await page.waitForFunction(()=>document.querySelectorAll('.suite-ribbon-actions .ml-ribbon-primary-action:disabled').length===4);
     requireEvidence(await surface.locator('.capability-command-strip').count()===0 &&
       await page.locator('.suite-ribbon').count()===1 &&
       await commands.count()===6 &&
       await commands.filter({hasText:'Help'}).isEnabled() &&
       await commands.filter({hasText:'Files / Library'}).count()<=1 &&
-      await page.locator('.suite-ribbon-actions .suite-ribbon-action:disabled').count()===4,
+      await page.locator('.suite-ribbon-actions .ml-ribbon-primary-action:disabled').count()===4,
       'Specialist UI has duplicate ribbons or unsupported commands appear executable in '+name);
     requireEvidence(await surface.getByText('NOT RELEASE-READY').isVisible(),
       'Missing honest readiness status in '+name);
@@ -544,12 +607,18 @@ async function main(){
         const actions=toolbar.querySelector('.pdf-task-actions')?.getBoundingClientRect();
         const controls=toolbar.querySelector('.pdf-view-controls')?.getBoundingClientRect();
         const bounds=toolbar.getBoundingClientRect();
-        return {actionsRight:actions?.right??0,controlsLeft:controls?.left??0,
-          controlsRight:controls?.right??0,toolbarRight:bounds.right};
+        const overlaps=Boolean(actions&&controls&&
+          actions.left<controls.right-2&&actions.right>controls.left+2&&
+          actions.top<controls.bottom-2&&actions.bottom>controls.top+2);
+        return {overlaps,actionsTop:actions?.top,actionsBottom:actions?.bottom,
+          controlsTop:controls?.top,controlsBottom:controls?.bottom,
+          controlsLeft:controls?.left??0,controlsRight:controls?.right??0,
+          toolbarRight:bounds.right,viewportWidth:innerWidth,viewportHeight:innerHeight};
       });
-    requireEvidence(collision.actionsRight<=collision.controlsLeft+3 &&
-      collision.controlsRight<=collision.toolbarRight+3,
-      'PDF buttons/panels overlap at '+width+'px: '+JSON.stringify(collision));
+    requireEvidence(!collision.overlaps&&collision.controlsLeft>=0&&
+      collision.controlsRight<=collision.viewportWidth+2&&
+      collision.controlsBottom<=collision.viewportHeight+2,
+      'PDF top and bottom controls overlap or leave viewport at '+width+'px: '+JSON.stringify(collision));
   }
   await page.setViewportSize({width:1440,height:900});
   console.log('MALENJO PDF icon ribbon non-overlap, hidden sidebars, side-chat coexistence: PASS');
@@ -567,9 +636,12 @@ async function main(){
     selection?.addRange(range);
     const text=selection?.toString()??'';
     selection?.removeAllRanges();
-    return {cursor:getComputedStyle(node).cursor,selection:text};
+    return {cursor:getComputedStyle(node).cursor,selection:text,
+      element:node.outerHTML.slice(0,350),parentClass:node.parentElement?.className,
+      matchesTextLayer:!!node.closest('.pdf-text-layer'),
+      display:getComputedStyle(node).display,inlineCursor:node.style.cursor};
   });
-  requireEvidence(selected.cursor==='text','PDF hover does not show I-beam');
+  requireEvidence(selected.cursor==='text','PDF hover does not show I-beam: '+JSON.stringify(selected));
   requireEvidence(selected.selection.includes('MALENJO BROWSER UI'),
     'PDF text cannot be selected and copied');
   console.log('MALENJO UI text selection: PASS');

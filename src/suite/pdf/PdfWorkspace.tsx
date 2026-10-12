@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import FeatureGallery from '../shell/FeatureGallery';
 import {
   ChevronLeft,
   ChevronRight,
@@ -302,6 +303,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [inspectorHidden, setInspectorHidden] = useState(true);
   const [taskCategory, setTaskCategory] = useState<PdfTaskCategory>('home');
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
+  const [masterGalleryOpen, setMasterGalleryOpen] = useState(false);
   const [featureGalleryMode, setFeatureGalleryMode] = useState<'category'|'all'>('category');
   const [featureGallerySearch, setFeatureGallerySearch] = useState('');
   const [providerPanelOpen, setProviderPanelOpen] = useState(false);
@@ -2146,7 +2148,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     disabledReason:onNavigateModule?undefined:'Suite navigation is unavailable in this workspace.',
     run:()=>onNavigateModule?.(id),
   });
-  const providerCategory = taskCategory === 'ai' ? null : taskCategory as PdfProviderToolCategory;
+  // Preserve reviewed backend provider routing while exposing the canonical
+  // Master v2 tab labels to users.
+  const providerCategory:PdfProviderToolCategory|null =
+    taskCategory === 'tools' ? null
+      : taskCategory === 'optimize' ? 'scan'
+      : taskCategory === 'review' ? 'comment'
+      : taskCategory as PdfProviderToolCategory;
   const providerAction:PdfToolbarAction={
     id:'local-provider-tools',
     label:'Local tools',
@@ -2199,19 +2207,16 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'later',label:'Move later',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&currentPage<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':currentPage>=pageCount?'The final page cannot move later.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)},
       providerAction,
     ],
-    comment:[
+    review:[
       {id:'comments-panel',label:'Comments panel',enabled:true,run:()=>openLeftPanel('comments')},
       {id:'add-comment',label:'Add comment',enabled:!!sourceBytes&&!mutating&&!!commentDraft.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!commentDraft.text.trim()?'Enter comment text in the Comments panel first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addComment},
       {id:'markup-region',label:'Add '+markupDraft.kind+' region',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addReviewMarkup},
       providerAction,
     ],
-    sign:[
-      navigateAction('Open Sign workspace','sign'),
-      {id:'signatures-panel',label:'Signature fields',enabled:true,run:()=>openLeftPanel('signatures')},
-      providerAction,
-    ],
     protect:[
       navigateAction('Open Security Center','security'),
+      navigateAction('Open Sign workspace','sign'),
+      {id:'signatures-panel',label:'Signature fields',enabled:true,run:()=>openLeftPanel('signatures')},
       providerAction,
     ],
     forms:[
@@ -2221,9 +2226,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'configure-forms',label:'Form settings',enabled:true,run:configureProperties},
       providerAction,
     ],
-    ai:[navigateAction('Open Malenjo AI','ai')],
-    scan:[navigateAction('Open Scanner','scanner'),providerAction],
+    optimize:[navigateAction('Open Scanner','scanner'),providerAction],
     automate:[navigateAction('Open Automation Studio','automation'),providerAction],
+    tools:[{id:'properties',label:'Document properties',enabled:true,run:()=>setInspectorHidden(false)},providerAction],
   };
   const directoryVisible=USER_PDF_TOOLS.filter(tool=>
     (tool.label+' '+tool.group).toLowerCase().includes(featureGallerySearch.trim().toLowerCase()));
@@ -2307,7 +2312,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           tabIndex={taskCategory===category?0:-1}
           className={taskCategory===category?'active':''}
           title={`${PDF_TASK_CATEGORY_LABELS[category]} · ${PDF_TASK_CATEGORY_SHORTCUTS[category]}`}
-          onClick={()=>{setTaskCategory(category);setFeatureGalleryOpen(false);if(category==='ai')setProviderPanelOpen(false);}}
+          onClick={()=>{setTaskCategory(category);setFeatureGalleryOpen(false);setMasterGalleryOpen(false);}}
           onKeyDown={(event)=>{
             if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
             event.preventDefault();
@@ -2318,6 +2323,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
       <div id={`${domIdPrefix}-task-tools`} className="pdf-context-toolbar" role="toolbar" aria-label={`${PDF_TASK_CATEGORY_LABELS[taskCategory]} PDF tools`}>
         <div className="pdf-task-actions">
+          <button type="button" className="pdf-master-catalog-trigger"
+            aria-label="Browse all 90 PDF capabilities"
+            title="Browse the full MAL-001–MAL-090 catalog and implementation availability"
+            aria-expanded={masterGalleryOpen}
+            aria-controls={domIdPrefix+'-master-gallery'}
+            onClick={()=>{setMasterGalleryOpen(value=>!value);setFeatureGalleryOpen(false);}}>
+            <FileText size={20} aria-hidden="true"/>
+            <span className="pdf-feature-caption">All 90</span>
+          </button>
           <button type="button" className="pdf-feature-index-trigger"
             aria-label="Browse all PDF features"
             title="Browse PDF features and availability"
@@ -2417,6 +2431,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           </div>
         </div>
       </div>
+      <FeatureGallery id={domIdPrefix+'-master-gallery'}
+        category={PDF_TASK_CATEGORY_LABELS[taskCategory]}
+        open={masterGalleryOpen} onClose={()=>setMasterGalleryOpen(false)}/>
       {featureGalleryOpen&&<section id={`${domIdPrefix}-feature-gallery`}
         className="pdf-feature-gallery"
         aria-label={`${PDF_TASK_CATEGORY_LABELS[taskCategory]} PDF features`}

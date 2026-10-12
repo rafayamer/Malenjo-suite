@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { Bot, ChevronDown, Command, FolderOpen, House, LayoutGrid, Search, ShieldCheck, Moon, Sun, X } from 'lucide-react';
+import { Bot, ChevronDown, Command, FolderOpen, House, LayoutGrid, Redo2, Save, Search, Settings, ShieldCheck, Undo2, Moon, Sun, X } from 'lucide-react';
 import { modules } from '../modules/registry';
 import type { ModuleId } from '../core/types';
 import FileLibrary from '../files/FileLibrary';
@@ -409,6 +409,10 @@ export default function App() {
     ? commandControllersRef.current.get(activeSession.id)?.list() ?? []
     : [];
 
+  const quickSave = activeDocumentCommands.find(command=>command.id==='export');
+  const quickUndo = activeDocumentCommands.find(command=>command.id==='undo');
+  const quickRedo = activeDocumentCommands.find(command=>command.id==='redo');
+
   const commandItems: CommandPaletteItem[] = [
     {
       id:'open-documents',
@@ -633,6 +637,24 @@ export default function App() {
         </div>
         <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);openCommandPalette();}} placeholder="Search commands" aria-label="Search commands"/><kbd>Ctrl K</kbd></div>
         <div className="topbar-actions">
+          <button type="button" className="command ml-top-quick-save"
+            aria-label="Save PDF copy" title={quickSave?.detail || 'Save PDF copy — open a PDF first'}
+            disabled={!quickSave?.enabled}
+            onClick={()=>{if(quickSave?.enabled)void quickSave.run();}}>
+            <Save size={19} aria-hidden="true"/>
+          </button>
+          <button type="button" className="command ml-top-quick-undo"
+            aria-label="Undo PDF edit" title={quickUndo?.disabledReason || 'Undo PDF edit'}
+            disabled={!quickUndo?.enabled}
+            onClick={()=>{if(quickUndo?.enabled)void quickUndo.run();}}>
+            <Undo2 size={19} aria-hidden="true"/>
+          </button>
+          <button type="button" className="command ml-top-quick-redo"
+            aria-label="Redo PDF edit" title={quickRedo?.disabledReason || 'Redo PDF edit'}
+            disabled={!quickRedo?.enabled}
+            onClick={()=>{if(quickRedo?.enabled)void quickRedo.run();}}>
+            <Redo2 size={19} aria-hidden="true"/>
+          </button>
           <button type="button" className="command ml-top-ai" aria-label="MALENJO AI"
             title="MALENJO AI — document assistant" aria-expanded={aiOpen}
             aria-controls="ml-ai-assistant"
@@ -647,6 +669,11 @@ export default function App() {
             title={theme === 'dark' ? 'Light appearance' : 'Dark appearance'}
             onClick={() => setTheme(current=>nextSuiteTheme(current))}>
             {theme === 'dark' ? <Sun size={18}/> : <Moon size={18}/>}
+          </button>
+          <button type="button" className="command ml-top-settings"
+            aria-label="User and settings" title="User and appearance settings"
+            onClick={()=>selectModule('settings')}>
+            <Settings size={19} aria-hidden="true"/>
           </button>
         </div>
       </header>
@@ -763,6 +790,11 @@ export default function App() {
                                     ? <CapabilityWorkspace module={active} onNavigate={selectModule}/>
                                     : <ModuleView module={module} session={null} notice="" onSaveAs={async()=>{}} onBackToFiles={()=>selectModule('files')}/>)}
     </main>
+    <footer className="ml-suite-status" aria-label="MALENJO status bar">
+      <span>{activeSession?.document.name ?? 'Ready'}</span>
+      <span className="ml-suite-status-center">{sessions.length} document{sessions.length===1?'':'s'} open</span>
+      <span>{activeSession?.saving?'Saving…':activeSession?.dirty?'Unsaved edits':activeSession?'Document open':'PDF editor'} · Ctrl+K for commands</span>
+    </footer>
   </div>
 }
 
