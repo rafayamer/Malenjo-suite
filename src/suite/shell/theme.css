@@ -1648,3 +1648,15 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
   user-select:text!important;
   -webkit-user-select:text!important;
 }
+
+
+/* Retain the native text-selection I-beam regardless of PDF.js-generated
+   wrapper spans. This does not modify canvas pixels or text extraction. */
+.pdf-text-layer,
+.pdf-text-layer span,
+.pdf-text-layer .markedContent span,
+.pdf-text-layer br {
+  cursor:text!important;
+  user-select:text!important;
+  -webkit-user-select:text!important;
+}
