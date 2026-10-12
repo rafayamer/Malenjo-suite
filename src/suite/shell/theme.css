@@ -2288,3 +2288,12 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 .app-shell-top-only .pdf-workspace.presentation-mode .pdf-page-number{
   display:none;
 }
+
+
+/* One and only one footer for an open PDF. Its live page, zoom and view
+   controls live in .pdf-reader-footer. The generic shell status returns on
+   Home and all non-PDF workspaces; it must not steal a second reader row. */
+.app-shell-top-only .workspace:has(> .document-session-stack .document-session-panel.active .pdf-reader-footer)
+  > .ml-bottom-statusbar{
+  display:none!important;
+}
