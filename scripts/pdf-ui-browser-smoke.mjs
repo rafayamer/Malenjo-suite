@@ -64,8 +64,14 @@ async function main(){
     .getByRole('button',{name:'PDF Workspace'}).click();
   requireEvidence(await page.locator('.sidebar .nav-item.active').getAttribute('aria-label')==='PDF Workspace',
     'Ribbon PDF Viewer command did not navigate inside MALENJO');
+  requireEvidence(await page.locator('.suite-ribbon').count()===0 &&
+    await page.locator('main.workspace > .pdf-workspace .pdf-task-toolbar').isVisible(),
+    'PDF workspace stacked two ribbons or lost its actual PDF task ribbon');
   requireEvidence(context.pages().length===1,'Ribbon navigation opened another window instead of the single workbench');
   await page.locator('.sidebar nav .nav-item').filter({hasText:'Home'}).first().click();
+  await page.getByRole('tab',{name:'Home',exact:true}).waitFor({timeout:15000});
+  requireEvidence(await page.locator('.suite-ribbon').count()===1,
+    'Home did not restore the shared MALENJO ribbon');
   console.log('PHASE3 MALENJO ribbon Home/PDF and persistent light/dark appearance: PASS');
 
   // Phase 1 real keyboard-navigation contract. Arrow keys move among ribbon
