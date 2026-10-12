@@ -2035,3 +2035,6 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
     width:calc(100vw - 90px)!important;
   }
 }
+
+/* The active PDF's page/zoom controls must paint above the passive status text. */
+.app-shell-top-only .ml-suite-status{z-index:10}
