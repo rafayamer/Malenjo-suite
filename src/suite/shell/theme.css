@@ -2085,14 +2085,14 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 }
 .app-shell-top-only .ml-start-minimal #ml-home-recent-panel:not([hidden]){
   position:absolute;left:clamp(8px,7vw,110px);right:clamp(8px,7vw,110px);
-  top:clamp(124px,33%,220px);bottom:8px;z-index:24;width:auto;margin:0;
+  top:65%;bottom:8px;z-index:24;width:auto;margin:0;
   display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;
   padding:12px;border:1px solid var(--ml-border);border-radius:8px;
   background:var(--ml-surface);box-shadow:0 14px 35px #0005;
 }
 .app-shell-top-only .ml-start-minimal .ml-start-utilities{flex:0 0 auto;max-width:100%}
 .app-shell-top-only .ml-start-minimal .ml-start-utilities[open]{
-  position:absolute;top:clamp(120px,32%,215px);bottom:8px;
+  position:absolute;top:65%;bottom:8px;
   left:clamp(8px,7vw,110px);right:clamp(8px,7vw,110px);
   width:auto;max-width:none;overflow-y:auto;overscroll-behavior:contain;
   z-index:22;background:var(--ml-surface);border:1px solid var(--ml-border);
