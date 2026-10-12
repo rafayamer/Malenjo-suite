@@ -51,8 +51,8 @@ async function main(){
   requireEvidence(await page.locator('.sidebar:not(.ml-tools-popup)').count()===0 &&
     await page.locator('.app-shell-top-only').count()===1,
     'Permanent module sidebar was not eliminated');
-  requireEvidence(await page.getByRole('button',{name:'Open File',exact:true}).isVisible() &&
-    await page.getByRole('button',{name:'Recent Files',exact:true}).isVisible(),
+  requireEvidence(await page.locator('.ml-start-hero').getByRole('button',{name:'Open File',exact:true}).isVisible() &&
+    await page.locator('.ml-start-hero').getByRole('button',{name:'Recent Files',exact:true}).isVisible(),
     'Minimal central Home Open File / Recent Files entry points are missing');
   requireEvidence(await page.locator('.ml-start-more-tools:not([open])').count()===1,
     'Extra Home dashboard tools must remain hidden until requested');
@@ -63,6 +63,27 @@ async function main(){
   // Verify a real palette switch, persistence after reload and same-window
   // navigation rather than only checking the presence of a decorative toggle.
   await page.getByRole('tab',{name:'Home',exact:true}).waitFor({timeout:15000});
+  // Master v2 Home: all ten canonical tabs and all 90 discoverable features.
+  const ribbonCategories=await page.locator('.suite-ribbon-tabs [role="tab"]').allTextContents();
+  requireEvidence(JSON.stringify(ribbonCategories.map(item=>item.trim()))===
+    JSON.stringify(['Home','Edit','Organize','Optimize','Convert','Forms','Review','Protect','Automate','Tools']),
+    'Main ribbon does not match exact ten Master v2 categories');
+  const galleryTrigger=page.getByRole('button',{name:'More PDF tools'});
+  await galleryTrigger.click();
+  const gallery=page.getByRole('dialog',{name:'All 90 PDF tools'});
+  requireEvidence(await gallery.locator('[data-mal-command]').count()===90,
+    'Home ribbon cannot discover all 90 features');
+  const gallerySearch=gallery.getByRole('searchbox',{name:'Find a PDF tool'});
+  await gallerySearch.fill('MAL-037');
+  requireEvidence(await gallery.locator('[data-mal-command]').count()===1 &&
+    await gallery.locator('[data-mal-command="MAL-037"] button').isDisabled(),
+    'PDF to Word missing or executable without converter');
+  await gallerySearch.fill('');
+  await page.keyboard.press('Escape');
+  requireEvidence(await gallery.count()===0 && await galleryTrigger.evaluate(el=>document.activeElement===el),
+    'Feature flyout failed Escape/focus return');
+  console.log('PHASE1 Home Master v2 ten-tab / 90 PDF features flyout: PASS');
+
   // Home is not an independent Word/Excel/PowerPoint opener. Those outputs
   // must originate from a successful PDF conversion (still a release blocker).
   await page.locator('.ml-start-more-tools summary').click();
@@ -202,9 +223,9 @@ async function main(){
   await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
   requireEvidence(await page.locator('.topbar').evaluate((node)=>getComputedStyle(node).backgroundColor)===topColor,
     'The dark appearance failed to restore MALENJO colors');
-  await page.getByRole('tab',{name:'PDF Viewer'}).click();
-  await page.getByRole('tabpanel',{name:'PDF Viewer',exact:true})
-    .getByRole('button',{name:'PDF Workspace'}).click();
+  await page.getByRole('tab',{name:'Home',exact:true}).click();
+  await page.getByRole('tabpanel',{name:'Home',exact:true})
+    .getByRole('button',{name:'PDF Viewer'}).click();
   requireEvidence(await page.locator('main.workspace > .pdf-workspace').count()===1,
     'Ribbon PDF Viewer command did not navigate inside MALENJO');
   requireEvidence(await page.locator('.suite-ribbon').count()===0 &&
@@ -222,18 +243,18 @@ async function main(){
   const homeRibbonTab=page.getByRole('tab',{name:'Home',exact:true});
   await homeRibbonTab.focus();
   await page.keyboard.press('ArrowRight');
-  const pdfRibbonTab=page.getByRole('tab',{name:'PDF Viewer',exact:true});
-  requireEvidence(await pdfRibbonTab.getAttribute('aria-selected')==='true',
-    'Right arrow did not select the next ribbon category');
+  const editRibbonTab=page.getByRole('tab',{name:'Edit',exact:true});
+  requireEvidence(await editRibbonTab.getAttribute('aria-selected')==='true',
+    'Right arrow did not select the next Master v2 ribbon category');
   await page.keyboard.press('ArrowDown');
-  requireEvidence(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label'))==='Open PDF',
-    'ArrowDown did not focus the first enabled ribbon command');
+  requireEvidence(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label'))==='PDF Workspace',
+    'ArrowDown did not focus the first enabled Edit command');
   await page.keyboard.press('Escape');
-  requireEvidence(await pdfRibbonTab.evaluate((node)=>node===document.activeElement),
-    'Escape did not restore focus to the selected ribbon category');
+  requireEvidence(await editRibbonTab.evaluate((node)=>node===document.activeElement),
+    'Escape did not restore focus to selected Edit tab');
   await page.keyboard.press('End');
-  requireEvidence(await page.getByRole('tab',{name:'Suite Tools'}).getAttribute('aria-selected')==='true',
-    'End did not select the final ribbon category');
+  requireEvidence(await page.getByRole('tab',{name:'Tools',exact:true}).getAttribute('aria-selected')==='true',
+    'End did not select final Master v2 ribbon category');
   await page.keyboard.press('Home');
   requireEvidence(await homeRibbonTab.getAttribute('aria-selected')==='true',
     'Home did not select the first ribbon category');
@@ -251,10 +272,13 @@ async function main(){
         const bar=document.querySelector('.topbar').getBoundingClientRect();
         const ribbon=document.querySelector('.suite-ribbon').getBoundingClientRect();
         const search=document.querySelector('.topbar .search').getBoundingClientRect();
-        const commands=[...document.querySelectorAll('.topbar-actions button')].map((button)=>{
-          const box=button.getBoundingClientRect();
-          return {left:box.left,right:box.right,width:box.width};
-        });
+        const commands=[...document.querySelectorAll('.topbar-actions button')]
+          .filter(button=>getComputedStyle(button).display!=='none')
+          .map(button=>{
+            const box=button.getBoundingClientRect();
+            return {left:box.left,right:box.right,width:box.width,
+              label:button.getAttribute('aria-label')};
+          });
         return {viewport:innerWidth,documentWidth:document.documentElement.scrollWidth,
           bodyWidth:document.body.scrollWidth,barRight:bar.right,ribbonRight:ribbon.right,
           searchWidth:search.width,commands};
@@ -262,8 +286,10 @@ async function main(){
       requireEvidence(metrics.documentWidth<=width+2 && metrics.bodyWidth<=width+2 &&
         metrics.barRight<=width+2 && metrics.ribbonRight<=width+2,
         'Shell or document horizontally overflows at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
-      requireEvidence(metrics.searchWidth>45 && metrics.commands.every((c)=>c.left>=0&&c.right<=width+2&&c.width>=30),
-        'Essential titlebar commands clipped at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
+      requireEvidence(metrics.searchWidth>45 && metrics.commands.every((c)=>c.left>=0&&c.right<=width+2&&c.width>=30) &&
+        metrics.commands.some(c=>c.label==='MALENJO AI') &&
+        metrics.commands.some(c=>c.label?.includes('Switch to')),
+        'Visible titlebar commands clipped or AI/theme missing at '+width+'px in '+theme+' mode: '+JSON.stringify(metrics));
       requireEvidence(context.pages().length===1,'Responsive layout launched a second browser window');
     }
   }
@@ -469,7 +495,7 @@ async function main(){
 
   // The user-facing feature index is a complete, searchable PDF suite
   // directory, never a separate Word/Excel/PowerPoint application menu.
-  await featureGrid.getByRole('button',{name:'All 33 PDF tools'}).click();
+  await featureGrid.getByRole('button',{name:'33 tool shortcuts'}).click();
   requireEvidence(await featureGrid.locator('[data-user-pdf-tool]').count()===33 &&
     await featureGrid.locator('.pdf-user-tool-group').count()===7,
     'User-visible PDF manipulation suite does not expose all 33 named tools in seven groups');
@@ -487,6 +513,20 @@ async function main(){
     await featureGrid.locator('[data-user-pdf-tool="compress-pdf"] button').isDisabled(),
     'PDF feature search returned misleading results or enabled unverified compression');
   await toolSearch.fill('');
+  await featureGrid.getByRole('button',{name:'All 90 PDF features'}).click();
+  requireEvidence(await featureGrid.locator('[data-mal-command]').count()===90 &&
+    await featureGrid.locator('[data-feature-index="MAL-001-MAL-090"]').count()===1,
+    'Full MAL-001..MAL-090 PDF gallery is missing or incomplete');
+  for(const id of ['MAL-001','MAL-011','MAL-037','MAL-063','MAL-090']){
+    requireEvidence(await featureGrid.locator('[data-mal-command="'+id+'"] button').isDisabled(),
+      'Master v2 unverified command became executable: '+id);
+  }
+  const masterSearch=featureGrid.getByRole('searchbox',{name:'Find a MALENJO feature'});
+  await masterSearch.fill('MAL-090');
+  requireEvidence(await featureGrid.locator('[data-mal-command]').count()===1 &&
+    await featureGrid.locator('[data-mal-command="MAL-090"]').count()===1,
+    'MAL-090 could not be discovered through the PDF ribbon gallery');
+  await masterSearch.fill('');
   await featureGrid.getByRole('button',{name:'Current ribbon'}).click();
   requireEvidence(await featureGrid.locator('[data-pdf-feature="export-text"]').count()===1,
     'Returning from all PDF tools lost the current ribbon actions');
@@ -558,8 +598,14 @@ async function main(){
     Array.from(document.querySelectorAll('.pdf-text-layer span')).some(
       node=>node.textContent?.includes('MALENJO BROWSER UI TEXT SELECT FIND'),
     ),null,{timeout:30000});
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('.pdf-text-layer span')].some(node =>
+      node.isConnected &&
+      node.textContent?.includes('MALENJO BROWSER UI TEXT SELECT FIND') &&
+      getComputedStyle(node).cursor==='text'
+    ),null,{timeout:30000});
   const span=page.locator('.pdf-text-layer span').filter({hasText:'MALENJO BROWSER UI TEXT SELECT FIND'}).first();
-  console.log('MALENJO real PDF.js selectable text spans rendered');
+  console.log('MALENJO real PDF.js selectable text spans rendered with working I-beam');
   const selected=await span.evaluate(node=>{
     const range=document.createRange(),selection=window.getSelection();
     range.selectNodeContents(node);

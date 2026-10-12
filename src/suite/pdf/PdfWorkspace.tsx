@@ -132,13 +132,15 @@ import {
   type DocumentInspectorTab,
 } from '../shell/inspector';
 import {
-  PDF_TASK_CATEGORIES,
   PDF_TASK_CATEGORY_LABELS,
-  PDF_TASK_CATEGORY_SHORTCUTS,
-  movePdfTaskCategory,
-  pdfTaskCategoryFromShortcut,
   type PdfTaskCategory,
 } from './taskToolbar';
+import {
+  PDF_MASTER_TABS, moveMasterPdfTab, masterPdfTabFromShortcut, masterTabForCategory,
+  type PdfMasterTab,
+} from './masterRibbonTabs';
+import { PDF_COMMANDS } from '../commands/masterCatalog';
+import type { ModuleId } from '../core/types';
 
 interface Props {
   session: DocumentSession | null;
@@ -146,7 +148,7 @@ interface Props {
   notice: string;
   onBackToFiles(): void;
   onOpenBrowserPdf?(file:File):void;
-  onNavigateModule?(id:'ai'|'security'|'sign'|'scanner'|'automation'): void;
+  onNavigateModule?(id:ModuleId): void;
   onDirtyChange?(dirty:boolean): void;
   onSavingChange?(saving:boolean): void;
   registerCommands?: RegisterDocumentCommands;
@@ -301,8 +303,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [inspectorTab, setInspectorTab] = useState<DocumentInspectorTab>('properties');
   const [inspectorHidden, setInspectorHidden] = useState(true);
   const [taskCategory, setTaskCategory] = useState<PdfTaskCategory>('home');
+  const [masterTab, setMasterTab] = useState<PdfMasterTab>('home');
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
-  const [featureGalleryMode, setFeatureGalleryMode] = useState<'category'|'all'>('category');
+  const [featureGalleryMode, setFeatureGalleryMode] = useState<'category'|'all'|'master'>('category');
   const [featureGallerySearch, setFeatureGallerySearch] = useState('');
   const [providerPanelOpen, setProviderPanelOpen] = useState(false);
   const [textOverlay, setTextOverlay] = useState({ text:'', x:0.12, y:0.82, size:12 });
@@ -1658,6 +1661,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setComparisonResult({data,baselineName,comparisonName:selected.name});
       setActionNotice('Compared both PDFs by page-aligned selectable text. Visual differences were not assessed.');
       setTaskCategory('convert');
+      setMasterTab('convert');
     }catch(reason){
       if(reason instanceof Error&&reason.name==='AbortError'){
         setActionNotice('PDF comparison cancelled; no partial result was saved.');
@@ -2080,11 +2084,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     function onTaskShortcut(event: KeyboardEvent) {
       const target=event.target as HTMLElement|null;
       if(target?.closest('input,textarea,[contenteditable="true"]'))return;
-      const category=pdfTaskCategoryFromShortcut(event);
-      if(!category)return;
+      const tab=masterPdfTabFromShortcut(event);
+      if(!tab)return;
       event.preventDefault();
-      setTaskCategory(category);
-      window.requestAnimationFrame(()=>document.getElementById(`${domIdPrefix}-task-${category}`)?.focus());
+      setMasterTab(tab);
+      setTaskCategory(PDF_MASTER_TABS.find(item=>item.id===tab)!.category);
+      window.requestAnimationFrame(()=>document.getElementById(`${domIdPrefix}-task-${tab}`)?.focus());
     }
     window.addEventListener('keydown',onTaskShortcut);
     return()=>window.removeEventListener('keydown',onTaskShortcut);
@@ -2139,7 +2144,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setLeftPanel(panel);
     setLeftPanelCollapsed(false);
   };
-  const navigateAction=(label:string,id:'ai'|'security'|'sign'|'scanner'|'automation'):PdfToolbarAction=>({
+  const navigateAction=(label:string,id:ModuleId):PdfToolbarAction=>({
     id:`navigate-${id}`,
     label,
     enabled:!!onNavigateModule,
@@ -2212,6 +2217,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     ],
     protect:[
       navigateAction('Open Security Center','security'),
+      navigateAction('Open Sign workspace','sign'),
+      {id:'signatures-panel',label:'Signature fields',enabled:true,run:()=>openLeftPanel('signatures')},
       providerAction,
     ],
     forms:[
@@ -2221,7 +2228,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'configure-forms',label:'Form settings',enabled:true,run:configureProperties},
       providerAction,
     ],
-    ai:[navigateAction('Open Malenjo AI','ai')],
+    ai:[navigateAction('Open CAD viewer','cad'),navigateAction('Open DICOM viewer','dicom')],
     scan:[navigateAction('Open Scanner','scanner'),providerAction],
     automate:[navigateAction('Open Automation Studio','automation'),providerAction],
   };
@@ -2229,7 +2236,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     (tool.label+' '+tool.group).toLowerCase().includes(featureGallerySearch.trim().toLowerCase()));
   const directoryAction=(id:string,category:PdfTaskCategory)=>
     taskActions[category].find(action=>action.id===id);
-  const plannedActions:PdfToolbarAction[]=plannedPdfFeatures(taskCategory).map(feature=>({
+  const plannedForMaster=masterTab==='tools'?[]
+    :masterTab==='protect'?[...plannedPdfFeatures('protect'),...plannedPdfFeatures('sign')]
+    :plannedPdfFeatures(taskCategory);
+  const plannedActions:PdfToolbarAction[]=plannedForMaster.map(feature=>({
     id:feature.id,label:feature.label,enabled:false,disabledReason:feature.reason,planned:true,
     run:()=>undefined,
   }));
@@ -2237,15 +2247,16 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const primaryTaskActions=activeTaskActions.slice(0,6);
   const overflowTaskActions=activeTaskActions.slice(6);
   const shortActionLabel=(action:PdfToolbarAction)=>action.label
-    .replace(/^PDF to /,'To ').replace(/^Open /,'').replace(/^Show /,'')
+    .replace(/^Local tools$/,'Local').replace(/^PDF to /,'To ').replace(/^Open /,'').replace(/^Show /,'')
     .replace(/^Hide /,'').replace(/^Add /,'').replace(/\u2026/g,'')
     .replace(/\s*\(\.txt\)/,'').replace(/\s*ZIP$/,'')
     .slice(0,20);
   const taskActionTitle=(action:PdfToolbarAction)=>action.enabled?action.label:`${action.label} — ${action.disabledReason??'Unavailable'}`;
-  const focusTaskCategory=(category:PdfTaskCategory)=>{
-    setTaskCategory(category);
+  const focusMasterTab=(tab:PdfMasterTab)=>{
+    setMasterTab(tab);
+    setTaskCategory(PDF_MASTER_TABS.find(item=>item.id===tab)!.category);
     setFeatureGalleryOpen(false);
-    window.requestAnimationFrame(()=>document.getElementById(`${domIdPrefix}-task-${category}`)?.focus());
+    window.requestAnimationFrame(()=>document.getElementById(`${domIdPrefix}-task-${tab}`)?.focus());
   };
 
   return <div ref={workspaceRef} className={`pdf-workspace${presentationMode?' presentation-mode':''}`}>
@@ -2297,26 +2308,26 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
     <div className="pdf-task-toolbar">
       <div className="pdf-task-categories" role="tablist" aria-label="PDF task categories">
-        {PDF_TASK_CATEGORIES.map((category)=><button
-          id={`${domIdPrefix}-task-${category}`}
-          key={category}
+        {PDF_MASTER_TABS.map((tab)=><button
+          id={`${domIdPrefix}-task-${tab.id}`}
+          key={tab.id}
           role="tab"
-          aria-selected={taskCategory===category}
+          aria-selected={masterTab===tab.id}
           aria-controls={`${domIdPrefix}-task-tools`}
-          aria-keyshortcuts={PDF_TASK_CATEGORY_SHORTCUTS[category]}
-          tabIndex={taskCategory===category?0:-1}
-          className={taskCategory===category?'active':''}
-          title={`${PDF_TASK_CATEGORY_LABELS[category]} · ${PDF_TASK_CATEGORY_SHORTCUTS[category]}`}
-          onClick={()=>{setTaskCategory(category);setFeatureGalleryOpen(false);if(category==='ai')setProviderPanelOpen(false);}}
+          aria-keyshortcuts={tab.shortcut}
+          tabIndex={masterTab===tab.id?0:-1}
+          className={masterTab===tab.id?'active':''}
+          title={`${tab.label} · ${tab.shortcut}`}
+          onClick={()=>{setMasterTab(tab.id);setTaskCategory(tab.category);setFeatureGalleryOpen(false);}}
           onKeyDown={(event)=>{
             if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
             event.preventDefault();
-            focusTaskCategory(movePdfTaskCategory(taskCategory,event.key as 'ArrowLeft'|'ArrowRight'|'Home'|'End'));
+            focusMasterTab(moveMasterPdfTab(masterTab,event.key as 'ArrowLeft'|'ArrowRight'|'Home'|'End'));
           }}
-        >{PDF_TASK_CATEGORY_LABELS[category]}</button>)}
+        >{tab.label}</button>)}
       </div>
 
-      <div id={`${domIdPrefix}-task-tools`} className="pdf-context-toolbar" role="toolbar" aria-label={`${PDF_TASK_CATEGORY_LABELS[taskCategory]} PDF tools`}>
+      <div id={`${domIdPrefix}-task-tools`} className="pdf-context-toolbar" role="toolbar" aria-label={`${PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label} PDF tools`}>
         <div className="pdf-task-actions">
           <button type="button" className="pdf-feature-index-trigger"
             aria-label="Browse all PDF features"
@@ -2343,9 +2354,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             </button>
             {action.planned&&<span className="pdf-feature-planned-dot" aria-hidden="true"/>}
           </span>)}
-          {!activeTaskActions.length&&<span className="pdf-task-empty">No operational {PDF_TASK_CATEGORY_LABELS[taskCategory].toLowerCase()} commands are available in this build yet. Use Ctrl+K to discover available document actions.</span>}
+          {!activeTaskActions.length&&<span className="pdf-task-empty">No operational {PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label.toLowerCase()} commands are available in this build yet. Use Ctrl+K to discover available document actions.</span>}
           {false&&overflowTaskActions.length>0&&<details className="pdf-task-overflow">
-            <summary aria-label={`More ${PDF_TASK_CATEGORY_LABELS[taskCategory]} tools`}>More</summary>
+            <summary aria-label={`More ${PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label} tools`}>More</summary>
             <div>
               {overflowTaskActions.map((action)=><button
                 key={action.id}
@@ -2419,11 +2430,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       </div>
       {featureGalleryOpen&&<section id={`${domIdPrefix}-feature-gallery`}
         className="pdf-feature-gallery"
-        aria-label={`${PDF_TASK_CATEGORY_LABELS[taskCategory]} PDF features`}
+        aria-label={`${PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label} PDF features`}
         onKeyDown={event=>{if(event.key==='Escape'){setFeatureGalleryOpen(false);event.stopPropagation();}}}>
         <header>
           <div><strong>PDF features</strong>
-            <p>All 33 requested tools are listed. Only operational controls can be selected.</p></div>
+            <p>Browse 90 Master v2 features or the 33 existing PDF tool shortcuts. Unverified commands remain disabled.</p></div>
           <button type="button" onClick={()=>setFeatureGalleryOpen(false)}
             aria-label="Close PDF features" title="Close PDF features">×</button>
         </header>
@@ -2431,9 +2442,42 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           <button type="button" aria-pressed={featureGalleryMode==='category'}
             onClick={()=>setFeatureGalleryMode('category')}>Current ribbon</button>
           <button type="button" aria-pressed={featureGalleryMode==='all'}
-            onClick={()=>setFeatureGalleryMode('all')}>All 33 PDF tools</button>
+            onClick={()=>setFeatureGalleryMode('all')}>33 tool shortcuts</button>
+          <button type="button" aria-pressed={featureGalleryMode==='master'}
+            onClick={()=>{setFeatureGalleryMode('master');setFeatureGallerySearch('');}}>All 90 PDF features</button>
         </div>
-        {featureGalleryMode==='all' ? <div className="pdf-user-tool-directory">
+        {featureGalleryMode==='master' ? <div className="pdf-user-tool-directory" data-feature-index="MAL-001-MAL-090">
+          <label htmlFor={`${domIdPrefix}-master-search`}>Find a MALENJO feature</label>
+          <input id={`${domIdPrefix}-master-search`} type="search"
+            value={featureGallerySearch} onChange={event=>setFeatureGallerySearch(event.target.value)}
+            placeholder="Search MAL-001…MAL-090"/>
+          {PDF_MASTER_TABS.map(({label})=>{
+            const commands=PDF_COMMANDS.filter(command=>command.category===label &&
+              (command.id+' '+command.label+' '+command.requirementGroup)
+                .toLowerCase().includes(featureGallerySearch.trim().toLowerCase()));
+            if(!commands.length)return null;
+            return <section className="pdf-user-tool-group" key={label} aria-label={label+' PDF feature requirements'}>
+              <h3>{label} · {commands.length}</h3>
+              <div className="pdf-feature-gallery-grid">
+                {commands.map(command=><span key={command.id} data-mal-command={command.id}
+                  className="pdf-feature-gallery-cell planned" tabIndex={0}
+                  role="group" aria-label={command.id+' '+command.label+' — Not release-ready'}
+                  title={command.tooltip}>
+                  <button type="button" disabled
+                    title={command.tooltip}
+                    aria-label={command.id+' '+command.label+' — Not release-ready'}>
+                    <PdfFeatureIcon id={command.icon} label={command.label} size={22}/>
+                    <span className="pdf-feature-gallery-label">{command.label}</span>
+                    <small>{command.id} · Not ready</small>
+                  </button>
+                </span>)}
+              </div>
+            </section>;
+          })}
+          {!PDF_COMMANDS.some(command=>(command.id+' '+command.label+' '+command.requirementGroup)
+            .toLowerCase().includes(featureGallerySearch.trim().toLowerCase()))&&
+            <p role="status">No PDF features match your search.</p>}
+        </div> : featureGalleryMode==='all' ? <div className="pdf-user-tool-directory">
           <label htmlFor={`${domIdPrefix}-feature-search`}>Find PDF tool</label>
           <input id={`${domIdPrefix}-feature-search`} type="search"
             placeholder="Search all PDF features"
@@ -2460,6 +2504,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                         if(!enabled)return;
                         setFeatureGalleryOpen(false);
                         setTaskCategory(tool.category);
+                      setMasterTab(masterTabForCategory(tool.category));
                         if(canOrganize){openLeftPanel('pages');return;}
                         if(tool.destination){onNavigateModule?.(tool.destination);return;}
                         if(action)void action.run();
@@ -2536,7 +2581,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     {error && <div className="pdf-notice error">{error}</div>}
 
     {!pdf && <div className="pdf-empty">
-      <div className="empty-icon">M</div>
+      <div className="pdf-empty-icon" aria-hidden="true"><FileText size={32} strokeWidth={1.6}/></div>
       <h1>PDF Workspace</h1>
       <p>{loading
         ? 'Loading PDF with the local PDF.js renderer…'

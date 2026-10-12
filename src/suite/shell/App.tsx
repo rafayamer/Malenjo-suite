@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { Bot, ChevronDown, Command, FolderOpen, House, LayoutGrid, Search, ShieldCheck, Moon, Sun, X } from 'lucide-react';
+import { Bot, ChevronDown, Command, FolderOpen, House, LayoutGrid, Search, ShieldCheck, Moon, Sun, X, Save, Undo2, Redo2, UserRound } from 'lucide-react';
 import { modules } from '../modules/registry';
 import type { ModuleId } from '../core/types';
 import FileLibrary from '../files/FileLibrary';
@@ -408,6 +408,9 @@ export default function App() {
   const activeDocumentCommands = activeSession
     ? commandControllersRef.current.get(activeSession.id)?.list() ?? []
     : [];
+  const pdfQuickCommand=(id:'export'|'undo'|'redo')=>
+    activeSession?.document.kind==='pdf'
+      ? activeDocumentCommands.find(command=>command.id===id) : undefined;
 
   const commandItems: CommandPaletteItem[] = [
     {
@@ -624,6 +627,21 @@ export default function App() {
             aria-label="Home" title="Home — start and recent files" onClick={()=>selectModule('home')}>
             <House size={18} aria-hidden="true"/>
           </button>
+          <button type="button" className="command topbar-open"
+            aria-label="Open File" title="Open a file (Ctrl+O)"
+            onClick={()=>void openDocumentsFromPicker()}>
+            <FolderOpen size={19} aria-hidden="true"/>
+          </button>
+          {(['export','undo','redo'] as const).map((id)=>{
+            const action=pdfQuickCommand(id);
+            const label=id==='export'?'Save PDF copy':id==='undo'?'Undo PDF edit':'Redo PDF edit';
+            const Icon=id==='export'?Save:id==='undo'?Undo2:Redo2;
+            return <button type="button" className="command topbar-quick-history" key={id}
+              aria-label={label} title={action?.enabled?label:(action?.disabledReason??'Open a PDF to use '+label)}
+              disabled={!action?.enabled} onClick={()=>{if(action?.enabled)void action.run();}}>
+              <Icon size={18} aria-hidden="true"/>
+            </button>;
+          })}
           <button type="button" className="command topbar-tool-trigger" ref={moduleMenuButtonRef}
             aria-label="All tools" title="All tools — browse MALENJO modules"
             aria-expanded={moduleMenuOpen} aria-haspopup="dialog"
@@ -639,14 +657,17 @@ export default function App() {
             onClick={()=>{setAiHasOpened(true);setAiOpen(value=>!value);setModuleMenuOpen(false);}}>
             <Bot size={20} aria-hidden="true"/>
           </button>
-          <button className="command" aria-label="Open files" title="Open a file (Ctrl+O)" onClick={()=>void openDocumentsFromPicker()}><FolderOpen size={19}/></button>
-          <button className="command" aria-label="Open command palette" title="Commands (Ctrl+K)" onClick={()=>setCommandOpen(true)}><Command size={19}/></button>
+            <button className="command" aria-label="Open command palette" title="Commands (Ctrl+K)" onClick={()=>setCommandOpen(true)}><Command size={19}/></button>
           <button className="theme-toggle command" type="button"
             aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
             aria-pressed={theme === 'light'}
             title={theme === 'dark' ? 'Light appearance' : 'Dark appearance'}
             onClick={() => setTheme(current=>nextSuiteTheme(current))}>
             {theme === 'dark' ? <Sun size={18}/> : <Moon size={18}/>}
+          </button>
+          <button className="command topbar-user" type="button" aria-label="Settings and account"
+            title="Settings and account" onClick={()=>selectModule('settings')}>
+            <UserRound size={19} aria-hidden="true"/>
           </button>
         </div>
       </header>
@@ -762,6 +783,12 @@ export default function App() {
                                   : active === 'cad' || active === 'dicom' || active === 'invoice' || active === 'account'
                                     ? <CapabilityWorkspace module={active} onNavigate={selectModule}/>
                                     : <ModuleView module={module} session={null} notice="" onSaveAs={async()=>{}} onBackToFiles={()=>selectModule('files')}/>)}
+      <footer className="ml-bottom-statusbar" aria-label="MALENJO document status">
+        <span title={activeSession?.document.name??module.name}>{activeSession?.document.name??module.name}</span>
+        <span>{sessions.length} open {sessions.length===1?'file':'files'}</span>
+        <span>{activeSession?.dirty?'Unsaved changes':activeSession?'Working copy':'Local-first'}</span>
+        <span className="ml-bottom-status-end">{theme==='light'?'Light':'Dark'} · {aiOpen?'AI open':'AI closed'}</span>
+      </footer>
     </main>
   </div>
 }
