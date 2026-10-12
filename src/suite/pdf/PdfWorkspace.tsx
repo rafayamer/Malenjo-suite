@@ -2431,7 +2431,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         onKeyDown={event=>{if(event.key==='Escape'){setFeatureGalleryOpen(false);event.stopPropagation();}}}>
         <header>
           <div><strong>PDF features</strong>
-            <p>All 33 requested tools are listed. Only operational controls can be selected.</p></div>
+            <p>Browse 90 Master v2 features or the 33 existing PDF tool shortcuts. Unverified commands remain disabled.</p></div>
           <button type="button" onClick={()=>setFeatureGalleryOpen(false)}
             aria-label="Close PDF features" title="Close PDF features">×</button>
         </header>
@@ -2439,9 +2439,40 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           <button type="button" aria-pressed={featureGalleryMode==='category'}
             onClick={()=>setFeatureGalleryMode('category')}>Current ribbon</button>
           <button type="button" aria-pressed={featureGalleryMode==='all'}
-            onClick={()=>setFeatureGalleryMode('all')}>All 33 PDF tools</button>
+            onClick={()=>setFeatureGalleryMode('all')}>33 tool shortcuts</button>
+          <button type="button" aria-pressed={featureGalleryMode==='master'}
+            onClick={()=>{setFeatureGalleryMode('master');setFeatureGallerySearch('');}}>All 90 PDF features</button>
         </div>
-        {featureGalleryMode==='all' ? <div className="pdf-user-tool-directory">
+        {featureGalleryMode==='master' ? <div className="pdf-user-tool-directory" data-feature-index="MAL-001-MAL-090">
+          <label htmlFor={`${domIdPrefix}-master-search`}>Find a MALENJO feature</label>
+          <input id={`${domIdPrefix}-master-search`} type="search"
+            value={featureGallerySearch} onChange={event=>setFeatureGallerySearch(event.target.value)}
+            placeholder="Search MAL-001…MAL-090"/>
+          {PDF_MASTER_TABS.map(({label})=>{
+            const commands=PDF_COMMANDS.filter(command=>command.category===label &&
+              (command.id+' '+command.label+' '+command.requirementGroup)
+                .toLowerCase().includes(featureGallerySearch.trim().toLowerCase()));
+            if(!commands.length)return null;
+            return <section className="pdf-user-tool-group" key={label} aria-label={label+' PDF feature requirements'}>
+              <h3>{label} · {commands.length}</h3>
+              <div className="pdf-feature-gallery-grid">
+                {commands.map(command=><span key={command.id} data-mal-command={command.id}
+                  className="pdf-feature-gallery-cell planned" title={command.tooltip}>
+                  <button type="button" disabled
+                    title={command.tooltip}
+                    aria-label={command.id+' '+command.label+' — Not release-ready'}>
+                    <PdfFeatureIcon id={command.icon} label={command.label} size={22}/>
+                    <span className="pdf-feature-gallery-label">{command.label}</span>
+                    <small>{command.id} · Not ready</small>
+                  </button>
+                </span>)}
+              </div>
+            </section>;
+          })}
+          {!PDF_COMMANDS.some(command=>(command.id+' '+command.label+' '+command.requirementGroup)
+            .toLowerCase().includes(featureGallerySearch.trim().toLowerCase()))&&
+            <p role="status">No PDF features match your search.</p>}
+        </div> : featureGalleryMode==='all' ? <div className="pdf-user-tool-directory">
           <label htmlFor={`${domIdPrefix}-feature-search`}>Find PDF tool</label>
           <input id={`${domIdPrefix}-feature-search`} type="search"
             placeholder="Search all PDF features"
