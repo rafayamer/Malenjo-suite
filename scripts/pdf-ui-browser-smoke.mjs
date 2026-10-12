@@ -171,7 +171,7 @@ async function main(){
       ['MAL-037','PDF to Word'],['MAL-063','Permanent PDF Redaction'],
       ['MAL-071','AI Chat with PDF'],['MAL-090','Advanced Print and Prepress']]){
     await commandSearch.fill(requirement);
-    const option=page.getByRole('option',{name:new RegExp(label.replace(/[.*+?^${}()|[\\]\\]/g,'\\  await commandSearch.fill('Open Settings');'))}).first();
+    const option=page.getByRole('option',{name:new RegExp(label)}).first();
     await option.waitFor({timeout:15000});
     requireEvidence(await option.isDisabled() &&
       (await option.getAttribute('title'))?.includes('Not release-ready'),
