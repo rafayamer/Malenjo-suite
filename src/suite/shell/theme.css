@@ -1638,3 +1638,13 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
   height:25px;border:0;border-radius:4px;cursor:pointer;background:transparent;color:inherit}
 .app-shell-top-only .ml-open-feedback button:hover{background:var(--ml-hover)}
 .app-shell-top-only .suite-ribbon-hint{display:none!important}
+
+
+/* Text selection is a PDF viewer interaction, not a drag-pan action.
+   PDF.js may apply inline text-span styles; keep the I-beam in both themes. */
+.app-shell-top-only .pdf-page-shell .pdf-text-layer span,
+.app-shell-top-only .pdf-page-shell .pdf-text-layer br {
+  cursor:text!important;
+  user-select:text!important;
+  -webkit-user-select:text!important;
+}
