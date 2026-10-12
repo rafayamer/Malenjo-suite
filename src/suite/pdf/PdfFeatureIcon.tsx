@@ -1,5 +1,5 @@
 import {
-  Bot, ClipboardCheck, Copy, Download, FileImage, FilePlus2, FileSearch, FileText, FileType,
+  Bot, ClipboardCheck, Copy, Download, FileImage, FilePlus2, FileText, FileType,
   FolderOpen, FormInput, Highlighter, Image, Languages, LayoutTemplate, LockKeyhole,
   MessageSquare, PanelRight, PenTool, Presentation, Printer, Redo2,
   RotateCw, ScanText, Scissors, Settings2, ShieldCheck, Sparkles, Table2,
@@ -14,7 +14,7 @@ const icons: Record<string,LucideIcon> = {
   undo:Undo2,redo:Redo2,'place-text':FileType,rectangle:Highlighter,'configure-edit':Settings2,
   'edit-existing-text':FileType,'redact-pdf':ShieldCheck,
   'to-docx':FileType,'to-xlsx':Table2,'to-pptx':Presentation,
-  'export-text':FileText,'export-page-images':FileImage,'export-page-jpeg':Image,'images-to-pdf':Image,'compare-pdf':FileSearch,
+  'export-text':FileText,'export-page-images':FileImage,'export-page-jpeg':Image,'images-to-pdf':Image,'compare-pdf':GitCompare,
   'turn-pages':RotateCw,'remove-pages':Trash2,'copy-page':Copy,'extract-pages':Download,
   split:Scissors,insert:FilePlus2,append:FilePlus2,blank:FilePlus2,'page-labels':FileText,
   earlier:Undo2,later:Redo2,'comments-panel':MessageSquare,'add-comment':MessageSquare,
@@ -24,8 +24,8 @@ const icons: Record<string,LucideIcon> = {
   'form-designer':LayoutTemplate,'configure-forms':Settings2,
   'ai-summarize':Sparkles,'ai-translate':Languages,'searchable-ocr':ScanText,
   'batch-pdf':Workflow,
-  'merge-pdf':FilePlus2,'split-pdf':Scissors,'remove-pages':Trash2,
-  'extract-pages':Download,'organize-pdf':FileText,'scan-to-pdf':ScanText,
+  'merge-pdf':FilePlus2,'split-pdf':Scissors,
+  'organize-pdf':FileText,'scan-to-pdf':ScanText,
   'compress-pdf':Minimize2,'repair-pdf':Wrench,'ocr-pdf':ScanText,
   'jpg-to-pdf':FileImage,'word-to-pdf':FileType,'powerpoint-to-pdf':Presentation,
   'excel-to-pdf':Table2,'html-to-pdf':FileCode2,
@@ -33,8 +33,8 @@ const icons: Record<string,LucideIcon> = {
   'pdf-to-excel':Table2,'pdf-to-pdfa':FileText,'rotate-pdf':RotateCw,
   'page-numbers':Hash,'watermark-pdf':Stamp,'crop-pdf':Crop,
   'edit-pdf':FileType,'pdf-forms':FormInput,'unlock-pdf':LockOpen,
-  'protect-pdf':LockKeyhole,'sign-pdf':PenTool,'redact-pdf':ShieldCheck,
-  'compare-pdf':GitCompare,'ai-summarizer':Sparkles,'translate-pdf':Languages,
+  'protect-pdf':LockKeyhole,'sign-pdf':PenTool,
+  'ai-summarizer':Sparkles,'translate-pdf':Languages,
   'pdf-to-markdown':FileText,
 };
 export function PdfFeatureIcon({id,label,size=20}:{id:string;label:string;size?:number}) {
