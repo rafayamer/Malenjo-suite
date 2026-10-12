@@ -28,7 +28,7 @@ function required(id: PDFRequirementId): RibbonAction {
     id,
     label:feature.label,
     description:feature.tooltip,
-    unavailableReason:feature.tooltip,
+    unavailableReason:feature.id+' — '+feature.tooltip,
   };
 }
 
