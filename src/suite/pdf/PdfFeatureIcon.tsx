@@ -1,7 +1,7 @@
 import {
   Bot, ClipboardCheck, Copy, Download, FileImage, FilePlus2, FileSearch, FileText, FileType,
   FolderOpen, FormInput, Highlighter, Image, Languages, LayoutTemplate, LockKeyhole,
-  MessageSquare, PanelRight, PenTool, Presentation, Printer, Redo2, RefreshCcw,
+  MessageSquare, PanelRight, PenTool, Presentation, Printer, Redo2,
   RotateCw, ScanText, Scissors, Settings2, ShieldCheck, Sparkles, Table2,
   Trash2, Undo2, Workflow, type LucideIcon,
 } from 'lucide-react';
@@ -13,7 +13,7 @@ const icons: Record<string,LucideIcon> = {
   undo:Undo2,redo:Redo2,'place-text':FileType,rectangle:Highlighter,'configure-edit':Settings2,
   'edit-existing-text':FileType,'redact-pdf':ShieldCheck,
   'to-docx':FileType,'to-xlsx':Table2,'to-pptx':Presentation,
-  'export-text':FileText,'export-page-images':FileImage,'images-to-pdf':Image,'compare-pdf':FileSearch,
+  'export-text':FileText,'export-page-images':FileImage,'export-page-jpeg':Image,'images-to-pdf':Image,'compare-pdf':FileSearch,
   'turn-pages':RotateCw,'remove-pages':Trash2,'copy-page':Copy,'extract-pages':Download,
   split:Scissors,insert:FilePlus2,append:FilePlus2,blank:FilePlus2,'page-labels':FileText,
   earlier:Undo2,later:Redo2,'comments-panel':MessageSquare,'add-comment':MessageSquare,
