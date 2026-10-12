@@ -285,7 +285,6 @@ export default function HomeWorkspace({
           <span>Recent Files</span>
         </button>
       </div>
-      <p className="ml-start-privacy"><ShieldCheck size={14} aria-hidden="true"/> {desktop?'Local Windows documents':'Browser / Codespaces session'} · files stay under your control</p>
     </header>
 
     <section id="ml-home-recent-panel" hidden={!recentOpen} className="ml-home-section ml-co-files" aria-labelledby="ml-home-files-title">
@@ -362,7 +361,7 @@ export default function HomeWorkspace({
           <button disabled={busy} onClick={()=>void browseLocation(location)}>Browse & open</button>
           <button className="text-action" onClick={()=>removeLocation(location.id)}>Remove</button>
         </article>)}
-        {!desktop&&<article className="ml-home-location muted"><FolderOpen size={18}/><div><b>Browser session</b><small>Native folder pins are available only in the Windows desktop runtime.</small></div><button onClick={()=>onSelectModule('files')}>View files</button></article>}
+        {!desktop&&<article className="ml-home-location muted"><FolderOpen size={18}/><div><b>Available files</b><small>Browse files already opened in this session.</small></div><button onClick={()=>onSelectModule('files')}>View files</button></article>}
         {desktop&&!state.pinnedLocations.length&&<div className="ml-home-location-empty">No pinned folders yet.</div>}
       </div>
     </section>
