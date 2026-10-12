@@ -1007,21 +1007,21 @@ body { background:var(--ml-background);color:var(--ml-text); }
 }
 :root[data-theme="light"] {
   --ml-background:#f1f5f8;
-  --ml-surface:#fff;
-  --ml-field:#fff;
+  --ml-surface:#ffffff;
+  --ml-field:#ffffff;
   --ml-control:#e9f1f8;
   --ml-toolbar:#f8fbfd;
   --ml-pane-bg:#e9eff5;
   --ml-surround:#d8e0e7;
-  --ml-card:#fff;
+  --ml-card:#ffffff;
   --ml-tab-bg:#e7eef4;
-  --ml-tab-active:#fff;
+  --ml-tab-active:#ffffff;
   --ml-selected:#daeafa;
   --ml-hover:#e6f1fa;
   --ml-hover-strong:#cfe4f6;
   --ml-subtle:#eaf1f6;
   --ml-table-head:#e5edf4;
-  --ml-grid-bg:#fff;
+  --ml-grid-bg:#ffffff;
   --ml-info-bg:#e8f6f9;
   --ml-error-bg:#fff0f0;
   --ml-warn-bg:#fff4d8;
