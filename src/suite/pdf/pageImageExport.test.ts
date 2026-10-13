@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { unzipSync } from 'fflate';
 import { archivePdfPageJpegs, archivePdfPagePngs, exportPdfPagesAsJpegZip, exportPdfPagesAsPngZip, PDF_PAGE_IMAGE_MAX_PAGES } from './pageImageExport';
 
@@ -72,6 +72,25 @@ describe('PDF page image ZIP exporter',()=>{
       numPages:1,
       getPage:async()=>{throw Error('Should never render');},
     } as never,{signal:controller.signal})).rejects.toMatchObject({name:'AbortError'});
+  });
+
+  it('releases canvas memory if PDF page rendering fails',async()=>{
+    const canvas={width:0,height:0,getContext:()=>({})};
+    vi.stubGlobal('document',{createElement:()=>canvas});
+    try{
+      const pdf={
+        numPages:1,
+        getPage:async()=>({
+          getViewport:()=>({width:40,height:50}),
+          render:()=>({promise:Promise.reject(new Error('render failed')),cancel:()=>{}}),
+        }),
+      };
+      await expect(exportPdfPagesAsPngZip(pdf as never)).rejects.toThrow(/render failed/);
+      expect(canvas.width).toBe(0);
+      expect(canvas.height).toBe(0);
+    }finally{
+      vi.unstubAllGlobals();
+    }
   });
 
   it('validates output scales before acquiring canvases',async()=>{

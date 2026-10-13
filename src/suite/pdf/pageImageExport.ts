@@ -130,25 +130,25 @@ export async function exportPdfPagesAsPngZip(
     }
     const canvas=document.createElement('canvas');
     canvas.width=width;canvas.height=height;
-    const context=canvas.getContext('2d',{alpha:false});
-    if(!context)throw new Error('PNG export requires a canvas rendering context.');
-    const task=page.render({canvas,canvasContext:context,viewport});
-    const cancel=()=>task.cancel();
-    options.signal?.addEventListener('abort',cancel,{once:true});
-    try{
-      await task.promise;
-    }catch(reason){
-      if(options.signal?.aborted)abortIfRequested(options.signal);
-      throw reason;
-    }finally{
-      options.signal?.removeEventListener('abort',cancel);
-    }
-    abortIfRequested(options.signal);
     let bytes:Uint8Array;
     try{
+      const context=canvas.getContext('2d',{alpha:false});
+      if(!context)throw new Error('PNG export requires a canvas rendering context.');
+      const task=page.render({canvas,canvasContext:context,viewport});
+      const cancel=()=>task.cancel();
+      options.signal?.addEventListener('abort',cancel,{once:true});
+      try{
+        await task.promise;
+      }catch(reason){
+        if(options.signal?.aborted)abortIfRequested(options.signal);
+        throw reason;
+      }finally{
+        options.signal?.removeEventListener('abort',cancel);
+      }
+      abortIfRequested(options.signal);
       bytes=await pngBytes(canvas);
     }finally{
-      // Release backing allocation even when encoding fails.
+      // Release backing allocation on rendering, cancellation and encoding failures.
       canvas.width=0;canvas.height=0;
     }
     totalBytes+=bytes.byteLength;
