@@ -746,6 +746,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     mutationPendingRef.current=true;
     setMutating(true);
     setError('');
+    setActionNotice('Applying PDF edit to the live document…');
     try{
       const result=await operation(Uint8Array.from(sourceBytes));
       if(currentPdfBytesRef.current!==sourceBytes||
@@ -873,11 +874,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     mutationPendingRef.current=true;
     setMutating(true);
     setError('');
+    setActionNotice('Undoing PDF edit…');
     try{
       await installPdf(transition.entry.bytes,sourceName,browserFile,true,()=>{
         historyRef.current=transition.history;
         setHistoryRevision((value)=>value+1);
         setCurrentPage(transition.entry.page);
+        setSelectedPages(new Set([transition.entry.page]));
+        selectionAnchorRef.current=transition.entry.page;
         setDirty(transition.entry.dirty);
         onDirtyChange?.(transition.entry.dirty);
         setActionNotice(`Undid: ${undoneLabel}`);
@@ -899,11 +903,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     mutationPendingRef.current=true;
     setMutating(true);
     setError('');
+    setActionNotice('Redoing PDF edit…');
     try{
       await installPdf(transition.entry.bytes,sourceName,browserFile,true,()=>{
         historyRef.current=transition.history;
         setHistoryRevision((value)=>value+1);
         setCurrentPage(transition.entry.page);
+        setSelectedPages(new Set([transition.entry.page]));
+        selectionAnchorRef.current=transition.entry.page;
         setDirty(transition.entry.dirty);
         onDirtyChange?.(transition.entry.dirty);
         setActionNotice(`Redid: ${transition.entry.label}`);
@@ -3189,7 +3196,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           <div><dt>Size</dt><dd>{sourceBytes ? formatBytes(sourceBytes.byteLength) : session?.document ? formatBytes(session.document.sizeBytes) : '—'}</dd></div>
           <div><dt>Renderer</dt><dd>PDF.js 6.4.299</dd></div>
           <div><dt>Edit state</dt><dd>{dirty?'Modified':'Original'}</dd></div>
-          <div><dt>History</dt><dd>{historyRef.current?`${historyRef.current.cursor+1}/${historyRef.current.entries.length} · ${formatBytes(historyRef.current.totalBytes)}`:'—'}</dd></div>
+           <div><dt>History</dt><dd>{historyRef.current?`${historyRef.current.cursor} undo step(s) available · ${formatBytes(historyRef.current.totalBytes)} (up to 30, memory-limited)`:'—'}</dd></div>
           <div><dt>View</dt><dd>{fitMode === 'custom' ? `${Math.round(zoom * 100)}%` : fitMode} · {rotation}°</dd></div>
         </dl>
 
