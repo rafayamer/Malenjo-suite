@@ -30,20 +30,20 @@ export function pdfPageSchedule(
   pageCount: number,
   renderedPages: ReadonlySet<number>,
 ): PdfPageSchedule {
-  const critical = pdfCriticalPageOrder(currentPage, pageCount);
-  if (!critical.length) return { allowed: false, eager: false, phase: 'lazy' };
-
-  const focus = critical[0];
+  if (!Number.isFinite(pageCount) || pageCount < 1 ||
+      !Number.isSafeInteger(pageNumber) || pageNumber < 1 || pageNumber > pageCount)
+    return { allowed: false, eager: false, phase: 'lazy' };
+  // This executes once per page on every reader state update. Avoid allocating
+  // a new critical-page array for each of hundreds of page placeholders.
+  const focus = Math.min(Math.max(1, Math.trunc(currentPage) || 1), Math.trunc(pageCount));
   if (pageNumber === focus) return { allowed: true, eager: true, phase: 'focus' };
-
-  const adjacent = critical.slice(1);
-  if (adjacent.includes(pageNumber)) {
-    const focusReady = renderedPages.has(focus);
+  const focusReady = renderedPages.has(focus);
+  if (pageNumber === focus + 1 || pageNumber === focus - 1)
     return { allowed: focusReady, eager: focusReady, phase: 'adjacent' };
-  }
-
   return {
-    allowed: critical.every((page) => renderedPages.has(page)),
+    allowed: focusReady &&
+      (focus >= pageCount || renderedPages.has(focus + 1)) &&
+      (focus <= 1 || renderedPages.has(focus - 1)),
     eager: false,
     phase: 'lazy',
   };
