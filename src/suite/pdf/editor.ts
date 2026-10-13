@@ -27,18 +27,39 @@ export async function rotatePdfPagePermanent(bytes:Uint8Array,pageNumber:number)
   return Uint8Array.from(await pdf.save({useObjectStreams:false}));
 }
 
+/**
+ * Duplicate one safely portable page within the *original* PDF rather than
+ * building a new PDF (which loses metadata, outlines and file attachments).
+ * The copied page must have its own distinct indirect reference; existing
+ * page refs and the catalog must not change.
+ */
 export async function duplicatePdfPage(bytes:Uint8Array,pageNumber:number):Promise<Uint8Array>{
   const source=await load(bytes);
   const index=requirePage(pageNumber,source.getPageCount());
-  const output=await PDFDocument.create();
-  const order=Array.from({length:source.getPageCount()+1},(_,position)=>{
-    if(position<=index)return position;
-    if(position===index+1)return index;
-    return position-1;
-  });
-  const copied=await output.copyPages(source,order);
-  copied.forEach(page=>output.addPage(page));
-  return Uint8Array.from(await output.save({useObjectStreams:false}));
+  const unsafeCatalog=['Perms','AcroForm','StructTreeRoot','PageLabels'];
+  if(unsafeCatalog.some(key=>source.catalog.has(PDFName.of(key)))){
+    throw new Error('Duplicating pages in certified, signed/form, tagged or page-labelled PDFs is unavailable until those structures can be safely updated.');
+  }
+  const page=source.getPage(index);
+  if(page.node.has(PDFName.of('StructParents')) ||
+     (page.node.lookupMaybe(PDFName.of('Annots'),PDFArray)?.size()??0)>0){
+    throw new Error('The selected PDF page has annotations/widgets or tagged references which cannot be duplicated safely.');
+  }
+  const priorRefs=source.getPages().map(page=>page.ref.toString());
+  const [copied]=await source.copyPages(source,[index]);
+  if(copied.ref.toString()===priorRefs[index]){
+    throw new Error('PDF duplication did not create an independent page reference; no change was made.');
+  }
+  source.insertPage(index+1,copied);
+  const output=Uint8Array.from(await source.save({useObjectStreams:false,updateFieldAppearances:false}));
+  const verified=await load(output);
+  const expectedRefs=[...priorRefs];
+  expectedRefs.splice(index+1,0,copied.ref.toString());
+  if(verified.getPageCount()!==expectedRefs.length ||
+     verified.getPages().some((page,n)=>page.ref.toString()!==expectedRefs[n])){
+    throw new Error('Duplicated PDF failed independent page-reference validation; no change was committed.');
+  }
+  return output;
 }
 
 /**
