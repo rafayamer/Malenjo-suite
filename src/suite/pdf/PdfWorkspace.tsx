@@ -215,9 +215,6 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const replaceInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const selectionAnchorRef = useRef<number | null>(null);
-  // Visibility observers for intermediary pages must not override an explicit
-  // page jump while that target is being scrolled into view.
-  const explicitPageJumpRef=useRef<{page:number;until:number}|null>(null);
   const activeLoadRef = useRef<PdfLoadResult | null>(null);
   const requestIdRef = useRef(0);
   // A replacement is reserved immediately at load start, before PDF.js has
@@ -649,7 +646,6 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
   const goToPage = useCallback((requested: number, preserveSelection = false) => {
     const page = clampPdfPage(requested, pageCount);
-    explicitPageJumpRef.current={page,until:performance.now()+2000};
     setCurrentPage(page);
     // Explicit jumps should not slowly animate across dozens of heavy page
     // canvases; that causes render churn and stale intermediate page statuses.
@@ -665,11 +661,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   }, [domIdPrefix,pageCount]);
 
   const onPageVisible = useCallback((page: number) => {
-    const target=explicitPageJumpRef.current;
-    if(target){
-      if(performance.now()<target.until && page!==target.page)return;
-      if(performance.now()>=target.until)explicitPageJumpRef.current=null;
-    }
+    // Manual scrolling must always update the live page indicator immediately.
     setCurrentPage(page);
   }, []);
 
