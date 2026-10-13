@@ -1256,6 +1256,77 @@ async function main(){
     return canvas instanceof HTMLCanvasElement&&canvas.width>200;
   },null,{timeout:30000});
   console.log('PHASE1 real 57-page continuous PDF navigation and last-page rendering: PASS');
+  // Owner UAT regression: users must never have to infer the edit target.
+  // Select page 2 via the visible page-number entry, replace it using the
+  // nearby action, delete it and Undo. Independent saved bytes prove that
+  // each operation targets page 2 rather than the first visible canvas.
+  const targetSource=await PDFDocument.create();
+  targetSource.addPage([455,700]).drawText('KEEP ORIGINAL FIRST PAGE',{x:40,y:600,size:16});
+  targetSource.addPage([466,700]).drawText('REPLACE SECOND PAGE',{x:40,y:600,size:16});
+  const targetBytes=Buffer.from(await targetSource.save({useObjectStreams:false}));
+  await openModule('PDF Workspace');
+  await page.locator('main.workspace > .pdf-workspace > input[type="file"][accept="application/pdf,.pdf"]').first()
+    .setInputFiles({name:'owner-ux-page-target.pdf',mimeType:'application/pdf',buffer:targetBytes});
+  await page.locator('.document-tab-main').filter({hasText:'owner-ux-page-target.pdf'})
+    .waitFor({timeout:30000});
+  const ownerUi=page.locator('.document-session-panel.active .pdf-workspace');
+  await ownerUi.getByRole('tab',{name:'Organize',exact:true}).click();
+  const ownerTarget=ownerUi.getByRole('spinbutton',{name:'Page number to edit'});
+  await ownerTarget.fill('2');
+  await ownerTarget.press('Enter');
+  await page.waitForFunction(()=>document.querySelector('.document-session-panel.active .pdf-organize-page-picker')
+    ?.textContent?.includes('Editing page 2'),null,{timeout:15000});
+  const ownPageButton=ownerUi.getByRole('button',{name:'Select page 2 for editing'});
+  await ownPageButton.waitFor({state:'visible',timeout:15000});
+  requireEvidence(await ownPageButton.getAttribute('aria-pressed')==='true',
+    'Visible selected page and Organize target disagree');
+  const ownReplacement=await PDFDocument.create();
+  ownReplacement.addPage([777,710]).drawText('REPLACED SECOND PAGE',{x:30,y:610,size:16});
+  const ownReplacementBytes=Buffer.from(await ownReplacement.save({useObjectStreams:false}));
+  const ownPickerWait=page.waitForEvent('filechooser',{timeout:15000});
+  await ownerUi.locator('.pdf-organize-page-picker').getByRole('button',{name:/Replace page 2/}).click();
+  const ownPicker=await ownPickerWait;
+  page.once('dialog',async dialog=>{await dialog.accept();});
+  await ownPicker.setFiles({name:'owner-replacement.pdf',mimeType:'application/pdf',buffer:ownReplacementBytes});
+  await page.waitForFunction(()=>[...document.querySelectorAll('.document-session-panel.active .pdf-notice')]
+    .some(item=>item.textContent?.includes('Replaced page 2')),null,{timeout:30000});
+  const ownSavedWait=page.waitForEvent('download',{timeout:30000});
+  await page.getByRole('button',{name:'Save PDF copy',exact:true}).click();
+  const ownSaved=await ownSavedWait;
+  const ownSavedPath=join(mkdtempSync(join(tmpdir(),'malenjo-ux-target-')),'saved.pdf');
+  await ownSaved.saveAs(ownSavedPath);
+  const ownerReopened=await PDFDocument.load(readFileSync(ownSavedPath));
+  requireEvidence(ownerReopened.getPageCount()===2 &&
+    ownerReopened.getPage(0).getWidth()===455&&ownerReopened.getPage(1).getWidth()===777,
+    'Selecting page 2 then replacing it changed the wrong page in exported PDF');
+
+  page.once('dialog',async dialog=>{await dialog.accept();});
+  await ownerUi.locator('.pdf-organize-page-picker').getByRole('button',{name:/Delete page 2/}).click();
+  await page.waitForFunction(()=>[...document.querySelectorAll('.document-session-panel.active .pdf-notice')]
+    .some(item=>item.textContent?.includes('Removed 1 page')),null,{timeout:30000});
+  const ownDeletedWait=page.waitForEvent('download',{timeout:30000});
+  await page.getByRole('button',{name:'Save PDF copy',exact:true}).click();
+  const ownDeleted=await ownDeletedWait;
+  const ownDeletedPath=join(mkdtempSync(join(tmpdir(),'malenjo-ux-delete-')),'deleted.pdf');
+  await ownDeleted.saveAs(ownDeletedPath);
+  const ownerDeleted=await PDFDocument.load(readFileSync(ownDeletedPath));
+  requireEvidence(ownerDeleted.getPageCount()===1&&ownerDeleted.getPage(0).getWidth()===455,
+    'Quick Delete page 2 removed the wrong page');
+  await page.getByRole('button',{name:'Undo PDF edit',exact:true}).click();
+  await page.waitForFunction(()=>[...document.querySelectorAll('.document-session-panel.active .pdf-notice')]
+    .some(item=>item.textContent?.includes('Undid: Removed 1 page')),null,{timeout:30000});
+  const ownUndoneWait=page.waitForEvent('download',{timeout:30000});
+  await page.getByRole('button',{name:'Save PDF copy',exact:true}).click();
+  const ownUndone=await ownUndoneWait;
+  const ownUndonePath=join(mkdtempSync(join(tmpdir(),'malenjo-ux-undo-')),'undone.pdf');
+  await ownUndone.saveAs(ownUndonePath);
+  const ownerRestored=await PDFDocument.load(readFileSync(ownUndonePath));
+  requireEvidence(ownerRestored.getPageCount()===2 &&
+    ownerRestored.getPage(0).getWidth()===455&&ownerRestored.getPage(1).getWidth()===777 &&
+    (await PDFDocument.load(targetBytes)).getPage(1).getWidth()===466,
+    'Quick Delete Undo did not restore page 2 or modified original');
+  console.log('OWNER UAT direct page target, Replace/Delete/Undo and independently reopened outputs: PASS');
+
 
   requireEvidence(errors.length===0,'Unhandled browser exceptions: '+errors.join(' | '));
   await context.close();
