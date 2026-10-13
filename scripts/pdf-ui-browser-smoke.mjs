@@ -496,9 +496,16 @@ async function main(){
   // Low-level OOXML fidelity/edit/export regressions remain in Vitest;
   // real conversion->editor browser acceptance is still NOT RELEASE-READY.
   await openModule('Home');
-  console.log('MALENJO loaded in Chromium; opening PDF via browser input');
+  console.log('MALENJO loaded in Chromium; opening PDF using the actual Home Open File button');
   const pdfFirstCanvasStarted=Date.now();
-  await page.locator('.workspace > input[type="file"]').setInputFiles({
+  // setInputFiles() on a hidden input bypasses the real button->picker wiring.
+  // Owner acceptance must exercise what a Codespaces user actually clicks.
+  const fileChooserPromise=page.waitForEvent('filechooser',{timeout:15000});
+  await page.locator('.ml-start-hero').getByRole('button',{name:'Open File',exact:true}).click();
+  const fileChooser=await fileChooserPromise;
+  requireEvidence(fileChooser.isMultiple(),
+    'Home Open File did not open the real multi-file browser picker');
+  await fileChooser.setFiles({
     name:'browser-ui-acceptance.pdf',mimeType:'application/pdf',buffer:source,
   });
   const documentTab=page.locator('.document-tab-main').filter({hasText:'browser-ui-acceptance.pdf'});
