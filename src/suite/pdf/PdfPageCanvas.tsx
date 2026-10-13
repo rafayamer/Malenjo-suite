@@ -28,6 +28,9 @@ interface Props {
   cropMode?:boolean;
   cropPreview?:CropRectangle|null;
   onCropSelection?(rect:CropRectangle):void;
+  showEditSelection?:boolean;
+  selectedForEdit?:boolean;
+  onSelectForEdit?():void;
 }
 
 export default function PdfPageCanvas({
@@ -52,6 +55,9 @@ export default function PdfPageCanvas({
   cropMode=false,
   cropPreview=null,
   onCropSelection,
+  showEditSelection=false,
+  selectedForEdit=false,
+  onSelectForEdit,
 }: Props) {
   const shellRef = useRef<HTMLDivElement>(null);
   const cropOriginRef=useRef<{x:number;y:number}|null>(null);
@@ -316,6 +322,14 @@ export default function PdfPageCanvas({
         outline:'2px dashed currentColor',boxShadow:'0 0 0 100vmax rgba(15,23,42,.35)',
       }}/>}
     </div>}
+    {showEditSelection&&<button type="button" onClick={onSelectForEdit}
+      aria-label={`Select page ${pageNumber} for editing`}
+      aria-pressed={selectedForEdit}
+      style={{position:'absolute',right:8,top:8,zIndex:7,padding:'6px 10px',
+        border:'1px solid currentColor',borderRadius:6,background:'var(--surface, white)',color:'var(--text, #111827)',
+        cursor:'pointer'}}>
+      {selectedForEdit?`✓ Page ${pageNumber} selected`:`Select page ${pageNumber}`}
+    </button>}
     {failed && <div className="pdf-page-error">Page {pageNumber}: {failed}</div>}
     <span className="pdf-page-number">{pageNumber}</span>
   </div>;
