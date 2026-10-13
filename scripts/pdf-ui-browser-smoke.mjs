@@ -786,11 +786,13 @@ async function main(){
   // Regression for the owner's real-world defect: the *same* PDF must scroll
   // through multiple pages; page navigation and zoom are no longer in the ribbon.
   const readerFooter=activePdf.locator('.pdf-reader-footer');
-  requireEvidence(await readerFooter.getByRole('button',{name:'Rotate view clockwise (display only)'}).isVisible(),
-    'Rotating the displayed PDF is not discoverable in its view footer');
+  requireEvidence(await readerFooter.getByRole('button',{name:'Rotate current PDF page clockwise (saved edit)'}).isVisible(),
+    'Saved PDF rotation must be discoverable in the viewer footer');
   await activePdf.getByRole('tab',{name:'Organize',exact:true}).click();
-  requireEvidence(await activePdf.locator('[data-pdf-feature="turn-pages"] button').isVisible(),
-    'Permanently rotating PDF pages is not discoverable in Organize');
+  requireEvidence(await activePdf.getByRole('spinbutton',{name:'Page number to edit'}).isVisible(),
+    'Organize must explicitly show the target page selector');
+  requireEvidence(await activePdf.locator('[data-pdf-feature="turn-pages"] button').count()===0,
+    'Duplicate Rotate command must be removed from Organize');
   await activePdf.getByRole('tab',{name:'Home',exact:true}).click();
   const reader=activePdf.locator('.pdf-scroll');
   const scrollSizes=await reader.evaluate(node=>({height:node.clientHeight,scrollHeight:node.scrollHeight}));
@@ -977,7 +979,7 @@ async function main(){
     await undoQuick.isDisabled() && await redoQuick.isDisabled(),
     'Top-bar Save / Undo / Redo did not reflect the unedited live PDF');
   await page.locator('.document-session-panel.active .pdf-task-categories button').filter({hasText:'Organize'}).click();
-  await page.locator('.document-session-panel.active .pdf-context-toolbar').getByRole('button',{name:/Rotate PDF pages/}).click();
+  await readerFooter.getByRole('button',{name:'Rotate current PDF page clockwise (saved edit)'}).click();
   await page.waitForFunction(()=>
     Array.from(document.querySelectorAll('.pdf-notice')).some(
       node=>node.textContent?.includes('Permanently rotated'),
@@ -1099,6 +1101,59 @@ async function main(){
     (await PDFDocument.load(source)).getPage(0).getWidth()===500,
     'Replace-page Redo damaged page order or modified the source bytes');
   console.log('PHASE2 real PDF page replacement, independent Save/Undo/Redo reopen and original preservation: PASS');
+  // Owner UAT follow-up: visibly select a page, draw a crop in the live
+  // canvas with measured margins, apply, export/reopen, and Undo the crop.
+  const targetPicker=activePdf.getByRole('spinbutton',{name:'Page number to edit'});
+  await targetPicker.fill('1');
+  await targetPicker.press('Tab');
+  const cropButton=activePdf.locator('[data-pdf-feature="open-crop-settings"] button');
+  await cropButton.click();
+  const cropOverlay=activePdf.locator('[data-pdf-crop-overlay="1"]');
+  await cropOverlay.waitFor({state:'visible',timeout:30000});
+  const box=await cropOverlay.boundingBox();
+  requireEvidence(Boolean(box)&&box.width>200&&box.height>200,'Live visual crop overlay had no usable canvas area');
+  await page.mouse.move(box.x+box.width*.15,box.y+box.height*.12);
+  await page.mouse.down();
+  await page.mouse.move(box.x+box.width*.80,box.y+box.height*.88,{steps:8});
+  await page.mouse.up();
+  const leftMargin=activePdf.getByRole('spinbutton',{name:'Crop left in mm'});
+  await page.waitForFunction(()=>Number(document.querySelector('.document-session-panel.active input[aria-label="Crop left in mm"]')?.value)>1,null,{timeout:15000});
+  requireEvidence(Number(await leftMargin.inputValue())>1,'Crop drag did not update measured margins');
+  await activePdf.getByRole('button',{name:/Apply crop to 1 page/}).click();
+  await page.waitForFunction(()=>[...document.querySelectorAll('.document-session-panel.active .pdf-notice')]
+    .some(item=>item.textContent?.includes('Crop applied')),null,{timeout:30000});
+  const croppedWait=page.waitForEvent('download',{timeout:30000});
+  await saveQuick.click();
+  const croppedDownload=await croppedWait;
+  const croppedPath=join(mkdtempSync(join(tmpdir(),'malenjo-visual-crop-')),'crop.pdf');
+  await croppedDownload.saveAs(croppedPath);
+  const croppedPdf=await PDFDocument.load(readFileSync(croppedPath));
+  requireEvidence(croppedPdf.getPage(0).getCropBox().width<croppedPdf.getPage(0).getMediaBox().width,
+    'Live dragged crop was not persisted in a separately reopened PDF');
+  await undoQuick.click();
+  await page.waitForFunction(()=>[...document.querySelectorAll('.document-session-panel.active .pdf-notice')]
+    .some(item=>item.textContent?.includes('Undid: Updated crop box')),null,{timeout:30000});
+  // Deletion and Undo must restore the *real* document structure in-memory.
+  page.once('dialog',async dialog=>{await dialog.accept();});
+  await activePdf.locator('[data-pdf-feature="remove-pages"] button').click();
+  await page.waitForFunction(()=>[...document.querySelectorAll('.document-session-panel.active .pdf-notice')]
+    .some(item=>item.textContent?.includes('Removed 1 page')),null,{timeout:30000});
+  await page.waitForFunction(()=>document.querySelector('.document-session-panel.active input[aria-label="Current PDF page"]')?.value==='1' &&
+    [...document.querySelectorAll('.document-session-panel.active .pdf-inspector dt')].some(item=>item.textContent==='Pages'&&item.nextElementSibling?.textContent==='1'),
+    null,{timeout:30000});
+  await undoQuick.click();
+  await page.waitForFunction(()=>[...document.querySelectorAll('.document-session-panel.active .pdf-notice')]
+    .some(item=>item.textContent?.includes('Undid: Removed 1 page')),null,{timeout:30000});
+  const restoredWait=page.waitForEvent('download',{timeout:30000});
+  await saveQuick.click();
+  const restoredDownload=await restoredWait;
+  const restoredPath=join(mkdtempSync(join(tmpdir(),'malenjo-delete-undo-')),'restored.pdf');
+  await restoredDownload.saveAs(restoredPath);
+  const restoredPdf=await PDFDocument.load(readFileSync(restoredPath));
+  requireEvidence(restoredPdf.getPageCount()===2 && restoredPdf.getPage(0).getWidth()===690,
+    'Delete/Undo did not restore two intact pages in independent reopen');
+  console.log('PHASE2 visual crop with measured margins and real Delete/Undo independently reopened: PASS');
+
 
   // MAL-AUD-020: Click a real PDF /Link annotation over the rendered canvas.
   const linked=await PDFDocument.create();
