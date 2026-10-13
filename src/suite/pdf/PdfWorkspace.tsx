@@ -105,7 +105,6 @@ import {
   clampPdfPage,
   clampPdfZoom,
   effectivePdfScale,
-  rotatePdfClockwise,
   stepPdfZoom,
   type PdfFitMode,
 } from './layout';
@@ -3501,18 +3500,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           <button disabled={mutating||operationPages.length!==1} onClick={()=>void mutate(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)}>Duplicate</button>
           <button disabled={mutating||operationPages.length!==1||currentPage<=1} onClick={()=>void mutate('Moved page earlier.',bytes=>movePdfPage(bytes,currentPage,currentPage-1),currentPage-1)}>Move earlier</button>
           <button disabled={mutating||operationPages.length!==1||currentPage>=pageCount} onClick={()=>void mutate('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)}>Move later</button>
-          <button disabled={mutating} onClick={()=>void mutate(
-            `Permanently rotated ${operationPages.length} selected page(s) by 90°.`,
-            bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),
-            operationPages[0],
-          )}>Rotate selected</button>
           <button disabled={mutating} onClick={()=>void mutate(`Inserted a blank page after page ${currentPage}.`,bytes=>insertBlankPdfPage(bytes,currentPage),currentPage+1)}>Blank after</button>
           <button disabled={mutating} onClick={()=>void extractSelected()}>Extract selected</button>
           <button disabled={mutating} onClick={()=>insertInputRef.current?.click()}>Insert PDF here…</button>
           <button disabled={mutating||currentPage>=pageCount} onClick={()=>void splitCurrent()}>Split here</button>
           <button disabled={mutating} onClick={()=>appendInputRef.current?.click()}>Append PDF…</button>
         </div>
-        <div className="pdf-edit-note">Click a thumbnail to select one page; Ctrl/Cmd-click toggles pages and Shift-click selects a range. Mutations use the bounded per-tab Undo/Redo history and never overwrite the source document; use Export to create the edited file.</div>
+        <div className="pdf-edit-note">Choose a page number or click Select on a viewed page. Ctrl/Cmd-click thumbnails to select multiple pages. Your source file stays unchanged; Save PDF copy exports edits.</div>
 
         <div className="pdf-pane-title">Performance</div>
         <dl>
@@ -3617,7 +3611,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             <button disabled={!pdf} className={viewMode==='single'?'active':''} onClick={()=>setViewMode('single')} aria-label="Single page view" title="Single page">1</button>
             <button disabled={!pdf} className={viewMode==='continuous'?'active':''} onClick={()=>setViewMode('continuous')} aria-label="Continuous page view" title="Continuous">↕</button>
             <button disabled={!pdf} className={viewMode==='two'?'active':''} onClick={()=>setViewMode('two')} aria-label="Two-page view" title="Two page">2</button>
-            <button disabled={!pdf} onClick={() => setRotation((value) => rotatePdfClockwise(value))} aria-label="Rotate view clockwise (display only)" title="Rotate view clockwise — display only. To save a rotated page, use Organize → Rotate selected."><RotateCw size={16}/></button>
+            <button disabled={!sourceBytes||mutating||loading} onClick={() => void mutate(
+              `Permanently rotated page ${currentPage} by 90°.`,bytes=>rotatePdfPagePermanent(bytes,currentPage),currentPage,
+            ).then(applied=>{if(applied)setRotation(0);})}
+              aria-label="Rotate current PDF page clockwise (saved edit)"
+              title="Rotate this PDF page 90°. The edit appears immediately, is included in Save PDF copy and can be undone."><RotateCw size={16}/></button>
             <button disabled={!pdf} onClick={()=>void toggleFullscreen(false)} aria-label={fullscreen?'Exit full screen':'Full screen'} title={fullscreen?'Exit full screen':'Full screen'}><Maximize2 size={16}/></button>
             <button disabled={!pdf} onClick={()=>void toggleFullscreen(true)} aria-label="Presentation mode" title="Presentation mode"><MonitorPlay size={16}/></button>
             <button
