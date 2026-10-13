@@ -213,6 +213,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const appendInputRef = useRef<HTMLInputElement>(null);
   const insertInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
+  // File-picker callbacks must edit the page clicked when the picker opened,
+  // not whichever page becomes visible while the user chooses a PDF.
+  const replaceTargetPageRef=useRef<number|null>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const selectionAnchorRef = useRef<number | null>(null);
   const activeLoadRef = useRef<PdfLoadResult | null>(null);
@@ -423,6 +426,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [pageLabelError, setPageLabelError] = useState('');
   const [cropUnit,setCropUnit]=useState<CropUnit>('mm');
   const [cropMode,setCropMode]=useState(false);
+  // Bind a visual crop to a specific page; scrolling must never move its overlay.
+  const [cropTargetPage,setCropTargetPage]=useState<number|null>(null);
   const [cropGeometry,setCropGeometry]=useState<{width:number;height:number;visualSupported:boolean;reason:string}|null>(null);
   const [pageBoxDraft, setPageBoxDraft] = useState({
     scope:'selected' as 'selected'|'all',
@@ -435,20 +440,20 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   // Numeric margins use the source MediaBox. Dragging is only exact when the
   // displayed page is uncropped and natively unrotated.
   useEffect(()=>{
-    if(!cropMode||!sourceBytes){setCropGeometry(null);return;}
+    if(!cropMode||!sourceBytes||cropTargetPage===null){setCropGeometry(null);return;}
     let cancelled=false;
     setCropGeometry(null);
-    void inspectPdfVisualCropPage(sourceBytes,currentPage).then(value=>{
+    void inspectPdfVisualCropPage(sourceBytes,cropTargetPage).then(value=>{
       if(!cancelled)setCropGeometry(value);
     }).catch(reason=>{
       if(!cancelled){setCropGeometry(null);setError(reason instanceof Error?reason.message:String(reason));}
     });
     return ()=>{cancelled=true;};
-  },[cropMode,currentPage,sourceBytes]);
+  },[cropMode,cropTargetPage,sourceBytes]);
   const cropPreview=cropGeometry?.visualSupported&&pageBoxDraft.box==='crop'
     ?cropMarginsToRectangle(pageBoxDraft,cropGeometry.width,cropGeometry.height):null;
   const chooseCropRectangle=(rect:CropRectangle)=>{
-    if(!cropGeometry?.visualSupported)return;
+    if(!cropGeometry?.visualSupported||cropTargetPage===null)return;
     try{
       const margins=cropRectangleToMargins(rect,cropGeometry.width,cropGeometry.height);
       setPageBoxDraft(draft=>({...draft,box:'crop',scope:'selected',...margins}));
@@ -502,7 +507,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setSourceName(name);
       setPageCount(result.document.numPages);
       setRenderedPages(new Set());
-      if(!preserveDirty) setCurrentPage(1);
+      if(!preserveDirty){
+        setCurrentPage(1);
+        setCropMode(false);
+        setCropTargetPage(null);
+        setCropGeometry(null);
+        setPageBoxDraft(draft=>({...draft,scope:'selected',box:'crop',top:0,right:0,bottom:0,left:0}));
+        replaceTargetPageRef.current=null;
+      }
       if(!preserveDirty){
         setSelectedPages(new Set([1]));
         selectionAnchorRef.current=1;
