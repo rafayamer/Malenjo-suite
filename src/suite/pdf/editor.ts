@@ -166,7 +166,7 @@ export async function replacePdfPage(
   // cannot be carried across as a standalone page without reference repair.
   const importAnnots=incoming.getPage(from).node.lookupMaybe(PDFName.of('Annots'),PDFArray);
   if(importAnnots?.size()){
-    throw new Error('Imported PDF page has annotations or widgets. Replace-page import refuses to discard their structure.');
+    throw new Error('Imported PDF page has annotations or widgets. MALENJO cannot safely transfer them yet. Choose an unannotated PDF or intentionally prepare a flattened copy in a trusted PDF viewer; no changes were made.');
   }
   const destinationKey=PDFName.of('Dest');
   const actionKey=PDFName.of('A');
@@ -1171,6 +1171,25 @@ export async function addPdfBatesNumbers(
   });
 
   return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+}
+
+// PDF.js displays the page's CropBox, whereas page-box editing uses its
+// MediaBox. A drag overlay is exact only when those boxes coincide and the
+// source page has no native rotation; otherwise offer numeric editing only.
+export async function inspectPdfVisualCropPage(bytes:Uint8Array,pageNumber:number):Promise<{
+  width:number;height:number;visualSupported:boolean;reason:string;
+}>{
+  const pdf=await load(bytes);
+  const page=pdf.getPage(requirePage(pageNumber,pdf.getPageCount()));
+  const media=page.getMediaBox();
+  const crop=page.getCropBox();
+  const sameBox=[['x',media.x,crop.x],['y',media.y,crop.y],
+    ['width',media.width,crop.width],['height',media.height,crop.height]]
+    .every(([,a,b])=>Math.abs(Number(a)-Number(b))<0.01);
+  const straight=page.getRotation().angle%360===0;
+  const reason=!straight?'The page already has native rotation; numeric crop remains available.'
+    :!sameBox?'The page has an existing crop box; numeric crop remains available.':'';
+  return {width:media.width,height:media.height,visualSupported:straight&&sameBox,reason};
 }
 
 export type PdfPageBoxKind='crop'|'trim'|'bleed'|'art';

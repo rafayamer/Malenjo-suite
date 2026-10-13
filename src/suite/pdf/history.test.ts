@@ -53,6 +53,46 @@ describe('PDF history',()=>{
     expect(Array.from(currentPdfHistoryEntry(history).bytes)).toEqual([4,4]);
   });
 
+  it('retains the last thirty small edits and restores them in sequence',()=>{
+    let history=createPdfHistory(bytes(0));
+    for(let n=1;n<=30;n++)history=recordPdfHistory(history,bytes(n),1,'Edit '+n);
+    expect(history.entries).toHaveLength(31);
+    for(let n=29;n>=0;n--){
+      const transition=undoPdfHistory(history);
+      expect(transition.changed).toBe(true);
+      history=transition.history;
+      expect(Array.from(transition.entry.bytes)).toEqual([n]);
+    }
+    expect(canUndoPdfHistory(history)).toBe(false);
+    for(let n=1;n<=30;n++){
+      const transition=redoPdfHistory(history);
+      expect(transition.changed).toBe(true);
+      history=transition.history;
+      expect(Array.from(transition.entry.bytes)).toEqual([n]);
+    }
+  });
+
+  it('reuses immutable previous snapshots instead of copying all retained PDFs',()=>{
+    let history=createPdfHistory(bytes(1,2,3));
+    const initial=history.entries[0].bytes;
+    history=recordPdfHistory(history,bytes(4,5),1,'A');
+    const firstEdit=history.entries[1].bytes;
+    history=recordPdfHistory(history,bytes(6,7),1,'B');
+    expect(history.entries[0].bytes).toBe(initial);
+    expect(history.entries[1].bytes).toBe(firstEdit);
+  });
+
+  it('does not alter owned history when caller changes its input buffer',()=>{
+    const input=bytes(2,3,4);
+    let history=createPdfHistory(input);
+    input[0]=99;
+    const changed=bytes(4,5,6);
+    history=recordPdfHistory(history,changed,1,'Edit');
+    changed[0]=99;
+    expect(undoPdfHistory(history).entry.bytes).toEqual(bytes(2,3,4));
+    expect(currentPdfHistoryEntry(history).bytes).toEqual(bytes(4,5,6));
+  });
+
   it('keeps histories independent across document tabs',()=>{
     const tabA=recordPdfHistory(createPdfHistory(bytes(1),1),bytes(2),1,'A edit');
     const tabB=createPdfHistory(bytes(9),1);

@@ -78,6 +78,7 @@ import {
   rotatePdfPagesPermanent,
   replacePdfPage,
   setPdfPageBox,
+  inspectPdfVisualCropPage,
   splitPdfAtPage,
   fillPdfFormFields,
   flattenPdfForm,
@@ -104,11 +105,12 @@ import {
   clampPdfPage,
   clampPdfZoom,
   effectivePdfScale,
-  rotatePdfClockwise,
   stepPdfZoom,
   type PdfFitMode,
 } from './layout';
 import PdfPageCanvas from './PdfPageCanvas';
+import {cropMarginsToRectangle,cropPointsToUnit,cropRectangleToMargins,cropUnitToPoints,
+  type CropUnit,type CropRectangle} from './cropGeometry';
 import { PdfFeatureIcon } from './PdfFeatureIcon';
 import { plannedPdfFeatures } from './featureCatalog';
 import { USER_PDF_TOOLS, USER_PDF_TOOL_GROUPS } from './userPdfTools';
@@ -419,6 +421,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [pageLabelRanges, setPageLabelRanges] = useState<PdfPageLabelRange[]>([]);
   const [logicalPageLabels, setLogicalPageLabels] = useState<string[]>([]);
   const [pageLabelError, setPageLabelError] = useState('');
+  const [cropUnit,setCropUnit]=useState<CropUnit>('mm');
+  const [cropMode,setCropMode]=useState(false);
+  const [cropGeometry,setCropGeometry]=useState<{width:number;height:number;visualSupported:boolean;reason:string}|null>(null);
   const [pageBoxDraft, setPageBoxDraft] = useState({
     scope:'selected' as 'selected'|'all',
     box:'crop' as 'crop'|'trim'|'bleed'|'art',
@@ -427,6 +432,29 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     bottom:0,
     left:0,
   });
+  // Numeric margins use the source MediaBox. Dragging is only exact when the
+  // displayed page is uncropped and natively unrotated.
+  useEffect(()=>{
+    if(!cropMode||!sourceBytes){setCropGeometry(null);return;}
+    let cancelled=false;
+    setCropGeometry(null);
+    void inspectPdfVisualCropPage(sourceBytes,currentPage).then(value=>{
+      if(!cancelled)setCropGeometry(value);
+    }).catch(reason=>{
+      if(!cancelled){setCropGeometry(null);setError(reason instanceof Error?reason.message:String(reason));}
+    });
+    return ()=>{cancelled=true;};
+  },[cropMode,currentPage,sourceBytes]);
+  const cropPreview=cropGeometry?.visualSupported&&pageBoxDraft.box==='crop'
+    ?cropMarginsToRectangle(pageBoxDraft,cropGeometry.width,cropGeometry.height):null;
+  const chooseCropRectangle=(rect:CropRectangle)=>{
+    if(!cropGeometry?.visualSupported)return;
+    try{
+      const margins=cropRectangleToMargins(rect,cropGeometry.width,cropGeometry.height);
+      setPageBoxDraft(draft=>({...draft,box:'crop',scope:'selected',...margins}));
+      setError('');
+    }catch(reason){setError(reason instanceof Error?reason.message:String(reason));}
+  };
   const scrollFps = useScrollFps(scrollRef);
   const domIdPrefix=session?.id??previewIdRef.current;
 
@@ -635,6 +663,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setCurrentPage(page);
   }, []);
 
+  const chooseEditPage=(page:number)=>{
+    const selected=clampPdfPage(page,pageCount);
+    selectionAnchorRef.current=selected;
+    setSelectedPages(new Set([selected]));
+    goToPage(selected,true);
+  };
+
   function selectThumbnail(page:number,additive:boolean,range:boolean){
     goToPage(page,true);
     setSelectedPages((current)=>{
@@ -711,6 +746,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     mutationPendingRef.current=true;
     setMutating(true);
     setError('');
+    setActionNotice('Applying PDF edit to the live document…');
     try{
       const result=await operation(Uint8Array.from(sourceBytes));
       if(currentPdfBytesRef.current!==sourceBytes||
@@ -745,7 +781,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
   async function removeSelectedPagesSafely():Promise<void>{
     if(!sourceBytes||operationPages.length>=pageCount||mutating)return;
-    const label='Remove '+operationPages.length+' selected page'+(operationPages.length===1?'':'s')+'?';
+    const label='Delete '+(operationPages.length===1?'page ':'pages ')+operationPages.join(', ')+'?';
     if(!window.confirm(label+'\n\nOnly the MALENJO working copy changes. Your original PDF file stays untouched. You can Undo before exporting.'))return;
     await mutateAction(
       'Removed '+operationPages.length+' page(s) from the working copy.',
@@ -838,11 +874,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     mutationPendingRef.current=true;
     setMutating(true);
     setError('');
+    setActionNotice('Undoing PDF edit…');
     try{
       await installPdf(transition.entry.bytes,sourceName,browserFile,true,()=>{
         historyRef.current=transition.history;
         setHistoryRevision((value)=>value+1);
         setCurrentPage(transition.entry.page);
+        setSelectedPages(new Set([transition.entry.page]));
+        selectionAnchorRef.current=transition.entry.page;
         setDirty(transition.entry.dirty);
         onDirtyChange?.(transition.entry.dirty);
         setActionNotice(`Undid: ${undoneLabel}`);
@@ -864,11 +903,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     mutationPendingRef.current=true;
     setMutating(true);
     setError('');
+    setActionNotice('Redoing PDF edit…');
     try{
       await installPdf(transition.entry.bytes,sourceName,browserFile,true,()=>{
         historyRef.current=transition.history;
         setHistoryRevision((value)=>value+1);
         setCurrentPage(transition.entry.page);
+        setSelectedPages(new Set([transition.entry.page]));
+        selectionAnchorRef.current=transition.entry.page;
         setDirty(transition.entry.dirty);
         onDirtyChange?.(transition.entry.dirty);
         setActionNotice(`Redid: ${transition.entry.label}`);
@@ -1521,7 +1563,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   }
 
   async function applyPageBox(){
-    await mutate(
+    const committed=await mutate(
       `Updated ${pageBoxDraft.box} box on ${pageBoxDraft.scope==='selected' ? operationPages.length : pageCount} page(s).`,
       (bytes)=>setPdfPageBox(bytes,{
         pageNumbers:pagesForScope(pageBoxDraft.scope),
@@ -1533,6 +1575,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       }),
       currentPage,
     );
+    if(committed){setCropMode(false);setActionNotice('Crop applied. The page preview has updated; Undo restores the previous crop.');}
   }
 
   async function searchPdf(){
@@ -2394,8 +2437,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       providerAction,
     ],
     organize:[
-      {id:'open-crop-settings',label:'Crop PDF settings',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF before cropping.':mutating?'Wait for the current PDF edit.':undefined,run:configureProperties},
-      {id:'turn-pages',label:'Rotate PDF pages',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Permanently rotated ${operationPages.length} selected page(s) by 90°.`,bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),operationPages[0])},
+      {id:'open-crop-settings',label:cropMode?'Exit crop preview':'Crop visually…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF before cropping.':mutating?'Wait for the current PDF edit.':undefined,run:()=>{
+        if(!cropMode){setPageBoxDraft(draft=>({...draft,scope:'selected',box:'crop'}));configureProperties();}
+        setCropMode(value=>!value);
+      }},
       {id:'remove-pages',label:`Delete ${operationPages.length} page${operationPages.length===1?'':'s'}`,enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length>=pageCount?'A PDF must retain at least one page.':mutating?'Wait for the current PDF edit to finish.':undefined,run:removeSelectedPagesSafely},
       {id:'replace-page',label:'Replace page…',enabled:!!sourceBytes&&!mutating&&!loading&&operationPages.length===1,
         disabledReason:!sourceBytes?'Open a PDF first.':operationPages.length!==1?'Select exactly one page for replacement.':'Wait for the active PDF operation.',
@@ -2539,7 +2584,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           tabIndex={masterTab===tab.id?0:-1}
           className={masterTab===tab.id?'active':''}
           title={`${tab.label} · ${tab.shortcut}`}
-          onClick={()=>{setMasterTab(tab.id);setTaskCategory(tab.category);setFeatureGalleryOpen(false);}}
+          onClick={()=>{setMasterTab(tab.id);setTaskCategory(tab.category);setFeatureGalleryOpen(false);if(tab.id==='organize')openLeftPanel('pages');else setCropMode(false);}}
           onKeyDown={(event)=>{
             if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
             event.preventDefault();
@@ -2548,6 +2593,18 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         >{tab.label}</button>)}
       </div>
 
+      {masterTab==='organize'&&pdf&&<section className="pdf-organize-page-picker" aria-label="Choose pages to edit"
+        style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',flexWrap:'wrap',borderBottom:'1px solid var(--border, #d1d5db)'}}>
+        <strong>1. Choose page</strong>
+        <label>Page number <input type="number" min={1} max={pageCount} step={1}
+          aria-label="Page number to edit" style={{width:72,marginLeft:6}}
+          value={operationPages.length===1?operationPages[0]:currentPage}
+          onChange={event=>{if(event.target.value)chooseEditPage(Number(event.target.value));}}/></label>
+        <button type="button" onClick={()=>chooseEditPage(currentPage)} disabled={operationPages.length===1&&operationPages[0]===currentPage}>Use page on screen</button>
+        <button type="button" onClick={()=>openLeftPanel('pages')}>Choose multiple in Pages panel</button>
+        <span role="status">Editing {operationPages.length===1?`page ${operationPages[0]}`:`${operationPages.length} pages: ${operationPages.join(', ')}`}</span>
+        <small>2. Select Delete, Replace or Crop below. Undo returns to the previous edited version.</small>
+      </section>}
       <div id={`${domIdPrefix}-task-tools`} className="pdf-context-toolbar" role="toolbar" aria-label={`${PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label} PDF tools`}>
         <div className="pdf-task-actions">
           <button type="button" className="pdf-feature-index-trigger"
@@ -2803,7 +2860,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
           {leftPanel==='pages'&&<div className="pdf-left-panel-body pdf-pages-panel">
             <div className="pdf-selection-bar">
-              <span>{selectedPageNumbers.length || 1} selected</span>
+              <span>{selectedPageNumbers.length || 1} selected. Click thumbnails; Ctrl/Cmd-click adds pages.</span>
               <button onClick={()=>{setSelectedPages(new Set(Array.from({length:pageCount},(_,index)=>index+1)));selectionAnchorRef.current=1;}}>All</button>
               <button onClick={()=>{setSelectedPages(new Set([currentPage]));selectionAnchorRef.current=currentPage;}}>Current</button>
             </div>
@@ -3072,6 +3129,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               onActivateLink={activatePdfLink}
               onVisible={onPageVisible}
               onRendered={onPageRendered}
+              showEditSelection={masterTab==='organize'}
+              selectedForEdit={selectedPages.has(page)}
+              onSelectForEdit={()=>chooseEditPage(page)}
+              cropMode={cropMode&&page===currentPage&&Boolean(cropGeometry?.visualSupported)&&rotation===0}
+              cropPreview={page===currentPage?cropPreview:null}
+              onCropSelection={chooseCropRectangle}
             />;
           })}
         </div>
@@ -3133,7 +3196,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           <div><dt>Size</dt><dd>{sourceBytes ? formatBytes(sourceBytes.byteLength) : session?.document ? formatBytes(session.document.sizeBytes) : '—'}</dd></div>
           <div><dt>Renderer</dt><dd>PDF.js 6.4.299</dd></div>
           <div><dt>Edit state</dt><dd>{dirty?'Modified':'Original'}</dd></div>
-          <div><dt>History</dt><dd>{historyRef.current?`${historyRef.current.cursor+1}/${historyRef.current.entries.length} · ${formatBytes(historyRef.current.totalBytes)}`:'—'}</dd></div>
+           <div><dt>History</dt><dd>{historyRef.current?`${historyRef.current.cursor} undo step(s) available · ${formatBytes(historyRef.current.totalBytes)} (up to 30, memory-limited)`:'—'}</dd></div>
           <div><dt>View</dt><dd>{fitMode === 'custom' ? `${Math.round(zoom * 100)}%` : fitMode} · {rotation}°</dd></div>
         </dl>
 
@@ -3403,18 +3466,51 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           <small>Preview: <code>{batesDraft.prefix}{String(batesDraft.startNumber).padStart(Math.max(1,batesDraft.digits),'0')}{batesDraft.suffix}</code>. Numbering follows selected-page order when scope is Selected pages.</small>
         </div>
 
-        <div className="pdf-pane-title">Page boxes</div>
+        <div className="pdf-pane-title">Crop and page boxes</div>
         <div className="pdf-edit-form">
-          <label>Scope<select value={pageBoxDraft.scope} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,scope:event.target.value as 'selected'|'all'})}><option value="selected">Selected pages</option><option value="all">All pages</option></select></label>
-          <label>Box<select value={pageBoxDraft.box} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,box:event.target.value as 'crop'|'trim'|'bleed'|'art'})}><option value="crop">Crop box</option><option value="trim">Trim box</option><option value="bleed">Bleed box</option><option value="art">Art box</option></select></label>
+          <small>Crop is non-destructive to the original file. Choose a page, drag a rectangle directly over the live page, then Apply crop. Before applying, the shaded area is a preview only.</small>
+          <button type="button" disabled={!sourceBytes||mutating||loading}
+            onClick={()=>{
+              setPageBoxDraft(draft=>({...draft,box:'crop',scope:'selected'}));
+              chooseEditPage(currentPage);
+              setCropMode(value=>!value);
+            }}>{cropMode?'Stop drawing crop':'Draw crop on page '+currentPage}</button>
+          {cropMode&&<small role="status">{!cropGeometry?'Preparing crop preview…'
+            :cropGeometry.visualSupported&&rotation===0?'Drag across the displayed page. Adjust the four margins below; the outline updates live.'
+            :cropGeometry.reason||'Reset the viewer rotation before drawing. Numeric margins remain available.'}</small>}
+          <label>Measurements <select value={cropUnit} onChange={event=>setCropUnit(event.target.value as CropUnit)}
+            aria-label="Crop measurement unit">
+            <option value="mm">Millimeters (mm)</option>
+            <option value="cm">Centimeters (cm)</option>
+            <option value="in">Inches (in)</option>
+          </select></label>
+          <label>Apply to<select value={pageBoxDraft.scope}
+            onChange={event=>setPageBoxDraft({...pageBoxDraft,scope:event.target.value as 'selected'|'all'})}>
+            <option value="selected">Selected pages</option><option value="all">All pages</option>
+          </select></label>
+          <label>Page box<select value={pageBoxDraft.box}
+            onChange={event=>setPageBoxDraft({...pageBoxDraft,box:event.target.value as 'crop'|'trim'|'bleed'|'art'})}>
+            <option value="crop">Crop (visible page)</option>
+            <option value="trim">Trim (print production)</option>
+            <option value="bleed">Bleed (print production)</option>
+            <option value="art">Art (print production)</option>
+          </select></label>
           <div className="pdf-coordinate-grid">
-            <label>Top<input type="number" min="0" max="720" step="1" value={pageBoxDraft.top} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,top:Number(event.target.value)})}/></label>
-            <label>Right<input type="number" min="0" max="720" step="1" value={pageBoxDraft.right} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,right:Number(event.target.value)})}/></label>
-            <label>Bottom<input type="number" min="0" max="720" step="1" value={pageBoxDraft.bottom} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,bottom:Number(event.target.value)})}/></label>
-            <label>Left<input type="number" min="0" max="720" step="1" value={pageBoxDraft.left} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,left:Number(event.target.value)})}/></label>
+            {(['top','right','bottom','left'] as const).map(side=><label key={side}>
+              {side.charAt(0).toUpperCase()+side.slice(1)} ({cropUnit})
+              <input type="number" min="0" step="0.1" aria-label={`Crop ${side} in ${cropUnit}`}
+                value={Number(cropPointsToUnit(pageBoxDraft[side],cropUnit).toFixed(2))}
+                onChange={event=>{
+                  setPageBoxDraft(draft=>({...draft,[side]:cropUnitToPoints(Number(event.target.value),cropUnit)}));
+                  if(pageBoxDraft.box==='crop')setCropMode(true);
+                }}/>
+            </label>)}
           </div>
-          <button disabled={mutating} onClick={()=>void applyPageBox()}>Apply page box</button>
-          <small>Margins are points inset from each page’s MediaBox. Invalid/inverted boxes are rejected; the operation is undoable before export.</small>
+          <button disabled={!sourceBytes||mutating||loading} onClick={()=>void applyPageBox()}>
+            Apply {pageBoxDraft.box==='crop'?'crop':'page box'} to {pageBoxDraft.scope==='selected'?operationPages.length:pageCount} page(s)
+          </button>
+          {cropMode&&<button type="button" onClick={()=>{setCropMode(false);setPageBoxDraft(d=>({...d,top:0,right:0,bottom:0,left:0}));}}>Cancel crop preview</button>}
+          <small>Measurements are in {cropUnit}. The preview shows the crop rectangle before committing; only Apply changes the working PDF. Undo and Save PDF copy operate on the committed result. Existing cropped/rotated pages use numeric inputs for safety.</small>
         </div>
 
         <div className="pdf-pane-title">Logical page labels</div>
@@ -3444,18 +3540,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           <button disabled={mutating||operationPages.length!==1} onClick={()=>void mutate(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)}>Duplicate</button>
           <button disabled={mutating||operationPages.length!==1||currentPage<=1} onClick={()=>void mutate('Moved page earlier.',bytes=>movePdfPage(bytes,currentPage,currentPage-1),currentPage-1)}>Move earlier</button>
           <button disabled={mutating||operationPages.length!==1||currentPage>=pageCount} onClick={()=>void mutate('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)}>Move later</button>
-          <button disabled={mutating} onClick={()=>void mutate(
-            `Permanently rotated ${operationPages.length} selected page(s) by 90°.`,
-            bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),
-            operationPages[0],
-          )}>Rotate selected</button>
           <button disabled={mutating} onClick={()=>void mutate(`Inserted a blank page after page ${currentPage}.`,bytes=>insertBlankPdfPage(bytes,currentPage),currentPage+1)}>Blank after</button>
           <button disabled={mutating} onClick={()=>void extractSelected()}>Extract selected</button>
           <button disabled={mutating} onClick={()=>insertInputRef.current?.click()}>Insert PDF here…</button>
           <button disabled={mutating||currentPage>=pageCount} onClick={()=>void splitCurrent()}>Split here</button>
           <button disabled={mutating} onClick={()=>appendInputRef.current?.click()}>Append PDF…</button>
         </div>
-        <div className="pdf-edit-note">Click a thumbnail to select one page; Ctrl/Cmd-click toggles pages and Shift-click selects a range. Mutations use the bounded per-tab Undo/Redo history and never overwrite the source document; use Export to create the edited file.</div>
+        <div className="pdf-edit-note">Choose a page number or click Select on a viewed page. Ctrl/Cmd-click thumbnails to select multiple pages. Your source file stays unchanged; Save PDF copy exports edits.</div>
 
         <div className="pdf-pane-title">Performance</div>
         <dl>
@@ -3560,7 +3651,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             <button disabled={!pdf} className={viewMode==='single'?'active':''} onClick={()=>setViewMode('single')} aria-label="Single page view" title="Single page">1</button>
             <button disabled={!pdf} className={viewMode==='continuous'?'active':''} onClick={()=>setViewMode('continuous')} aria-label="Continuous page view" title="Continuous">↕</button>
             <button disabled={!pdf} className={viewMode==='two'?'active':''} onClick={()=>setViewMode('two')} aria-label="Two-page view" title="Two page">2</button>
-            <button disabled={!pdf} onClick={() => setRotation((value) => rotatePdfClockwise(value))} aria-label="Rotate view clockwise (display only)" title="Rotate view clockwise — display only. To save a rotated page, use Organize → Rotate selected."><RotateCw size={16}/></button>
+            <button disabled={!sourceBytes||mutating||loading} onClick={() => void mutate(
+              `Permanently rotated page ${currentPage} by 90°.`,bytes=>rotatePdfPagePermanent(bytes,currentPage),currentPage,
+            ).then(applied=>{if(applied)setRotation(0);})}
+              aria-label="Rotate current PDF page clockwise (saved edit)"
+              title="Rotate this PDF page 90°. The edit appears immediately, is included in Save PDF copy and can be undone."><RotateCw size={16}/></button>
             <button disabled={!pdf} onClick={()=>void toggleFullscreen(false)} aria-label={fullscreen?'Exit full screen':'Full screen'} title={fullscreen?'Exit full screen':'Full screen'}><Maximize2 size={16}/></button>
             <button disabled={!pdf} onClick={()=>void toggleFullscreen(true)} aria-label="Presentation mode" title="Presentation mode"><MonitorPlay size={16}/></button>
             <button

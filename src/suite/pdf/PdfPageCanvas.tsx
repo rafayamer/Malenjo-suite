@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import type {CropRectangle} from './cropGeometry';
 import { TextLayer, type PDFDocumentProxy } from 'pdfjs-dist';
 import {highlightPdfTextNodes} from './pdfTextHighlights';
 import type {PdfLinkAnnotation} from './links';
@@ -24,6 +25,12 @@ interface Props {
   onRendered(pageNumber: number): void;
   links?:readonly PdfLinkAnnotation[];
   onActivateLink?(link:PdfLinkAnnotation):void;
+  cropMode?:boolean;
+  cropPreview?:CropRectangle|null;
+  onCropSelection?(rect:CropRectangle):void;
+  showEditSelection?:boolean;
+  selectedForEdit?:boolean;
+  onSelectForEdit?():void;
 }
 
 export default function PdfPageCanvas({
@@ -45,8 +52,30 @@ export default function PdfPageCanvas({
   onRendered,
   links=[],
   onActivateLink,
+  cropMode=false,
+  cropPreview=null,
+  onCropSelection,
+  showEditSelection=false,
+  selectedForEdit=false,
+  onSelectForEdit,
 }: Props) {
   const shellRef = useRef<HTMLDivElement>(null);
+  const cropOriginRef=useRef<{x:number;y:number}|null>(null);
+  const [dragCrop,setDragCrop]=useState<CropRectangle|null>(null);
+  const relativeCropPoint=(event:ReactPointerEvent<HTMLDivElement>)=>{
+    const bounds=event.currentTarget.getBoundingClientRect();
+    return {x:Math.max(0,Math.min(1,(event.clientX-bounds.left)/bounds.width)),
+      y:Math.max(0,Math.min(1,(event.clientY-bounds.top)/bounds.height))};
+  };
+  const updateDrag=(event:ReactPointerEvent<HTMLDivElement>)=>{
+    const start=cropOriginRef.current;
+    if(!start)return;
+    const end=relativeCropPoint(event);
+    const rect={x:Math.min(start.x,end.x),y:Math.min(start.y,end.y),
+      width:Math.abs(end.x-start.x),height:Math.abs(end.y-start.y)};
+    setDragCrop(rect);
+    return rect;
+  };
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef=useRef<HTMLDivElement>(null);
   const textDivsRef=useRef<HTMLSpanElement[]>([]);
@@ -243,7 +272,7 @@ export default function PdfPageCanvas({
     ref={shellRef}
     id={`${domIdPrefix}-page-${pageNumber}`}
     className="pdf-page-shell"
-    style={{ minWidth: placeholder.width, minHeight: placeholder.height, position:'relative' }}
+    style={{ minWidth: placeholder.width, minHeight: placeholder.height, position:'relative', overflow:cropMode?'hidden':undefined }}
   >
     <canvas ref={canvasRef} aria-label={`PDF page ${pageNumber}`}/>
     <div ref={textLayerRef} className="pdf-text-layer textLayer"
@@ -264,6 +293,43 @@ export default function PdfPageCanvas({
         onClick={()=>onActivateLink?.(link)}
       />
     ))} 
+    {cropMode&&<div
+      role="region"
+      aria-label={`Drag over PDF page ${pageNumber} to draw a crop rectangle. Precise measurements are available in Crop settings.`}
+      data-pdf-crop-overlay={pageNumber}
+      style={{position:'absolute',inset:0,zIndex:8,cursor:'crosshair',touchAction:'none'}}
+      onPointerDown={event=>{
+        if(event.button!==0)return;
+        cropOriginRef.current=relativeCropPoint(event);
+        setDragCrop(null);
+        event.currentTarget.setPointerCapture(event.pointerId);
+        event.preventDefault();
+      }}
+      onPointerMove={event=>{updateDrag(event);}}
+      onPointerUp={event=>{
+        const rect=updateDrag(event);
+        cropOriginRef.current=null;
+        setDragCrop(null);
+        if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
+        if(rect&&rect.width>.003&&rect.height>.003)onCropSelection?.(rect);
+      }}
+      onPointerCancel={()=>{cropOriginRef.current=null;setDragCrop(null);}}
+    >
+      {(dragCrop??cropPreview)&&<div aria-hidden="true" style={{
+        position:'absolute',pointerEvents:'none',
+        left:`${(dragCrop??cropPreview)!.x*100}%`,top:`${(dragCrop??cropPreview)!.y*100}%`,
+        width:`${(dragCrop??cropPreview)!.width*100}%`,height:`${(dragCrop??cropPreview)!.height*100}%`,
+        outline:'2px dashed currentColor',boxShadow:'0 0 0 100vmax rgba(15,23,42,.35)',
+      }}/>}
+    </div>}
+    {showEditSelection&&<button type="button" onClick={onSelectForEdit}
+      aria-label={`Select page ${pageNumber} for editing`}
+      aria-pressed={selectedForEdit}
+      style={{position:'absolute',right:8,top:8,zIndex:7,padding:'6px 10px',
+        border:'1px solid currentColor',borderRadius:6,background:'var(--surface, white)',color:'var(--text, #111827)',
+        cursor:'pointer'}}>
+      {selectedForEdit?`✓ Page ${pageNumber} selected`:`Select page ${pageNumber}`}
+    </button>}
     {failed && <div className="pdf-page-error">Page {pageNumber}: {failed}</div>}
     <span className="pdf-page-number">{pageNumber}</span>
   </div>;
