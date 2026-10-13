@@ -2431,8 +2431,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       providerAction,
     ],
     organize:[
-      {id:'open-crop-settings',label:'Crop PDF settings',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF before cropping.':mutating?'Wait for the current PDF edit.':undefined,run:configureProperties},
-      {id:'turn-pages',label:'Rotate PDF pages',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Permanently rotated ${operationPages.length} selected page(s) by 90°.`,bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),operationPages[0])},
+      {id:'open-crop-settings',label:cropMode?'Exit crop preview':'Crop visually…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF before cropping.':mutating?'Wait for the current PDF edit.':undefined,run:()=>{
+        if(!cropMode){setPageBoxDraft(draft=>({...draft,scope:'selected',box:'crop'}));configureProperties();}
+        setCropMode(value=>!value);
+      }},
       {id:'remove-pages',label:`Delete ${operationPages.length} page${operationPages.length===1?'':'s'}`,enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length>=pageCount?'A PDF must retain at least one page.':mutating?'Wait for the current PDF edit to finish.':undefined,run:removeSelectedPagesSafely},
       {id:'replace-page',label:'Replace page…',enabled:!!sourceBytes&&!mutating&&!loading&&operationPages.length===1,
         disabledReason:!sourceBytes?'Open a PDF first.':operationPages.length!==1?'Select exactly one page for replacement.':'Wait for the active PDF operation.',
@@ -2576,7 +2578,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           tabIndex={masterTab===tab.id?0:-1}
           className={masterTab===tab.id?'active':''}
           title={`${tab.label} · ${tab.shortcut}`}
-          onClick={()=>{setMasterTab(tab.id);setTaskCategory(tab.category);setFeatureGalleryOpen(false);}}
+          onClick={()=>{setMasterTab(tab.id);setTaskCategory(tab.category);setFeatureGalleryOpen(false);if(tab.id==='organize')openLeftPanel('pages');else setCropMode(false);}}
           onKeyDown={(event)=>{
             if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
             event.preventDefault();
@@ -2585,6 +2587,18 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         >{tab.label}</button>)}
       </div>
 
+      {masterTab==='organize'&&pdf&&<section className="pdf-organize-page-picker" aria-label="Choose pages to edit"
+        style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',flexWrap:'wrap',borderBottom:'1px solid var(--border, #d1d5db)'}}>
+        <strong>1. Choose page</strong>
+        <label>Page number <input type="number" min={1} max={pageCount} step={1}
+          aria-label="Page number to edit" style={{width:72,marginLeft:6}}
+          value={operationPages.length===1?operationPages[0]:currentPage}
+          onChange={event=>{if(event.target.value)chooseEditPage(Number(event.target.value));}}/></label>
+        <button type="button" onClick={()=>chooseEditPage(currentPage)} disabled={operationPages.length===1&&operationPages[0]===currentPage}>Use page on screen</button>
+        <button type="button" onClick={()=>openLeftPanel('pages')}>Choose multiple in Pages panel</button>
+        <span role="status">Editing {operationPages.length===1?`page ${operationPages[0]}`:`${operationPages.length} pages: ${operationPages.join(', ')}`}</span>
+        <small>2. Select Delete, Replace or Crop below. Undo returns to the previous edited version.</small>
+      </section>}
       <div id={`${domIdPrefix}-task-tools`} className="pdf-context-toolbar" role="toolbar" aria-label={`${PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label} PDF tools`}>
         <div className="pdf-task-actions">
           <button type="button" className="pdf-feature-index-trigger"
@@ -2840,7 +2854,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
           {leftPanel==='pages'&&<div className="pdf-left-panel-body pdf-pages-panel">
             <div className="pdf-selection-bar">
-              <span>{selectedPageNumbers.length || 1} selected</span>
+              <span>{selectedPageNumbers.length || 1} selected. Click thumbnails; Ctrl/Cmd-click adds pages.</span>
               <button onClick={()=>{setSelectedPages(new Set(Array.from({length:pageCount},(_,index)=>index+1)));selectionAnchorRef.current=1;}}>All</button>
               <button onClick={()=>{setSelectedPages(new Set([currentPage]));selectionAnchorRef.current=currentPage;}}>Current</button>
             </div>
