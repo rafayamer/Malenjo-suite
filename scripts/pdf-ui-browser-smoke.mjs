@@ -1032,6 +1032,74 @@ async function main(){
   requireEvidence((await PDFDocument.load(source)).getPage(0).getRotation().angle===0,
     'original source was unexpectedly modified');
   console.log('MALENJO UI rotate, download, reopen and original preservation: PASS');
+  // Phase 2: Replace one selected PDF page through the REAL Organize button
+  // and file chooser. Verify saved bytes in an independent pdf-lib reader,
+  // preserving page count/neighbor content, original, Undo and Redo.
+  const replacementSource=await PDFDocument.create();
+  const replacementPage=replacementSource.addPage([690,720]);
+  replacementPage.drawText('MALENJO PHASE 2 REPLACEMENT PAGE',{x:40,y:610,size:18});
+  const replacementBytes=Buffer.from(await replacementSource.save({useObjectStreams:false}));
+  await activePdf.getByRole('tab',{name:'Organize',exact:true}).click();
+  const replacementButton=activePdf.locator('[data-pdf-feature="replace-page"] button');
+  await replacementButton.waitFor({state:'visible',timeout:15000});
+  requireEvidence(await replacementButton.isEnabled(),
+    'Organize did not offer safe single-page replacement with page 1 selected');
+  const replacementChooserWait=page.waitForEvent('filechooser',{timeout:15000});
+  await replacementButton.click();
+  const replacementChooser=await replacementChooserWait;
+  requireEvidence(!replacementChooser.isMultiple(),
+    'Replace page must import exactly one PDF, not an uncontrolled file batch');
+  let approvedReplacement=false;
+  page.once('dialog',async dialog=>{
+    approvedReplacement=dialog.type()==='confirm'&&dialog.message().includes('Replace page 1');
+    await dialog.accept();
+  });
+  await replacementChooser.setFiles({
+    name:'phase2-replacement.pdf',mimeType:'application/pdf',buffer:replacementBytes,
+  });
+  await page.waitForFunction(()=>[...document.querySelectorAll('.document-session-panel.active .pdf-notice')]
+    .some(item=>item.textContent?.includes('Replaced page 1')),null,{timeout:30000});
+  requireEvidence(approvedReplacement,
+    'Replacement did not require an explicit human confirmation');
+  const replacementDownloadWait=page.waitForEvent('download',{timeout:30000});
+  await saveQuick.click();
+  const replacementDownload=await replacementDownloadWait;
+  const replacementPath=join(mkdtempSync(join(tmpdir(),'malenjo-replace-')),'replaced.pdf');
+  await replacementDownload.saveAs(replacementPath);
+  const replacementResult=await PDFDocument.load(readFileSync(replacementPath));
+  requireEvidence(replacementResult.getPageCount()===2&&
+    replacementResult.getPage(0).getWidth()===690&&
+    replacementResult.getPage(1).getWidth()===500,
+    'Replace page UI did not export one real imported page in its original page order');
+  await undoQuick.click();
+  await page.waitForFunction(()=>[...document.querySelectorAll('.document-session-panel.active .pdf-notice')]
+    .some(item=>item.textContent?.includes('Undid: Replaced page 1')),null,{timeout:30000});
+  const undoDownloadWait=page.waitForEvent('download',{timeout:30000});
+  await saveQuick.click();
+  const undoDownload=await undoDownloadWait;
+  const undoPath=join(mkdtempSync(join(tmpdir(),'malenjo-replace-undo-')),'undone.pdf');
+  await undoDownload.saveAs(undoPath);
+  const undoResult=await PDFDocument.load(readFileSync(undoPath));
+  requireEvidence(undoResult.getPageCount()===2&&
+    undoResult.getPage(0).getWidth()===500&&
+    undoResult.getPage(0).getRotation().angle===90,
+    'Replace-page Undo did not restore the prior rotated working PDF');
+  await redoQuick.click();
+  await page.waitForFunction(()=>[...document.querySelectorAll('.document-session-panel.active .pdf-notice')]
+    .some(item=>item.textContent?.includes('Redid: Replaced page 1')),null,{timeout:30000});
+  const redoDownloadWait=page.waitForEvent('download',{timeout:30000});
+  await saveQuick.click();
+  const redoDownload=await redoDownloadWait;
+  const redoPath=join(mkdtempSync(join(tmpdir(),'malenjo-replace-redo-')),'redone.pdf');
+  await redoDownload.saveAs(redoPath);
+  const redoResult=await PDFDocument.load(readFileSync(redoPath));
+  requireEvidence(redoResult.getPageCount()===2&&
+    redoResult.getPage(0).getWidth()===690&&
+    redoResult.getPage(1).getWidth()===500&&
+    (await PDFDocument.load(source)).getPage(0).getWidth()===500,
+    'Replace-page Redo damaged page order or modified the source bytes');
+  console.log('PHASE2 real PDF page replacement, independent Save/Undo/Redo reopen and original preservation: PASS');
+
   // MAL-AUD-020: Click a real PDF /Link annotation over the rendered canvas.
   const linked=await PDFDocument.create();
   const firstLinkPage=linked.addPage([500,700]);
