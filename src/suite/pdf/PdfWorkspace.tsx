@@ -78,6 +78,7 @@ import {
   rotatePdfPagesPermanent,
   replacePdfPage,
   setPdfPageBox,
+  inspectPdfVisualCropPage,
   splitPdfAtPage,
   fillPdfFormFields,
   flattenPdfForm,
@@ -109,6 +110,8 @@ import {
   type PdfFitMode,
 } from './layout';
 import PdfPageCanvas from './PdfPageCanvas';
+import {cropMarginsToRectangle,cropPointsToUnit,cropRectangleToMargins,cropUnitToPoints,
+  type CropUnit,type CropRectangle} from './cropGeometry';
 import { PdfFeatureIcon } from './PdfFeatureIcon';
 import { plannedPdfFeatures } from './featureCatalog';
 import { USER_PDF_TOOLS, USER_PDF_TOOL_GROUPS } from './userPdfTools';
@@ -419,6 +422,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [pageLabelRanges, setPageLabelRanges] = useState<PdfPageLabelRange[]>([]);
   const [logicalPageLabels, setLogicalPageLabels] = useState<string[]>([]);
   const [pageLabelError, setPageLabelError] = useState('');
+  const [cropUnit,setCropUnit]=useState<CropUnit>('mm');
+  const [cropMode,setCropMode]=useState(false);
+  const [cropGeometry,setCropGeometry]=useState<{width:number;height:number;visualSupported:boolean;reason:string}|null>(null);
   const [pageBoxDraft, setPageBoxDraft] = useState({
     scope:'selected' as 'selected'|'all',
     box:'crop' as 'crop'|'trim'|'bleed'|'art',
@@ -427,6 +433,29 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     bottom:0,
     left:0,
   });
+  // Numeric margins use the source MediaBox. Dragging is only exact when the
+  // displayed page is uncropped and natively unrotated.
+  useEffect(()=>{
+    if(!cropMode||!sourceBytes){setCropGeometry(null);return;}
+    let cancelled=false;
+    setCropGeometry(null);
+    void inspectPdfVisualCropPage(sourceBytes,currentPage).then(value=>{
+      if(!cancelled)setCropGeometry(value);
+    }).catch(reason=>{
+      if(!cancelled){setCropGeometry(null);setError(reason instanceof Error?reason.message:String(reason));}
+    });
+    return ()=>{cancelled=true;};
+  },[cropMode,currentPage,sourceBytes]);
+  const cropPreview=cropGeometry?.visualSupported&&pageBoxDraft.box==='crop'
+    ?cropMarginsToRectangle(pageBoxDraft,cropGeometry.width,cropGeometry.height):null;
+  const chooseCropRectangle=(rect:CropRectangle)=>{
+    if(!cropGeometry?.visualSupported)return;
+    try{
+      const margins=cropRectangleToMargins(rect,cropGeometry.width,cropGeometry.height);
+      setPageBoxDraft(draft=>({...draft,box:'crop',scope:'selected',...margins}));
+      setError('');
+    }catch(reason){setError(reason instanceof Error?reason.message:String(reason));}
+  };
   const scrollFps = useScrollFps(scrollRef);
   const domIdPrefix=session?.id??previewIdRef.current;
 
@@ -635,6 +664,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setCurrentPage(page);
   }, []);
 
+  const chooseEditPage=(page:number)=>{
+    const selected=clampPdfPage(page,pageCount);
+    selectionAnchorRef.current=selected;
+    setSelectedPages(new Set([selected]));
+    goToPage(selected,true);
+  };
+
   function selectThumbnail(page:number,additive:boolean,range:boolean){
     goToPage(page,true);
     setSelectedPages((current)=>{
@@ -745,7 +781,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
   async function removeSelectedPagesSafely():Promise<void>{
     if(!sourceBytes||operationPages.length>=pageCount||mutating)return;
-    const label='Remove '+operationPages.length+' selected page'+(operationPages.length===1?'':'s')+'?';
+    const label='Delete '+(operationPages.length===1?'page ':'pages ')+operationPages.join(', ')+'?';
     if(!window.confirm(label+'\n\nOnly the MALENJO working copy changes. Your original PDF file stays untouched. You can Undo before exporting.'))return;
     await mutateAction(
       'Removed '+operationPages.length+' page(s) from the working copy.',
@@ -1521,7 +1557,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   }
 
   async function applyPageBox(){
-    await mutate(
+    const committed=await mutate(
       `Updated ${pageBoxDraft.box} box on ${pageBoxDraft.scope==='selected' ? operationPages.length : pageCount} page(s).`,
       (bytes)=>setPdfPageBox(bytes,{
         pageNumbers:pagesForScope(pageBoxDraft.scope),
@@ -1533,6 +1569,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       }),
       currentPage,
     );
+    if(committed){setCropMode(false);setActionNotice('Crop applied. The page preview has updated; Undo restores the previous crop.');}
   }
 
   async function searchPdf(){
