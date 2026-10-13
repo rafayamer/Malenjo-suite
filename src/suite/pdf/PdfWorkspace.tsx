@@ -1616,7 +1616,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       }),
       currentPage,
     );
-    if(committed){setCropMode(false);setActionNotice('Crop applied. The page preview has updated; Undo restores the previous crop.');}
+    if(committed){endCropPreview();setActionNotice('Crop applied to the working PDF. Undo restores the previous page.');}
   }
 
   async function searchPdf(){
@@ -2191,7 +2191,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           detail:'Replace exactly one selected page using page 1 of an imported PDF; Undo and Save PDF copy work normally.',
           enabled:!!sourceBytes&&!mutating&&!loading&&operationPages.length===1,
           disabledReason:!sourceBytes?'Open a PDF first.':operationPages.length!==1?'Select exactly one page to replace.':'Wait for the active PDF operation.',
-          run:()=>replaceInputRef.current?.click(),
+          run:()=>beginReplacePage(operationPages[0]),
         },
         {
           id:'pdf-pages-extract',
@@ -2478,14 +2478,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       providerAction,
     ],
     organize:[
-      {id:'open-crop-settings',label:cropMode?'Exit crop preview':'Crop visually…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF before cropping.':mutating?'Wait for the current PDF edit.':undefined,run:()=>{
-        if(!cropMode){setPageBoxDraft(draft=>({...draft,scope:'selected',box:'crop'}));configureProperties();}
-        setCropMode(value=>!value);
+      {id:'open-crop-settings',label:cropMode?'Cancel crop preview':'Crop visually…',enabled:!!sourceBytes&&!mutating&&operationPages.length===1,disabledReason:!sourceBytes?'Open a PDF before cropping.':operationPages.length!==1?'Choose one page to crop.':'Wait for the current PDF edit.',run:()=>{
+        if(cropMode)endCropPreview();else startCropOnPage(operationPages[0]);
       }},
       {id:'remove-pages',label:`Delete ${operationPages.length} page${operationPages.length===1?'':'s'}`,enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length>=pageCount?'A PDF must retain at least one page.':mutating?'Wait for the current PDF edit to finish.':undefined,run:removeSelectedPagesSafely},
       {id:'replace-page',label:'Replace page…',enabled:!!sourceBytes&&!mutating&&!loading&&operationPages.length===1,
         disabledReason:!sourceBytes?'Open a PDF first.':operationPages.length!==1?'Select exactly one page for replacement.':'Wait for the active PDF operation.',
-        run:()=>replaceInputRef.current?.click()},
+        run:()=>beginReplacePage(operationPages[0])},
       {id:'copy-page',label:'Duplicate page',enabled:!!sourceBytes&&!mutating&&operationPages.length===1,disabledReason:operationPages.length!==1?'Select exactly one page.':mutating?'Wait for the current PDF edit to finish.':!sourceBytes?'No PDF is loaded.':undefined,run:()=>mutateAction(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)},
       {id:'extract-pages',label:'Extract selected',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:extractSelected},
       {id:'split',label:'Split here',enabled:!!sourceBytes&&!mutating&&currentPage<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':currentPage>=pageCount?'Move before the final page to split the PDF.':mutating?'Wait for the current PDF edit to finish.':undefined,run:splitCurrent},
@@ -2625,7 +2624,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           tabIndex={masterTab===tab.id?0:-1}
           className={masterTab===tab.id?'active':''}
           title={`${tab.label} · ${tab.shortcut}`}
-          onClick={()=>{setMasterTab(tab.id);setTaskCategory(tab.category);setFeatureGalleryOpen(false);if(tab.id==='organize')openLeftPanel('pages');else setCropMode(false);}}
+          onClick={()=>{setMasterTab(tab.id);setTaskCategory(tab.category);setFeatureGalleryOpen(false);if(tab.id==='organize')openLeftPanel('pages');else endCropPreview();}}
           onKeyDown={(event)=>{
             if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
             event.preventDefault();
@@ -3173,9 +3172,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               showEditSelection={masterTab==='organize'}
               selectedForEdit={selectedPages.has(page)}
               onSelectForEdit={()=>chooseEditPage(page)}
-              cropMode={cropMode&&page===currentPage&&Boolean(cropGeometry?.visualSupported)&&rotation===0}
-              cropPreview={page===currentPage?cropPreview:null}
+              cropMode={cropMode&&page===cropTargetPage&&Boolean(cropGeometry?.visualSupported)&&rotation===0}
+              cropPreview={page===cropTargetPage?cropPreview:null}
               onCropSelection={chooseCropRectangle}
+              onDeletePage={()=>void removePagesSafely([page])}
+              onReplacePage={()=>beginReplacePage(page)}
+              onCropPage={()=>startCropOnPage(page)}
+              editingBusy={mutating||loading}
             />;
           })}
         </div>
@@ -3511,11 +3514,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         <div className="pdf-edit-form">
           <small>Crop is non-destructive to the original file. Choose a page, drag a rectangle directly over the live page, then Apply crop. Before applying, the shaded area is a preview only.</small>
           <button type="button" disabled={!sourceBytes||mutating||loading}
-            onClick={()=>{
-              setPageBoxDraft(draft=>({...draft,box:'crop',scope:'selected'}));
-              chooseEditPage(currentPage);
-              setCropMode(value=>!value);
-            }}>{cropMode?'Stop drawing crop':'Draw crop on page '+currentPage}</button>
+            onClick={()=>{if(cropMode)endCropPreview();else startCropOnPage(operationPages.length===1?operationPages[0]:currentPage);}}>
+            {cropMode?'Cancel crop preview':'Draw crop on page '+(operationPages.length===1?operationPages[0]:currentPage)}</button>
           {cropMode&&<small role="status">{!cropGeometry?'Preparing crop preview…'
             :cropGeometry.visualSupported&&rotation===0?'Drag across the displayed page. Adjust the four margins below; the outline updates live.'
             :cropGeometry.reason||'Reset the viewer rotation before drawing. Numeric margins remain available.'}</small>}
@@ -3543,14 +3543,17 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                 value={Number(cropPointsToUnit(pageBoxDraft[side],cropUnit).toFixed(2))}
                 onChange={event=>{
                   setPageBoxDraft(draft=>({...draft,[side]:cropUnitToPoints(Number(event.target.value),cropUnit)}));
-                  if(pageBoxDraft.box==='crop')setCropMode(true);
+                  if(pageBoxDraft.box==='crop'){
+                    setCropTargetPage(operationPages.length===1?operationPages[0]:currentPage);
+                    setCropMode(true);
+                  }
                 }}/>
             </label>)}
           </div>
           <button disabled={!sourceBytes||mutating||loading} onClick={()=>void applyPageBox()}>
             Apply {pageBoxDraft.box==='crop'?'crop':'page box'} to {pageBoxDraft.scope==='selected'?operationPages.length:pageCount} page(s)
           </button>
-          {cropMode&&<button type="button" onClick={()=>{setCropMode(false);setPageBoxDraft(d=>({...d,top:0,right:0,bottom:0,left:0}));}}>Cancel crop preview</button>}
+          {cropMode&&<button type="button" onClick={()=>{endCropPreview();setPageBoxDraft(d=>({...d,top:0,right:0,bottom:0,left:0}));}}>Cancel crop preview</button>}
           <small>Measurements are in {cropUnit}. The preview shows the crop rectangle before committing; only Apply changes the working PDF. Undo and Save PDF copy operate on the committed result. Existing cropped/rotated pages use numeric inputs for safety.</small>
         </div>
 
