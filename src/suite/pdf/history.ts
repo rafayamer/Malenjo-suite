@@ -20,8 +20,10 @@ export interface PdfHistoryTransition {
 }
 
 export const PDF_HISTORY_DEFAULTS = {
-  maxEntries: 12,
-  maxBytes: 96 * 1024 * 1024,
+  // Initial version was 12 snapshots. Keep up to 30 reversible edits plus
+  // the baseline, subject to a per-document memory ceiling.
+  maxEntries: 31,
+  maxBytes: 256 * 1024 * 1024,
 } as const;
 
 function owned(bytes: Uint8Array): Uint8Array {
@@ -30,10 +32,6 @@ function owned(bytes: Uint8Array): Uint8Array {
 
 function normalizePage(page: number): number {
   return Number.isInteger(page) && page > 0 ? page : 1;
-}
-
-function cloneEntry(entry: PdfHistoryEntry): PdfHistoryEntry {
-  return { ...entry, bytes: owned(entry.bytes) };
 }
 
 function total(entries: PdfHistoryEntry[]): number {
@@ -80,7 +78,9 @@ export function recordPdfHistory(
   page: number,
   label: string,
 ): PdfHistory {
-  const retained = history.entries.slice(0, history.cursor + 1).map(cloneEntry);
+  // Entries already own their immutable byte snapshots. Re-cloning every prior
+  // PDF on every edit was quadratic in both retained edits and file size.
+  const retained = history.entries.slice(0, history.cursor + 1);
   retained.push({
     bytes: owned(bytes),
     page: normalizePage(page),
