@@ -31,6 +31,10 @@ interface Props {
   showEditSelection?:boolean;
   selectedForEdit?:boolean;
   onSelectForEdit?():void;
+  onDeletePage?():void;
+  onReplacePage?():void;
+  onCropPage?():void;
+  editingBusy?:boolean;
 }
 
 export default function PdfPageCanvas({
@@ -58,6 +62,10 @@ export default function PdfPageCanvas({
   showEditSelection=false,
   selectedForEdit=false,
   onSelectForEdit,
+  onDeletePage,
+  onReplacePage,
+  onCropPage,
+  editingBusy=false,
 }: Props) {
   const shellRef = useRef<HTMLDivElement>(null);
   const cropOriginRef=useRef<{x:number;y:number}|null>(null);
@@ -322,14 +330,27 @@ export default function PdfPageCanvas({
         outline:'2px dashed currentColor',boxShadow:'0 0 0 100vmax rgba(15,23,42,.35)',
       }}/>}
     </div>}
-    {showEditSelection&&<button type="button" onClick={onSelectForEdit}
-      aria-label={`Select page ${pageNumber} for editing`}
-      aria-pressed={selectedForEdit}
-      style={{position:'absolute',right:8,top:8,zIndex:7,padding:'6px 10px',
-        border:'1px solid currentColor',borderRadius:6,background:'var(--surface, white)',color:'var(--text, #111827)',
-        cursor:'pointer'}}>
-      {selectedForEdit?`✓ Page ${pageNumber} selected`:`Select page ${pageNumber}`}
-    </button>}
+    {showEditSelection&&<div role="group" aria-label={`Actions for PDF page ${pageNumber}`}
+      className="pdf-page-inline-actions"
+      style={{position:'absolute',right:8,top:8,zIndex:7,
+        display:'flex',alignItems:'center',gap:5,padding:5,borderRadius:8,
+        background:'var(--surface, white)',color:'var(--text, #111827)',
+        boxShadow:'0 2px 10px rgba(0,0,0,.18)',maxWidth:'calc(100% - 16px)',flexWrap:'wrap'}}>
+      <button type="button" onClick={onSelectForEdit} disabled={editingBusy}
+        aria-label={`Select page ${pageNumber} for editing`}
+        aria-pressed={selectedForEdit}
+        title={`Set page ${pageNumber} as the edit target`}>
+        {selectedForEdit?`✓ Page ${pageNumber}`:`Select page ${pageNumber}`}
+      </button>
+      {selectedForEdit&&<>
+        <button type="button" onClick={onReplacePage} disabled={editingBusy}
+          aria-label={`Replace page ${pageNumber}`} title="Replace this page with a PDF page">Replace</button>
+        <button type="button" onClick={onCropPage} disabled={editingBusy}
+          aria-label={`Crop page ${pageNumber}`} title="Draw a crop rectangle on this page">Crop</button>
+        <button type="button" onClick={onDeletePage} disabled={editingBusy}
+          aria-label={`Delete page ${pageNumber}`} title="Delete this page (Undo available)">Delete</button>
+      </>}
+    </div>}
     {failed && <div className="pdf-page-error">Page {pageNumber}: {failed}</div>}
     <span className="pdf-page-number">{pageNumber}</span>
   </div>;
