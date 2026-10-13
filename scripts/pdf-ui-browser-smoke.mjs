@@ -1270,6 +1270,14 @@ async function main(){
   const duplicationUi=page.locator('.document-session-panel.active .pdf-workspace');
   await duplicationUi.getByRole('tab',{name:'Organize',exact:true}).click();
   const duplicateCommand=duplicationUi.locator('[data-pdf-feature="copy-page"] button');
+  await duplicateCommand.waitFor({state:'visible',timeout:30000});
+  // A document tab can appear before PDF.js has loaded its working source
+  // and the per-page selection is initialized. Wait for the REAL enabled
+  // action, not just the existence of the document tab.
+  await page.waitForFunction(()=>{
+    const button=document.querySelector('.document-session-panel.active [data-pdf-feature="copy-page"] button');
+    return button instanceof HTMLButtonElement&&!button.disabled;
+  },null,{timeout:30000});
   requireEvidence(await duplicateCommand.isEnabled(),'Duplicate page command was not available for ordinary two-page PDF');
   await duplicateCommand.click();
   await page.waitForFunction(()=>[...document.querySelectorAll('.document-session-panel.active .pdf-notice')]
