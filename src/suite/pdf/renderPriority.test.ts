@@ -22,6 +22,27 @@ describe('PDF central-canvas render priority', () => {
     expect(pdfPageSchedule(3, 4, 8, focusReady)).toMatchObject({ allowed: true, eager: true, phase: 'adjacent' });
   });
 
+  it('preserves focus/adjacent/lazy scheduling for long PDFs without per-page arrays', () => {
+    const count=1000;
+    for (const focus of [1, 2, 500, 999, 1000]) {
+      const critical=pdfCriticalPageOrder(focus,count);
+      for (const ready of [new Set<number>(), new Set([focus]), new Set(critical)]) {
+        for (const page of [1,2,focus-1,focus,focus+1,500,999,1000]) {
+          if(page<1||page>count)continue;
+          const result=pdfPageSchedule(page,focus,count,ready);
+          const expectedPhase=page===focus?'focus':critical.includes(page)?'adjacent':'lazy';
+          const expectedAllowed=page===focus ||
+            (expectedPhase==='adjacent' ? ready.has(focus) : critical.every(item=>ready.has(item)));
+          expect(result).toEqual({
+            phase:expectedPhase,
+            allowed:expectedAllowed,
+            eager:expectedPhase==='focus'||(expectedPhase==='adjacent'&&ready.has(focus)),
+          });
+        }
+      }
+    }
+  });
+
   it('keeps background pages and thumbnails gated until the critical pass is ready', () => {
     const focusOnly = new Set([4]);
     expect(pdfPageSchedule(8, 4, 8, focusOnly)).toMatchObject({ allowed: false, eager: false, phase: 'lazy' });
