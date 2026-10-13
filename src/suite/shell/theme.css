@@ -2288,3 +2288,11 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 .app-shell-top-only .pdf-workspace.presentation-mode .pdf-page-number{
   display:none;
 }
+
+
+/* One PDF footer: keep live page/zoom/view controls in the reader footer.
+   Preserve the shell status on Home and all non-PDF workspaces. */
+.app-shell-top-only .workspace:has(> .document-session-stack .document-session-panel.active .pdf-reader-footer)
+  > .ml-bottom-statusbar{
+  display:none!important;
+}
