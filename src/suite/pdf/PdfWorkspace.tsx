@@ -218,6 +218,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const replaceTargetPageRef=useRef<number|null>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const selectionAnchorRef = useRef<number | null>(null);
+  // Ignore out-of-order IntersectionObserver callbacks during explicit jumps.
+  // The lock is released when the reader is manually scrolled away from its
+  // destination, so manual scrolling still updates the page indicator.
+  const pageJumpLockRef=useRef<{page:number;settled:boolean}|null>(null);
   const activeLoadRef = useRef<PdfLoadResult | null>(null);
   const requestIdRef = useRef(0);
   // A replacement is reserved immediately at load start, before PDF.js has
@@ -659,6 +663,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
   const goToPage = useCallback((requested: number, preserveSelection = false) => {
     const page = clampPdfPage(requested, pageCount);
+    pageJumpLockRef.current={page,settled:false};
     setCurrentPage(page);
     // Explicit jumps should not slowly animate across dozens of heavy page
     // canvases; that causes render churn and stale intermediate page statuses.
@@ -670,13 +675,31 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       document.getElementById(`${domIdPrefix}-page-${page}`)?.scrollIntoView({
         behavior:'auto',block:'start',
       });
+      window.requestAnimationFrame(()=>{
+        if(pageJumpLockRef.current?.page===page)pageJumpLockRef.current.settled=true;
+      });
     });
   }, [domIdPrefix,pageCount]);
 
   const onPageVisible = useCallback((page: number) => {
-    // Manual scrolling must always update the live page indicator immediately.
+    // The observer also reports pages adjacent to the requested target.
+    // Never let a stale callback turn a jump to page 57 into page 56.
+    const lock=pageJumpLockRef.current;
+    if(lock&&page!==lock.page)return;
     setCurrentPage(page);
   }, []);
+  const releasePageJumpOnManualScroll=()=>{
+    pageJumpLockRef.current=null;
+  };
+  const releaseJumpIfTargetLeftView=()=>{
+    const lock=pageJumpLockRef.current;
+    if(!lock?.settled)return;
+    const viewport=scrollRef.current?.getBoundingClientRect();
+    const target=document.getElementById(`${domIdPrefix}-page-${lock.page}`)?.getBoundingClientRect();
+    if(!viewport||!target)return;
+    const overlap=Math.max(0,Math.min(viewport.bottom,target.bottom)-Math.max(viewport.top,target.top));
+    if(overlap<Math.min(viewport.height,target.height)*.15)pageJumpLockRef.current=null;
+  };
 
   const endCropPreview=()=>{
     setCropMode(false);
@@ -3155,6 +3178,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
       <div ref={scrollRef} className="pdf-scroll" tabIndex={0}
         aria-label="Scrollable PDF pages. Page Up/Down and arrow keys navigate. Plus/minus zoom; 0 actual size, W fit width, F fit page; F9 presents."
+        onWheelCapture={releasePageJumpOnManualScroll}
+        onTouchStartCapture={releasePageJumpOnManualScroll}
+        onPointerDownCapture={releasePageJumpOnManualScroll}
+        onScroll={releaseJumpIfTargetLeftView}
         onKeyDown={event=>{
           if(event.target!==event.currentTarget || event.altKey || event.metaKey)return;
           if(event.key==='PageDown'||event.key==='PageUp'||event.key==='ArrowRight'||event.key==='ArrowLeft'){
