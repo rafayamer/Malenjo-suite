@@ -34,6 +34,53 @@ describe('PDF mutation core',()=>{
     expect(await count(await insertBlankPdfPage(bytes,1))).toBe(3);
   });
 
+  it('duplicates a page with unique ref while preserving original metadata and bookmarks',async()=>{
+    const pdf=await PDFDocument.create();
+    pdf.setTitle('MALENJO unchanged title');
+    pdf.addPage([300,400]).drawText('ORIGINAL PAGE');
+    pdf.addPage([301,400]).drawText('SECOND PAGE');
+    let original:Uint8Array=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    original=await addPdfTopLevelBookmark(original,'Keep bookmark',2);
+    const before=await PDFDocument.load(original,{updateMetadata:false});
+    const beforeRefs=before.getPages().map(page=>page.ref.toString());
+    const duplicatedBytes=await duplicatePdfPage(original,1);
+    const duplicated=await PDFDocument.load(duplicatedBytes,{updateMetadata:false});
+    expect(duplicated.getPageCount()).toBe(3);
+    expect(duplicated.getPages().map(page=>page.getWidth())).toEqual([300,300,301]);
+    const afterRefs=duplicated.getPages().map(page=>page.ref.toString());
+    expect(afterRefs[0]).toBe(beforeRefs[0]);
+    expect(afterRefs[1]).not.toBe(beforeRefs[0]);
+    expect(afterRefs[2]).toBe(beforeRefs[1]);
+    expect(duplicated.getTitle()).toBe('MALENJO unchanged title');
+    expect((await listPdfTopLevelBookmarks(duplicatedBytes)).map(item=>item.title)).toEqual(['Keep bookmark']);
+    expect((await PDFDocument.load(original)).getPageCount()).toBe(2);
+  });
+
+  it('refuses to duplicate form widgets, annotated, tagged or certified PDF pages',async()=>{
+    const form=await PDFDocument.load(await sample(2));
+    form.getForm().createTextField('protected').addToPage(form.getPage(0));
+    await expect(duplicatePdfPage(Uint8Array.from(await form.save()),1))
+      .rejects.toThrow(/signed\/form/i);
+
+    const annotated=await PDFDocument.load(await sample(2));
+    const comment=annotated.context.register(annotated.context.obj({
+      Type:PDFName.of('Annot'),Subtype:PDFName.of('Text'),Rect:[1,1,20,20],
+    }));
+    annotated.getPage(0).node.set(PDFName.of('Annots'),annotated.context.obj([comment]));
+    await expect(duplicatePdfPage(Uint8Array.from(await annotated.save()),1))
+      .rejects.toThrow(/annotations\/widgets/i);
+
+    const tagged=await PDFDocument.load(await sample(2));
+    tagged.catalog.set(PDFName.of('StructTreeRoot'),tagged.context.obj({Type:PDFName.of('StructTreeRoot')}));
+    await expect(duplicatePdfPage(Uint8Array.from(await tagged.save()),1))
+      .rejects.toThrow(/tagged/i);
+
+    const certified=await PDFDocument.load(await sample(2));
+    certified.catalog.set(PDFName.of('Perms'),certified.context.obj({DocMDP:{Type:PDFName.of('Sig')}}));
+    await expect(duplicatePdfPage(Uint8Array.from(await certified.save()),1))
+      .rejects.toThrow(/certified/i);
+  });
+
   it('batch deletes, rotates and extracts selected pages',async()=>{
     const source=await sample(4);
     expect(await count(await deletePdfPages(source,[2,4]))).toBe(2);

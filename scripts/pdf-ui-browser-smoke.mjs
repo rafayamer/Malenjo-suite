@@ -1256,6 +1256,57 @@ async function main(){
     return canvas instanceof HTMLCanvasElement&&canvas.width>200;
   },null,{timeout:30000});
   console.log('PHASE1 real 57-page continuous PDF navigation and last-page rendering: PASS');
+  // Phase 2: a real button duplicates the current page in the original
+  // document, with distinct page refs and independently reopened export.
+  const duplicateSource=await PDFDocument.create();
+  duplicateSource.addPage([440,640]).drawText('DUPLICATE THIS PAGE',{x:30,y:590,size:16});
+  duplicateSource.addPage([460,640]).drawText('KEEP THIS PAGE',{x:30,y:590,size:16});
+  duplicateSource.setTitle('Keep catalog metadata');
+  const duplicateOriginalBytes=Buffer.from(await duplicateSource.save({useObjectStreams:false}));
+  await openModule('PDF Workspace');
+  await page.locator('main.workspace > .pdf-workspace > input[type="file"][accept="application/pdf,.pdf"]').first()
+    .setInputFiles({name:'phase2-duplicate-test.pdf',mimeType:'application/pdf',buffer:duplicateOriginalBytes});
+  await page.locator('.document-tab-main').filter({hasText:'phase2-duplicate-test.pdf'}).waitFor({timeout:30000});
+  const duplicationUi=page.locator('.document-session-panel.active .pdf-workspace');
+  await duplicationUi.getByRole('tab',{name:'Organize',exact:true}).click();
+  const duplicateCommand=duplicationUi.locator('[data-pdf-feature="copy-page"] button');
+  await duplicateCommand.waitFor({state:'visible',timeout:30000});
+  // A document tab can appear before PDF.js has loaded its working source
+  // and the per-page selection is initialized. Wait for the REAL enabled
+  // action, not just the existence of the document tab.
+  await page.waitForFunction(()=>{
+    const button=document.querySelector('.document-session-panel.active [data-pdf-feature="copy-page"] button');
+    return button instanceof HTMLButtonElement&&!button.disabled;
+  },null,{timeout:30000});
+  requireEvidence(await duplicateCommand.isEnabled(),'Duplicate page command was not available for ordinary two-page PDF');
+  await duplicateCommand.click();
+  await page.waitForFunction(()=>[...document.querySelectorAll('.document-session-panel.active .pdf-notice')]
+    .some(item=>item.textContent?.includes('Duplicated page 1')),null,{timeout:30000});
+  const duplicateExportWait=page.waitForEvent('download',{timeout:30000});
+  await page.getByRole('button',{name:'Save PDF copy',exact:true}).click();
+  const duplicateDownload=await duplicateExportWait;
+  const duplicatePath=join(mkdtempSync(join(tmpdir(),'malenjo-duplicate-')),'duplicated.pdf');
+  await duplicateDownload.saveAs(duplicatePath);
+  const duplicateVerified=await PDFDocument.load(readFileSync(duplicatePath),{updateMetadata:false});
+  const duplicateRefs=duplicateVerified.getPages().map(page=>page.ref.toString());
+  requireEvidence(duplicateVerified.getPageCount()===3 &&
+    duplicateVerified.getPages().map(page=>page.getWidth()).join(',')==='440,440,460' &&
+    new Set(duplicateRefs).size===3 &&
+    duplicateVerified.getTitle()==='Keep catalog metadata',
+    'Duplicate page produced incorrect page order, reused page refs or lost metadata');
+  await page.getByRole('button',{name:'Undo PDF edit',exact:true}).click();
+  await page.waitForFunction(()=>[...document.querySelectorAll('.document-session-panel.active .pdf-notice')]
+    .some(item=>item.textContent?.includes('Undid: Duplicated page 1')),null,{timeout:30000});
+  const duplicateUndoWait=page.waitForEvent('download',{timeout:30000});
+  await page.getByRole('button',{name:'Save PDF copy',exact:true}).click();
+  const undoneDuplicate=await duplicateUndoWait;
+  const undonePath=join(mkdtempSync(join(tmpdir(),'malenjo-duplicate-undo-')),'undone.pdf');
+  await undoneDuplicate.saveAs(undonePath);
+  requireEvidence((await PDFDocument.load(readFileSync(undonePath))).getPageCount()===2 &&
+    (await PDFDocument.load(duplicateOriginalBytes)).getPageCount()===2,
+    'Duplicate-page Undo did not restore two pages or changed the source document');
+  console.log('PHASE2 duplicate-page UI, independent reference/metadata inspection and Undo: PASS');
+
 
   requireEvidence(errors.length===0,'Unhandled browser exceptions: '+errors.join(' | '));
   await context.close();
