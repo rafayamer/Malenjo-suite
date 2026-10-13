@@ -30,7 +30,8 @@ export function pdfPageSchedule(
   pageCount: number,
   renderedPages: ReadonlySet<number>,
 ): PdfPageSchedule {
-  if (!Number.isFinite(pageCount) || pageCount < 1)
+  if (!Number.isFinite(pageCount) || pageCount < 1 ||
+      !Number.isSafeInteger(pageNumber) || pageNumber < 1 || pageNumber > pageCount)
     return { allowed: false, eager: false, phase: 'lazy' };
   // This executes once per page on every reader state update. Avoid allocating
   // a new critical-page array for each of hundreds of page placeholders.
