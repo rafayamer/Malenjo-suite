@@ -1,4 +1,4 @@
-import { PDFArray, PDFBool, PDFButton, PDFCheckBox, PDFDict, PDFDocument, PDFDropdown, PDFHexString, PDFName, PDFOptionList, PDFRadioGroup, PDFSignature, PDFTextField, StandardFonts, degrees, rgb } from 'pdf-lib';
+import { PDFArray, PDFBool, PDFButton, PDFCheckBox, PDFDict, PDFDocument, PDFDropdown, PDFHexString, PDFName, PDFNumber, PDFOptionList, PDFRadioGroup, PDFSignature, PDFTextField, StandardFonts, degrees, rgb } from 'pdf-lib';
 
 function requirePage(pageNumber:number,pageCount:number):number{
   if(!Number.isInteger(pageNumber)||pageNumber<1||pageNumber>pageCount){
@@ -193,11 +193,50 @@ export async function replacePdfPage(
      incoming.catalog.has(PDFName.of('AcroForm'))){
     throw new Error('Importing a signed/certified or interactive form PDF page is not supported by safe page replacement.');
   }
-  // Imported page annotations (including widgets and internal destinations)
-  // cannot be carried across as a standalone page without reference repair.
-  const importAnnots=incoming.getPage(from).node.lookupMaybe(PDFName.of('Annots'),PDFArray);
-  if(importAnnots?.size()){
-    throw new Error('Imported PDF page has annotations or widgets. MALENJO cannot safely transfer them yet. Choose an unannotated PDF or intentionally prepare a flattened copy in a trusted PDF viewer; no changes were made.');
+  // Standalone visual annotations can be copied with their appearance
+  // streams. Interactive widgets, links, annotation reply chains and other
+  // page/document relationships must still fail closed rather than dangle.
+  // Reject tagged content: importing a single page without its source
+  // structure tree would silently discard accessibility semantics.
+  if(incoming.catalog.has(PDFName.of('StructTreeRoot')) ||
+     incoming.getPage(from).node.has(PDFName.of('StructParents'))){
+    throw new Error('The imported PDF page has a tagged accessibility structure that cannot be safely transferred with one page.');
+  }
+  const annotsName=PDFName.of('Annots');
+  const parentName=PDFName.of('P');
+  const portableSubtypes=new Set(['/Text','/Highlight','/Underline','/StrikeOut','/Square','/Circle']);
+  const unsafeKeys=['A','AA','Dest','Popup','IRT','Parent','StructParent','OC','FS','RichMedia','3DD']
+    .map(PDFName.of);
+  const importPage=incoming.getPage(from);
+  const importAnnots=importPage.node.lookupMaybe(annotsName,PDFArray);
+  const expectedAnnots:string[]=[];
+  if(importAnnots){
+    if(importAnnots.size()>256)throw new Error('Imported PDF page has too many annotations for safe page replacement.');
+    for(let index=0;index<importAnnots.size();index++){
+      let annotation:PDFDict;
+      try{annotation=incoming.context.lookup(importAnnots.get(index),PDFDict);}
+      catch{throw new Error('Imported PDF page contains an annotation or widget that cannot be inspected safely.');}
+      const subtype=annotation.get(PDFName.of('Subtype'))?.toString()??'';
+      if(!portableSubtypes.has(subtype) || unsafeKeys.some(key=>annotation.has(key))){
+        throw new Error('Imported PDF page has annotations or widgets that cannot be transferred safely (interactive widget, link or related annotation). No changes were made.');
+      }
+      const rectangle=annotation.lookupMaybe(PDFName.of('Rect'),PDFArray);
+      if(!rectangle || rectangle.size()!==4 ||
+         Array.from({length:4},(_,k)=>{
+           try{return incoming.context.lookup(rectangle.get(k),PDFNumber).asNumber();}
+           catch{return NaN;}
+         }).some(value=>!Number.isFinite(value))){
+        throw new Error('Imported PDF annotation rectangle is invalid; page replacement was refused.');
+      }
+      const oldParent=annotation.get(parentName);
+      if(oldParent && oldParent.toString()!==importPage.ref.toString()){
+        throw new Error('Imported PDF annotation references another page; page replacement was refused.');
+      }
+      // /P is optional. Remove the old reference before PDFObjectCopier
+      // traverses it, then register the copied annotation with the new page.
+      if(oldParent)annotation.delete(parentName);
+      expectedAnnots.push(subtype);
+    }
   }
   const destinationKey=PDFName.of('Dest');
   const actionKey=PDFName.of('A');
@@ -218,6 +257,19 @@ export async function replacePdfPage(
     }
   }
   const [copied]=await target.copyPages(incoming,[from]);
+  const copiedAnnots=copied.node.lookupMaybe(annotsName,PDFArray);
+  if(expectedAnnots.length && copiedAnnots?.size()!==expectedAnnots.length){
+    throw new Error('PDF annotation copy did not preserve all annotation objects; no edit was committed.');
+  }
+  if(copiedAnnots){
+    for(let index=0;index<copiedAnnots.size();index++){
+      const annotation=target.context.lookup(copiedAnnots.get(index),PDFDict);
+      if(annotation.get(PDFName.of('Subtype'))?.toString()!==expectedAnnots[index]){
+        throw new Error('Imported annotation subtype changed while copying; no edit was committed.');
+      }
+      annotation.set(parentName,copied.ref);
+    }
+  }
   target.removePage(at);
   target.insertPage(at,copied);
   const output=Uint8Array.from(await target.save({useObjectStreams:false}));
@@ -227,6 +279,17 @@ export async function replacePdfPage(
   const reopened=await load(output);
   if(reopened.getPageCount()!==target.getPageCount()){
     throw new Error('Page replacement changed PDF page count unexpectedly; the working copy was not updated.');
+  }
+  const reopenedAnnots=reopened.getPage(at).node.lookupMaybe(annotsName,PDFArray);
+  if((reopenedAnnots?.size()??0)!==expectedAnnots.length){
+    throw new Error('Saved replacement PDF lost annotations during independent reopen; no edit was committed.');
+  }
+  for(let index=0;index<expectedAnnots.length;index++){
+    const annotation=reopened.context.lookup(reopenedAnnots!.get(index),PDFDict);
+    if(annotation.get(PDFName.of('Subtype'))?.toString()!==expectedAnnots[index] ||
+       annotation.get(parentName)?.toString()!==reopened.getPage(at).ref.toString()){
+      throw new Error('Saved imported annotation failed parent-page integrity validation; no edit was committed.');
+    }
   }
   return output;
 }

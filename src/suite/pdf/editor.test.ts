@@ -94,6 +94,63 @@ describe('PDF mutation core',()=>{
     await expect(replacePdfPage(unchanged,new Uint8Array([0,1,2,3]),2)).rejects.toThrow();
   });
 
+  it('imports standalone annotated page with real Text and Highlight annotations, parent refs and appearances intact',async()=>{
+    const incoming=await PDFDocument.create();
+    const page=incoming.addPage([700,700]);
+    page.drawText('STATIC ANNOTATION IMPORT',{x:44,y:630,size:20});
+    const text=incoming.context.register(incoming.context.obj({
+      Type:PDFName.of('Annot'),Subtype:PDFName.of('Text'),Rect:[10,20,60,70],
+      Contents:PDFHexString.fromText('Review note'),P:page.ref,
+    }));
+    const highlight=incoming.context.register(incoming.context.obj({
+      Type:PDFName.of('Annot'),Subtype:PDFName.of('Highlight'),
+      Rect:[90,100,190,130],QuadPoints:[90,130,190,130,90,100,190,100],
+      Contents:PDFHexString.fromText('Important'),P:page.ref,
+    }));
+    page.node.set(PDFName.of('Annots'),incoming.context.obj([text,highlight]));
+    const incomingBytes=Uint8Array.from(await incoming.save({useObjectStreams:false}));
+    const original=await sample(2);
+    const output=await replacePdfPage(original,incomingBytes,2);
+    const verified=await PDFDocument.load(output,{updateMetadata:false});
+    expect(verified.getPageCount()).toBe(2);
+    expect(verified.getPages().map(p=>p.getWidth())).toEqual([300,700]);
+    const annots=verified.getPage(1).node.lookup(PDFName.of('Annots'),PDFArray);
+    expect(annots.size()).toBe(2);
+    for(const [index,subtype] of ['/Text','/Highlight'].entries()){
+      const dict=verified.context.lookup(annots.get(index),PDFDict);
+      expect(dict.get(PDFName.of('Subtype'))?.toString()).toBe(subtype);
+      expect(dict.get(PDFName.of('P'))?.toString()).toBe(verified.getPage(1).ref.toString());
+    }
+    expect((await PDFDocument.load(incomingBytes)).getPageCount()).toBe(1);
+    expect((await PDFDocument.load(original)).getPages().map(p=>p.getWidth())).toEqual([300,301]);
+  });
+
+  it('refuses unsafe imported links, chained annotation replies, and tagged source pages',async()=>{
+    const target=await sample(2);
+    const unsafe=await PDFDocument.create();
+    const page=unsafe.addPage([400,500]);
+    const link=unsafe.context.register(unsafe.context.obj({
+      Type:PDFName.of('Annot'),Subtype:PDFName.of('Link'),Rect:[5,5,50,30],
+      Dest:unsafe.context.obj([page.ref,PDFName.of('Fit')]),
+    }));
+    page.node.set(PDFName.of('Annots'),unsafe.context.obj([link]));
+    await expect(replacePdfPage(target,Uint8Array.from(await unsafe.save()),1))
+      .rejects.toThrow(/annotations or widgets/);
+    const replies=await PDFDocument.create();
+    const replyPage=replies.addPage([400,500]);
+    const reply=replies.context.register(replies.context.obj({
+      Type:PDFName.of('Annot'),Subtype:PDFName.of('Text'),Rect:[5,5,50,30],
+      IRT:replyPage.ref,
+    }));
+    replyPage.node.set(PDFName.of('Annots'),replies.context.obj([reply]));
+    await expect(replacePdfPage(target,Uint8Array.from(await replies.save()),1))
+      .rejects.toThrow(/annotations or widgets/);
+    const tagged=await PDFDocument.create();
+    tagged.addPage([400,500]).node.set(PDFName.of('StructParents'),PDFNumber.of(0));
+    await expect(replacePdfPage(target,Uint8Array.from(await tagged.save()),1))
+      .rejects.toThrow(/tagged accessibility/);
+  });
+
   it('rejects replacement when live signing, bookmarks, form widgets or internal links could be lost',async()=>{
     const incoming=await sample(1);
     const signed=await PDFDocument.load(await sample(2));
@@ -111,7 +168,7 @@ describe('PDF mutation core',()=>{
       .rejects.toThrow(/form fields/);
     const annotations=await PDFDocument.load(await sample(1));
     const note=annotations.context.register(annotations.context.obj({
-      Type:PDFName.of('Annot'),Subtype:PDFName.of('Text'),Rect:[1,1,20,20],
+      Type:PDFName.of('Annot'),Subtype:PDFName.of('Widget'),Rect:[1,1,20,20],
     }));
     annotations.getPage(0).node.set(PDFName.of('Annots'),annotations.context.obj([note]));
     await expect(replacePdfPage(await sample(2),Uint8Array.from(await annotations.save()),1))
