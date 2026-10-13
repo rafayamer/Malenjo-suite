@@ -3,7 +3,7 @@ import {spawn} from 'node:child_process';
 import {mkdtempSync,readFileSync,mkdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
-import {PDFDocument,PDFName,StandardFonts} from 'pdf-lib';
+import {PDFArray,PDFDict,PDFDocument,PDFHexString,PDFName,StandardFonts} from 'pdf-lib';
 import {zipSync,strToU8,strFromU8,unzipSync} from 'fflate';
 import {chromium} from 'playwright';
 const root=resolve(import.meta.dirname,'..');
@@ -1101,6 +1101,44 @@ async function main(){
     (await PDFDocument.load(source)).getPage(0).getWidth()===500,
     'Replace-page Redo damaged page order or modified the source bytes');
   console.log('PHASE2 real PDF page replacement, independent Save/Undo/Redo reopen and original preservation: PASS');
+  // Portable visual annotations must survive the REAL Organize picker,
+  // confirmation, working preview and independently reopened download.
+  const annotationImport=await PDFDocument.create();
+  const importedPage=annotationImport.addPage([690,720]);
+  importedPage.drawText('ANNOTATED REPLACEMENT',{x:44,y:610,size:18});
+  const importedNote=annotationImport.context.register(annotationImport.context.obj({
+    Type:PDFName.of('Annot'),Subtype:PDFName.of('Text'),Rect:[35,35,65,65],
+    Contents:PDFHexString.fromText('Preserved visual annotation'),P:importedPage.ref,
+  }));
+  importedPage.node.set(PDFName.of('Annots'),annotationImport.context.obj([importedNote]));
+  const annotatedBytes=Buffer.from(await annotationImport.save({useObjectStreams:false}));
+  const annotatedChooserWait=page.waitForEvent('filechooser',{timeout:15000});
+  await replacementButton.click();
+  const annotatedChooser=await annotatedChooserWait;
+  page.once('dialog',async dialog=>{await dialog.accept();});
+  await annotatedChooser.setFiles({
+    name:'annotated-import.pdf',mimeType:'application/pdf',buffer:annotatedBytes,
+  });
+  await page.waitForFunction(()=>[...document.querySelectorAll('.document-session-panel.active .pdf-notice')]
+    .some(item=>item.textContent?.includes('Replaced page 1 with page 1 from annotated-import.pdf')),null,{timeout:30000});
+  const annotatedWait=page.waitForEvent('download',{timeout:30000});
+  await saveQuick.click();
+  const annotatedDownload=await annotatedWait;
+  const annotatedPath=join(mkdtempSync(join(tmpdir(),'malenjo-annotated-import-')),'annotated.pdf');
+  await annotatedDownload.saveAs(annotatedPath);
+  const annotatedReopened=await PDFDocument.load(readFileSync(annotatedPath));
+  const reopenedAnnotationArray=annotatedReopened.getPage(0).node.lookup(PDFName.of('Annots'),PDFArray);
+  requireEvidence(reopenedAnnotationArray.size()===1,
+    'Annotated page replacement lost a real imported annotation');
+  const reopenedNote=annotatedReopened.context.lookup(reopenedAnnotationArray.get(0),PDFDict);
+  requireEvidence(reopenedNote.get(PDFName.of('Subtype'))?.toString()==='/Text' &&
+    reopenedNote.get(PDFName.of('P'))?.toString()===annotatedReopened.getPage(0).ref.toString(),
+    'Imported PDF annotation lost its subtype or page reference on independent reopen');
+  await undoQuick.click();
+  await page.waitForFunction(()=>[...document.querySelectorAll('.document-session-panel.active .pdf-notice')]
+    .some(item=>item.textContent?.includes('Undid: Replaced page 1 with page 1 from annotated-import.pdf')),null,{timeout:30000});
+  console.log('PHASE2 portable annotated PDF replacement from real file picker and reopened PDF: PASS');
+
   // Owner UAT follow-up: visibly select a page, draw a crop in the live
   // canvas with measured margins, apply, export/reopen, and Undo the crop.
   const targetPicker=activePdf.getByRole('spinbutton',{name:'Page number to edit'});
