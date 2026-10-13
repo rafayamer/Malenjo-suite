@@ -25,6 +25,57 @@ describe('PDF mutation core',()=>{
     await expect(deletePdfPage(await sample(1),1)).rejects.toThrow(/at least one page/i);
   });
 
+  it('deletes only selected ordinary pages while retaining original catalog, metadata and surviving refs',async()=>{
+    const pdf=await PDFDocument.create();
+    pdf.setTitle('Owner PDF');
+    for(let i=0;i<4;i++)pdf.addPage([400+i,600+i]);
+    const originalBytes=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    const original=await PDFDocument.load(originalBytes,{updateMetadata:false});
+    const refs=original.getPages().map(page=>page.ref.toString());
+    const output=await deletePdfPages(originalBytes,[2,4]);
+    const reopened=await PDFDocument.load(output,{updateMetadata:false});
+    expect(reopened.getPageCount()).toBe(2);
+    expect(reopened.getPages().map(page=>page.getWidth())).toEqual([400,402]);
+    expect(reopened.getPages().map(page=>page.ref.toString())).toEqual([refs[0],refs[2]]);
+    expect(reopened.getTitle()).toBe('Owner PDF');
+    expect((await PDFDocument.load(originalBytes)).getPageCount()).toBe(4);
+  });
+
+  it('fails closed on deletion of referenced, form, tagged or certified PDFs',async()=>{
+    const plain=await sample(2);
+    const linkSource=await PDFDocument.load(plain);
+    const dest=linkSource.getPage(1);
+    const link=linkSource.context.register(linkSource.context.obj({
+      Type:PDFName.of('Annot'),Subtype:PDFName.of('Link'),Rect:[1,1,30,30],
+      Dest:linkSource.context.obj([dest.ref,PDFName.of('Fit')]),
+    }));
+    linkSource.getPage(0).node.set(PDFName.of('Annots'),linkSource.context.obj([link]));
+    const linked=Uint8Array.from(await linkSource.save({useObjectStreams:false}));
+    await expect(deletePdfPage(linked,2)).rejects.toThrow(/internal navigation/i);
+    await expect(deletePdfPages(linked,[2])).rejects.toThrow(/internal navigation/i);
+    expect((await PDFDocument.load(linked)).getPageCount()).toBe(2);
+
+    const form=await PDFDocument.load(plain);
+    form.getForm().createTextField('protected').addToPage(form.getPage(0));
+    await expect(deletePdfPage(Uint8Array.from(await form.save()),2))
+      .rejects.toThrow(/signatures, forms/i);
+
+    const outline=await PDFDocument.load(plain);
+    outline.catalog.set(PDFName.of('Outlines'),outline.context.obj({Type:PDFName.of('Outlines'),Count:0}));
+    await expect(deletePdfPage(Uint8Array.from(await outline.save()),2))
+      .rejects.toThrow(/bookmarks/i);
+
+    const tagged=await PDFDocument.load(plain);
+    tagged.catalog.set(PDFName.of('StructTreeRoot'),tagged.context.obj({Type:PDFName.of('StructTreeRoot')}));
+    await expect(deletePdfPage(Uint8Array.from(await tagged.save()),2))
+      .rejects.toThrow(/tagged content/i);
+
+    const certified=await PDFDocument.load(plain);
+    certified.catalog.set(PDFName.of('Perms'),certified.context.obj({DocMDP:{Type:PDFName.of('Sig')}}));
+    await expect(deletePdfPage(Uint8Array.from(await certified.save()),2))
+      .rejects.toThrow(/signatures/i);
+  });
+
   it('duplicates, extracts, appends and inserts blank pages',async()=>{
     const bytes=await sample(2);
     expect(await count(await duplicatePdfPage(bytes,1))).toBe(3);
