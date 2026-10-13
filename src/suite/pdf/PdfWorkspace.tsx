@@ -677,11 +677,32 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setCurrentPage(page);
   }, []);
 
+  const endCropPreview=()=>{
+    setCropMode(false);
+    setCropTargetPage(null);
+    setCropGeometry(null);
+  };
   const chooseEditPage=(page:number)=>{
     const selected=clampPdfPage(page,pageCount);
+    if(cropMode&&cropTargetPage!==selected)endCropPreview();
     selectionAnchorRef.current=selected;
     setSelectedPages(new Set([selected]));
     goToPage(selected,true);
+  };
+  const startCropOnPage=(page:number)=>{
+    const target=clampPdfPage(page,pageCount);
+    chooseEditPage(target);
+    setCropTargetPage(target);
+    // Never reuse the margin values from another page or another edit.
+    setPageBoxDraft({scope:'selected',box:'crop',top:0,right:0,bottom:0,left:0});
+    setCropMode(true);
+    configureProperties();
+  };
+  const beginReplacePage=(page:number)=>{
+    if(!sourceBytes||mutating||loading||page<1||page>pageCount)return;
+    chooseEditPage(page);
+    replaceTargetPageRef.current=page;
+    replaceInputRef.current?.click();
   };
 
   function selectThumbnail(page:number,additive:boolean,range:boolean){
@@ -793,17 +814,22 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }
   }
 
-  async function removeSelectedPagesSafely():Promise<void>{
-    if(!sourceBytes||operationPages.length>=pageCount||mutating)return;
-    const label='Delete '+(operationPages.length===1?'page ':'pages ')+operationPages.join(', ')+'?';
-    if(!window.confirm(label+'\n\nOnly the MALENJO working copy changes. Your original PDF file stays untouched. You can Undo before exporting.'))return;
+  async function removePagesSafely(pages:number[]):Promise<void>{
+    const targets=[...new Set(pages)].sort((a,b)=>a-b);
+    if(!sourceBytes||mutating||loading||!targets.length||targets.length>=pageCount||
+      targets.some(page=>!Number.isInteger(page)||page<1||page>pageCount))return;
+    const label='Delete '+(targets.length===1?'page ':'pages ')+targets.join(', ')+'?';
+    if(!window.confirm(label+'\n\nOnly the working PDF changes. Your original file remains untouched, and Undo can restore the pages.'))return;
     await mutateAction(
-      'Removed '+operationPages.length+' page(s) from the working copy.',
-      bytes=>operationPages.length===1
-        ?deletePdfPage(bytes,operationPages[0])
-        :deletePdfPages(bytes,operationPages),
-      Math.max(1,Math.min(operationPages[0],pageCount-operationPages.length)),
+      'Removed '+targets.length+' page(s) from the working copy.',
+      bytes=>targets.length===1
+        ?deletePdfPage(bytes,targets[0])
+        :deletePdfPages(bytes,targets),
+      Math.max(1,Math.min(targets[0],pageCount-targets.length)),
     );
+  }
+  async function removeSelectedPagesSafely():Promise<void>{
+    await removePagesSafely(operationPages);
   }
 
   async function mutateAction(
@@ -836,12 +862,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   async function replaceSelectedPdfPage(event:React.ChangeEvent<HTMLInputElement>){
     const file=event.target.files?.[0];
     event.target.value='';
-    if(!file || !sourceBytes || mutating || loading || operationPages.length!==1)return;
+    const targetPage=replaceTargetPageRef.current;
+    replaceTargetPageRef.current=null;
+    if(!file||!sourceBytes||mutating||loading||targetPage===null||targetPage<1||targetPage>pageCount)return;
     if(file.size<1 || file.size>32*1024*1024){
       setError('Replacement PDF must be nonempty and no larger than 32 MB.');
       return;
     }
-    const targetPage=operationPages[0];
     if(!window.confirm(
       `Replace page ${targetPage} with page 1 of "${file.name}"?\n\n`+
       'The original file is unchanged. MALENJO will keep the edit in this tab with Undo available; incompatible signed/form/bookmark documents are safely rejected.'
