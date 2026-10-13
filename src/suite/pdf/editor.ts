@@ -41,19 +41,50 @@ export async function duplicatePdfPage(bytes:Uint8Array,pageNumber:number):Promi
   return Uint8Array.from(await output.save({useObjectStreams:false}));
 }
 
+/**
+ * Move an existing page *within its original PDF*, keeping the exact page
+ * indirect reference instead of copying pages into a new empty PDF. This
+ * preserves catalog metadata, outlines, internal GoTo destinations, AcroForm
+ * widget registrations and page annotations referring to that same ref.
+ * Certified/signed documents and XFA are not safe to rewrite with pdf-lib.
+ */
 export async function movePdfPage(bytes:Uint8Array,pageNumber:number,targetPageNumber:number):Promise<Uint8Array>{
   const source=await load(bytes);
   const pageCount=source.getPageCount();
   const from=requirePage(pageNumber,pageCount);
   const to=requirePage(targetPageNumber,pageCount);
   if(from===to)return Uint8Array.from(bytes);
-  const order=Array.from({length:pageCount},(_,i)=>i);
-  const [moved]=order.splice(from,1);
-  order.splice(to,0,moved);
-  const output=await PDFDocument.create();
-  const copied=await output.copyPages(source,order);
-  copied.forEach(page=>output.addPage(page));
-  return Uint8Array.from(await output.save({useObjectStreams:false}));
+  if(source.catalog.has(PDFName.of('Perms'))){
+    throw new Error('Moving pages in certified or usage-rights PDFs is unavailable because saving would invalidate protections.');
+  }
+  const acroForm=source.catalog.lookupMaybe(PDFName.of('AcroForm'),PDFDict);
+  if(acroForm?.has(PDFName.of('XFA'))){
+    throw new Error('Moving pages in XFA/hybrid form PDFs is unavailable until their live structure can be preserved.');
+  }
+  if(acroForm && source.getForm().getFields().some(field=>field instanceof PDFSignature)){
+    throw new Error('Moving pages in a signed PDF is unavailable because saving would invalidate signatures.');
+  }
+
+  // Both removePage and insertPage mutate only the original Pages tree.
+  // The existing page's indirect reference stays the same and so do all
+  // document-wide objects that refer to it (outlines, destinations, widgets).
+  const originalRefs=source.getPages().map(page=>page.ref.toString());
+  const expectedRefs=[...originalRefs];
+  const [movedRef]=expectedRefs.splice(from,1);
+  expectedRefs.splice(to,0,movedRef);
+  const movedPage=source.getPage(from);
+  source.removePage(from);
+  source.insertPage(to,movedPage);
+  const output=Uint8Array.from(await source.save({
+    useObjectStreams:false,
+    updateFieldAppearances:false,
+  }));
+  const verified=await load(output);
+  if(verified.getPageCount()!==pageCount ||
+     verified.getPages().some((page,index)=>page.ref.toString()!==expectedRefs[index])){
+    throw new Error('The reordered PDF failed page-reference integrity verification; no edit was committed.');
+  }
+  return output;
 }
 
 export async function extractPdfPage(bytes:Uint8Array,pageNumber:number):Promise<Uint8Array>{

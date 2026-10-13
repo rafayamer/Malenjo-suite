@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PDFArray, PDFBool, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber } from 'pdf-lib';
+import {addPdfTopLevelBookmark,listPdfTopLevelBookmarks} from './bookmarkEditor';
 import {
   addPdfBatesNumbers, addPdfCheckBox, addPdfCommentAnnotation, addPdfDropdown, addPdfHeaderFooter,
   addPdfOptionList, addPdfRadioGroup, addPdfRectangleOverlay, addPdfTextField, addPdfTextOverlay, appendPdf,
@@ -141,6 +142,52 @@ describe('PDF mutation core',()=>{
     const result=await PDFDocument.load(moved);
     expect(result.getPages().map(page=>page.getWidth())).toEqual([300,303,301,302]);
     expect((await PDFDocument.load(original)).getPages().map(page=>page.getWidth())).toEqual([300,301,302,303]);
+  });
+
+  it('reorders without discarding metadata, real bookmark, form widgets or internal page links',async()=>{
+    const pdf=await PDFDocument.create();
+    const pages=[pdf.addPage([401,600]),pdf.addPage([402,600]),pdf.addPage([403,600])];
+    pdf.setTitle('MALENJO integrity test');
+    pdf.setAuthor('Page move regression');
+    const textField=pdf.getForm().createTextField('Owner.reference');
+    textField.setText('persistent');
+    textField.addToPage(pages[2],{x:40,y:520,width:180,height:26});
+    const link=pdf.context.register(pdf.context.obj({
+      Type:PDFName.of('Annot'),Subtype:PDFName.of('Link'),
+      Rect:[20,20,110,40],
+      Dest:pdf.context.obj([pages[2].ref,PDFName.of('Fit')]),
+    }));
+    pages[0].node.set(PDFName.of('Annots'),pdf.context.obj([link]));
+    let source:Uint8Array=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    source=await addPdfTopLevelBookmark(source,'Keep target page',3);
+    const original=await PDFDocument.load(source,{updateMetadata:false});
+    const pageRefs=original.getPages().map(p=>p.ref.toString());
+    const movedBytes=await movePdfPage(source,3,1);
+    const reopened=await PDFDocument.load(movedBytes,{updateMetadata:false});
+    expect(reopened.getPages().map(p=>p.getWidth())).toEqual([403,401,402]);
+    expect(reopened.getPages().map(p=>p.ref.toString())).toEqual([pageRefs[2],pageRefs[0],pageRefs[1]]);
+    expect(reopened.getTitle()).toBe('MALENJO integrity test');
+    expect(reopened.getAuthor()).toBe('Page move regression');
+    expect(reopened.getForm().getTextField('Owner.reference').getText()).toBe('persistent');
+    expect(reopened.getPage(0).node.lookupMaybe(PDFName.of('Annots'),PDFArray)?.size()).toBeGreaterThan(0);
+    const sourceLink=reopened.getPage(1).node.lookup(PDFName.of('Annots'),PDFArray);
+    const linkDict=reopened.context.lookup(sourceLink.get(0),PDFDict);
+    const destination=linkDict.lookup(PDFName.of('Dest'),PDFArray);
+    expect(destination.get(0).toString()).toBe(pageRefs[2]);
+    expect((await listPdfTopLevelBookmarks(movedBytes)).map(item=>item.title)).toEqual(['Keep target page']);
+    expect((await PDFDocument.load(source)).getPages().map(p=>p.getWidth())).toEqual([401,402,403]);
+  });
+
+  it('refuses moving certified and XFA forms without changing the source',async()=>{
+    const certified=await PDFDocument.load(await sample(2));
+    certified.catalog.set(PDFName.of('Perms'),certified.context.obj({DocMDP:{Type:PDFName.of('Sig')}}));
+    const bytes=Uint8Array.from(await certified.save({useObjectStreams:false}));
+    await expect(movePdfPage(bytes,1,2)).rejects.toThrow(/certified|usage-rights/i);
+    expect((await PDFDocument.load(bytes)).getPage(0).getWidth()).toBe(300);
+    const xfa=await PDFDocument.load(await sample(2));
+    xfa.getForm().acroForm.dict.set(PDFName.of('XFA'),PDFHexString.fromText('<xfa/>'));
+    await expect(movePdfPage(Uint8Array.from(await xfa.save({useObjectStreams:false})),1,2))
+      .rejects.toThrow(/XFA\/hybrid/);
   });
 
   it('moves pages and permanently rotates a page',async()=>{
