@@ -72,6 +72,16 @@ describe('PDF history',()=>{
     }
   });
 
+  it('reuses immutable previous snapshots instead of copying all retained PDFs',()=>{
+    let history=createPdfHistory(bytes(1,2,3));
+    const initial=history.entries[0].bytes;
+    history=recordPdfHistory(history,bytes(4,5),1,'A');
+    const firstEdit=history.entries[1].bytes;
+    history=recordPdfHistory(history,bytes(6,7),1,'B');
+    expect(history.entries[0].bytes).toBe(initial);
+    expect(history.entries[1].bytes).toBe(firstEdit);
+  });
+
   it('does not alter owned history when caller changes its input buffer',()=>{
     const input=bytes(2,3,4);
     let history=createPdfHistory(input);
