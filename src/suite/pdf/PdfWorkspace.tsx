@@ -262,6 +262,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [firstPageMs, setFirstPageMs] = useState<number | null>(null);
   const [forceRenderAll, setForceRenderAll] = useState(false);
   const [renderedPages, setRenderedPages] = useState<Set<number>>(() => new Set());
+  // Noncritical PDF inspection is deliberately started AFTER the first canvas
+  // has painted. Parsing forms/bookmarks/links/reviews on the main thread while
+  // PDF.js renders page 1 made image-heavy PDFs appear to hang in Codespaces.
+  const [inspectionReadySource, setInspectionReadySource] = useState<Uint8Array|null>(null);
   const [viewport, setViewport] = useState({ width: 900, height: 700 });
   const [historyRevision, setHistoryRevision] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
@@ -441,7 +445,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     loadStartedRef.current = performance.now();
 
     try {
-      const owned = input instanceof Uint8Array ? Uint8Array.from(input) : new Uint8Array(input.slice(0));
+      // File.arrayBuffer() already gives this reader an exclusive new buffer.
+      // Keep that buffer instead of immediately copying up to 32 MB again;
+      // Uint8Array inputs (including Undo/Redo) still receive an owned copy.
+      // loadPdfBytes() clones separately for PDF.js worker transfer.
+      const owned = input instanceof Uint8Array ? Uint8Array.from(input) : new Uint8Array(input);
       const result = await loadPdfBytes(owned);
       if (requestId !== requestIdRef.current) {
         await disposePdf(result);
@@ -509,24 +517,32 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         setError('Browser PDF must be nonempty and no larger than 32 MB.');
         return;
       }
+      setLoading(true);
       void file.arrayBuffer()
         .then((bytes) => {
           if (!cancelled) return installPdf(bytes, document.name, file);
         })
         .catch((reason) => {
-          if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason));
+          if (!cancelled) {
+            setError(reason instanceof Error ? reason.message : String(reason));
+            setLoading(false);
+          }
         });
       return () => { cancelled = true; };
     }
 
     if (!isDesktopRuntime()) return;
 
+    setLoading(true);
     void readPdfDocumentBytes(document.id)
       .then((bytes) => {
         if (!cancelled) return installPdf(bytes, document.name);
       })
       .catch((reason) => {
-        if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason));
+        if (!cancelled) {
+          setError(reason instanceof Error ? reason.message : String(reason));
+          setLoading(false);
+        }
       });
 
     return () => { cancelled = true; };
@@ -553,6 +569,35 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     imagesAbortRef.current?.abort();
     void disposePdf(activeLoadRef.current);
   }, []);
+
+  // Protect first-page interactive paint from heavyweight PDF-lib metadata
+  // traversal. A newly opened/edited PDF schedules secondary inspection after
+  // a browser rendering opportunity and an idle turn. The identity check
+  // ensures stale inspection never applies to a replacement or Undo/Redo.
+  const firstPdfPagePainted = renderedPages.size > 0;
+  useEffect(()=>{
+    setInspectionReadySource(null);
+    if(!sourceBytes || !firstPdfPagePainted)return;
+    let cancelled=false;
+    let idleId:number|null=null;
+    const timer=window.setTimeout(()=>{
+      if(cancelled)return;
+      if(typeof window.requestIdleCallback==='function'){
+        idleId=window.requestIdleCallback(()=>{
+          if(!cancelled)setInspectionReadySource(sourceBytes);
+        },{timeout:1500});
+      }else{
+        setInspectionReadySource(sourceBytes);
+      }
+    },150);
+    return ()=>{
+      cancelled=true;
+      window.clearTimeout(timer);
+      if(idleId!==null)window.cancelIdleCallback(idleId);
+    };
+  },[sourceBytes,firstPdfPagePainted]);
+  const deferredInspectionBytes=sourceBytes&&inspectionReadySource===sourceBytes
+    ? sourceBytes : null;
 
   useEffect(() => {
     const node = scrollRef.current;
@@ -834,9 +879,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setFormFillTouched(new Set());
     setFormInspectedSource(null);
     setManagedFormField(null);
-    if(!sourceBytes)return;
+    if(!deferredInspectionBytes)return;
 
-    const inspectedBytes=sourceBytes;
+    const inspectedBytes=deferredInspectionBytes;
     let cancelled=false;
     void inspectPdfFormFields(inspectedBytes)
       .then((fields)=>{
@@ -861,7 +906,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         setFormInspectedSource(null);
       });
     return()=>{cancelled=true;};
-  },[sourceBytes]);
+  },[deferredInspectionBytes]);
 
   const fillableFormFields=(formInspectedSource===sourceBytes?formFields:[]).filter((field)=>
     !field.readOnly
@@ -897,7 +942,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setReviewReply(null);
     setReviewEdit(null);
     setReviewAnnotations([]);
-    if(!sourceBytes){
+    if(!deferredInspectionBytes){
       setReviewAnnotations([]);
       setReviewFailure('');
       setReviewLoading(false);
@@ -906,7 +951,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     let cancelled=false;
     setReviewLoading(true);
     setReviewFailure('');
-    void listPdfReviewAnnotations(sourceBytes)
+    void listPdfReviewAnnotations(deferredInspectionBytes)
       .then(items=>{if(!cancelled)setReviewAnnotations(items);})
       .catch(reason=>{
         if(!cancelled){
@@ -916,12 +961,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       })
       .finally(()=>{if(!cancelled)setReviewLoading(false);});
     return ()=>{cancelled=true;};
-  },[sourceBytes]);
+  },[deferredInspectionBytes]);
 
   useEffect(()=>{
     setOptionalLayers(null);
     setLayersError('');
-    if(!pdf){setLayersLoading(false);return;}
+    if(!pdf || !deferredInspectionBytes){setLayersLoading(false);return;}
     let cancelled=false;
     const activeDocument=pdf.document;
     setLayersLoading(true);
@@ -938,7 +983,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       })
       .finally(()=>{if(!cancelled)setLayersLoading(false);});
     return()=>{cancelled=true;};
-  },[pdf]);
+  },[pdf,deferredInspectionBytes]);
 
   const currentLayers=optionalLayers?.document===pdf?.document?optionalLayers:null;
 
@@ -966,7 +1011,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   }
 
   useEffect(()=>{
-    if(!pdf){
+    if(!pdf || !deferredInspectionBytes){
       setPdfOutline({entries:[],truncated:false});
       setPdfAttachments({entries:[],truncated:false});
       setNavigatorLoading(false);
@@ -998,19 +1043,19 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       })
       .finally(()=>{if(!cancelled)setNavigatorLoading(false);});
     return ()=>{cancelled=true;};
-  },[pdf]);
+  },[pdf,deferredInspectionBytes]);
 
   useEffect(()=>{
     // Never leave actionable bookmark refs/drafts from a previous PDF available
     // while asynchronously inspecting a newly opened or edited working copy.
     setEditableBookmarks([]);
     setBookmarkEdit(null);
-    if(!sourceBytes){
+    if(!deferredInspectionBytes){
       setBookmarkEditError('');
       return;
     }
     let cancelled=false;
-    void listPdfTopLevelBookmarks(sourceBytes)
+    void listPdfTopLevelBookmarks(deferredInspectionBytes)
       .then(items=>{if(!cancelled){setEditableBookmarks(items);setBookmarkEditError('');}})
       .catch(reason=>{
         if(!cancelled){
@@ -1019,7 +1064,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         }
       });
     return ()=>{cancelled=true;};
-  },[sourceBytes]);
+  },[deferredInspectionBytes]);
 
   async function addCurrentPageBookmark(){
     const title=bookmarkTitle;
@@ -1056,17 +1101,17 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setPdfLinks([]);
     setLinkEdit(null);
     setLinksError('');
-    if(!sourceBytes){setLinksLoading(false);return;}
+    if(!deferredInspectionBytes){setLinksLoading(false);return;}
     let cancelled=false;
     setLinksLoading(true);
-    void listPdfLinkAnnotations(sourceBytes)
+    void listPdfLinkAnnotations(deferredInspectionBytes)
       .then(items=>{if(!cancelled)setPdfLinks(items);})
       .catch(reason=>{
         if(!cancelled)setLinksError(reason instanceof Error?reason.message:String(reason));
       })
       .finally(()=>{if(!cancelled)setLinksLoading(false);});
     return()=>{cancelled=true;};
-  },[sourceBytes]);
+  },[deferredInspectionBytes]);
 
   function linkTarget(kind:PdfLinkTarget['kind'],page:number,url:string):PdfLinkTarget{
     return kind==='page'?{kind,pageNumber:page}:{kind,url};
@@ -1403,14 +1448,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   }
 
   useEffect(()=>{
-    if(!sourceBytes){
+    if(!deferredInspectionBytes){
       setPageLabelRanges([]);
       setPageLabelError('');
       return;
     }
     let cancelled=false;
     setPageLabelRanges([]);
-    void listPdfPageLabelRanges(sourceBytes)
+    void listPdfPageLabelRanges(deferredInspectionBytes)
       .then(ranges=>{if(!cancelled){setPageLabelRanges(ranges);setPageLabelError('');}})
       .catch(reason=>{
         if(!cancelled){
@@ -1419,7 +1464,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         }
       });
     return ()=>{cancelled=true;};
-  },[sourceBytes]);
+  },[deferredInspectionBytes]);
 
   useEffect(()=>{
     if(!pdf){setLogicalPageLabels([]);return;}
@@ -2382,7 +2427,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     window.requestAnimationFrame(()=>document.getElementById(`${domIdPrefix}-task-${tab}`)?.focus());
   };
 
-  return <div ref={workspaceRef} className={`pdf-workspace${presentationMode?' presentation-mode':''}`}>
+  return <div ref={workspaceRef} className={`pdf-workspace${presentationMode?' presentation-mode':''}`}
+    data-pdf-first-rendered={firstPdfPagePainted?'true':'false'}
+    data-pdf-secondary-inspection={deferredInspectionBytes?'ready':sourceBytes?'deferred':'unloaded'}>
     <input
       ref={fileInputRef}
       className="visually-hidden"
