@@ -242,6 +242,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [browserFile, setBrowserFile] = useState<File | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
+  const [editPageInput,setEditPageInput]=useState('1');
   const [selectedPages, setSelectedPages] = useState<Set<number>>(() => new Set([1]));
   const [fitMode, setFitMode] = useState<PdfFitMode>('width');
   const [zoom, setZoom] = useState(1);
@@ -733,7 +734,21 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   // Explicit thumbnail selection is authoritative for "selected page"
   // operations, even after the user scrolls or searches to another page.
   const operationPages=selectedPageNumbers.length?selectedPageNumbers:[currentPage];
-
+  const singleEditTarget=operationPages.length===1?operationPages[0]:null;
+  useEffect(()=>{
+    setEditPageInput(singleEditTarget===null?'':String(singleEditTarget));
+  },[singleEditTarget]);
+  const commitEditPageInput=(entered:string)=>{
+    const page=Number(entered);
+    if(!Number.isSafeInteger(page)||page<1||page>pageCount){
+      setError(`Choose a page number between 1 and ${pageCount}.`);
+      setEditPageInput(singleEditTarget===null?'':String(singleEditTarget));
+      return;
+    }
+    setError('');
+    chooseEditPage(page);
+    setEditPageInput(String(page));
+  };
 
   const onPageRendered = useCallback((page: number) => {
     setRenderedPages((current) => {
@@ -2634,16 +2649,32 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       </div>
 
       {masterTab==='organize'&&pdf&&<section className="pdf-organize-page-picker" aria-label="Choose pages to edit"
-        style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',flexWrap:'wrap',borderBottom:'1px solid var(--border, #d1d5db)'}}>
-        <strong>1. Choose page</strong>
-        <label>Page number <input type="number" min={1} max={pageCount} step={1}
-          aria-label="Page number to edit" style={{width:72,marginLeft:6}}
-          value={operationPages.length===1?operationPages[0]:currentPage}
-          onChange={event=>{if(event.target.value)chooseEditPage(Number(event.target.value));}}/></label>
-        <button type="button" onClick={()=>chooseEditPage(currentPage)} disabled={operationPages.length===1&&operationPages[0]===currentPage}>Use page on screen</button>
-        <button type="button" onClick={()=>openLeftPanel('pages')}>Choose multiple in Pages panel</button>
-        <span role="status">Editing {operationPages.length===1?`page ${operationPages[0]}`:`${operationPages.length} pages: ${operationPages.join(', ')}`}</span>
-        <small>2. Select Delete, Replace or Crop below. Undo returns to the previous edited version.</small>
+        style={{display:'flex',alignItems:'center',gap:12,padding:'10px 14px',flexWrap:'wrap',borderBottom:'1px solid var(--border, #d1d5db)'}}>
+        <strong>Editing {singleEditTarget!==null?`page ${singleEditTarget}`:`${operationPages.length} selected pages`}</strong>
+        <label>Go to page <input type="number" min={1} max={pageCount} step={1}
+          aria-label="Page number to edit" style={{width:76,marginLeft:6}}
+          value={editPageInput}
+          onChange={event=>setEditPageInput(event.target.value)}
+          onBlur={event=>commitEditPageInput(event.currentTarget.value)}
+          onKeyDown={event=>{
+            if(event.key==='Enter'){event.preventDefault();commitEditPageInput(event.currentTarget.value);event.currentTarget.blur();}
+            if(event.key==='Escape'){setEditPageInput(singleEditTarget===null?'':String(singleEditTarget));event.currentTarget.blur();}
+          }}/></label>
+        <button type="button" onClick={()=>chooseEditPage(currentPage)}
+          disabled={singleEditTarget===currentPage}>Edit the page I'm viewing ({currentPage})</button>
+        <button type="button" onClick={()=>openLeftPanel('pages')}>Select pages from thumbnails</button>
+        <div role="group" aria-label="Quick page editing actions" style={{display:'flex',gap:7,flexWrap:'wrap',alignItems:'center'}}>
+          <button type="button" disabled={mutating||loading||singleEditTarget===null}
+            onClick={()=>{if(singleEditTarget!==null)beginReplacePage(singleEditTarget);}}>
+            Replace {singleEditTarget!==null?`page ${singleEditTarget}`:'one page'}…</button>
+          <button type="button" disabled={mutating||loading||singleEditTarget===null}
+            onClick={()=>{if(singleEditTarget!==null)startCropOnPage(singleEditTarget);}}>
+            Crop {singleEditTarget!==null?`page ${singleEditTarget}`:'one page'}…</button>
+          <button type="button" disabled={mutating||loading||operationPages.length>=pageCount}
+            onClick={()=>void removeSelectedPagesSafely()}>
+            Delete {operationPages.length===1?`page ${operationPages[0]}`:`${operationPages.length} pages`}…</button>
+        </div>
+        <small role="note">Select a page on the PDF or in thumbnails. Changes appear in the editor; Undo restores the previous version. Original file is unchanged.</small>
       </section>}
       <div id={`${domIdPrefix}-task-tools`} className="pdf-context-toolbar" role="toolbar" aria-label={`${PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label} PDF tools`}>
         <div className="pdf-task-actions">
