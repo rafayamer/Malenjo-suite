@@ -30,6 +30,7 @@ export type DocumentCommandId =
   | 'pdf-rectangle-add'
   | 'pdf-pages-remove'
   | 'pdf-page-copy'
+  | 'pdf-page-replace'
   | 'pdf-pages-turn'
   | 'pdf-pages-extract'
   | 'pdf-document-split'
