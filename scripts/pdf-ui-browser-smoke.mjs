@@ -513,8 +513,25 @@ async function main(){
   // The PDF viewer starts with no permanent navigation or inspector panes.
   const activePdf=page.locator('.document-session-panel.active');
   await activePdf.locator('.pdf-layout').waitFor({state:'visible',timeout:30000});
-  await activePdf.locator('.pdf-page-shell canvas').first().waitFor({state:'visible',timeout:30000});
-  console.log('PHASE1 measured two-page PDF first canvas: '+(Date.now()-pdfFirstCanvasStarted)+' ms (not a release budget)');
+  // A canvas element may exist long before PDF.js has painted its pixels.
+  // Assert an actual completed page render, not merely that React mounted
+  // the viewer; this is the user-visible open-performance measurement.
+  await page.waitForFunction(()=>{
+    const root=document.querySelector('.document-session-panel.active .pdf-workspace');
+    return root?.getAttribute('data-pdf-first-rendered')==='true' &&
+      (root.querySelector('.pdf-page-shell canvas')?.width??0)>200;
+  },null,{timeout:30000});
+  console.log('PHASE1 measured two-page PDF first painted page: '+(Date.now()-pdfFirstCanvasStarted)+' ms (not a release budget)');
+  // On large files PDF-lib form/annotation/bookmark/link metadata traversals
+  // used to compete with the initial PDF.js canvas. They now start only
+  // after page 1 has painted and the browser has received an idle opportunity.
+  await page.waitForFunction(()=>
+    document.querySelector('.document-session-panel.active .pdf-workspace')
+      ?.getAttribute('data-pdf-secondary-inspection')==='ready',
+    null,{timeout:30000});
+  requireEvidence(await activePdf.locator('.pdf-page-shell canvas').first().isVisible(),
+    'Deferred document inspection removed the readable first page');
+  console.log('PHASE1 first real page painted before optional PDF structure inspection: PASS');
   requireEvidence(await activePdf.locator('.pdf-layout.left-panel-collapsed.inspector-hidden').count()===1 &&
     await activePdf.locator('.pdf-left-shell').isHidden() &&
     await activePdf.locator('.pdf-inspector').count()===0,
