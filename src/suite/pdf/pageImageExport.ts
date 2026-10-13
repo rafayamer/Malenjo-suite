@@ -6,6 +6,54 @@ export const PDF_PAGE_IMAGE_MAX_PIXELS=16_000_000;
 export const PDF_PAGE_IMAGE_MAX_PNG_BYTES=12*1024*1024;
 export const PDF_PAGE_IMAGE_MAX_TOTAL_BYTES=100*1024*1024;
 
+/** Reject truncated or corrupt rendered PNGs instead of packaging them as valid output. */
+const PNG_SIGNATURE=[0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a];
+const PNG_CRC_TABLE=Uint32Array.from({length:256},(_,index)=>{
+  let value=index;
+  for(let bit=0;bit<8;bit++)value=(value>>>1)^((value&1)?0xedb88320:0);
+  return value>>>0;
+});
+function pngU32(bytes:Uint8Array,offset:number):number{
+  return (bytes[offset]*0x1000000+(bytes[offset+1]<<16)+(bytes[offset+2]<<8)+bytes[offset+3])>>>0;
+}
+function pngCrc32(bytes:Uint8Array,start:number,end:number):number{
+  let crc=0xffffffff;
+  for(let i=start;i<end;i++)crc=PNG_CRC_TABLE[(crc^bytes[i])&0xff]^(crc>>>8);
+  return (crc^0xffffffff)>>>0;
+}
+function assertValidRenderedPng(bytes:Uint8Array):void{
+  const invalid=()=>{throw new Error('PDF PNG archive contains an invalid PNG file.');};
+  if(bytes.length<45||PNG_SIGNATURE.some((byte,index)=>bytes[index]!==byte))invalid();
+  let offset=8,chunkCount=0,hasHeader=false,hasData=false,hasEnd=false;
+  while(offset<bytes.length){
+    if(++chunkCount>4096||bytes.length-offset<12)invalid();
+    const length=pngU32(bytes,offset);
+    if(length>bytes.length-offset-12)invalid();
+    const typeOffset=offset+4,dataOffset=offset+8,crcOffset=dataOffset+length;
+    const type=String.fromCharCode(...bytes.subarray(typeOffset,dataOffset));
+    if(!/^[A-Za-z]{4}$/.test(type)||pngCrc32(bytes,typeOffset,crcOffset)!==pngU32(bytes,crcOffset))invalid();
+    if(!hasHeader){
+      if(type!=='IHDR'||length!==13)invalid();
+      const width=pngU32(bytes,dataOffset),height=pngU32(bytes,dataOffset+4);
+      const depth=bytes[dataOffset+8],color=bytes[dataOffset+9];
+      const allowedDepths:Record<number,number[]>={0:[1,2,4,8,16],2:[8,16],3:[1,2,4,8],4:[8,16],6:[8,16]};
+      if(!width||!height||width*height>PDF_PAGE_IMAGE_MAX_PIXELS||
+        !allowedDepths[color]?.includes(depth)||bytes[dataOffset+10]!==0||
+        bytes[dataOffset+11]!==0||bytes[dataOffset+12]>1)invalid();
+      hasHeader=true;
+    }else if(type==='IHDR'||(type[0]===type[0].toUpperCase()&&
+      !['PLTE','IDAT','IEND'].includes(type)))invalid();
+    if(type==='IDAT')hasData=true;
+    if(type==='IEND'){
+      if(length!==0||!hasData||crcOffset+4!==bytes.length)invalid();
+      hasEnd=true;
+    }
+    offset=crcOffset+4;
+    if(hasEnd)break;
+  }
+  if(!hasHeader||!hasData||!hasEnd||offset!==bytes.length)invalid();
+}
+
 export interface PdfPagePng { pageNumber:number; bytes:Uint8Array }
 export interface PdfPngExportOptions {
   signal?:AbortSignal;
@@ -30,13 +78,11 @@ export function archivePdfPagePngs(pages:PdfPagePng[],totalPages:number):Uint8Ar
   for(let index=0;index<pages.length;index++){
     const page=pages[index];
     if(page.pageNumber!==index+1)throw new Error('PDF PNG pages must be consecutive and correctly ordered.');
-    if(!(page.bytes instanceof Uint8Array)||page.bytes.length<8||
-      page.bytes[0]!==0x89||page.bytes[1]!==0x50||page.bytes[2]!==0x4e||
-      page.bytes[3]!==0x47||page.bytes[4]!==0x0d||page.bytes[5]!==0x0a||
-      page.bytes[6]!==0x1a||page.bytes[7]!==0x0a){
+    if(!(page.bytes instanceof Uint8Array)){
       throw new Error('PDF PNG archive contains an invalid PNG file.');
     }
     if(page.bytes.byteLength>PDF_PAGE_IMAGE_MAX_PNG_BYTES)throw new Error('Rendered PNG exceeds the 12 MB per-page limit.');
+    assertValidRenderedPng(page.bytes);
     size+=page.bytes.byteLength;
     if(size>PDF_PAGE_IMAGE_MAX_TOTAL_BYTES)throw new Error('Rendered PNGs exceed the 100 MB total limit.');
     const filename='page-'+String(page.pageNumber).padStart(4,'0')+'.png';
@@ -98,9 +144,13 @@ export async function exportPdfPagesAsPngZip(
       options.signal?.removeEventListener('abort',cancel);
     }
     abortIfRequested(options.signal);
-    const bytes=await pngBytes(canvas);
-    // Release backing allocation before the next page is rendered.
-    canvas.width=0;canvas.height=0;
+    let bytes:Uint8Array;
+    try{
+      bytes=await pngBytes(canvas);
+    }finally{
+      // Release backing allocation even when encoding fails.
+      canvas.width=0;canvas.height=0;
+    }
     totalBytes+=bytes.byteLength;
     if(totalBytes>PDF_PAGE_IMAGE_MAX_TOTAL_BYTES)throw new Error('Rendered PNGs exceed the 100 MB total limit.');
     pages.push({pageNumber,bytes});

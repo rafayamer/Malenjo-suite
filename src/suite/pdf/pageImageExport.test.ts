@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { unzipSync } from 'fflate';
 import { archivePdfPageJpegs, archivePdfPagePngs, exportPdfPagesAsJpegZip, exportPdfPagesAsPngZip, PDF_PAGE_IMAGE_MAX_PAGES } from './pageImageExport';
 
-const PNG='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jS6cAAAAASUVORK5CYII=';
+const PNG='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=';
 function image():Uint8Array{
   return Uint8Array.from(atob(PNG),value=>value.charCodeAt(0));
 }
@@ -26,6 +26,34 @@ describe('PDF page image ZIP exporter',()=>{
     expect(()=>archivePdfPagePngs([],1)).toThrow(/requires every page/i);
     expect(()=>archivePdfPagePngs(Array.from({length:PDF_PAGE_IMAGE_MAX_PAGES+1},(_,i)=>({pageNumber:i+1,bytes:image()})),PDF_PAGE_IMAGE_MAX_PAGES+1))
       .toThrow(/at most 50 pages/i);
+  });
+
+  it('rejects truncated, CRC-corrupt and trailing-data PNGs instead of exporting broken images',()=>{
+    const valid=image();
+    const corrupt=Uint8Array.from(valid);
+    corrupt[44]^=0x01; // IDAT data changed without updating its CRC.
+    for(const bytes of [
+      valid.slice(0,8),valid.slice(0,-4),corrupt,
+      Uint8Array.from([...valid,0x00]),new Uint8Array(50),
+    ]){
+      expect(()=>archivePdfPagePngs([{pageNumber:1,bytes}],1)).toThrow(/invalid PNG/i);
+    }
+    expect(Object.keys(unzipSync(archivePdfPagePngs([{pageNumber:1,bytes:valid}],1))))
+      .toEqual(['page-0001.png']);
+  });
+
+  it('rejects valid-CRC PNGs that declare unsafe pixel counts',()=>{
+    const bytes=image();
+    // Rewrite IHDR dimensions to 20,000 x 20,000 and repair its CRC.
+    bytes.set([0,0,0x4e,0x20,0,0,0x4e,0x20],16);
+    let crc=0xffffffff;
+    for(let i=12;i<29;i++){
+      crc^=bytes[i];
+      for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);
+    }
+    crc=(crc^0xffffffff)>>>0;
+    bytes.set([(crc>>>24)&255,(crc>>>16)&255,(crc>>>8)&255,crc&255],29);
+    expect(()=>archivePdfPagePngs([{pageNumber:1,bytes}],1)).toThrow(/invalid PNG/i);
   });
 
   it('rejects oversized PDF page counts without rendering anything',async()=>{
