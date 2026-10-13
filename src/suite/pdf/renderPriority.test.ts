@@ -43,6 +43,17 @@ describe('PDF central-canvas render priority', () => {
     }
   });
 
+  it('does not schedule out-of-range pages at document boundaries', () => {
+    const rendered=new Set([1,2]);
+    for (const page of [-1,0,3,4,NaN,Infinity]) {
+      expect(pdfPageSchedule(page,1,2,rendered)).toEqual({
+        allowed:false,eager:false,phase:'lazy',
+      });
+    }
+    expect(pdfPageSchedule(1,1,2,rendered).phase).toBe('focus');
+    expect(pdfPageSchedule(2,1,2,rendered).phase).toBe('adjacent');
+  });
+
   it('keeps background pages and thumbnails gated until the critical pass is ready', () => {
     const focusOnly = new Set([4]);
     expect(pdfPageSchedule(8, 4, 8, focusOnly)).toMatchObject({ allowed: false, eager: false, phase: 'lazy' });
