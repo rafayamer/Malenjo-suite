@@ -134,6 +134,72 @@ export async function insertPdfAfter(bytes:Uint8Array,insertBytes:Uint8Array,aft
   return Uint8Array.from(await output.save({useObjectStreams:false}));
 }
 
+/**
+ * Replace one page with an explicitly chosen page of another PDF. Work in the
+ * existing document rather than copying the whole document into a new one:
+ * unrelated metadata, page references, and catalog entries stay in place.
+ *
+ * This is deliberately a conservative Phase 2 operation. PDFs with fields,
+ * certification, outlines or named destinations need specialized reference
+ * rewriting before replacement can be offered without losing live structure.
+ * Direct GoTo links are also rejected because their old page ref could dangle.
+ */
+export async function replacePdfPage(
+  bytes:Uint8Array,
+  replacementBytes:Uint8Array,
+  pageNumber:number,
+  replacementPageNumber=1,
+):Promise<Uint8Array>{
+  const [target, incoming]=await Promise.all([load(bytes),load(replacementBytes)]);
+  const at=requirePage(pageNumber,target.getPageCount());
+  const from=requirePage(replacementPageNumber,incoming.getPageCount());
+  const protectedKeys=['Perms','AcroForm','Outlines','Dests'];
+  if(protectedKeys.some(key=>target.catalog.has(PDFName.of(key))) ||
+     target.catalog.lookupMaybe(PDFName.of('Names'),PDFDict)?.has(PDFName.of('Dests'))){
+    throw new Error('Page replacement requires a PDF without signing controls, form fields, bookmarks or named destinations; those references cannot be rewritten safely yet.');
+  }
+  if(incoming.catalog.has(PDFName.of('Perms')) ||
+     incoming.catalog.has(PDFName.of('AcroForm'))){
+    throw new Error('Importing a signed/certified or interactive form PDF page is not supported by safe page replacement.');
+  }
+  // Imported page annotations (including widgets and internal destinations)
+  // cannot be carried across as a standalone page without reference repair.
+  const importAnnots=incoming.getPage(from).node.lookupMaybe(PDFName.of('Annots'),PDFArray);
+  if(importAnnots?.size()){
+    throw new Error('Imported PDF page has annotations or widgets. Replace-page import refuses to discard their structure.');
+  }
+  const destinationKey=PDFName.of('Dest');
+  const actionKey=PDFName.of('A');
+  const subtypeKey=PDFName.of('Subtype');
+  for(const page of target.getPages()){
+    const annots=page.node.lookupMaybe(PDFName.of('Annots'),PDFArray);
+    if(!annots)continue;
+    for(let index=0;index<annots.size();index++){
+      let annotation:PDFDict;
+      try{annotation=target.context.lookup(annots.get(index),PDFDict);}
+      catch{throw new Error('Page replacement cannot inspect a source annotation safely.');}
+      if(annotation.get(subtypeKey)?.toString()!=='/Link')continue;
+      const action=annotation.lookupMaybe(actionKey,PDFDict);
+      if(annotation.has(destinationKey) ||
+         action?.get(PDFName.of('S'))?.toString()==='/GoTo'){
+        throw new Error('Page replacement is unavailable while the PDF contains internal page links whose destination references could be lost.');
+      }
+    }
+  }
+  const [copied]=await target.copyPages(incoming,[from]);
+  target.removePage(at);
+  target.insertPage(at,copied);
+  const output=Uint8Array.from(await target.save({useObjectStreams:false}));
+  // Ensure the new artifact is a reopenable PDF with unchanged page count.
+  // Caller commits through MALENJO's transactional Undo/Redo lane only after
+  // this validation succeeds; the original input is never mutated.
+  const reopened=await load(output);
+  if(reopened.getPageCount()!==target.getPageCount()){
+    throw new Error('Page replacement changed PDF page count unexpectedly; the working copy was not updated.');
+  }
+  return output;
+}
+
 export async function splitPdfAtPage(bytes:Uint8Array,pageNumber:number):Promise<[Uint8Array,Uint8Array]>{
   const source=await load(bytes);
   if(source.catalog.has(PDFName.of('Perms')))throw new Error('Certified or usage-rights PDFs cannot be split because signing controls would be lost.');
