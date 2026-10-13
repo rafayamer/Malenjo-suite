@@ -5,7 +5,7 @@ import {
   addPdfOptionList, addPdfRadioGroup, addPdfRectangleOverlay, addPdfTextField, addPdfTextOverlay, appendPdf,
   attachFileToPdf, deletePdfPage, deletePdfPages, duplicatePdfPage, extractPdfPage, extractPdfPages,
   fillPdfFormFields, flattenPdfForm, inspectPdfFormFields, insertBlankPdfPage, insertPdfAfter, listPdfFormFields, movePdfPage,
-  rotatePdfPagePermanent, rotatePdfPagesPermanent, setPdfPageBox, splitPdfAtPage,
+  replacePdfPage, rotatePdfPagePermanent, rotatePdfPagesPermanent, setPdfPageBox, splitPdfAtPage,
 } from './editor';
 
 async function sample(pages=3):Promise<Uint8Array>{
@@ -64,6 +64,70 @@ describe('PDF mutation core',()=>{
     expect(await count(left)).toBe(2);
     expect(await count(right)).toBe(1);
     await expect(splitPdfAtPage(source,3)).rejects.toThrow(/before the last/i);
+  });
+
+  it('replaces one selected page with an explicitly chosen imported page, preserving metadata and originals',async()=>{
+    const original=await PDFDocument.create();
+    original.setTitle('Keep original document metadata');
+    original.addPage([300,400]);
+    original.addPage([350,450]);
+    original.addPage([400,500]);
+    const unchanged=Uint8Array.from(await original.save({useObjectStreams:false}));
+
+    const imported=await PDFDocument.create();
+    imported.addPage([625,725]);
+    imported.addPage([725,825]);
+    const importBytes=Uint8Array.from(await imported.save({useObjectStreams:false}));
+    const output=await replacePdfPage(unchanged,importBytes,2,2);
+    const reopened=await PDFDocument.load(output);
+    expect(reopened.getPageCount()).toBe(3);
+    expect(reopened.getPages().map(page=>page.getWidth())).toEqual([300,725,400]);
+    expect(reopened.getPages().map(page=>page.getHeight())).toEqual([400,825,500]);
+    expect(reopened.getTitle()).toBe('Keep original document metadata');
+    expect((await PDFDocument.load(unchanged)).getPages().map(page=>page.getWidth())).toEqual([300,350,400]);
+    expect((await PDFDocument.load(importBytes)).getPageCount()).toBe(2);
+    await expect(replacePdfPage(unchanged,importBytes,0)).rejects.toThrow(/outside/);
+    await expect(replacePdfPage(unchanged,importBytes,4)).rejects.toThrow(/outside/);
+    await expect(replacePdfPage(unchanged,importBytes,2,3)).rejects.toThrow(/outside/);
+    await expect(replacePdfPage(unchanged,new Uint8Array(),2)).rejects.toThrow(/empty/);
+    await expect(replacePdfPage(unchanged,new Uint8Array([0,1,2,3]),2)).rejects.toThrow();
+  });
+
+  it('rejects replacement when live signing, bookmarks, form widgets or internal links could be lost',async()=>{
+    const incoming=await sample(1);
+    const signed=await PDFDocument.load(await sample(2));
+    signed.catalog.set(PDFName.of('Perms'),signed.context.obj({DocMDP:{Type:PDFName.of('Sig')}}));
+    await expect(replacePdfPage(Uint8Array.from(await signed.save()),incoming,1))
+      .rejects.toThrow(/signing controls/);
+    const bookmarked=await PDFDocument.load(await sample(2));
+    bookmarked.catalog.set(PDFName.of('Outlines'),bookmarked.context.obj({Type:PDFName.of('Outlines'),Count:0}));
+    await expect(replacePdfPage(Uint8Array.from(await bookmarked.save()),incoming,1))
+      .rejects.toThrow(/bookmarks/);
+    const form=await PDFDocument.load(await sample(2));
+    const field=form.getForm().createTextField('Patient.ID');
+    field.addToPage(form.getPage(0));
+    await expect(replacePdfPage(Uint8Array.from(await form.save()),incoming,2))
+      .rejects.toThrow(/form fields/);
+    const annotations=await PDFDocument.load(await sample(1));
+    const note=annotations.context.register(annotations.context.obj({
+      Type:PDFName.of('Annot'),Subtype:PDFName.of('Text'),Rect:[1,1,20,20],
+    }));
+    annotations.getPage(0).node.set(PDFName.of('Annots'),annotations.context.obj([note]));
+    await expect(replacePdfPage(await sample(2),Uint8Array.from(await annotations.save()),1))
+      .rejects.toThrow(/annotations or widgets/);
+    const links=await PDFDocument.load(await sample(2));
+    const targetPage=links.getPage(1);
+    const link=links.context.register(links.context.obj({
+      Type:PDFName.of('Annot'),Subtype:PDFName.of('Link'),Rect:[1,1,30,30],
+      Dest:links.context.obj([targetPage.ref,PDFName.of('Fit')]),
+    }));
+    links.getPage(0).node.set(PDFName.of('Annots'),links.context.obj([link]));
+    await expect(replacePdfPage(Uint8Array.from(await links.save()),incoming,2))
+      .rejects.toThrow(/internal page links/);
+    const signedImport=await PDFDocument.load(incoming);
+    signedImport.catalog.set(PDFName.of('Perms'),signedImport.context.obj({DocMDP:{Type:PDFName.of('Sig')}}));
+    await expect(replacePdfPage(await sample(2),Uint8Array.from(await signedImport.save()),1))
+      .rejects.toThrow(/signed\/certified/);
   });
 
   it('refuses splitting PDFs with direct catalog certification permissions',async()=>{
