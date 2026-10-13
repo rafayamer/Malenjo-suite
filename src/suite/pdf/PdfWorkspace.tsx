@@ -3459,18 +3459,51 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           <small>Preview: <code>{batesDraft.prefix}{String(batesDraft.startNumber).padStart(Math.max(1,batesDraft.digits),'0')}{batesDraft.suffix}</code>. Numbering follows selected-page order when scope is Selected pages.</small>
         </div>
 
-        <div className="pdf-pane-title">Page boxes</div>
+        <div className="pdf-pane-title">Crop and page boxes</div>
         <div className="pdf-edit-form">
-          <label>Scope<select value={pageBoxDraft.scope} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,scope:event.target.value as 'selected'|'all'})}><option value="selected">Selected pages</option><option value="all">All pages</option></select></label>
-          <label>Box<select value={pageBoxDraft.box} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,box:event.target.value as 'crop'|'trim'|'bleed'|'art'})}><option value="crop">Crop box</option><option value="trim">Trim box</option><option value="bleed">Bleed box</option><option value="art">Art box</option></select></label>
+          <small>Crop is non-destructive to the original file. Choose a page, drag a rectangle directly over the live page, then Apply crop. Before applying, the shaded area is a preview only.</small>
+          <button type="button" disabled={!sourceBytes||mutating||loading}
+            onClick={()=>{
+              setPageBoxDraft(draft=>({...draft,box:'crop',scope:'selected'}));
+              chooseEditPage(currentPage);
+              setCropMode(value=>!value);
+            }}>{cropMode?'Stop drawing crop':'Draw crop on page '+currentPage}</button>
+          {cropMode&&<small role="status">{!cropGeometry?'Preparing crop preview…'
+            :cropGeometry.visualSupported&&rotation===0?'Drag across the displayed page. Adjust the four margins below; the outline updates live.'
+            :cropGeometry.reason||'Reset the viewer rotation before drawing. Numeric margins remain available.'}</small>}
+          <label>Measurements <select value={cropUnit} onChange={event=>setCropUnit(event.target.value as CropUnit)}
+            aria-label="Crop measurement unit">
+            <option value="mm">Millimeters (mm)</option>
+            <option value="cm">Centimeters (cm)</option>
+            <option value="in">Inches (in)</option>
+          </select></label>
+          <label>Apply to<select value={pageBoxDraft.scope}
+            onChange={event=>setPageBoxDraft({...pageBoxDraft,scope:event.target.value as 'selected'|'all'})}>
+            <option value="selected">Selected pages</option><option value="all">All pages</option>
+          </select></label>
+          <label>Page box<select value={pageBoxDraft.box}
+            onChange={event=>setPageBoxDraft({...pageBoxDraft,box:event.target.value as 'crop'|'trim'|'bleed'|'art'})}>
+            <option value="crop">Crop (visible page)</option>
+            <option value="trim">Trim (print production)</option>
+            <option value="bleed">Bleed (print production)</option>
+            <option value="art">Art (print production)</option>
+          </select></label>
           <div className="pdf-coordinate-grid">
-            <label>Top<input type="number" min="0" max="720" step="1" value={pageBoxDraft.top} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,top:Number(event.target.value)})}/></label>
-            <label>Right<input type="number" min="0" max="720" step="1" value={pageBoxDraft.right} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,right:Number(event.target.value)})}/></label>
-            <label>Bottom<input type="number" min="0" max="720" step="1" value={pageBoxDraft.bottom} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,bottom:Number(event.target.value)})}/></label>
-            <label>Left<input type="number" min="0" max="720" step="1" value={pageBoxDraft.left} onChange={(event)=>setPageBoxDraft({...pageBoxDraft,left:Number(event.target.value)})}/></label>
+            {(['top','right','bottom','left'] as const).map(side=><label key={side}>
+              {side.charAt(0).toUpperCase()+side.slice(1)} ({cropUnit})
+              <input type="number" min="0" step="0.1" aria-label={`Crop ${side} in ${cropUnit}`}
+                value={Number(cropPointsToUnit(pageBoxDraft[side],cropUnit).toFixed(2))}
+                onChange={event=>{
+                  setPageBoxDraft(draft=>({...draft,[side]:cropUnitToPoints(Number(event.target.value),cropUnit)}));
+                  if(pageBoxDraft.box==='crop')setCropMode(true);
+                }}/>
+            </label>)}
           </div>
-          <button disabled={mutating} onClick={()=>void applyPageBox()}>Apply page box</button>
-          <small>Margins are points inset from each page’s MediaBox. Invalid/inverted boxes are rejected; the operation is undoable before export.</small>
+          <button disabled={!sourceBytes||mutating||loading} onClick={()=>void applyPageBox()}>
+            Apply {pageBoxDraft.box==='crop'?'crop':'page box'} to {pageBoxDraft.scope==='selected'?operationPages.length:pageCount} page(s)
+          </button>
+          {cropMode&&<button type="button" onClick={()=>{setCropMode(false);setPageBoxDraft(d=>({...d,top:0,right:0,bottom:0,left:0}));}}>Cancel crop preview</button>}
+          <small>Measurements are in {cropUnit}. The preview shows the crop rectangle before committing; only Apply changes the working PDF. Undo and Save PDF copy operate on the committed result. Existing cropped/rotated pages use numeric inputs for safety.</small>
         </div>
 
         <div className="pdf-pane-title">Logical page labels</div>
