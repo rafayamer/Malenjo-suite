@@ -76,6 +76,7 @@ import {
   movePdfPage,
   rotatePdfPagePermanent,
   rotatePdfPagesPermanent,
+  replacePdfPage,
   setPdfPageBox,
   splitPdfAtPage,
   fillPdfFormFields,
@@ -209,6 +210,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const comparisonInputRef = useRef<HTMLInputElement>(null);
   const appendInputRef = useRef<HTMLInputElement>(null);
   const insertInputRef = useRef<HTMLInputElement>(null);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const selectionAnchorRef = useRef<number | null>(null);
   const activeLoadRef = useRef<PdfLoadResult | null>(null);
@@ -779,6 +781,35 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       },
       currentPage+1,
     );
+  }
+
+  async function replaceSelectedPdfPage(event:React.ChangeEvent<HTMLInputElement>){
+    const file=event.target.files?.[0];
+    event.target.value='';
+    if(!file || !sourceBytes || mutating || loading || operationPages.length!==1)return;
+    if(file.size<1 || file.size>32*1024*1024){
+      setError('Replacement PDF must be nonempty and no larger than 32 MB.');
+      return;
+    }
+    const targetPage=operationPages[0];
+    if(!window.confirm(
+      `Replace page ${targetPage} with page 1 of "${file.name}"?\n\n`+
+      'The original file is unchanged. MALENJO will keep the edit in this tab with Undo available; incompatible signed/form/bookmark documents are safely rejected.'
+    ))return;
+    const originalBytes=sourceBytes;
+    try{
+      const imported=new Uint8Array(await file.arrayBuffer());
+      if(currentPdfBytesRef.current!==originalBytes || replacementPendingRef.current){
+        throw new Error('The PDF changed while reading the replacement. Select the target page and try again.');
+      }
+      await mutate(
+        `Replaced page ${targetPage} with page 1 from ${file.name}.`,
+        bytes=>replacePdfPage(bytes,imported,targetPage,1),
+        targetPage,
+      );
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:String(reason));
+    }
   }
 
   async function appendDocuments(event:React.ChangeEvent<HTMLInputElement>){
@@ -2070,6 +2101,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           run:()=>mutateAction(`Permanently rotated ${operationPages.length} selected page(s) by 90°.`,bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),operationPages[0]),
         },
         {
+          id:'pdf-page-replace',
+          label:'Replace selected PDF page with imported page…',
+          keywords:'pdf organize replace page first imported source',
+          detail:'Replace exactly one selected page using page 1 of an imported PDF; Undo and Save PDF copy work normally.',
+          enabled:!!sourceBytes&&!mutating&&!loading&&operationPages.length===1,
+          disabledReason:!sourceBytes?'Open a PDF first.':operationPages.length!==1?'Select exactly one page to replace.':'Wait for the active PDF operation.',
+          run:()=>replaceInputRef.current?.click(),
+        },
+        {
           id:'pdf-pages-extract',
           label:'Extract selected PDF pages',
           keywords:'pdf organize extract pages export',
@@ -2357,6 +2397,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'open-crop-settings',label:'Crop PDF settings',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF before cropping.':mutating?'Wait for the current PDF edit.':undefined,run:configureProperties},
       {id:'turn-pages',label:'Rotate PDF pages',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Permanently rotated ${operationPages.length} selected page(s) by 90°.`,bytes=>operationPages.length===1?rotatePdfPagePermanent(bytes,operationPages[0]):rotatePdfPagesPermanent(bytes,operationPages),operationPages[0])},
       {id:'remove-pages',label:`Delete ${operationPages.length} page${operationPages.length===1?'':'s'}`,enabled:!!sourceBytes&&!mutating&&operationPages.length<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length>=pageCount?'A PDF must retain at least one page.':mutating?'Wait for the current PDF edit to finish.':undefined,run:removeSelectedPagesSafely},
+      {id:'replace-page',label:'Replace page…',enabled:!!sourceBytes&&!mutating&&!loading&&operationPages.length===1,
+        disabledReason:!sourceBytes?'Open a PDF first.':operationPages.length!==1?'Select exactly one page for replacement.':'Wait for the active PDF operation.',
+        run:()=>replaceInputRef.current?.click()},
       {id:'copy-page',label:'Duplicate page',enabled:!!sourceBytes&&!mutating&&operationPages.length===1,disabledReason:operationPages.length!==1?'Select exactly one page.':mutating?'Wait for the current PDF edit to finish.':!sourceBytes?'No PDF is loaded.':undefined,run:()=>mutateAction(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)},
       {id:'extract-pages',label:'Extract selected',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:extractSelected},
       {id:'split',label:'Split here',enabled:!!sourceBytes&&!mutating&&currentPage<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':currentPage>=pageCount?'Move before the final page to split the PDF.':mutating?'Wait for the current PDF edit to finish.':undefined,run:splitCurrent},
@@ -2467,6 +2510,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       accept="application/pdf,.pdf"
       multiple
       onChange={(event)=>void insertDocuments(event)}
+    />
+    <input
+      ref={replaceInputRef}
+      className="visually-hidden"
+      type="file"
+      accept="application/pdf,.pdf"
+      aria-label="Select PDF to replace page"
+      onChange={(event)=>void replaceSelectedPdfPage(event)}
     />
     <input
       ref={attachmentInputRef}
