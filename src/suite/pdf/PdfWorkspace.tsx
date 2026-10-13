@@ -647,19 +647,21 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const goToPage = useCallback((requested: number, preserveSelection = false) => {
     const page = clampPdfPage(requested, pageCount);
     setCurrentPage(page);
-    // Deliberate page navigation updates a single-page selection. Multi-page
-    // selections remain intact, and thumbnail selection manages itself.
+    // Explicit jumps should not slowly animate across dozens of heavy page
+    // canvases; that causes render churn and stale intermediate page statuses.
     if(!preserveSelection){
       setSelectedPages((selected)=> selected.size<=1 ? new Set([page]) : selected);
       selectionAnchorRef.current=page;
     }
-    document.getElementById(`${domIdPrefix}-page-${page}`)?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'start',
+    window.requestAnimationFrame(()=>{
+      document.getElementById(`${domIdPrefix}-page-${page}`)?.scrollIntoView({
+        behavior:'auto',block:'start',
+      });
     });
   }, [domIdPrefix,pageCount]);
 
   const onPageVisible = useCallback((page: number) => {
+    // Manual scrolling must always update the live page indicator immediately.
     setCurrentPage(page);
   }, []);
 

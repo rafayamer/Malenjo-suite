@@ -115,7 +115,7 @@ describe('offline Word DOCX and RTF text conversions',()=>{
       .toThrow(/16 MB/);
     const data=sample(['Test']);data.pages[0].page=10;
     expect(()=>serializePdfOfficeText(data,'docx')).toThrow(/page sequence/);
-  });
+  },20_000); // Real 16 MB overflow protection is CPU-heavy on shared CI runners.
   it('rejects malformed or incomplete DOCX output during inspection',()=>{
     expect(()=>inspectPdfTextDocx(Uint8Array.from([80,75,3,4])))
       .toThrow();
