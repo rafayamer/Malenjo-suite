@@ -2173,7 +2173,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           detail:'Requires exactly one selected page',
           enabled:!!sourceBytes&&!mutating&&operationPages.length===1,
           disabledReason:operationPages.length!==1?'Select exactly one page.':!sourceBytes?'No PDF is loaded.':'Wait for the current PDF edit to finish.',
-          run:()=>mutateAction(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1),
+          run:()=>mutateAction(`Duplicated page ${operationPages[0]}.`,bytes=>duplicatePdfPage(bytes,operationPages[0]),operationPages[0]+1),
         },
         {
           id:'pdf-pages-turn',
@@ -2485,15 +2485,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'replace-page',label:'Replace page…',enabled:!!sourceBytes&&!mutating&&!loading&&operationPages.length===1,
         disabledReason:!sourceBytes?'Open a PDF first.':operationPages.length!==1?'Select exactly one page for replacement.':'Wait for the active PDF operation.',
         run:()=>beginReplacePage(operationPages[0])},
-      {id:'copy-page',label:'Duplicate page',enabled:!!sourceBytes&&!mutating&&operationPages.length===1,disabledReason:operationPages.length!==1?'Select exactly one page.':mutating?'Wait for the current PDF edit to finish.':!sourceBytes?'No PDF is loaded.':undefined,run:()=>mutateAction(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)},
+      {id:'copy-page',label:'Duplicate page',enabled:!!sourceBytes&&!mutating&&operationPages.length===1,disabledReason:operationPages.length!==1?'Select exactly one page.':mutating?'Wait for the current PDF edit to finish.':!sourceBytes?'No PDF is loaded.':undefined,run:()=>mutateAction(`Duplicated page ${operationPages[0]}.`,bytes=>duplicatePdfPage(bytes,operationPages[0]),operationPages[0]+1)},
       {id:'extract-pages',label:'Extract selected',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:extractSelected},
       {id:'split',label:'Split here',enabled:!!sourceBytes&&!mutating&&currentPage<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':currentPage>=pageCount?'Move before the final page to split the PDF.':mutating?'Wait for the current PDF edit to finish.':undefined,run:splitCurrent},
       {id:'insert',label:'Insert PDF…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>insertInputRef.current?.click()},
       {id:'append',label:'Append PDF…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>appendInputRef.current?.click()},
       {id:'blank',label:'Blank after',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Inserted a blank page after page ${currentPage}.`,bytes=>insertBlankPdfPage(bytes,currentPage),currentPage+1)},
       {id:'page-labels',label:'Set page label',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF first.':'Wait for PDF edit.',run:applyPageLabel},
-      {id:'earlier',label:'Move earlier',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&currentPage>1,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':currentPage<=1?'The first page cannot move earlier.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Moved page earlier.',bytes=>movePdfPage(bytes,currentPage,currentPage-1),currentPage-1)},
-      {id:'later',label:'Move later',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&currentPage<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':currentPage>=pageCount?'The final page cannot move later.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)},
+      {id:'earlier',label:'Move earlier',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&operationPages[0]>1,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':operationPages[0]<=1?'The first page cannot move earlier.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Moved page earlier.',bytes=>movePdfPage(bytes,operationPages[0],operationPages[0]-1),operationPages[0]-1)},
+      {id:'later',label:'Move later',enabled:!!sourceBytes&&!mutating&&operationPages.length===1&&operationPages[0]<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':operationPages.length!==1?'Select exactly one page.':operationPages[0]>=pageCount?'The final page cannot move later.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Moved page later.',bytes=>movePdfPage(bytes,operationPages[0],operationPages[0]+1),operationPages[0]+1)},
       providerAction,
     ],
     comment:[
@@ -3581,9 +3581,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         <div className="pdf-pane-title">Page tools</div>
         <div className="pdf-page-tools">
           <button disabled={mutating||operationPages.length>=pageCount} onClick={()=>void removeSelectedPagesSafely()}>Remove selected pages…</button>
-          <button disabled={mutating||operationPages.length!==1} onClick={()=>void mutate(`Duplicated page ${currentPage}.`,bytes=>duplicatePdfPage(bytes,currentPage),currentPage+1)}>Duplicate</button>
-          <button disabled={mutating||operationPages.length!==1||currentPage<=1} onClick={()=>void mutate('Moved page earlier.',bytes=>movePdfPage(bytes,currentPage,currentPage-1),currentPage-1)}>Move earlier</button>
-          <button disabled={mutating||operationPages.length!==1||currentPage>=pageCount} onClick={()=>void mutate('Moved page later.',bytes=>movePdfPage(bytes,currentPage,currentPage+1),currentPage+1)}>Move later</button>
+          <button disabled={mutating||operationPages.length!==1} onClick={()=>void mutate(`Duplicated page ${operationPages[0]}.`,bytes=>duplicatePdfPage(bytes,operationPages[0]),operationPages[0]+1)}>Duplicate</button>
+          <button disabled={mutating||operationPages.length!==1||operationPages[0]<=1} onClick={()=>void mutate('Moved page earlier.',bytes=>movePdfPage(bytes,operationPages[0],operationPages[0]-1),operationPages[0]-1)}>Move earlier</button>
+          <button disabled={mutating||operationPages.length!==1||operationPages[0]>=pageCount} onClick={()=>void mutate('Moved page later.',bytes=>movePdfPage(bytes,operationPages[0],operationPages[0]+1),operationPages[0]+1)}>Move later</button>
           <button disabled={mutating} onClick={()=>void mutate(`Inserted a blank page after page ${currentPage}.`,bytes=>insertBlankPdfPage(bytes,currentPage),currentPage+1)}>Blank after</button>
           <button disabled={mutating} onClick={()=>void extractSelected()}>Extract selected</button>
           <button disabled={mutating} onClick={()=>insertInputRef.current?.click()}>Insert PDF here…</button>
