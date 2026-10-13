@@ -12,11 +12,53 @@ async function load(bytes:Uint8Array):Promise<PDFDocument>{
   return PDFDocument.load(bytes,{ignoreEncryption:false,updateMetadata:false});
 }
 
+/**
+ * Removing a page destroys its indirect reference. Until source references
+ * can be rewritten and verified, refuse catalog-linked/page-numbered PDFs,
+ * form widgets, signatures, tagged documents and internal page destinations.
+ * Ordinary unprotected pages remain editable with per-document Undo.
+ */
+function assertPdfPageDeletionSafe(pdf:PDFDocument):void{
+  const protectedKeys=['Perms','AcroForm','Outlines','Dests','PageLabels','StructTreeRoot','OpenAction','AA'];
+  const namedDestinations=pdf.catalog.lookupMaybe(PDFName.of('Names'),PDFDict)?.has(PDFName.of('Dests'));
+  if(namedDestinations || protectedKeys.some(key=>pdf.catalog.has(PDFName.of(key)))){
+    throw new Error('Deleting a page is unavailable in PDFs with signatures, forms, bookmarks, tagged content, logical page labels or destinations; deleting it could leave broken references. No change was made.');
+  }
+  for(const page of pdf.getPages()){
+    const annots=page.node.lookupMaybe(PDFName.of('Annots'),PDFArray);
+    if(!annots)continue;
+    for(let index=0;index<annots.size();index++){
+      let annotation:PDFDict;
+      try{annotation=pdf.context.lookup(annots.get(index),PDFDict);}
+      catch{throw new Error('The PDF has an annotation that cannot be verified safely before page deletion.');}
+      const action=annotation.lookupMaybe(PDFName.of('A'),PDFDict);
+      if(annotation.has(PDFName.of('Dest')) || annotation.has(PDFName.of('AA')) ||
+         action?.get(PDFName.of('S'))?.toString()==='/GoTo'){
+        throw new Error('Deleting pages with internal navigation actions is unavailable until affected destination references can be rewritten.');
+      }
+    }
+  }
+}
+
+/** Preserve the original document catalog and the refs of every retained page. */
+async function removeCheckedPdfPages(pdf:PDFDocument,indices:number[]):Promise<Uint8Array>{
+  if(indices.length>=pdf.getPageCount())throw new Error('A PDF must keep at least one page.');
+  assertPdfPageDeletionSafe(pdf);
+  const removed=new Set(indices);
+  const expectedRefs=pdf.getPages().filter((_,index)=>!removed.has(index)).map(page=>page.ref.toString());
+  [...indices].sort((a,b)=>b-a).forEach(index=>pdf.removePage(index));
+  const result=Uint8Array.from(await pdf.save({useObjectStreams:false,updateFieldAppearances:false}));
+  const reopened=await load(result);
+  if(reopened.getPageCount()!==expectedRefs.length ||
+     reopened.getPages().some((page,index)=>page.ref.toString()!==expectedRefs[index])){
+    throw new Error('PDF page deletion failed independent page-reference verification; no edit was committed.');
+  }
+  return result;
+}
+
 export async function deletePdfPage(bytes:Uint8Array,pageNumber:number):Promise<Uint8Array>{
   const pdf=await load(bytes);
-  if(pdf.getPageCount()<=1) throw new Error('A PDF must keep at least one page.');
-  pdf.removePage(requirePage(pageNumber,pdf.getPageCount()));
-  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+  return removeCheckedPdfPages(pdf,[requirePage(pageNumber,pdf.getPageCount())]);
 }
 
 export async function rotatePdfPagePermanent(bytes:Uint8Array,pageNumber:number):Promise<Uint8Array>{
@@ -94,9 +136,7 @@ function requirePages(pageNumbers:number[],pageCount:number):number[]{
 export async function deletePdfPages(bytes:Uint8Array,pageNumbers:number[]):Promise<Uint8Array>{
   const pdf=await load(bytes);
   const indices=requirePages(pageNumbers,pdf.getPageCount());
-  if(indices.length>=pdf.getPageCount())throw new Error('A PDF must keep at least one page.');
-  [...indices].sort((a,b)=>b-a).forEach(index=>pdf.removePage(index));
-  return Uint8Array.from(await pdf.save({useObjectStreams:false}));
+  return removeCheckedPdfPages(pdf,indices);
 }
 
 export async function rotatePdfPagesPermanent(bytes:Uint8Array,pageNumbers:number[]):Promise<Uint8Array>{
