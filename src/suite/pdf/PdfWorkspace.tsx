@@ -3123,6 +3123,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               onActivateLink={activatePdfLink}
               onVisible={onPageVisible}
               onRendered={onPageRendered}
+              showEditSelection={masterTab==='organize'}
+              selectedForEdit={selectedPages.has(page)}
+              onSelectForEdit={()=>chooseEditPage(page)}
+              cropMode={cropMode&&page===currentPage&&Boolean(cropGeometry?.visualSupported)&&rotation===0}
+              cropPreview={page===currentPage?cropPreview:null}
+              onCropSelection={chooseCropRectangle}
             />;
           })}
         </div>
