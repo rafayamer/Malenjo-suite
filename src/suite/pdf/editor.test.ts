@@ -158,7 +158,7 @@ describe('PDF mutation core',()=>{
       Dest:pdf.context.obj([pages[2].ref,PDFName.of('Fit')]),
     }));
     pages[0].node.set(PDFName.of('Annots'),pdf.context.obj([link]));
-    let source=Uint8Array.from(await pdf.save({useObjectStreams:false}));
+    let source:Uint8Array=Uint8Array.from(await pdf.save({useObjectStreams:false}));
     source=await addPdfTopLevelBookmark(source,'Keep target page',3);
     const original=await PDFDocument.load(source,{updateMetadata:false});
     const pageRefs=original.getPages().map(p=>p.ref.toString());
