@@ -29,6 +29,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Launch all 22 workspaces and verify real PDF workflows in Chromium
         run: node scripts/pdf-ui-browser-smoke.mjs
+      - name: Verify local LottieFiles motion and reduced-motion accessibility in Chromium
+        run: node scripts/home-lottie-browser-smoke.mjs
       - name: Publish Phase 3 light/dark visual review screenshots
         if: success()
         uses: actions/upload-artifact@v4

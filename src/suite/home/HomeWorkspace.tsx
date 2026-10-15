@@ -5,6 +5,7 @@ import {
   Presentation, ScanLine, Search, ShieldCheck, Sparkles, Star, Workflow,
 } from 'lucide-react';
 import packageJson from '../../../package.json';
+import RecentFilesMotion from '../motion/RecentFilesMotion';
 import type { ModuleId } from '../core/types';
 import { isDesktopRuntime, listLibraryDocuments, openLibraryDocument } from '../files/api';
 import { listBrowserDocuments, markBrowserDocumentOpened } from '../files/browserStore';
@@ -283,7 +284,7 @@ export default function HomeWorkspace({
         <button className="ml-start-recent" type="button" title="View recently opened documents"
           aria-expanded={recentOpen} aria-controls="ml-home-recent-panel"
           onClick={()=>{moreOptionsRef.current?.removeAttribute('open');setRecentOpen(current=>!current);}}>
-          <span className="ml-start-recent-icon" aria-hidden="true"><FolderOpen size={27}/></span>
+          <span className="ml-start-recent-icon" aria-hidden="true"><RecentFilesMotion size={27}><FolderOpen size={27}/></RecentFilesMotion></span>
           <span>Recent Files</span>
         </button>
       </div>
