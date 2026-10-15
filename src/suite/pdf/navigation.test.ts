@@ -40,6 +40,38 @@ describe('PDF outline navigation', () => {
     expect(model.truncated).toBe(true);
   });
 
+  it('flattens deeply nested PDF bookmarks without recursive stack overflow', () => {
+    let node: {title:string;items?:unknown[]} = {title:'Deep leaf'};
+    for (let depth = 0; depth < 2500; depth++) {
+      node = {title:`Level ${depth}`,items:[node]};
+    }
+    const model=flattenPdfOutline([node],3000);
+    expect(model.truncated).toBe(false);
+    expect(model.entries).toHaveLength(2501);
+    expect(model.entries[0].title).toBe('Level 2499');
+    expect(model.entries[2500]).toMatchObject({title:'Deep leaf',depth:12});
+  });
+
+  it('omits cyclic bookmark descendants but preserves valid siblings', () => {
+    const cycle:{title:string;items?:unknown[]}={title:'Root'};
+    cycle.items=[cycle,{title:'Safe sibling'}];
+    const model=flattenPdfOutline([cycle]);
+    expect(model.truncated).toBe(true);
+    expect(model.entries.map(({title})=>title)).toEqual(['Root','Safe sibling']);
+  });
+
+  it('allows separately linked bookmarks and safely caps output', () => {
+    const shared={title:'Shared'};
+    const model=flattenPdfOutline([
+      {title:'One',items:[shared]},{title:'Two',items:[shared]},
+    ]);
+    expect(model.truncated).toBe(false);
+    expect(model.entries.map(({title})=>title)).toEqual(['One','Shared','Two','Shared']);
+    const capped=flattenPdfOutline(Array.from({length:10001},(_,i)=>({title:String(i)})),10001);
+    expect(capped.entries).toHaveLength(10000);
+    expect(capped.truncated).toBe(true);
+  });
+
   it('resolves named, numeric and ref destinations to one-based pages', async () => {
     const ref = { num:7, gen:0 };
     const document = {

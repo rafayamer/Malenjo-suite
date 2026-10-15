@@ -56,39 +56,62 @@ function cleanText(value: unknown, fallback: string, max = MAX_TITLE_CHARS): str
 export function flattenPdfOutline(input: unknown, maxEntries = 1000): PdfOutlineModel {
   const roots = Array.isArray(input) ? input : [];
   const entries: PdfOutlineEntry[] = [];
+  // A damaged or malicious PDF may contain a deeply nested or cyclic outline.
+  // Bound output and walk iteratively so the UI never exhausts the JS call stack.
+  const limit = Number.isSafeInteger(maxEntries)
+    ? Math.min(10_000, Math.max(0, maxEntries))
+    : 1000;
+  const active = new WeakSet<object>();
+  interface Frame {
+    nodes: unknown[];
+    index: number;
+    depth: number;
+    path: string;
+    parent?: object;
+  }
+  const stack: Frame[] = [{ nodes: roots, index: 0, depth: 0, path: 'outline-' }];
   let truncated = false;
 
-  function visit(nodes: unknown[], depth: number, path: string) {
-    for (let index = 0; index < nodes.length; index += 1) {
-      if (entries.length >= maxEntries) {
-        truncated = true;
-        return;
-      }
+  while (stack.length) {
+    const frame = stack[stack.length - 1];
+    if (frame.index >= frame.nodes.length) {
+      if (frame.parent) active.delete(frame.parent);
+      stack.pop();
+      continue;
+    }
+    if (entries.length >= limit) {
+      truncated = true;
+      break;
+    }
 
-      const node = (nodes[index] ?? {}) as RawOutlineNode;
-      const title = cleanText(node.title, `Untitled bookmark ${entries.length + 1}`);
-      const url = typeof node.url === 'string'
+    const index = frame.index++;
+    const raw = frame.nodes[index];
+    const node = (raw !== null && typeof raw === 'object' ? raw : {}) as RawOutlineNode;
+    if (active.has(node)) {
+      truncated = true; // Cyclic descendants are omitted, never followed.
+      continue;
+    }
+    entries.push({
+      id: `${frame.path}${index}`,
+      title: cleanText(node.title, `Untitled bookmark ${entries.length + 1}`),
+      depth: Math.min(frame.depth, 12),
+      dest: node.dest ?? null,
+      url: typeof node.url === 'string'
         ? node.url
-        : typeof node.unsafeUrl === 'string'
-          ? node.unsafeUrl
-          : null;
+        : typeof node.unsafeUrl === 'string' ? node.unsafeUrl : null,
+    });
 
-      entries.push({
-        id: `${path}${index}`,
-        title,
-        depth: Math.min(depth, 12),
-        dest: node.dest ?? null,
-        url,
+    if (Array.isArray(node.items) && node.items.length) {
+      active.add(node);
+      stack.push({
+        nodes: node.items,
+        index: 0,
+        depth: frame.depth + 1,
+        path: `${frame.path}${index}.`,
+        parent: node,
       });
-
-      if (Array.isArray(node.items) && node.items.length) {
-        visit(node.items, depth + 1, `${path}${index}.`);
-        if (truncated) return;
-      }
     }
   }
-
-  visit(roots, 0, 'outline-');
   return { entries, truncated };
 }
 
