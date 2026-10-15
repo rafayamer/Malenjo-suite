@@ -18,6 +18,7 @@ interface Props {
 export default function CommandPalette({ open, query, items, onQueryChange, onClose }: Props) {
   const [selected, setSelected] = useState(0);
   const dialogRef = useRef<HTMLElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const filtered = useMemo(() => filterCommandPaletteItems(items, query), [items, query]);
   // Rendering must not transiently point at an unavailable/stale selection
   // between query changes and the normal selection-reset effect.
@@ -49,10 +50,14 @@ export default function CommandPalette({ open, query, items, onQueryChange, onCl
       } else if (event.key === 'ArrowDown') {
         event.preventDefault();
         setSelected((value) => moveAvailableCommand(filtered, value, 1));
+        searchRef.current?.focus();
       } else if (event.key === 'ArrowUp') {
         event.preventDefault();
         setSelected((value) => moveAvailableCommand(filtered, value, -1));
-      } else if (event.key === 'Enter' && filtered[activeIndex]) {
+        searchRef.current?.focus();
+      // Only the search input owns Enter-to-run. Buttons (especially Close)
+      // must keep their native Enter/click behavior, never run a stale result.
+      } else if (event.key === 'Enter' && event.target === searchRef.current && filtered[activeIndex]) {
         event.preventDefault();
         const item = filtered[activeIndex];
         if (item.disabled) return;
@@ -71,6 +76,7 @@ export default function CommandPalette({ open, query, items, onQueryChange, onCl
       <div className="command-palette-search">
         <Search size={17}/>
         <input
+          ref={searchRef}
           autoFocus
           value={query}
           onChange={(event)=>onQueryChange(event.target.value)}
