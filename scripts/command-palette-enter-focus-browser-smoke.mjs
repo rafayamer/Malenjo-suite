@@ -33,9 +33,14 @@ async function main() {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(base, { waitUntil: 'domcontentloaded' });
+  // DOMContentLoaded is earlier than React hydration. Wait for the same
+  // interactive Home ribbon used by the established PDF Chromium smoke before
+  // dispatching Ctrl+K; otherwise the shortcut is lost during initial mount.
+  await page.getByRole('tab', { name: 'Home', exact: true }).waitFor({ timeout: 15000 });
   const search = page.getByRole('combobox', { name: 'Search MALENJO actions, documents and settings' });
   const dialog = page.getByRole('dialog', { name: 'MALENJO command palette' });
   await page.keyboard.press('Control+k');
+  await dialog.waitFor({ state: 'visible', timeout: 15000 });
   await search.fill('Open Settings');
   await page.getByRole('option', { name: /Open Settings/ }).waitFor();
   await page.getByRole('button', { name: 'Close command palette' }).focus();
