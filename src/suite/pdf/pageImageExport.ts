@@ -84,26 +84,29 @@ export async function exportPdfPagesAsPngZip(
     }
     const canvas=document.createElement('canvas');
     canvas.width=width;canvas.height=height;
-    const context=canvas.getContext('2d',{alpha:false});
-    if(!context)throw new Error('PNG export requires a canvas rendering context.');
-    const task=page.render({canvas,canvasContext:context,viewport});
-    const cancel=()=>task.cancel();
-    options.signal?.addEventListener('abort',cancel,{once:true});
-    try{
-      await task.promise;
-    }catch(reason){
-      if(options.signal?.aborted)abortIfRequested(options.signal);
-      throw reason;
-    }finally{
-      options.signal?.removeEventListener('abort',cancel);
+    try {
+      const context=canvas.getContext('2d',{alpha:false});
+      if(!context)throw new Error('PNG export requires a canvas rendering context.');
+      const task=page.render({canvas,canvasContext:context,viewport});
+      const cancel=()=>task.cancel();
+      options.signal?.addEventListener('abort',cancel,{once:true});
+      try{
+        await task.promise;
+      }catch(reason){
+        if(options.signal?.aborted)abortIfRequested(options.signal);
+        throw reason;
+      }finally{
+        options.signal?.removeEventListener('abort',cancel);
+      }
+      abortIfRequested(options.signal);
+      const bytes=await pngBytes(canvas);
+      totalBytes+=bytes.byteLength;
+      if(totalBytes>PDF_PAGE_IMAGE_MAX_TOTAL_BYTES)throw new Error('Rendered PNGs exceed the 100 MB total limit.');
+      pages.push({pageNumber,bytes});
+    } finally {
+      // 16 MP can allocate tens of MB: release on render, abort AND encode errors.
+      canvas.width=0;canvas.height=0;
     }
-    abortIfRequested(options.signal);
-    const bytes=await pngBytes(canvas);
-    // Release backing allocation before the next page is rendered.
-    canvas.width=0;canvas.height=0;
-    totalBytes+=bytes.byteLength;
-    if(totalBytes>PDF_PAGE_IMAGE_MAX_TOTAL_BYTES)throw new Error('Rendered PNGs exceed the 100 MB total limit.');
-    pages.push({pageNumber,bytes});
     options.onProgress?.(pageNumber,pageCount);
   }
   abortIfRequested(options.signal);
