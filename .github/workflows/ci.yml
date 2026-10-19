@@ -62,6 +62,8 @@ jobs:
           bash -n scripts/setup-codespace-ai.sh
           bash -n scripts/check-codespace-ai.sh
           python3 scripts/validate-ai-model-manifest.py
+          python3 training/ai/validate_dataset.py training/ai/data/seed.jsonl
+          python3 -m py_compile training/ai/train_phi4_lora.py
       - run: cargo check --manifest-path src-tauri/Cargo.toml
       - run: cargo test --manifest-path src-tauri/Cargo.toml --lib
 
