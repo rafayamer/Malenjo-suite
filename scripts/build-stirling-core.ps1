@@ -115,6 +115,39 @@ try {
 
   $hash = (Get-FileHash -Algorithm SHA256 $destination).Hash.ToLowerInvariant()
 
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  function Get-ZipContentTreeHash([string]$Path) {
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($Path)
+    try {
+      $entries = @($zip.Entries | Where-Object { -not [string]::IsNullOrEmpty($_.Name) } | Sort-Object FullName)
+      $seen = @{}
+      $lines = New-Object System.Collections.Generic.List[string]
+      foreach ($entry in $entries) {
+        if ($seen.ContainsKey($entry.FullName)) {
+          throw "Stirling core JAR contains duplicate entry '$($entry.FullName)'."
+        }
+        $seen[$entry.FullName] = $true
+        $stream = $entry.Open()
+        try {
+          $sha = [System.Security.Cryptography.SHA256]::Create()
+          try { $entryHashBytes = $sha.ComputeHash($stream) } finally { $sha.Dispose() }
+        } finally {
+          $stream.Dispose()
+        }
+        $entryHash = ([BitConverter]::ToString($entryHashBytes)).Replace("-", "").ToLowerInvariant()
+        $lines.Add("$entryHash  $($entry.FullName.Replace('\','/'))")
+      }
+      $payload = [Text.Encoding]::UTF8.GetBytes(($lines -join "`n") + "`n")
+      $aggregate = [System.Security.Cryptography.SHA256]::Create()
+      try { $digestBytes = $aggregate.ComputeHash($payload) } finally { $aggregate.Dispose() }
+      return ([BitConverter]::ToString($digestBytes)).Replace("-", "").ToLowerInvariant()
+    } finally {
+      $zip.Dispose()
+    }
+  }
+  $contentTreeHash = Get-ZipContentTreeHash $destination
+  Write-Host "Content-tree SHA-256: $contentTreeHash"
+
   $officeVersion = "0.2.2"
   $officeCommit = "673aab8d6ac784524cd1d90141c95e74b9fd26ae"
   $officeNames = @(
