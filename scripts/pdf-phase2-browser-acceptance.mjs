@@ -233,7 +233,7 @@ async function main(){
     await panel().getByLabel('Sticky-note comment').fill('QA review note');await action('Review','Add comment');await notice(/comment/);
     expect((await pageAnnotations(await save())).flat().some(a=>a.includes('QA review note')),'comment missing');});
   await check('create a form field',async()=>{await openPdf(await simpleDoc(2));await selectPage(1);await action('Forms','Form settings');
-    await panel().getByLabel('Name').first().fill('customer_name');await action('Forms','Add text field');await notice(/field/);
+    await panel().getByLabel('Name',{exact:true}).first().fill('customer_name');await action('Forms','Add text field');await notice(/field/);
     expect((await PDFDocument.load(await save())).getForm().getFields().some(f=>f.getName()==='customer_name'),'field missing');});
   await check('fill text, checkbox, dropdown and radio fields',async()=>{await openPdf(await formDoc());await action('Forms','Form settings');
     const inspector=page.locator('.document-session-panel.active .pdf-inspector, .document-session-panel.active .pdf-left-panel');
