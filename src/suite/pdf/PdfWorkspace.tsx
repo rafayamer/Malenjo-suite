@@ -812,6 +812,16 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setFirstPageMs(Math.round(performance.now() - loadStartedRef.current));
     }
   }, []);
+  // A page released by the render memory budget must render again before the
+  // scheduler treats it as painted (focus/adjacent priority stays correct).
+  const onPageReleased = useCallback((page: number) => {
+    setRenderedPages((current) => {
+      if (!current.has(page)) return current;
+      const next = new Set(current);
+      next.delete(page);
+      return next;
+    });
+  }, []);
 
   async function chooseBrowserPdf(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -3292,6 +3302,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               onActivateLink={activatePdfLink}
               onVisible={onPageVisible}
               onRendered={onPageRendered}
+              onReleased={onPageReleased}
               showEditSelection={masterTab==='organize'}
               selectedForEdit={selectedPages.has(page)}
               onSelectForEdit={()=>chooseEditPage(page)}
