@@ -12,7 +12,7 @@ Read `docs/IMPLEMENTATION_STATUS.md` first. It is the honest list of what is fin
 
 1. **One small task at a time.** "Add OCR" is too big. "Show an error message when the OCR model is missing" is a task.
 2. **Licenses are a gate.** Never copy Stirling-PDF's restricted folders (`app/proprietary`, `app/saas`, `engine`, and the proprietary / desktop / saas / cloud / portal frontend layers). No GPL/AGPL libraries. Unsure? Ask.
-3. **Do not commit to `main`.** Make a branch, open a pull request, get it reviewed.
+3. **Do not commit to `main`, ever.** Work starts from `integration/option-b-codespaces-validation`: make a branch from it, open a pull request against it, get it reviewed.
 4. **Every change needs a test** and a passing check run.
 5. **Never commit secrets** (passwords, keys, tokens).
 
@@ -37,6 +37,7 @@ Building on your own PC costs nothing. You do not need GitHub Codespaces or paid
 ```bash
 git clone https://github.com/rafayamer/Malenjo-suite.git
 cd Malenjo-suite
+git switch integration/option-b-codespaces-validation
 npm install
 npm run typecheck
 npm test
@@ -47,8 +48,8 @@ If the MALENJO window opens, you are set up. If something fails, copy the **firs
 
 ## Day-to-day routine
 
-1. `git checkout main && git pull`
-2. `git checkout -b feat/<module>-<tiny-task>`
+1. `git switch integration/option-b-codespaces-validation && git pull --ff-only`
+2. `git switch -c fix/<phase>-<tiny-task>-<yyyymmdd>`
 3. Read the existing code and docs for that module. Copy its style.
 4. Make the smallest change that works. Add a normal test and a bad-input test.
 5. Run the checks:
@@ -79,7 +80,7 @@ The UI never talks to a library directly. It asks for a MALENJO capability, whic
 
 ## Suggested first tasks
 
-Pick from the "Next gate" column in `docs/IMPLEMENTATION_STATUS.md`. Good beginner starts are small tests or documentation fixes, then small UI fixes in a module that already works. Leave Windows camera, installer, signing and enterprise identity work for later.
+Read `docs/NEW_CHAT_HANDOFF.md` and roadmap issue #238 first, then pick from the "Next gate" column in `docs/IMPLEMENTATION_STATUS.md`. For PDF work, `docs/audits/PHASE2_QA_PASS_2026-10-24.md` lists what is verified and what still needs a Windows PC. Good beginner starts are small tests or documentation fixes, then small UI fixes in a module that already works. Leave Windows camera, installer, signing and enterprise identity work for later.
 
 ## Using Claude Code
 

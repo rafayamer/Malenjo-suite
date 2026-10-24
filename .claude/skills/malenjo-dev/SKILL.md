@@ -7,7 +7,9 @@ description: Rules and workflow for developing MALENJO (Rafius Tech LLC document
 
 MALENJO is a local-first Windows desktop document suite (educational / noncommercial build profile: personal use and class fellows; no billing, plans or paywalls). The repo already contains the Phase 0-7 foundation. Work **from this repo**, not from a fresh Stirling fork.
 
-Read `docs/IMPLEMENTATION_STATUS.md` before starting. It says which modules are complete (only Home and Help / Support) and which are scaffolds with open gates. Never claim a module is finished unless its acceptance criteria and `docs/TRACEABILITY.md` entries pass.
+**Active branch: `integration/option-b-codespaces-validation`.** It is far ahead of `main`. Branch from it and open every PR against it. **Never merge anything into `main`**; only the owner does that, at final release.
+
+Before starting, read `docs/NEW_CHAT_HANDOFF.md`, `docs/IMPLEMENTATION_STATUS.md` and the ten-phase roadmap (GitHub issue #238). Phases are only `RELEASE-READY` or `NOT RELEASE-READY`; a merged PR or green CI is evidence, not acceptance. Never claim a module or phase is finished unless its acceptance criteria and `docs/TRACEABILITY.md` entries pass and the owner has accepted it.
 
 ## The rules
 
@@ -36,7 +38,7 @@ Read `docs/IMPLEMENTATION_STATUS.md` before starting. It says which modules are 
 
 ## Task routine
 
-1. `git checkout main && git pull`, then `git checkout -b feat/<module>-<tiny-task>` (or `fix/...`, `docs/...`). Never commit to `main`.
+1. `git switch integration/option-b-codespaces-validation && git pull --ff-only`, then `git switch -c fix/<phase>-<tiny-task>-<yyyymmdd>` (or `feat/...`, `docs/...`). Never commit to `main` or directly to the integration branch.
 2. Read the relevant docs and the existing code for that module first. Match its patterns.
 3. Make the smallest change. Put new capability code behind its feature flag where the module has one.
 4. Add tests: a normal case plus a bad-input case. Use `testing/suite/fixtures/` for documents.
@@ -54,7 +56,16 @@ cargo check --manifest-path src-tauri/Cargo.toml
 cargo test --manifest-path src-tauri/Cargo.toml --lib
 ```
 
-`npm run verify:codespace` runs these in order on Linux / Codespaces. Windows-specific behavior (printing, camera, installers, Office interop) still needs a manual Windows check; record the result in the PR.
+`npm run verify:codespace` runs these in order on Linux / Codespaces.
+
+For any PDF workspace change, also run the real-browser gates (they need `npm install --no-save playwright` and `npx playwright install chromium`):
+
+```bash
+node scripts/pdf-ui-browser-smoke.mjs
+node scripts/pdf-phase2-browser-acceptance.mjs
+```
+
+The second one saves every edit through the real Save button and reopens the output independently; add a check there for any new PDF editing behaviour. Windows-specific behavior (installed desktop app, printing, camera, installers, Office interop) still needs a manual Windows check; record the result in the PR.
 
 ## Definition of done
 
