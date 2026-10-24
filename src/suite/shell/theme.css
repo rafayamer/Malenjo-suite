@@ -2296,3 +2296,84 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
   > .ml-bottom-statusbar{
   display:none!important;
 }
+
+/* Phase 2 QA 2026-10-24: password prompt for protected PDFs and the
+   read-only notice for encrypted PDFs. Theme tokens only (Light + Dark). */
+.pdf-password-prompt .pdf-password-field{
+  display:flex;flex-direction:column;align-items:stretch;gap:6px;
+  width:min(320px,100%);margin:0 0 12px;text-align:left;
+  font-size:12px;font-weight:600;color:var(--ml-text);
+}
+.pdf-password-prompt .pdf-password-field input{
+  height:36px;padding:0 10px;border-radius:6px;font:inherit;font-weight:400;font-size:14px;
+  border:1px solid var(--ml-border);background:var(--ml-field);color:var(--ml-text);
+}
+.pdf-password-prompt .pdf-password-field input:focus-visible{outline:2px solid var(--ml-brand-blue);outline-offset:1px}
+.pdf-password-prompt .pdf-password-field input[aria-invalid="true"]{border-color:var(--ml-error-fg)}
+.pdf-password-prompt .pdf-password-error{margin:-4px 0 12px;color:var(--ml-error-fg);font-size:13px}
+.pdf-encrypted-notice{display:flex;align-items:center;gap:8px;background:var(--ml-warn-bg);color:var(--ml-warn-fg)}
+.pdf-encrypted-notice svg{flex:0 0 auto}
+
+/* Phase 2 QA 2026-10-24: Organize page picker used unstyled browser-default
+   grey buttons and a white input in both themes. Use MALENJO controls. */
+.pdf-organize-page-picker{
+  display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;
+  padding:8px 14px;border-bottom:1px solid var(--ml-border);
+  font-size:13px;color:var(--ml-text);
+}
+.pdf-organize-page-picker strong{font-weight:650}
+.pdf-organize-page-picker label{display:inline-flex;align-items:center;gap:6px;color:var(--ml-muted)}
+.pdf-organize-page-picker input[type="number"]{
+  width:72px;height:28px;padding:0 8px;border-radius:5px;font:inherit;
+  border:1px solid var(--ml-border);background:var(--ml-field);color:var(--ml-text);
+}
+.pdf-organize-page-picker button{
+  height:28px;padding:0 10px;border-radius:5px;font:inherit;font-size:12px;font-weight:550;
+  border:1px solid var(--ml-border);background:var(--ml-control);color:var(--ml-text);cursor:pointer;
+}
+.pdf-organize-page-picker button:hover:not(:disabled){background:var(--ml-hover);border-color:var(--ml-brand-blue)}
+.pdf-organize-page-picker button:disabled{opacity:.55;cursor:not-allowed}
+.pdf-organize-page-picker button:focus-visible,
+.pdf-organize-page-picker input:focus-visible{outline:2px solid var(--ml-brand-blue);outline-offset:1px}
+.pdf-organize-quick-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.pdf-organize-page-picker small{flex-basis:100%;color:var(--ml-muted);font-size:12px}
+
+/* Thumbnail selection header: wrap instead of clipping "Current". */
+.pdf-selection-bar{flex-wrap:wrap}
+.pdf-selection-bar span{flex:1 1 100%;text-transform:none;letter-spacing:0;font-size:11px;line-height:1.35}
+
+/* Ribbon captions: size to the label (up to ~13 characters) instead of
+   truncating every command to "Crop visu…" at any window width. */
+.app-shell-top-only .pdf-feature-command{flex:0 0 auto;min-width:65px;max-width:104px}
+.app-shell-top-only .pdf-feature-caption{max-width:98px}
+
+/* On-page edit actions: previously inline-styled with an undefined
+   --surface token, so they fell back to white + browser-grey buttons. */
+.pdf-page-inline-actions{
+  position:absolute;right:8px;top:8px;z-index:7;
+  display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:4px;
+  max-width:calc(100% - 16px);border-radius:7px;
+  background:var(--ml-elevated);border:1px solid var(--ml-border);
+  box-shadow:0 4px 14px rgba(0,0,0,.28);
+}
+.pdf-page-inline-actions button{
+  height:26px;padding:0 9px;border-radius:5px;font:inherit;font-size:12px;font-weight:550;
+  border:1px solid var(--ml-border);background:var(--ml-control);color:var(--ml-text);cursor:pointer;
+}
+.pdf-page-inline-actions button[aria-pressed="true"]{border-color:var(--ml-brand-blue);color:var(--ml-brand-blue)}
+.pdf-page-inline-actions button:hover:not(:disabled){background:var(--ml-hover);border-color:var(--ml-brand-blue)}
+.pdf-page-inline-actions button:disabled{opacity:.55;cursor:not-allowed}
+.pdf-page-inline-actions button:focus-visible{outline:2px solid var(--ml-brand-blue);outline-offset:1px}
+@media print{.pdf-page-inline-actions{display:none!important}}
+
+/* Left page panel: the top-only shell narrows the column to <=235 px but the
+   inner rail+panel grid stayed 58+224 = 282 px, clipping 47 px. Let the panel
+   take the remaining width and give the column a little more room. */
+.app-shell-top-only .pdf-left-shell:not(.collapsed){grid-template-columns:52px minmax(0,1fr)}
+.app-shell-top-only .pdf-layout.inspector-hidden:not(.left-panel-collapsed){
+  grid-template-columns:minmax(190px,270px) minmax(0,1fr)!important;
+}
+.app-shell-top-only .pdf-layout:not(.left-panel-collapsed):not(.inspector-hidden){
+  grid-template-columns:minmax(180px,250px) minmax(0,1fr) minmax(190px,220px)!important;
+}
+.app-shell-top-only .pdf-left-panel .pdf-thumb-canvas{max-width:100%}

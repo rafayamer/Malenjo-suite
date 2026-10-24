@@ -8,6 +8,17 @@ export function clampPdfPage(page: number, pageCount: number): number {
   return Math.min(pageCount, Math.max(1, Math.round(page)));
 }
 
+/**
+ * Interpret what the user typed in the page-number box. Returns null when the
+ * draft is not a usable page number (empty, non-numeric, fractional garbage),
+ * so the caller can keep the current page instead of jumping to page 1.
+ */
+export function parsePdfPageDraft(draft: string, pageCount: number): number | null {
+  const text = draft.trim();
+  if (!/^\d{1,9}$/.test(text) || pageCount <= 0) return null;
+  return clampPdfPage(Number(text), pageCount);
+}
+
 export function clampPdfZoom(zoom: number): number {
   if (!Number.isFinite(zoom)) return 1;
   return Math.min(MAX_PDF_ZOOM, Math.max(MIN_PDF_ZOOM, zoom));
@@ -41,4 +52,16 @@ export function effectivePdfScale(
 export function rotatePdfClockwise(rotation: number): number {
   const normalized = ((rotation % 360) + 360) % 360;
   return (normalized + 90) % 360;
+}
+
+/**
+ * Rotation to hand PDF.js for display. PDF.js treats an explicit `rotation`
+ * as absolute, replacing the page's own /Rotate entry, so the reader's view
+ * rotation must be added to the page's intrinsic rotation. Passing the view
+ * rotation alone showed every /Rotate page (common in scans, and every page
+ * MALENJO rotates permanently) unrotated.
+ */
+export function displayPdfRotation(pageRotate: number, viewRotation: number): number {
+  const total = (Number.isFinite(pageRotate) ? pageRotate : 0) + (Number.isFinite(viewRotation) ? viewRotation : 0);
+  return ((Math.round(total / 90) * 90) % 360 + 360) % 360;
 }

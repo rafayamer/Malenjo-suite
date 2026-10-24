@@ -2,12 +2,33 @@ import { describe, expect, it } from 'vitest';
 import {
   clampPdfPage,
   clampPdfZoom,
+  displayPdfRotation,
   effectivePdfScale,
+  parsePdfPageDraft,
   rotatePdfClockwise,
   stepPdfZoom,
 } from './layout';
 
 describe('PDF workspace layout', () => {
+  it('adds the view rotation to the page /Rotate instead of replacing it', () => {
+    expect(displayPdfRotation(90, 0)).toBe(90);
+    expect(displayPdfRotation(270, 90)).toBe(0);
+    expect(displayPdfRotation(180, 270)).toBe(90);
+    expect(displayPdfRotation(0, 0)).toBe(0);
+    expect(displayPdfRotation(-90, 0)).toBe(270);
+    expect(displayPdfRotation(Number.NaN, 90)).toBe(90);
+  });
+  it('parses typed page drafts without jumping to page 1 on empty or invalid input', () => {
+    expect(parsePdfPageDraft('57', 57)).toBe(57);
+    expect(parsePdfPageDraft(' 12 ', 57)).toBe(12);
+    expect(parsePdfPageDraft('999', 57)).toBe(57);
+    expect(parsePdfPageDraft('0', 57)).toBe(1);
+    expect(parsePdfPageDraft('', 57)).toBeNull();
+    expect(parsePdfPageDraft('abc', 57)).toBeNull();
+    expect(parsePdfPageDraft('-3', 57)).toBeNull();
+    expect(parsePdfPageDraft('2.5', 57)).toBeNull();
+    expect(parsePdfPageDraft('5', 0)).toBeNull();
+  });
   it('clamps pages and zoom safely', () => {
     expect(clampPdfPage(0, 10)).toBe(1);
     expect(clampPdfPage(99, 10)).toBe(10);

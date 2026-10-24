@@ -47,3 +47,9 @@ provider-packs/weasyprint/runtime/
 provider-packs/weasyprint/manifest.json
 provider-packs/weasyprint/inventory.json
 .build/weasyprint/
+
+# Local browser-test output and TypeScript build info
+.build/qa/
+.build/pdf-ui-browser/
+.build/pdf-phase2-browser/
+*.tsbuildinfo

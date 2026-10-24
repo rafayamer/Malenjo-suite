@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type {CropRectangle} from './cropGeometry';
 import { TextLayer, type PDFDocumentProxy } from 'pdfjs-dist';
 import {highlightPdfTextNodes} from './pdfTextHighlights';
 import type {PdfLinkAnnotation} from './links';
 import type { PdfOptionalContentConfig } from './optionalLayers';
-import { effectivePdfScale, type PdfFitMode } from './layout';
+import { displayPdfRotation, effectivePdfScale, type PdfFitMode } from './layout';
+import { renderBudgetFor } from './renderBudget';
 
 interface Props {
   document: PDFDocumentProxy;
@@ -23,6 +24,8 @@ interface Props {
   highlightQuery?: string;
   onVisible(pageNumber: number): void;
   onRendered(pageNumber: number): void;
+  /** Called when the page's pixels were released to stay within the memory budget. */
+  onReleased?(pageNumber: number): void;
   links?:readonly PdfLinkAnnotation[];
   onActivateLink?(link:PdfLinkAnnotation):void;
   cropMode?:boolean;
@@ -54,6 +57,7 @@ export default function PdfPageCanvas({
   highlightQuery='',
   onVisible,
   onRendered,
+  onReleased,
   links=[],
   onActivateLink,
   cropMode=false,
@@ -103,8 +107,10 @@ export default function PdfPageCanvas({
     }
 
     const observer = new IntersectionObserver((entries) => {
-      const entry = entries[0];
-      if (entry.isIntersecting) setVisible(true);
+      // Use the newest entry; visibility now toggles so pages far from the
+      // viewport can be released by the render budget.
+      const entry = entries[entries.length - 1];
+      setVisible(entry.isIntersecting);
       if (entry.intersectionRatio >= 0.35) onVisible(pageNumber);
     }, {
       rootMargin: '900px 0px',
@@ -120,7 +126,7 @@ export default function PdfPageCanvas({
     let cancelled = false;
     void document.getPage(pageNumber).then((page) => {
       if (cancelled) return;
-      const viewport = page.getViewport({ scale: 1, rotation });
+      const viewport = page.getViewport({ scale: 1, rotation: displayPdfRotation(page.rotate, rotation) });
       setBaseSize({ width: viewport.width, height: viewport.height });
     }).catch((reason) => {
       if (!cancelled) setFailed(reason instanceof Error ? reason.message : String(reason));
@@ -142,10 +148,62 @@ export default function PdfPageCanvas({
     height: Math.max(160, Math.round(baseSize.height * scale)),
   }), [baseSize.height, baseSize.width, scale]);
 
+  // Pinned pages (visible neighbourhood, focus/adjacent, printing) are never
+  // released by the memory budget.
+  const pinned = forceRender || eager || visible;
+  const pinnedRef = useRef(pinned);
+  pinnedRef.current = pinned;
+  // Identity of the pixels currently on the canvas. A cached page that is
+  // revisited with the same document/scale/rotation/layers is not re-rendered.
+  const renderedKeyRef = useRef<{document:PDFDocumentProxy;key:string;config:unknown}|null>(null);
+  const renderKey = `${scale}|${rotation}|${layerRevision}`;
+  const [releaseRevision, setReleaseRevision] = useState(0);
+  const releasePixels = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.width = 0; canvas.height = 0;
+      // Drop the old display size too: after zooming out, a stale larger CSS
+      // size would stretch this page's slot and shift the scroll layout.
+      canvas.style.width = ''; canvas.style.height = '';
+    }
+    if (shellRef.current) shellRef.current.dataset.pdfRendered = 'false';
+    textLayerRef.current?.replaceChildren();
+    textDivsRef.current = [];
+    renderedKeyRef.current = null;
+    setTextRevision((revision) => revision + 1);
+    setReleaseRevision((revision) => revision + 1);
+    onReleased?.(pageNumber);
+  }, [onReleased, pageNumber]);
+
   useEffect(() => {
-    if (!forceRender && (!renderAllowed || (!eager && !visible))) return;
+    renderBudgetFor(document).setPinned(pageNumber, pinned);
+  }, [document, pageNumber, pinned]);
+  useEffect(() => () => renderBudgetFor(document).forget(pageNumber), [document, pageNumber]);
+
+  useEffect(() => {
+    const rendered = renderedKeyRef.current;
+    const current = rendered !== null && rendered.document === document &&
+      rendered.key === renderKey && rendered.config === optionalContentConfig;
+    const wanted = forceRender || (renderAllowed && (eager || visible));
+    if (!wanted) {
+      // Off-screen pages whose pixels are stale (zoom, rotation, layers or an
+      // edit changed) are released now instead of re-rendered: re-rendering
+      // every previously visited page on each zoom step was pure waste, and
+      // stale canvas sizes would distort the scroll layout.
+      if (rendered !== null && !current) {
+        renderBudgetFor(rendered.document).forget(pageNumber);
+        releasePixels();
+      }
+      return;
+    }
+    if (current) {
+      renderBudgetFor(document).setPinned(pageNumber, pinnedRef.current);
+      onRendered(pageNumber);
+      return;
+    }
 
     let cancelled = false;
+    let completed = false;
     let renderTask: ReturnType<Awaited<ReturnType<PDFDocumentProxy['getPage']>>['render']> | null = null;
     let textLayer:TextLayer|null=null;
     const textContainer=textLayerRef.current;
@@ -158,9 +216,10 @@ export default function PdfPageCanvas({
         const page = await document.getPage(pageNumber);
         if (cancelled) return;
 
-        const viewport = page.getViewport({ scale, rotation });
+        const viewport = page.getViewport({ scale, rotation: displayPdfRotation(page.rotate, rotation) });
         const canvas = canvasRef.current;
         if (!canvas) return;
+        if (shellRef.current) shellRef.current.dataset.pdfRendered = 'false';
 
         const context = canvas.getContext('2d', { alpha: false });
         if (!context) throw new Error('Canvas rendering is unavailable.');
@@ -181,6 +240,10 @@ export default function PdfPageCanvas({
 
         await renderTask.promise;
         if(cancelled)return;
+        renderedKeyRef.current = { document, key: renderKey, config: optionalContentConfig };
+        // Explicit, testable paint signal (a never-drawn canvas is 300 px wide).
+        if (shellRef.current) shellRef.current.dataset.pdfRendered = 'true';
+        renderBudgetFor(document).retain(pageNumber, canvas.width * canvas.height, releasePixels, pinnedRef.current);
         onRendered(pageNumber);
         // PDF.js canvas pixels cannot be selected. Its official TextLayer
         // overlays real, invisible and selectable text spans on the exact
@@ -213,6 +276,7 @@ export default function PdfPageCanvas({
             span.style.setProperty('-webkit-user-select','text','important');
           }
           setTextRevision(revision=>revision+1);
+          completed = true;
           } catch (error) {
             // Canvas rendering already succeeded: optional text selection
             // must not turn a readable page into a fatal page error.
@@ -234,10 +298,14 @@ export default function PdfPageCanvas({
       cancelled = true;
       renderTask?.cancel();
       textLayer?.cancel();
-      if(textContainer)textContainer.replaceChildren();
-      textDivsRef.current=[];
+      // Keep a finished page (pixels + selectable text) when it merely scrolls
+      // away; only an interrupted render leaves a partial text layer behind.
+      if(!completed){
+        if(textContainer)textContainer.replaceChildren();
+        textDivsRef.current=[];
+      }
     };
-  }, [document, eager, forceRender, onRendered, pageNumber, renderAllowed, rotation, scale, visible, optionalContentConfig, layerRevision]);
+  }, [document, eager, forceRender, onRendered, pageNumber, renderAllowed, rotation, scale, visible, optionalContentConfig, layerRevision, renderKey, releasePixels, releaseRevision]);
 
   useEffect(()=>{
     let cancelled=false;
@@ -249,7 +317,7 @@ export default function PdfPageCanvas({
     }
     void document.getPage(pageNumber).then((page)=>{
       if(cancelled)return;
-      const viewport=page.getViewport({scale,rotation});
+      const viewport=page.getViewport({scale,rotation:displayPdfRotation(page.rotate,rotation)});
       const hitboxes=pageLinks.flatMap(link=>{
         const rect=link.rectangle;
         if(!rect)return [];
@@ -282,7 +350,9 @@ export default function PdfPageCanvas({
     className="pdf-page-shell"
     style={{ minWidth: placeholder.width, minHeight: placeholder.height, position:'relative', overflow:cropMode?'hidden':undefined }}
   >
-    <canvas ref={canvasRef} aria-label={`PDF page ${pageNumber}`}/>
+    {/* width/height 0: no backing store until the page is actually drawn. A
+        default 300x150 canvas per placeholder cost ~180 MB on a 1,000-page PDF. */}
+    <canvas ref={canvasRef} width={0} height={0} aria-label={`PDF page ${pageNumber}`}/>
     <div ref={textLayerRef} className="pdf-text-layer textLayer"
       aria-label={`Selectable text on PDF page ${pageNumber}`}/>
     {linkHitboxes.map(({link,left,top,width,height})=>(
@@ -331,11 +401,7 @@ export default function PdfPageCanvas({
       }}/>}
     </div>}
     {showEditSelection&&<div role="group" aria-label={`Actions for PDF page ${pageNumber}`}
-      className="pdf-page-inline-actions"
-      style={{position:'absolute',right:8,top:8,zIndex:7,
-        display:'flex',alignItems:'center',gap:5,padding:5,borderRadius:8,
-        background:'var(--surface, white)',color:'var(--text, #111827)',
-        boxShadow:'0 2px 10px rgba(0,0,0,.18)',maxWidth:'calc(100% - 16px)',flexWrap:'wrap'}}>
+      className="pdf-page-inline-actions">
       <button type="button" onClick={onSelectForEdit} disabled={editingBusy}
         aria-label={`Select page ${pageNumber} for editing`}
         aria-pressed={selectedForEdit}
