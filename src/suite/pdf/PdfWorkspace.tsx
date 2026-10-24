@@ -2610,7 +2610,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   // editing actions are visible immediately, not buried behind disabled tiles.
   const activeTaskActions=[...taskActions[taskCategory],...plannedActions]
     .filter(action=>action.id!=='local-provider-tools'||masterTab==='tools');
-  const ribbonVisibleCount=viewport.width<540?2:viewport.width<900?3:5;
+  // Show as many commands as the measured reader width comfortably fits
+  // (about 92 px each) before using More; wide screens no longer hide 7 of
+  // 12 Organize commands behind an overflow menu.
+  const ribbonVisibleCount=viewport.width<540?2:viewport.width<900?3:Math.max(5,Math.min(14,Math.floor((viewport.width-260)/92)));
   const primaryTaskActions=activeTaskActions.slice(0,ribbonVisibleCount);
   const overflowTaskActions=activeTaskActions.slice(ribbonVisibleCount);
   const shortActionLabel=(action:PdfToolbarAction)=>action.label
@@ -2704,11 +2707,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         >{tab.label}</button>)}
       </div>
 
-      {masterTab==='organize'&&pdf&&<section className="pdf-organize-page-picker" aria-label="Choose pages to edit"
-        style={{display:'flex',alignItems:'center',gap:12,padding:'10px 14px',flexWrap:'wrap',borderBottom:'1px solid var(--border, #d1d5db)'}}>
+      {masterTab==='organize'&&pdf&&<section className="pdf-organize-page-picker" aria-label="Choose pages to edit">
         <strong>Editing {singleEditTarget!==null?`page ${singleEditTarget}`:`${operationPages.length} selected pages`}</strong>
         <label>Go to page <input type="number" min={1} max={pageCount} step={1}
-          aria-label="Page number to edit" style={{width:76,marginLeft:6}}
+          aria-label="Page number to edit"
           value={editPageInput}
           onChange={event=>setEditPageInput(event.target.value)}
           onBlur={event=>commitEditPageInput(event.currentTarget.value)}
@@ -2719,7 +2721,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         <button type="button" onClick={()=>chooseEditPage(currentPage)}
           disabled={singleEditTarget===currentPage}>Edit the page I'm viewing ({currentPage})</button>
         <button type="button" onClick={()=>openLeftPanel('pages')}>Select pages from thumbnails</button>
-        <div role="group" aria-label="Quick page editing actions" style={{display:'flex',gap:7,flexWrap:'wrap',alignItems:'center'}}>
+        <div role="group" aria-label="Quick page editing actions" className="pdf-organize-quick-actions">
           <button type="button" disabled={mutating||loading||singleEditTarget===null}
             onClick={()=>{if(singleEditTarget!==null)beginReplacePage(singleEditTarget);}}>
             Replace {singleEditTarget!==null?`page ${singleEditTarget}`:'one page'}…</button>

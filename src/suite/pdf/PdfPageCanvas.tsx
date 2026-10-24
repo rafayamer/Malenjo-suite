@@ -331,11 +331,7 @@ export default function PdfPageCanvas({
       }}/>}
     </div>}
     {showEditSelection&&<div role="group" aria-label={`Actions for PDF page ${pageNumber}`}
-      className="pdf-page-inline-actions"
-      style={{position:'absolute',right:8,top:8,zIndex:7,
-        display:'flex',alignItems:'center',gap:5,padding:5,borderRadius:8,
-        background:'var(--surface, white)',color:'var(--text, #111827)',
-        boxShadow:'0 2px 10px rgba(0,0,0,.18)',maxWidth:'calc(100% - 16px)',flexWrap:'wrap'}}>
+      className="pdf-page-inline-actions">
       <button type="button" onClick={onSelectForEdit} disabled={editingBusy}
         aria-label={`Select page ${pageNumber} for editing`}
         aria-pressed={selectedForEdit}
