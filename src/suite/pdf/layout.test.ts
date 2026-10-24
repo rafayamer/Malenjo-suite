@@ -3,11 +3,23 @@ import {
   clampPdfPage,
   clampPdfZoom,
   effectivePdfScale,
+  parsePdfPageDraft,
   rotatePdfClockwise,
   stepPdfZoom,
 } from './layout';
 
 describe('PDF workspace layout', () => {
+  it('parses typed page drafts without jumping to page 1 on empty or invalid input', () => {
+    expect(parsePdfPageDraft('57', 57)).toBe(57);
+    expect(parsePdfPageDraft(' 12 ', 57)).toBe(12);
+    expect(parsePdfPageDraft('999', 57)).toBe(57);
+    expect(parsePdfPageDraft('0', 57)).toBe(1);
+    expect(parsePdfPageDraft('', 57)).toBeNull();
+    expect(parsePdfPageDraft('abc', 57)).toBeNull();
+    expect(parsePdfPageDraft('-3', 57)).toBeNull();
+    expect(parsePdfPageDraft('2.5', 57)).toBeNull();
+    expect(parsePdfPageDraft('5', 0)).toBeNull();
+  });
   it('clamps pages and zoom safely', () => {
     expect(clampPdfPage(0, 10)).toBe(1);
     expect(clampPdfPage(99, 10)).toBe(10);

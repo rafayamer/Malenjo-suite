@@ -8,6 +8,17 @@ export function clampPdfPage(page: number, pageCount: number): number {
   return Math.min(pageCount, Math.max(1, Math.round(page)));
 }
 
+/**
+ * Interpret what the user typed in the page-number box. Returns null when the
+ * draft is not a usable page number (empty, non-numeric, fractional garbage),
+ * so the caller can keep the current page instead of jumping to page 1.
+ */
+export function parsePdfPageDraft(draft: string, pageCount: number): number | null {
+  const text = draft.trim();
+  if (!/^\d{1,9}$/.test(text) || pageCount <= 0) return null;
+  return clampPdfPage(Number(text), pageCount);
+}
+
 export function clampPdfZoom(zoom: number): number {
   if (!Number.isFinite(zoom)) return 1;
   return Math.min(MAX_PDF_ZOOM, Math.max(MIN_PDF_ZOOM, zoom));

@@ -105,6 +105,7 @@ import {
   clampPdfPage,
   clampPdfZoom,
   effectivePdfScale,
+  parsePdfPageDraft,
   stepPdfZoom,
   type PdfFitMode,
 } from './layout';
@@ -246,6 +247,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [browserFile, setBrowserFile] = useState<File | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
+  // What the user is typing in the page-number box. Kept separate from
+  // currentPage so the visible-page tracker can never overwrite a half-typed
+  // number, and an empty box does not snap to page 1. null = not editing.
+  const [pageDraft, setPageDraft] = useState<string | null>(null);
   const [editPageInput,setEditPageInput]=useState('1');
   const [selectedPages, setSelectedPages] = useState<Set<number>>(() => new Set([1]));
   const [fitMode, setFitMode] = useState<PdfFitMode>('width');
@@ -672,8 +677,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       selectionAnchorRef.current=page;
     }
     window.requestAnimationFrame(()=>{
+      // 'instant' overrides the reader's CSS scroll-behavior:smooth. 'auto'
+      // inherits it, which animated through every intermediate page, rendered
+      // them all and let stale observer updates reach the page indicator.
       document.getElementById(`${domIdPrefix}-page-${page}`)?.scrollIntoView({
-        behavior:'auto',block:'start',
+        behavior:'instant',block:'start',
       });
       window.requestAnimationFrame(()=>{
         if(pageJumpLockRef.current?.page===page)pageJumpLockRef.current.settled=true;
@@ -3711,10 +3719,27 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             <input
               aria-label="Current PDF page"
               disabled={!pdf}
-              value={pdf ? currentPage : ''}
-              onChange={(event) => setCurrentPage(clampPdfPage(Number(event.target.value), pageCount))}
-              onBlur={() => goToPage(currentPage)}
-              onKeyDown={(event) => { if (event.key === 'Enter') goToPage(currentPage); }}
+              inputMode="numeric"
+              value={pdf ? (pageDraft ?? String(currentPage)) : ''}
+              onFocus={(event) => { setPageDraft(String(currentPage)); event.currentTarget.select(); }}
+              onChange={(event) => setPageDraft(event.target.value)}
+              onBlur={() => {
+                const target = pageDraft === null ? null : parsePdfPageDraft(pageDraft, pageCount);
+                setPageDraft(null);
+                if (target !== null && target !== currentPage) goToPage(target);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  const target = pageDraft === null ? null : parsePdfPageDraft(pageDraft, pageCount);
+                  // Commit, then show the live page again. Invalid input
+                  // simply reverts to the current page instead of page 1.
+                  if (target !== null) goToPage(target);
+                  setPageDraft(null);
+                } else if (event.key === 'Escape') {
+                  setPageDraft(null);
+                  event.currentTarget.blur();
+                }
+              }}
             />
             <span>/ {pageCount || '—'}</span>
             <button disabled={!pdf || currentPage >= pageCount} onClick={() => goToPage(currentPage + 1)} aria-label="Next page"><ChevronRight size={16}/></button>
