@@ -31,6 +31,8 @@ jobs:
         run: node scripts/pdf-ui-browser-smoke.mjs
       - name: Verify command palette Enter and keyboard focus in real Chromium
         run: node scripts/command-palette-enter-focus-browser-smoke.mjs
+      - name: Phase 2 PDF core and editor acceptance with independent output reopen
+        run: node scripts/pdf-phase2-browser-acceptance.mjs
       - name: Publish Phase 3 light/dark visual review screenshots
         if: success()
         uses: actions/upload-artifact@v4
@@ -44,7 +46,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pdf-ui-browser-failure
-          path: .build/pdf-ui-browser/failure.png
+          path: |
+            .build/pdf-ui-browser/failure.png
+            .build/pdf-phase2-browser/*.png
           retention-days: 7
           if-no-files-found: warn
       - name: Report completed browser-acceptance result

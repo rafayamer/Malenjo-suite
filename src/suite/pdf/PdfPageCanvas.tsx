@@ -160,7 +160,12 @@ export default function PdfPageCanvas({
   const [releaseRevision, setReleaseRevision] = useState(0);
   const releasePixels = useCallback(() => {
     const canvas = canvasRef.current;
-    if (canvas) { canvas.width = 0; canvas.height = 0; }
+    if (canvas) {
+      canvas.width = 0; canvas.height = 0;
+      // Drop the old display size too: after zooming out, a stale larger CSS
+      // size would stretch this page's slot and shift the scroll layout.
+      canvas.style.width = ''; canvas.style.height = '';
+    }
     if (shellRef.current) shellRef.current.dataset.pdfRendered = 'false';
     textLayerRef.current?.replaceChildren();
     textDivsRef.current = [];
