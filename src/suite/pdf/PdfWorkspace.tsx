@@ -2596,7 +2596,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       providerAction,
     ],
     forms:[
-      {id:'add-form-field',label:`Add ${formDraft.type} field`,enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addFormField},
+      {id:'add-form-field',label:`Add ${formDraft.type} field`,enabled:!!sourceBytes&&!mutating&&!!formDraft.name.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!formDraft.name.trim()?'Enter a field name in Form settings first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addFormField},
       {id:'fill-form',label:'Apply field values',enabled:!!sourceBytes&&!mutating&&fillableFormFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!fillableFormFields.length?'No editable AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:fillForm},
       {id:'flatten-form',label:'Flatten fields',enabled:!!sourceBytes&&!mutating&&formFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:flattenForm},
       {id:'configure-forms',label:'Form settings',enabled:true,run:configureProperties},
@@ -3438,7 +3438,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             {formDraft.type==='radio'&&<label>Gap<input type="number" min="0.01" max="0.3" step="0.01" value={formDraft.gap} onChange={(event)=>setFormDraft({...formDraft,gap:Number(event.target.value)})}/></label>}
           </div>
 
-          <button disabled={mutating} onClick={()=>void addFormField()}>Add {formDraft.type} field</button>
+          <button disabled={mutating||!formDraft.name.trim()} title={formDraft.name.trim()?undefined:'Enter a field name first.'} onClick={()=>void addFormField()}>Add {formDraft.type} field</button>
 
           <div className="pdf-feature-list pdf-form-inventory">
             <b>{formFields.length} AcroForm field{formFields.length===1?'':'s'}</b>

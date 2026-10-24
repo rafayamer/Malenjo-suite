@@ -86,8 +86,10 @@ Stirling/PDFBox or another PDF mutation backend is not vendored by this phase. B
 - [x] Backend capability boundary.
 - [x] Dependency provenance.
 - [x] Automated CI/typecheck/build verification on Phase 2 branch (CI #90: frontend, Windows Rust, Codespaces/Linux all passed).
-- [ ] Windows desktop manual rendering/printing check (release-quality/manual validation; automated main CI #93 passed).
-- [ ] Representative fidelity corpus expansion.
+- [ ] Windows desktop manual rendering/printing check (release-quality/manual validation). Automated Windows Chromium rendering now runs in CI (`pdf-phase2-browser-windows`); a clean-installed desktop and physical-printer check remain manual — see `audits/PHASE2_QA_PASS_2026-10-24.md`.
+- [x] Representative fidelity corpus expansion for the core reader: AES-256 user-password and owner-restricted fixtures; generated mixed letter/A4/A5/tabloid layouts with /Rotate 0/90/180/270; dense-text/vector/raster 100- and 1,000-page reports (2026-10-24). Owner-supplied real-world documents remain part of UAT.
+- [x] Password-protected PDFs open via prompt (read-only); encrypted-file edits are refused with plain-language messages.
+- [x] Bounded render memory (48 MP per document) with instant cached-page return; `scripts/pdf-phase2-browser-acceptance.mjs` gates 27 real-Chromium checks with independent output reopen.
 
 
 ## Post-merge verification
