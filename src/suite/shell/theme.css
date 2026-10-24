@@ -2296,3 +2296,20 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
   > .ml-bottom-statusbar{
   display:none!important;
 }
+
+/* Phase 2 QA 2026-10-24: password prompt for protected PDFs and the
+   read-only notice for encrypted PDFs. Theme tokens only (Light + Dark). */
+.pdf-password-prompt .pdf-password-field{
+  display:flex;flex-direction:column;align-items:stretch;gap:6px;
+  width:min(320px,100%);margin:0 0 12px;text-align:left;
+  font-size:12px;font-weight:600;color:var(--ml-text);
+}
+.pdf-password-prompt .pdf-password-field input{
+  height:36px;padding:0 10px;border-radius:6px;font:inherit;font-weight:400;font-size:14px;
+  border:1px solid var(--ml-border);background:var(--ml-field);color:var(--ml-text);
+}
+.pdf-password-prompt .pdf-password-field input:focus-visible{outline:2px solid var(--ml-brand-blue);outline-offset:1px}
+.pdf-password-prompt .pdf-password-field input[aria-invalid="true"]{border-color:var(--ml-error-fg)}
+.pdf-password-prompt .pdf-password-error{margin:-4px 0 12px;color:var(--ml-error-fg);font-size:13px}
+.pdf-encrypted-notice{display:flex;align-items:center;gap:8px;background:var(--ml-warn-bg);color:var(--ml-warn-fg)}
+.pdf-encrypted-notice svg{flex:0 0 auto}

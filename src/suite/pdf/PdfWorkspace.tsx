@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Maximize2,
   MonitorPlay,
+  Lock,
 } from 'lucide-react';
 import type { DocumentSession } from '../files/session';
 import type { RegisterDocumentCommands } from '../commands/types';
@@ -86,7 +87,8 @@ import {
   type PdfFormFieldInfo,
   type PdfFormFieldUpdate,
 } from './editor';
-import { disposePdf, loadPdfBytes, type PdfLoadResult } from './engine';
+import { disposePdf, loadPdfBytes, PdfPasswordRequiredError, type PdfLoadResult } from './engine';
+import { describePdfError, ENCRYPTED_EDIT_MESSAGE, looksEncryptedPdf } from './pdfUserErrors';
 import { createPdfFromImages, PDF_IMAGE_MAX_COUNT, PDF_IMAGE_MAX_BYTES, PDF_IMAGE_MAX_TOTAL_BYTES } from './imageConvert';
 import {
   addPdfRegionMarkup, deletePdfReviewAnnotation, listPdfReviewAnnotations,
@@ -251,6 +253,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   // currentPage so the visible-page tracker can never overwrite a half-typed
   // number, and an empty box does not snap to page 1. null = not editing.
   const [pageDraft, setPageDraft] = useState<string | null>(null);
+  // A password-protected PDF waiting for its user password. The bytes stay in
+  // memory only; the typed password lives in passwordDraft until submitted.
+  const [passwordPrompt, setPasswordPrompt] = useState<{bytes:Uint8Array;name:string;file:File|null;incorrect:boolean}|null>(null);
+  const [passwordDraft, setPasswordDraft] = useState('');
+  // Encrypted PDFs can be viewed but pdf-lib cannot rewrite them safely.
+  const [encryptedPdf, setEncryptedPdf] = useState(false);
   const [editPageInput,setEditPageInput]=useState('1');
   const [selectedPages, setSelectedPages] = useState<Set<number>>(() => new Set([1]));
   const [fitMode, setFitMode] = useState<PdfFitMode>('width');
@@ -456,7 +464,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     void inspectPdfVisualCropPage(sourceBytes,cropTargetPage).then(value=>{
       if(!cancelled)setCropGeometry(value);
     }).catch(reason=>{
-      if(!cancelled){setCropGeometry(null);setError(reason instanceof Error?reason.message:String(reason));}
+      if(!cancelled){setCropGeometry(null);setError(describePdfError(reason));}
     });
     return ()=>{cancelled=true;};
   },[cropMode,cropTargetPage,sourceBytes]);
@@ -468,7 +476,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       const margins=cropRectangleToMargins(rect,cropGeometry.width,cropGeometry.height);
       setPageBoxDraft(draft=>({...draft,box:'crop',scope:'selected',...margins}));
       setError('');
-    }catch(reason){setError(reason instanceof Error?reason.message:String(reason));}
+    }catch(reason){setError(describePdfError(reason));}
   };
   const scrollFps = useScrollFps(scrollRef);
   const domIdPrefix=session?.id??previewIdRef.current;
@@ -479,6 +487,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     file: File | null = null,
     preserveDirty = false,
     onCommitted?:()=>void,
+    password?:string,
   ) => {
     const requestId = ++requestIdRef.current;
     replacementPendingRef.current=true;
@@ -488,14 +497,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setFirstPageMs(null);
     firstPageReportedRef.current = false;
     loadStartedRef.current = performance.now();
+    let owned: Uint8Array | null = null;
 
     try {
       // File.arrayBuffer() already gives this reader an exclusive new buffer.
       // Keep that buffer instead of immediately copying up to 32 MB again;
       // Uint8Array inputs (including Undo/Redo) still receive an owned copy.
       // loadPdfBytes() clones separately for PDF.js worker transfer.
-      const owned = input instanceof Uint8Array ? Uint8Array.from(input) : new Uint8Array(input);
-      const result = await loadPdfBytes(owned);
+      owned = input instanceof Uint8Array ? Uint8Array.from(input) : new Uint8Array(input);
+      const result = await loadPdfBytes(owned, password === undefined ? {} : {password});
       if (requestId !== requestIdRef.current) {
         await disposePdf(result);
         return false;
@@ -513,6 +523,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setComparisonResult(null);
       currentPdfBytesRef.current=owned;
       setSourceBytes(owned);
+      setPasswordPrompt(null);
+      if(!preserveDirty)setEncryptedPdf(looksEncryptedPdf(owned));
       setBrowserFile(file);
       setSourceName(name);
       setPageCount(result.document.numPages);
@@ -544,9 +556,16 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       return true;
     } catch (reason) {
       if (requestId === requestIdRef.current) {
+        if (reason instanceof PdfPasswordRequiredError && owned && !preserveDirty) {
+          // Ask for the password instead of failing. Nothing is installed yet,
+          // so a previously open PDF in this tab stays exactly as it was.
+          setPasswordPrompt({bytes:owned,name,file,incorrect:reason.incorrect});
+          setError('');
+          return false;
+        }
         // Loading is transactional: a corrupt replacement must not discard the
         // previously opened PDF, its unsaved bytes, or its undo/redo history.
-        setError(reason instanceof Error ? reason.message : String(reason));
+        setError(describePdfError(reason));
       }
       return false;
     } finally {
@@ -576,7 +595,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         })
         .catch((reason) => {
           if (!cancelled) {
-            setError(reason instanceof Error ? reason.message : String(reason));
+            setError(describePdfError(reason));
             setLoading(false);
           }
         });
@@ -592,7 +611,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       })
       .catch((reason) => {
         if (!cancelled) {
-          setError(reason instanceof Error ? reason.message : String(reason));
+          setError(describePdfError(reason));
           setLoading(false);
         }
       });
@@ -823,6 +842,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       replacementPendingRef.current||currentPdfBytesRef.current!==sourceBytes)return false;
     // Snapshot the replacement counter before awaiting any document processing.
     // It changes at the START of installPdf, not only after PDF.js parsing.
+    if(encryptedPdf){
+      setActionNotice('');
+      setError(ENCRYPTED_EDIT_MESSAGE);
+      return false;
+    }
     const sourceRevision=requestIdRef.current;
     mutationPendingRef.current=true;
     setMutating(true);
@@ -852,7 +876,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       });
       return installed;
     }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
+      setActionNotice('');
+      setError(describePdfError(reason));
       return false;
     }finally{
       mutationPendingRef.current=false;
@@ -931,7 +956,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         targetPage,
       );
     }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
+      setError(describePdfError(reason));
     }
   }
 
@@ -974,7 +999,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         setActionNotice(`Undid: ${undoneLabel}`);
       });
     }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
+      setError(describePdfError(reason));
     }finally{
       mutationPendingRef.current=false;
       setMutating(false);
@@ -1003,7 +1028,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         setActionNotice(`Redid: ${transition.entry.label}`);
       });
     }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
+      setError(describePdfError(reason));
     }finally{
       mutationPendingRef.current=false;
       setMutating(false);
@@ -1116,7 +1141,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       .catch(reason=>{
         if(!cancelled){
           setReviewAnnotations([]);
-          setReviewFailure(reason instanceof Error?reason.message:String(reason));
+          setReviewFailure(describePdfError(reason));
         }
       })
       .finally(()=>{if(!cancelled)setReviewLoading(false);});
@@ -1138,7 +1163,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       })
       .catch(reason=>{
         if(cancelled)return;
-        setLayersError(reason instanceof Error?reason.message:String(reason));
+        setLayersError(describePdfError(reason));
         setOptionalLayers(null);
       })
       .finally(()=>{if(!cancelled)setLayersLoading(false);});
@@ -1154,7 +1179,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setOptionalLayers({...currentLayers,current:entries});
       setLayerRevision(value=>value+1);
     }catch(reason){
-      setLayersError(reason instanceof Error?reason.message:String(reason));
+      setLayersError(describePdfError(reason));
     }
   }
 
@@ -1166,7 +1191,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       setLayerRevision(value=>value+1);
       setLayersError('');
     }catch(reason){
-      setLayersError(reason instanceof Error?reason.message:String(reason));
+      setLayersError(describePdfError(reason));
     }
   }
 
@@ -1220,7 +1245,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       .catch(reason=>{
         if(!cancelled){
           setEditableBookmarks([]);
-          setBookmarkEditError(reason instanceof Error?reason.message:String(reason));
+          setBookmarkEditError(describePdfError(reason));
         }
       });
     return ()=>{cancelled=true;};
@@ -1267,7 +1292,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     void listPdfLinkAnnotations(deferredInspectionBytes)
       .then(items=>{if(!cancelled)setPdfLinks(items);})
       .catch(reason=>{
-        if(!cancelled)setLinksError(reason instanceof Error?reason.message:String(reason));
+        if(!cancelled)setLinksError(describePdfError(reason));
       })
       .finally(()=>{if(!cancelled)setLinksLoading(false);});
     return()=>{cancelled=true;};
@@ -1335,7 +1360,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           window.open(target.href,'_blank','noopener,noreferrer');
         }
       }catch(reason){
-        setError(reason instanceof Error?reason.message:String(reason));
+        setError(describePdfError(reason));
       }
     }
   }
@@ -1347,7 +1372,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         const page=await resolvePdfOutlinePage(pdf.document,entry.dest);
         if(page){goToPage(page);setActionNotice('Navigated to bookmark '+entry.title+'.');return;}
       }catch(reason){
-        setError(reason instanceof Error?reason.message:String(reason));
+        setError(describePdfError(reason));
         return;
       }
     }
@@ -1374,7 +1399,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       const saved=await exportPdfEmbeddedAttachment(entry.name,bytes);
       if(saved)setActionNotice('Exported embedded attachment without opening or executing it.');
     }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
+      setError(describePdfError(reason));
     }finally{
       setExtractingAttachment(false);
       onSavingChange?.(false);
@@ -1620,7 +1645,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       .catch(reason=>{
         if(!cancelled){
           setPageLabelRanges([]);
-          setPageLabelError(reason instanceof Error?reason.message:String(reason));
+          setPageLabelError(describePdfError(reason));
         }
       });
     return ()=>{cancelled=true;};
@@ -1724,7 +1749,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }catch(reason){
       if(revision===searchSequenceRef.current){
         setSearchStatus('PDF text search could not finish.');
-        setError(reason instanceof Error?reason.message:String(reason));
+        setError(describePdfError(reason));
       }
     }finally{
       if(revision===searchSequenceRef.current)setSearching(false);
@@ -1757,7 +1782,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       if(reason instanceof Error&&reason.name==='AbortError'){
         setActionNotice('PDF text export cancelled. No partial file was saved.');
       }else{
-        setError(reason instanceof Error?reason.message:String(reason));
+        setError(describePdfError(reason));
       }
     }finally{
       if(textExportAbortRef.current===controller)textExportAbortRef.current=null;
@@ -1790,7 +1815,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       if(reason instanceof Error&&reason.name==='AbortError'){
         setActionNotice('PDF-to-JPEG cancelled; no partial file was saved.');
       }else{
-        setError(reason instanceof Error?reason.message:String(reason));
+        setError(describePdfError(reason));
       }
     }finally{
       if(pageImageAbortRef.current===controller)pageImageAbortRef.current=null;
@@ -1834,7 +1859,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       if(reason instanceof Error&&reason.name==='AbortError'){
         setActionNotice('Image-to-PDF conversion cancelled. No partial file was saved.');
       }else{
-        setError(reason instanceof Error?reason.message:String(reason));
+        setError(describePdfError(reason));
       }
     }finally{
       if(imagesAbortRef.current===controller)imagesAbortRef.current=null;
@@ -1870,7 +1895,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }catch(reason){
       if(reason instanceof Error&&reason.name==='AbortError'){
         setActionNotice('PDF-to-PNG export cancelled; no partial ZIP was saved.');
-      }else setError(reason instanceof Error?reason.message:String(reason));
+      }else setError(describePdfError(reason));
     }finally{
       if(pageImageAbortRef.current===controller)pageImageAbortRef.current=null;
       setExportingPageImages(false);
@@ -1915,7 +1940,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       if(reason instanceof Error&&reason.name==='AbortError'){
         setActionNotice('PDF comparison cancelled; no partial result was saved.');
       }else{
-        setError(reason instanceof Error?reason.message:String(reason));
+        setError(describePdfError(reason));
       }
     }finally{
       if(second){
@@ -1942,7 +1967,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         setActionNotice('Exported a selectable-text comparison report.');
       }
     }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
+      setError(describePdfError(reason));
     }finally{
       onSavingChange?.(false);
     }
@@ -1962,7 +1987,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         : 'PDF copy exported. The original document remains unchanged.');
       else setActionNotice('PDF export cancelled. No new file was saved.');
     }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
+      setError(describePdfError(reason));
     }finally{
       onSavingChange?.(false);
     }
@@ -1980,7 +2005,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       if(saved) setActionNotice(`Extracted ${pages.length} selected page(s) as a new PDF.`);
       else setActionNotice('Page extraction cancelled. No output was saved.');
     }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
+      setError(describePdfError(reason));
     }finally{
       onSavingChange?.(false);
     }
@@ -2002,7 +2027,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         ? `Split after page ${currentPage} and exported two PDFs.`
         : 'PDF split only partially saved: part 1 was exported, part 2 was cancelled.');
     }catch(reason){
-      setError(reason instanceof Error?reason.message:String(reason));
+      setError(describePdfError(reason));
     }finally{
       onSavingChange?.(false);
     }
@@ -2897,8 +2922,38 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
     {(notice || actionNotice) && <div className="pdf-notice">{notice || actionNotice}</div>}
     {error && <div className="pdf-notice error" role="alert"><strong>MAL-PDF-001</strong> · {error}</div>}
+    {pdf && encryptedPdf && <div className="pdf-notice pdf-encrypted-notice" role="status">
+      <Lock size={14} aria-hidden="true"/> Protected PDF: you can read, search, zoom and print it. Editing is off because the file is encrypted; remove its password or restrictions first, then edit the unlocked copy.
+    </div>}
 
-    {!pdf && <div className="pdf-empty">
+    {!pdf && passwordPrompt && <form className="pdf-empty pdf-password-prompt"
+      aria-labelledby={`${domIdPrefix}-password-title`}
+      onSubmit={(event)=>{
+        event.preventDefault();
+        const prompt=passwordPrompt;
+        const typed=passwordDraft;
+        // Clear the field immediately; the password is handed to PDF.js once.
+        setPasswordDraft('');
+        void installPdf(prompt.bytes,prompt.name,prompt.file,false,undefined,typed);
+      }}>
+      <div className="pdf-empty-icon" aria-hidden="true"><Lock size={30} strokeWidth={1.6}/></div>
+      <h1 id={`${domIdPrefix}-password-title`}>Password required</h1>
+      <p><strong>{passwordPrompt.name}</strong> is password-protected. Enter its password to open it. MALENJO does not save the password.</p>
+      <label className="pdf-password-field">Password
+        <input type="password" autoComplete="off" autoFocus value={passwordDraft}
+          aria-invalid={passwordPrompt.incorrect}
+          aria-describedby={passwordPrompt.incorrect?`${domIdPrefix}-password-error`:undefined}
+          disabled={loading}
+          onChange={(event)=>setPasswordDraft(event.target.value)}/>
+      </label>
+      {passwordPrompt.incorrect&&<p id={`${domIdPrefix}-password-error`} className="pdf-password-error" role="alert">Incorrect password. Check it and try again.</p>}
+      <button className="primary-action" type="submit" disabled={loading||!passwordDraft}>
+        <Lock size={16} aria-hidden="true"/> {loading?'Opening…':'Open PDF'}
+      </button>
+      <small>Protected PDFs open read-only: viewing, searching and printing work; editing needs an unlocked copy.</small>
+    </form>}
+
+    {!pdf && !passwordPrompt && <div className="pdf-empty">
       <div className="pdf-empty-icon" aria-hidden="true"><FileText size={32} strokeWidth={1.6}/></div>
       <h1>PDF Workspace</h1>
       <p>{loading

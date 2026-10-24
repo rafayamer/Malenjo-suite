@@ -63,3 +63,25 @@ describe('PDF.js load task ownership', () => {
     expect(destroy).toHaveBeenCalledOnce();
   });
 });
+
+describe('PDF.js password handling', () => {
+  it('passes a supplied password to PDF.js and maps password failures', async () => {
+    const { PdfPasswordRequiredError } = await import('./engine');
+    const destroy = vi.fn(async () => {});
+    pdfJs.getDocument.mockReturnValue({ promise: Promise.reject({ name: 'PasswordException', code: 1, message: 'No password given' }), destroy });
+    await expect(loadPdfBytes(new Uint8Array([37, 80, 68, 70]))).rejects.toMatchObject({ name: 'PdfPasswordRequiredError', incorrect: false });
+    expect(destroy).toHaveBeenCalledOnce();
+
+    pdfJs.getDocument.mockReturnValue({ promise: Promise.reject({ name: 'PasswordException', code: 2, message: 'Incorrect Password' }), destroy });
+    const failure = await loadPdfBytes(new Uint8Array([37, 80, 68, 70]), { password: 'wrong' }).catch((reason: unknown) => reason);
+    expect(failure).toBeInstanceOf(PdfPasswordRequiredError);
+    expect((failure as InstanceType<typeof PdfPasswordRequiredError>).incorrect).toBe(true);
+    expect((pdfJs.getDocument.mock.calls.at(-1)?.[0] as { password?: string }).password).toBe('wrong');
+  });
+
+  it('does not send a password option when none is given', async () => {
+    pdfJs.getDocument.mockReturnValue({ promise: Promise.resolve({ numPages: 1 }), destroy: vi.fn(async () => {}) });
+    await loadPdfBytes(new Uint8Array([37, 80, 68, 70]));
+    expect('password' in (pdfJs.getDocument.mock.calls.at(-1)?.[0] as object)).toBe(false);
+  });
+});
