@@ -106,6 +106,7 @@ import {
 import {
   clampPdfPage,
   clampPdfZoom,
+  displayPdfRotation,
   effectivePdfScale,
   parsePdfPageDraft,
   stepPdfZoom,
@@ -2412,7 +2413,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     }
     try{
       const page=await pdf.document.getPage(currentPage);
-      const size=page.getViewport({scale:1,rotation});
+      const size=page.getViewport({scale:1,rotation:displayPdfRotation(page.rotate,rotation)});
       const currentScale=effectivePdfScale(
         size.width,size.height,viewport.width,viewport.height,fitMode,zoom);
       setZoom(stepPdfZoom(currentScale,direction));

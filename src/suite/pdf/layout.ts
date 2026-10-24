@@ -53,3 +53,15 @@ export function rotatePdfClockwise(rotation: number): number {
   const normalized = ((rotation % 360) + 360) % 360;
   return (normalized + 90) % 360;
 }
+
+/**
+ * Rotation to hand PDF.js for display. PDF.js treats an explicit `rotation`
+ * as absolute, replacing the page's own /Rotate entry, so the reader's view
+ * rotation must be added to the page's intrinsic rotation. Passing the view
+ * rotation alone showed every /Rotate page (common in scans, and every page
+ * MALENJO rotates permanently) unrotated.
+ */
+export function displayPdfRotation(pageRotate: number, viewRotation: number): number {
+  const total = (Number.isFinite(pageRotate) ? pageRotate : 0) + (Number.isFinite(viewRotation) ? viewRotation : 0);
+  return ((Math.round(total / 90) * 90) % 360 + 360) % 360;
+}

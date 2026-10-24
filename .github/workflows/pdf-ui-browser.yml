@@ -54,3 +54,34 @@ jobs:
       - name: Report completed browser-acceptance result
         if: always()
         run: echo 'Browser PDF acceptance requires a real Chromium pass; green frontend unit tests are not sufficient.'
+
+  # Same Phase 2 acceptance on a real Windows runner. MALENJO's desktop shell
+  # uses WebView2 (Chromium), so this is Windows rendering/font/file-dialog-
+  # free evidence. It does not replace a clean-installed desktop check or a
+  # physical-printer check (see docs/PDF_PHASE2.md).
+  pdf-phase2-browser-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Use npm 11
+        run: npm install --global npm@11 --no-audit --no-fund
+      - name: Install frontend and uncommitted test-only Playwright
+        run: |
+          npm install --no-audit --no-fund
+          npm install --no-save --no-audit --no-fund playwright
+      - name: Install Chromium
+        run: npx playwright install chromium
+      - name: Phase 2 PDF core and editor acceptance on Windows
+        run: node scripts/pdf-phase2-browser-acceptance.mjs
+      - name: Upload Windows failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-phase2-browser-windows-failure
+          path: .build/pdf-phase2-browser/*.png
+          retention-days: 7
+          if-no-files-found: warn

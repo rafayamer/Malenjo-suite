@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   clampPdfPage,
   clampPdfZoom,
+  displayPdfRotation,
   effectivePdfScale,
   parsePdfPageDraft,
   rotatePdfClockwise,
@@ -9,6 +10,14 @@ import {
 } from './layout';
 
 describe('PDF workspace layout', () => {
+  it('adds the view rotation to the page /Rotate instead of replacing it', () => {
+    expect(displayPdfRotation(90, 0)).toBe(90);
+    expect(displayPdfRotation(270, 90)).toBe(0);
+    expect(displayPdfRotation(180, 270)).toBe(90);
+    expect(displayPdfRotation(0, 0)).toBe(0);
+    expect(displayPdfRotation(-90, 0)).toBe(270);
+    expect(displayPdfRotation(Number.NaN, 90)).toBe(90);
+  });
   it('parses typed page drafts without jumping to page 1 on empty or invalid input', () => {
     expect(parsePdfPageDraft('57', 57)).toBe(57);
     expect(parsePdfPageDraft(' 12 ', 57)).toBe(12);

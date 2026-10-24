@@ -12,7 +12,7 @@ import {mkdtempSync,readFileSync,mkdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {deflateSync} from 'node:zlib';
-import {PDFDocument,PDFName,StandardFonts,rgb} from 'pdf-lib';
+import {PDFDocument,PDFName,StandardFonts,degrees,rgb} from 'pdf-lib';
 import {getDocument} from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {chromium} from 'playwright';
 
@@ -283,6 +283,24 @@ async function main(){
   await check('owner-restricted PDF opens without prompt and refuses edits cleanly',async()=>{
     await openPdf(readFileSync(join(fixtures,'encrypted-owner-restricted.pdf')),'restricted.pdf');
     expect(await panel().locator('.pdf-encrypted-notice').count()===1,'read-only notice missing');});
+
+  // ---- representative layouts: mixed sizes, landscape, pre-rotated pages ----
+  await check('mixed page sizes and source rotations survive edits',async()=>{
+    const d=await PDFDocument.create();const f=await d.embedFont(StandardFonts.Helvetica);
+    const specs=[[612,792,0],[842,595,0],[595,842,90],[420,595,180],[1224,792,270]]; // letter, A4 landscape, A4 rotated, A5 upside-down, tabloid rotated
+    specs.forEach(([w,h,r],i)=>{const pg=d.addPage([w,h]);pg.drawText('QA page '+(i+1),{x:40,y:h-60,size:20,font:f});if(r)pg.setRotation(degrees(r));});
+    await openPdf(await d.save(),'mixed-layout.pdf');
+    for(const n of [5,1,3]){expect(await readerJump(n)>=0,'page '+n+' did not paint');}
+    // Rendered aspect must follow each page's own size and rotation.
+    const aspects=await page.evaluate(()=>[...document.querySelectorAll('.document-session-panel.active .pdf-page-shell')].slice(0,5).map(s=>{
+      const c=s.querySelector('canvas');return c&&c.width?+(c.width/c.height).toFixed(2):null;}));
+    const expected=specs.map(([w,h,r])=>+((r%180?h/w:w/h)).toFixed(2));
+    aspects.forEach((a,i)=>{if(a!==null)expect(Math.abs(a-expected[i])<0.03,`page ${i+1} aspect ${a} != ${expected[i]}`);});
+    await selectPage(3);await action('Organize','Duplicate page');await notice(/Duplicated page 3/);
+    const saved=await PDFDocument.load(await save());
+    const out=saved.getPages().map(p=>{const s=p.getSize();return Math.round(s.width)+'x'+Math.round(s.height)+'@'+p.getRotation().angle;}).join();
+    expect(out==='612x792@0,842x595@0,595x842@90,595x842@90,420x595@180,1224x792@270','layout '+out);
+  });
 
   // ---- rendering, memory and timings ----
   await check('zoom: off-screen pages are released and come back at the new zoom',async()=>{

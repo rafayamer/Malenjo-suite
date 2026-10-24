@@ -4,7 +4,7 @@ import { TextLayer, type PDFDocumentProxy } from 'pdfjs-dist';
 import {highlightPdfTextNodes} from './pdfTextHighlights';
 import type {PdfLinkAnnotation} from './links';
 import type { PdfOptionalContentConfig } from './optionalLayers';
-import { effectivePdfScale, type PdfFitMode } from './layout';
+import { displayPdfRotation, effectivePdfScale, type PdfFitMode } from './layout';
 import { renderBudgetFor } from './renderBudget';
 
 interface Props {
@@ -126,7 +126,7 @@ export default function PdfPageCanvas({
     let cancelled = false;
     void document.getPage(pageNumber).then((page) => {
       if (cancelled) return;
-      const viewport = page.getViewport({ scale: 1, rotation });
+      const viewport = page.getViewport({ scale: 1, rotation: displayPdfRotation(page.rotate, rotation) });
       setBaseSize({ width: viewport.width, height: viewport.height });
     }).catch((reason) => {
       if (!cancelled) setFailed(reason instanceof Error ? reason.message : String(reason));
@@ -216,7 +216,7 @@ export default function PdfPageCanvas({
         const page = await document.getPage(pageNumber);
         if (cancelled) return;
 
-        const viewport = page.getViewport({ scale, rotation });
+        const viewport = page.getViewport({ scale, rotation: displayPdfRotation(page.rotate, rotation) });
         const canvas = canvasRef.current;
         if (!canvas) return;
         if (shellRef.current) shellRef.current.dataset.pdfRendered = 'false';
@@ -317,7 +317,7 @@ export default function PdfPageCanvas({
     }
     void document.getPage(pageNumber).then((page)=>{
       if(cancelled)return;
-      const viewport=page.getViewport({scale,rotation});
+      const viewport=page.getViewport({scale,rotation:displayPdfRotation(page.rotate,rotation)});
       const hitboxes=pageLinks.flatMap(link=>{
         const rect=link.rectangle;
         if(!rect)return [];
