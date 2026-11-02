@@ -175,6 +175,43 @@ async function main() {
   await page.keyboard.press('Escape');
   await page.getByRole('dialog', { name: 'MALENJO command palette' }).waitFor({ state: 'hidden' });
 
+  // 8. Home recent-file "More actions" menu is keyboard operable.
+  await page.locator('.workspace > input[type="file"]').setInputFiles({
+    name: 'recent-menu.pdf', mimeType: 'application/pdf', buffer: await makePdf('recent-menu'),
+  });
+  await page.locator('.document-tab-main', { hasText: 'recent-menu.pdf' }).waitFor({ timeout: 15000 });
+  await tools.click();
+  await page.locator('.ml-tools-popup.is-open .nav-item[aria-label="Home"]').click();
+  const recentToggle = page.locator('.ml-start-recent');
+  await recentToggle.waitFor({ timeout: 15000 });
+  if (await recentToggle.getAttribute('aria-expanded') !== 'true') await recentToggle.click();
+  const recentMore = page.getByRole('button', { name: 'More actions for recent-menu.pdf' }).first();
+  await recentMore.waitFor({ timeout: 15000 });
+  const recentMenu = page.locator('.ml-home-file-menu');
+  await recentMore.click();
+  await frames();
+  check(await focusInside('.ml-home-file-menu'),
+    'Recent-file menu did not take focus; focus is on ' + await describeActive());
+  await page.keyboard.press('ArrowDown');
+  check(await page.evaluate(() => document.activeElement?.getAttribute('role') === 'menuitem'),
+    'ArrowDown did not move between recent-file menu items');
+  await page.keyboard.press('Escape');
+  await frames();
+  check(await recentMenu.count() === 0, 'Escape did not close the recent-file menu');
+  check(await activeIs(recentMore), 'Escape did not return focus to More actions; focus is on ' + await describeActive());
+  await recentMore.click();
+  await frames();
+  await page.mouse.click(5, 845);
+  await frames();
+  check(await recentMenu.count() === 0, 'Clicking outside did not close the recent-file menu');
+  await recentMore.click();
+  await frames();
+  await page.getByRole('menuitem', { name: /Pin to Home/ }).click();
+  await frames(4);
+  check(await recentMenu.count() === 0, 'Pin did not close the recent-file menu');
+  check(await page.evaluate(() => document.activeElement?.classList.contains('ml-home-more')),
+    'Pinning dropped focus; focus is on ' + await describeActive());
+
   check(errors.length === 0, 'Unexpected browser errors: ' + errors.join('; '));
   console.log('Phase 1 shell menus/drawers keyboard Chromium regression: PASS');
 }

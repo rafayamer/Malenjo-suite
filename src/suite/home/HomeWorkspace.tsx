@@ -177,9 +177,36 @@ export default function HomeWorkspace({
 
   const continueSessions=useMemo(()=>[...sessions].sort((a,b)=>b.openedAt-a.openedAt).slice(0,4),[sessions]);
 
+  // Return focus to a document's "More actions" button. Pinning moves the card
+  // to another section (a new element), so look it up after the re-render.
+  function focusMoreButton(documentId:string){
+    window.requestAnimationFrame(()=>{
+      window.document.querySelector<HTMLElement>(
+        `.ml-home-more[data-document-id="${CSS.escape(documentId)}"]`)?.focus();
+    });
+  }
+
+  function closeMenu(returnFocus:boolean){
+    const documentId=menuDocumentId;
+    setMenuDocumentId(null);
+    if(returnFocus&&documentId)focusMoreButton(documentId);
+  }
+
+  useEffect(()=>{
+    if(!menuDocumentId)return;
+    const dismiss=(event:PointerEvent)=>{
+      const target=event.target;
+      if(target instanceof Element&&(target.closest('.ml-home-file-menu')||target.closest('.ml-home-more')))return;
+      setMenuDocumentId(null);
+    };
+    window.document.addEventListener('pointerdown',dismiss);
+    return()=>window.document.removeEventListener('pointerdown',dismiss);
+  },[menuDocumentId]);
+
   function toggleStar(documentId:string){
     saveState(toggleStarredDocument(state,documentId),setState,setNotice);
     setMenuDocumentId(null);
+    focusMoreButton(documentId);
   }
 
   async function openDocument(document:LibraryDocument){
@@ -247,12 +274,15 @@ export default function HomeWorkspace({
       />
       <button
         className="ml-home-more"
+        data-document-id={document.id}
+        aria-haspopup="menu"
         aria-label={`More actions for ${document.name}`}
         aria-expanded={menuDocumentId===document.id}
         onClick={()=>setMenuDocumentId((current)=>current===document.id?null:document.id)}
       ><MoreHorizontal size={15}/></button>
       {menuDocumentId===document.id&&<OfficeContextMenu
         className="ml-home-file-menu"
+        onClose={closeMenu}
         items={[
           {label:'Open',disabled:!document.available,onSelect:()=>void openDocument(document)},
           {label:pinned?'Unpin from Home':'Pin to Home',onSelect:()=>toggleStar(document.id)},

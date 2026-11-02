@@ -4,8 +4,10 @@
  * License: Apache-2.0. See third_party/casualoffice/LICENSE and PROVENANCE.md.
  *
  * MALENJO changes: React/lucide icon injection, broader document kinds,
- * MALENJO class prefix, and explicit disabled/unavailable states.
+ * MALENJO class prefix, explicit disabled/unavailable states, and keyboard
+ * menu behaviour (focus on open, arrows, Escape/Tab to close).
  */
+import { useEffect, useRef } from 'react';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, KeyboardEvent, ReactNode } from 'react';
 import { Search } from 'lucide-react';
 
@@ -112,8 +114,36 @@ export interface OfficeContextMenuItem{
   disabled?:boolean;
 }
 
-export function OfficeContextMenu({items,className}:{items:OfficeContextMenuItem[];className?:string}){
-  return <div className={className?'ml-co-context-menu '+className:'ml-co-context-menu'} role="menu">
+export function OfficeContextMenu({items,className,onClose}:{
+  items:OfficeContextMenuItem[];
+  className?:string;
+  /** Escape (returnFocus=true) or Tab (returnFocus=false) dismissed the menu. */
+  onClose?:(returnFocus:boolean)=>void;
+}){
+  const menuRef=useRef<HTMLDivElement>(null);
+  // A menu opened from a button takes focus so arrows and Escape reach it.
+  useEffect(()=>{
+    menuRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+  },[]);
+  function onKeyDown(event:KeyboardEvent<HTMLDivElement>){
+    if(event.key==='Escape'){
+      event.preventDefault();
+      onClose?.(true);
+      return;
+    }
+    if(event.key==='Tab'){onClose?.(false);return;}
+    const enabled=Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+    if(!enabled.length)return;
+    const index=enabled.indexOf(document.activeElement as HTMLButtonElement);
+    const next=event.key==='ArrowDown'?(index+1)%enabled.length
+      :event.key==='ArrowUp'?(index-1+enabled.length)%enabled.length
+        :event.key==='Home'?0:event.key==='End'?enabled.length-1:-1;
+    if(next<0)return;
+    event.preventDefault();
+    enabled[next].focus();
+  }
+  return <div ref={menuRef} className={className?'ml-co-context-menu '+className:'ml-co-context-menu'} role="menu"
+    onKeyDown={onKeyDown}>
     {items.map((item,index)=><button
       key={index}
       type="button"
