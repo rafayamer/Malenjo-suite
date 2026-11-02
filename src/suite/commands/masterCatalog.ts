@@ -42,8 +42,19 @@ export interface PDFCommand {
   execute(context: PDFCommandContext): Promise<PDFCommandResult>;
 }
 
+import { VERIFIED_COMMAND_BY_ID } from './verifiedCommands';
+
 export const UNVERIFIED_COMMAND_REASON =
   'Not release-ready: execution, output fidelity and independent verification are not approved.';
+
+/** A verified capability runs through its real PDF workspace controls, not a headless call. */
+export class PDFCommandRunsInWorkspaceError extends Error {
+  readonly code = 'MALENJO_COMMAND_RUNS_IN_WORKSPACE';
+  constructor(public readonly commandId: PDFRequirementId, guidance: string) {
+    super(`${commandId}: use the PDF workspace. ${guidance}`);
+    this.name = 'PDFCommandRunsInWorkspaceError';
+  }
+}
 
 export class PDFCommandUnavailableError extends Error {
   readonly code = 'MALENJO_COMMAND_NOT_RELEASE_READY';
@@ -163,16 +174,22 @@ export const PDF_COMMANDS: readonly PDFCommand[] = Object.freeze(SPEC_CATALOG.ma
       ...(SENSITIVE_OPERATIONS.has(index) ? ['documents:sensitive-action'] : []),
       ...(!NO_SOURCE_DOCUMENT.has(index) ? ['documents:write'] : []),
     ];
+    const requiresDocument = !NO_SOURCE_DOCUMENT.has(index);
+    // Status comes only from the verified command adapter (evidence register).
+    const verified = VERIFIED_COMMAND_BY_ID.get(id);
     return Object.freeze({
       id, label, category, requirementGroup, icon,
-      tooltip: `${label}. Expected result: ${expectedOutput}. ${UNVERIFIED_COMMAND_REASON}`,
-      requiresDocument: !NO_SOURCE_DOCUMENT.has(index),
+      tooltip: verified
+        ? `${label}. Verified: ${verified.guidance}`
+        : `${label}. Expected result: ${expectedOutput}. ${UNVERIFIED_COMMAND_REASON}`,
+      requiresDocument,
       requiresSelection: REQUIRES_SELECTION.has(index),
       permissions,
       expectedOutput,
-      status: 'NOT_RELEASE_READY',
-      isAvailable: (_context: PDFCommandContext) => false,
+      status: verified ? 'RELEASE_READY' : 'NOT_RELEASE_READY',
+      isAvailable: (context: PDFCommandContext) => !!verified && (!requiresDocument || !!context.documentId),
       async execute(_context: PDFCommandContext): Promise<PDFCommandResult> {
+        if (verified) throw new PDFCommandRunsInWorkspaceError(id, verified.guidance);
         throw new PDFCommandUnavailableError(id);
       },
     });
@@ -204,24 +221,30 @@ export const LEGACY_TOOL_REQUIREMENTS: readonly {
   {legacyTool:'Create Transparent Image (PNG)',requirementIds:['MAL-029']},
 ];
 
-/** Convert requirements to searchable but NON-EXECUTABLE discovery entries.
- * This deliberately does not claim that existing legacy implementations
- * satisfy the stricter v2.0 acceptance criteria.
+/** Searchable discovery entries. Unverified requirements stay NON-EXECUTABLE;
+ * verified ones open the PDF workspace, and their detail says which controls to use.
+ * This never claims a legacy implementation satisfies v2.0 without evidence.
  */
-export function pdfCatalogDiscovery() {
-  return PDF_COMMANDS.map(command => ({
-    id:command.id,
-    label:command.label,
-    group:command.category,
-    icon:command.icon,
-    keywords:`${command.id} ${command.requirementGroup} ${command.expectedOutput}`,
-    detail:command.tooltip,
-    hiddenWhenEmpty:true,
-    disabled:true,
-    disabledReason:command.tooltip,
-    kind:'action' as const,
-    run:():void => { throw new PDFCommandUnavailableError(command.id); },
-  }));
+export function pdfCatalogDiscovery(openWorkspace?: (tab: PDFRibbonCategory) => void) {
+  return PDF_COMMANDS.map(command => {
+    const verified = VERIFIED_COMMAND_BY_ID.get(command.id);
+    return {
+      id:command.id,
+      label:command.label,
+      group:command.category,
+      icon:command.icon,
+      keywords:`${command.id} ${command.requirementGroup} ${command.expectedOutput}`,
+      detail:command.tooltip,
+      hiddenWhenEmpty:true,
+      disabled:!verified || !openWorkspace,
+      disabledReason:verified ? undefined : command.tooltip,
+      kind:'action' as const,
+      run:():void => {
+        if (verified && openWorkspace) { openWorkspace(verified.workspaceTab); return; }
+        throw new PDFCommandUnavailableError(command.id);
+      },
+    };
+  });
 }
 
 export function pdfCommandsForCategory(category: PDFRibbonCategory): readonly PDFCommand[] {

@@ -7,12 +7,15 @@ import {
 } from 'lucide-react';
 import type { ModuleId } from '../core/types';
 import { PDF_COMMANDS, type PDFRibbonCategory } from '../commands/masterCatalog';
+import { VERIFIED_COMMAND_BY_ID } from '../commands/verifiedCommands';
 import { defaultRibbonTab, RIBBON_TABS, specialistRibbonActions, type RibbonTabId } from './ribbonModel';
 
 interface Props {
   workspace: ModuleId;
   onNavigate(id: ModuleId): void;
   onOpenFiles(): void;
+  /** Opens the user's PDF (or the PDF module) on a ribbon tab for verified capabilities. */
+  onOpenPdfWorkspace?(tab?: PDFRibbonCategory): void;
 }
 
 const icons: Record<string, LucideIcon> = {
@@ -26,7 +29,7 @@ const icons: Record<string, LucideIcon> = {
   settings: Settings, help: HelpCircle,
 };
 
-export default function RibbonShell({ workspace, onNavigate, onOpenFiles }: Props) {
+export default function RibbonShell({ workspace, onNavigate, onOpenFiles, onOpenPdfWorkspace }: Props) {
   const [selected, setSelected] = useState<RibbonTabId>(() => defaultRibbonTab(workspace));
   const tabListRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
@@ -110,6 +113,9 @@ export default function RibbonShell({ workspace, onNavigate, onOpenFiles }: Prop
           onClick={() => {
             if (action.unavailableReason) return;
             if (action.opensFiles) onOpenFiles();
+            // Verified capabilities return to the user's open PDF on the right
+            // tab; plain module navigation would clear the active document.
+            else if (action.workspaceTab && onOpenPdfWorkspace) onOpenPdfWorkspace(action.workspaceTab);
             else if (action.destination) onNavigate(action.destination);
           }}
           onKeyDown={(event) => {
@@ -151,16 +157,23 @@ export default function RibbonShell({ workspace, onNavigate, onOpenFiles }: Prop
           return <section key={category} aria-label={category+' features'}>
             <h3>{category} <small>{subset.length}</small></h3>
             <div className="ml-command-catalog-grid">
-              {subset.map(command=><div key={command.id} className="ml-command-catalog-entry" tabIndex={0}
-                role="group" aria-label={command.id+' '+command.label+' — Not release-ready. '+command.tooltip}
-                title={command.tooltip} data-mal-command={command.id}>
-                <span className="ml-command-catalog-icon">
-                  {(() => {const Glyph=requirementIcons?.[command.id] ?? commandIcons[category];return <Glyph size={20} aria-hidden="true"/>;})()}
-                </span>
-                <span className="ml-command-catalog-label"><b>{command.label}</b><small>{command.id} · Not release-ready</small></span>
-                <button type="button" disabled aria-label={command.label+' — '+command.id+' unavailable'}
-                  title={command.tooltip}>Unavailable</button>
-              </div>)}
+              {subset.map(command=>{
+                const ready=command.status==='RELEASE_READY';
+                return <div key={command.id} className={ready?'ml-command-catalog-entry verified':'ml-command-catalog-entry'} tabIndex={0}
+                  role="group" aria-label={command.id+' '+command.label+(ready?' — Verified. ':' — Not release-ready. ')+command.tooltip}
+                  title={command.tooltip} data-mal-command={command.id} data-mal-status={command.status}>
+                  <span className="ml-command-catalog-icon">
+                    {(() => {const Glyph=requirementIcons?.[command.id] ?? commandIcons[category];return <Glyph size={20} aria-hidden="true"/>;})()}
+                  </span>
+                  <span className="ml-command-catalog-label"><b>{command.label}</b><small>{command.id} · {ready?'Verified':'Not release-ready'}</small></span>
+                  {ready
+                    ? <button type="button" aria-label={command.label+' — '+command.id+' open in PDF workspace'}
+                        title={command.tooltip}
+                        onClick={()=>{setMoreOpen(false);if(onOpenPdfWorkspace)onOpenPdfWorkspace(VERIFIED_COMMAND_BY_ID.get(command.id)?.workspaceTab);else onNavigate('pdf');}}>Open</button>
+                    : <button type="button" disabled aria-label={command.label+' — '+command.id+' unavailable'}
+                        title={command.tooltip}>Unavailable</button>}
+                </div>;
+              })}
             </div>
           </section>;
         })}
