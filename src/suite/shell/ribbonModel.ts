@@ -39,7 +39,7 @@ export const RIBBON_TABS: RibbonTab[] = [
   { id:'home', label:'Home', actions:[
     {id:'open',label:'Open File',description:'Select a local PDF, CAD or DICOM document',opensFiles:true},
     {id:'start',label:'Start',description:'Open MALENJO Home and recent files',destination:'home'},
-    {id:'library',label:'Recent Files',description:'Browse the local document library',destination:'files'},
+    {id:'library',label:'Files / Library',description:'Browse the local document library',destination:'files'},
     {id:'pdf',label:'PDF Viewer',description:'Open the PDF manipulation workspace',destination:'pdf'},
   ]},
   { id:'edit',label:'Edit',actions:[

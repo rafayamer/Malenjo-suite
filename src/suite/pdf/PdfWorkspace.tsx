@@ -162,6 +162,8 @@ interface Props {
   onSavingChange?(saving:boolean): void;
   /** Read-only, real renderer state for the compact application status bar. */
   onViewStatusChange?(status:{page:number;pageCount:number;zoom:string}):void;
+  /** Page to show once the document first loads (session restore). */
+  initialPage?:number;
   registerCommands?: RegisterDocumentCommands;
 }
 
@@ -206,7 +208,7 @@ function PdfMinimalCommandIcon({label}: {label:string}) {
   return <FileText size={18} aria-hidden="true"/>;
 }
 
-export default function PdfWorkspace({ session, active, notice, onBackToFiles, onOpenBrowserPdf, onNavigateModule, onDirtyChange, onSavingChange, onViewStatusChange, registerCommands }: Props) {
+export default function PdfWorkspace({ session, active, notice, onBackToFiles, onOpenBrowserPdf, onNavigateModule, onDirtyChange, onSavingChange, onViewStatusChange, registerCommands, initialPage}: Props) {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -697,6 +699,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     return () => observer.disconnect();
   }, [pdf]);
 
+  // Session restore: jump once to the saved page after the first load.
+  const initialPageAppliedRef=useRef(false);
   const goToPage = useCallback((requested: number, preserveSelection = false) => {
     const page = clampPdfPage(requested, pageCount);
     pageJumpLockRef.current={page,settled:false};
@@ -719,6 +723,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       });
     });
   }, [domIdPrefix,pageCount]);
+  useEffect(()=>{
+    // An inactive tab's panel is display:none: it cannot scroll and its
+    // reader measures 0 px wide, so page placeholders would be laid out at the
+    // wrong size. Spend the one-shot jump only once the tab is shown and the
+    // reader has been measured.
+    if(initialPageAppliedRef.current||!pageCount||!active||viewport.width<=0)return;
+    initialPageAppliedRef.current=true;
+    if(initialPage&&initialPage>1)goToPage(initialPage);
+  },[active,goToPage,initialPage,pageCount,viewport.width]);
 
   const onPageVisible = useCallback((page: number) => {
     // The observer also reports pages adjacent to the requested target.
