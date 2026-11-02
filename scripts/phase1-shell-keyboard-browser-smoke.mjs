@@ -5,7 +5,9 @@
  */
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
+import { PDFDocument } from 'pdf-lib';
 
 const root = resolve(import.meta.dirname, '..');
 const port = Number(process.env.PORT || 1420);
@@ -114,6 +116,64 @@ async function main() {
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'hidden' });
   check(await ai.getAttribute('aria-expanded') === 'false', 'Palette Escape toggled the AI drawer');
+
+  // 6. Closing document tabs must not drop focus to <body>.
+  page.on('dialog', (prompt) => prompt.accept());
+  const makePdf = async (text) => {
+    const pdf = await PDFDocument.create();
+    pdf.addPage().drawText(text);
+    return Buffer.from(await pdf.save());
+  };
+  await page.locator('.workspace > input[type="file"]').setInputFiles(await Promise.all(
+    ['tab-a.pdf', 'tab-b.pdf', 'tab-c.pdf'].map(async (name) =>
+      ({ name, mimeType: 'application/pdf', buffer: await makePdf(name) }))));
+  const tabs = page.locator('.document-tab-main');
+  await tabs.nth(2).waitFor({ timeout: 15000 });
+  const selectedTab = page.locator('.document-tab-main[aria-selected="true"]');
+  const notBody = () => page.evaluate(() => !!document.activeElement && document.activeElement !== document.body);
+  await page.locator('.document-tab-close').nth(2).focus();
+  await page.keyboard.press('Enter');
+  await frames(4);
+  check(await tabs.count() === 2, 'Close button did not close the tab');
+  check(await activeIs(selectedTab), 'Close button dropped focus; focus is on ' + await describeActive());
+  await page.locator('.document-tab-menu-button').nth(1).click();
+  await frames();
+  await page.keyboard.press('Enter');
+  await frames(4);
+  check(await tabs.count() === 1, 'Tab menu Close did not close the tab');
+  check(await activeIs(selectedTab), 'Tab menu Close dropped focus; focus is on ' + await describeActive());
+  await selectedTab.focus();
+  await page.evaluate(() => document.activeElement.dispatchEvent(new KeyboardEvent('keydown',
+    { key: 'w', ctrlKey: true, bubbles: true, cancelable: true })));
+  await frames(4);
+  check(await tabs.count() === 0, 'Ctrl+W did not close the last tab');
+  check(await notBody(), 'Closing the last tab dropped focus to <body>');
+
+  // 7. A wrong PDF password keeps focus in the password field for retyping.
+  await page.locator('.workspace > input[type="file"]').setInputFiles({
+    name: 'locked.pdf', mimeType: 'application/pdf',
+    buffer: await readFile(resolve(root, 'testing/suite/fixtures/pdf/encrypted-user-password.pdf')),
+  });
+  const passwordField = page.locator('.document-session-panel.active .pdf-password-prompt input[type="password"]');
+  await passwordField.waitFor({ timeout: 15000 });
+  await passwordField.fill('definitely-wrong');
+  await page.keyboard.press('Enter');
+  await page.locator('.document-session-panel.active .pdf-password-error').waitFor({ timeout: 15000 });
+  await frames(4);
+  check(await activeIs(passwordField),
+    'Focus left the password field after a wrong password; focus is on ' + await describeActive());
+  // 7b. Focus moved elsewhere while the password is being checked stays there.
+  await passwordField.fill('still-wrong');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Control+k');
+  const paletteSearch = page.getByRole('combobox', { name: 'Search MALENJO actions, documents and settings' });
+  await paletteSearch.waitFor({ timeout: 15000 });
+  await page.waitForTimeout(1500);
+  await frames(4);
+  check(await activeIs(paletteSearch),
+    'A failed password check pulled focus out of the command palette; focus is on ' + await describeActive());
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog', { name: 'MALENJO command palette' }).waitFor({ state: 'hidden' });
 
   check(errors.length === 0, 'Unexpected browser errors: ' + errors.join('; '));
   console.log('Phase 1 shell menus/drawers keyboard Chromium regression: PASS');

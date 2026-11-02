@@ -60,6 +60,8 @@ export default function App() {
   const moduleMenuRef = useRef<HTMLElement>(null);
   const aiButtonRef = useRef<HTMLButtonElement>(null);
   const aiDrawerRef = useRef<HTMLElement>(null);
+  // Set when tabs are closed; the next render moves focus off the removed tab.
+  const focusAfterTabCloseRef = useRef(false);
   const [theme, setTheme] = useState<SuiteTheme>(() => {
     try { return readSuiteTheme(window.localStorage); } catch { return 'dark'; }
   });
@@ -268,6 +270,22 @@ export default function App() {
     return callback;
   }
 
+  // Closing a tab removes the focused control (its close or menu button, or
+  // the tab itself for Ctrl+W). Move focus to the now-active tab, or to the
+  // workspace when no tabs remain, instead of dropping it to <body>. Focus the
+  // user already moved elsewhere is left alone.
+  useEffect(() => {
+    if (!focusAfterTabCloseRef.current) return;
+    focusAfterTabCloseRef.current = false;
+    const frame = window.requestAnimationFrame(() => {
+      const focused = document.activeElement;
+      if (focused && focused !== document.body && focused.isConnected) return;
+      (document.querySelector<HTMLElement>('.document-tab-main[aria-selected="true"]') ??
+        document.getElementById('malenjo-workspace-content'))?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [sessions, activeSessionId]);
+
   // Local browser files remain available in tabs when navigating, but have
   // not been persisted to disk; warn before leaving with unsaved PDF edits.
   useEffect(()=>{
@@ -291,6 +309,7 @@ export default function App() {
     )) return;
 
     const remaining = sessions.filter((session) => !remove.has(session.id));
+    focusAfterTabCloseRef.current = true;
     setSessions(remaining);
     setPdfViews(current=>{
       const next={...current};
@@ -327,6 +346,7 @@ export default function App() {
     )) return;
 
     const remaining = sessions.filter((session) => session.id !== sessionId);
+    focusAfterTabCloseRef.current = true;
     setSessions(remaining);
     setPdfViews(current=>{
       if(!(sessionId in current))return current;
