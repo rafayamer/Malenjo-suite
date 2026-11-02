@@ -272,9 +272,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [fullscreen, setFullscreen] = useState(false);
   const [loading, setLoading] = useState(false);
   // The field is disabled while a password is checked, which blurs it. After a
-  // wrong password, put focus back in the field so the user can retype.
+  // wrong password, put focus back in the field so the user can retype, but
+  // only if focus was actually lost: never pull it out of a control the user
+  // moved to meanwhile (for example the command palette).
   useEffect(()=>{
-    if(passwordPrompt?.incorrect&&!loading)passwordFieldRef.current?.focus();
+    if(!passwordPrompt?.incorrect||loading)return;
+    const focused=document.activeElement;
+    if(focused&&focused!==document.body&&focused.isConnected&&focused!==passwordFieldRef.current)return;
+    passwordFieldRef.current?.focus();
   },[passwordPrompt,loading]);
   const [mutating, setMutating] = useState(false);
   const [exportingText, setExportingText] = useState(false);

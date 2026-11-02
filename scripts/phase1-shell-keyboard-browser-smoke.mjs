@@ -162,6 +162,18 @@ async function main() {
   await frames(4);
   check(await activeIs(passwordField),
     'Focus left the password field after a wrong password; focus is on ' + await describeActive());
+  // 7b. Focus moved elsewhere while the password is being checked stays there.
+  await passwordField.fill('still-wrong');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Control+k');
+  const paletteSearch = page.getByRole('combobox', { name: 'Search MALENJO actions, documents and settings' });
+  await paletteSearch.waitFor({ timeout: 15000 });
+  await page.waitForTimeout(1500);
+  await frames(4);
+  check(await activeIs(paletteSearch),
+    'A failed password check pulled focus out of the command palette; focus is on ' + await describeActive());
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog', { name: 'MALENJO command palette' }).waitFor({ state: 'hidden' });
 
   check(errors.length === 0, 'Unexpected browser errors: ' + errors.join('; '));
   console.log('Phase 1 shell menus/drawers keyboard Chromium regression: PASS');
