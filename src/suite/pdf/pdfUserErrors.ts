@@ -53,13 +53,82 @@ function latin1(bytes: Uint8Array): string {
 }
 
 /**
- * Cheap check for an /Encrypt entry. The trailer (or cross-reference stream
- * dictionary) is uncompressed and sits at the end of the file, or at the start
- * of linearized files, so only the head and tail are scanned. This can miss an
- * unusual layout; edits still fail safely with ENCRYPTED_EDIT_MESSAGE then.
+ * Returns the top-level body of the `<< ... >>` dictionary that opens at
+ * `open`, with nested dictionaries, literal strings and hex strings blanked
+ * out, so only keys of THIS dictionary remain. Null when it never closes.
+ */
+function topLevelDictionary(text: string, open: number): string | null {
+  let depth = 0;
+  let body = '';
+  for (let index = open; index < text.length; index++) {
+    const char = text[index];
+    if (char === '(') {
+      // Literal string: skip to its balanced, unescaped closing parenthesis.
+      let parens = 1;
+      for (index++; index < text.length && parens > 0; index++) {
+        if (text[index] === '\\') index++;
+        else if (text[index] === '(') parens++;
+        else if (text[index] === ')') parens--;
+      }
+      index--;
+      if (depth === 1) body += ' ';
+      continue;
+    }
+    if (char === '<' && text[index + 1] === '<') {
+      depth++;
+      // A nested dictionary's opening still counts for an inline /Encrypt <<.
+      if (depth === 2) body += '<<';
+      index++;
+      continue;
+    }
+    if (char === '>' && text[index + 1] === '>') {
+      depth--;
+      index++;
+      if (depth === 0) return body;
+      continue;
+    }
+    if (char === '<') {
+      // Hex string.
+      const end = text.indexOf('>', index);
+      if (end < 0) return null;
+      index = end;
+      if (depth === 1) body += ' ';
+      continue;
+    }
+    if (depth === 1) body += char;
+  }
+  return null;
+}
+
+/** Trailer and cross-reference-stream dictionaries: the only places /Encrypt is meaningful. */
+function trailerDictionaries(text: string): string[] {
+  const found: string[] = [];
+  for (const match of text.matchAll(/trailer\s*<</g)) {
+    const body = topLevelDictionary(text, match.index! + match[0].length - 2);
+    if (body !== null) found.push(body);
+  }
+  for (const match of text.matchAll(/\d+\s+\d+\s+obj\s*<</g)) {
+    const body = topLevelDictionary(text, match.index! + match[0].length - 2);
+    if (body !== null && /\/Type\s*\/XRef\b/.test(body)) found.push(body);
+  }
+  return found;
+}
+
+function hasEncryptTrailer(text: string): boolean {
+  return ENCRYPT_ENTRY.test(text) && trailerDictionaries(text).some((body) => ENCRYPT_ENTRY.test(body));
+}
+
+/**
+ * Cheap structural check for encryption: an /Encrypt key must appear at the
+ * top level of a `trailer` dictionary or a cross-reference stream (/Type
+ * /XRef) dictionary. Text that merely mentions "/Encrypt" in metadata,
+ * comments or a content stream does not count. The trailer is uncompressed and
+ * sits at the end of the file, or at the start of linearized files, so only the
+ * head and tail are scanned. An unusual layout can be missed; edits still fail
+ * safely with ENCRYPTED_EDIT_MESSAGE then.
  */
 export function looksEncryptedPdf(bytes: Uint8Array): boolean {
-  if (bytes.length <= HEAD_BYTES + TAIL_BYTES) return ENCRYPT_ENTRY.test(latin1(bytes));
-  return ENCRYPT_ENTRY.test(latin1(bytes.subarray(0, HEAD_BYTES))) ||
-    ENCRYPT_ENTRY.test(latin1(bytes.subarray(bytes.length - TAIL_BYTES)));
+  if (bytes.length <= HEAD_BYTES + TAIL_BYTES) return hasEncryptTrailer(latin1(bytes));
+  return hasEncryptTrailer(latin1(bytes.subarray(0, HEAD_BYTES))) ||
+    hasEncryptTrailer(latin1(bytes.subarray(bytes.length - TAIL_BYTES)));
 }

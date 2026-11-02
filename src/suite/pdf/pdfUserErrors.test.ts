@@ -46,4 +46,27 @@ describe('encrypted PDF detection', () => {
     big.fill(0, big.length - trailer.length - 10);
     expect(looksEncryptedPdf(big)).toBe(false);
   });
+
+  it('ignores /Encrypt text outside the trailer (metadata, comments, content streams)', () => {
+    const pdf = [
+      '%PDF-1.7',
+      '% /Encrypt 7 0 R in a comment',
+      '1 0 obj << /Type /Catalog >> endobj',
+      '2 0 obj << /Subject (Documentation for /Encrypt 7 0 R) /Keywords <2F456E6372797074> >> endobj',
+      '3 0 obj << /Length 30 >> stream\nBT (/Encrypt << >>) Tj ET\nendstream endobj',
+      'trailer << /Size 4 /Root 1 0 R /Info 2 0 R /ID [<00ff><00ff>] >>',
+      '%%EOF',
+    ].join('\n');
+    expect(looksEncryptedPdf(new TextEncoder().encode(pdf))).toBe(false);
+  });
+
+  it('ignores /Encrypt nested inside another trailer value', () => {
+    const pdf = '%PDF-1.7\ntrailer << /Root 1 0 R /Extra << /Encrypt 7 0 R >> >>\n%%EOF';
+    expect(looksEncryptedPdf(new TextEncoder().encode(pdf))).toBe(false);
+  });
+
+  it('detects /Encrypt in a cross-reference stream dictionary', () => {
+    const pdf = '%PDF-1.7\n9 0 obj << /Type /XRef /Size 10 /Root 1 0 R /Encrypt 8 0 R /W [1 2 1] /Length 0 >> stream\nendstream endobj\n%%EOF';
+    expect(looksEncryptedPdf(new TextEncoder().encode(pdf))).toBe(true);
+  });
 });

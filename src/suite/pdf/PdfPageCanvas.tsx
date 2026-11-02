@@ -156,6 +156,10 @@ export default function PdfPageCanvas({
   // Identity of the pixels currently on the canvas. A cached page that is
   // revisited with the same document/scale/rotation/layers is not re-rendered.
   const renderedKeyRef = useRef<{document:PDFDocumentProxy;key:string;config:unknown}|null>(null);
+  // Whether the selectable text layer for the current pixels is finished. It
+  // is tracked separately because scrolling away can cancel text rendering
+  // after the canvas completed; a later cache hit must then rebuild the text.
+  const textReadyRef = useRef(false);
   const renderKey = `${scale}|${rotation}|${layerRevision}`;
   const [releaseRevision, setReleaseRevision] = useState(0);
   const releasePixels = useCallback(() => {
@@ -170,6 +174,7 @@ export default function PdfPageCanvas({
     textLayerRef.current?.replaceChildren();
     textDivsRef.current = [];
     renderedKeyRef.current = null;
+    textReadyRef.current = false;
     setTextRevision((revision) => revision + 1);
     setReleaseRevision((revision) => revision + 1);
     onReleased?.(pageNumber);
@@ -196,111 +201,154 @@ export default function PdfPageCanvas({
       }
       return;
     }
+    let cancelled = false;
+    let renderTask: ReturnType<Awaited<ReturnType<PDFDocumentProxy['getPage']>>['render']> | null = null;
+    let textLayer:TextLayer|null=null;
+    // True once this run resized the canvas (allocating its backing store)
+    // and false again once the pixels are complete and budget-tracked.
+    let pixelsPending = false;
+    const textContainer=textLayerRef.current;
+    const isCancelled = () => cancelled;
+
+    // PDF.js canvas pixels cannot be selected. Its official TextLayer overlays
+    // real, invisible and selectable text spans on the exact same viewport,
+    // including zoom and rotation.
+    const renderTextLayer = async (
+      page: Awaited<ReturnType<PDFDocumentProxy['getPage']>>,
+      viewport: ReturnType<Awaited<ReturnType<PDFDocumentProxy['getPage']>>['getViewport']>,
+    ) => {
+      if(!textContainer){ textReadyRef.current = true; return; }
+      try {
+        const textContent=await page.getTextContent();
+        if(isCancelled())return;
+        textContainer.replaceChildren();
+        textContainer.style.setProperty('--scale-factor',String(viewport.scale));
+        textContainer.style.setProperty('--total-scale-factor',String(viewport.scale));
+        textLayer=new TextLayer({
+          textContentSource:textContent,
+          container:textContainer,
+          viewport,
+        });
+        await textLayer.render();
+        if(isCancelled())return;
+        textDivsRef.current=textLayer.textDivs.filter(
+          (node):node is HTMLSpanElement=>node instanceof HTMLSpanElement,
+        );
+        // PDF.js emits wrapper spans (including marked-content containers)
+        // in addition to TextLayer.textDivs. Those wrappers can be the
+        // browser hit target for an entire selectable text run. Apply the
+        // text cursor to ALL generated spans, not just the leaf textDivs,
+        // so hovering and selecting PDF text works at either DOM depth.
+        // Keep textDivsRef restricted to actual glyph runs for Find highlights.
+        for (const span of textContainer.querySelectorAll('span')) {
+          span.style.setProperty('cursor','text','important');
+          span.style.setProperty('user-select','text','important');
+          span.style.setProperty('-webkit-user-select','text','important');
+        }
+        textReadyRef.current = true;
+        setTextRevision(revision=>revision+1);
+      } catch {
+        // Canvas rendering already succeeded: optional text selection
+        // must not turn a readable page into a fatal page error.
+        if (!isCancelled()) {
+          textContainer.replaceChildren();
+          textDivsRef.current=[];
+          textReadyRef.current = true;
+          setTextRevision((revision)=>revision+1);
+        }
+      }
+    };
+
     if (current) {
       renderBudgetFor(document).setPinned(pageNumber, pinnedRef.current);
       onRendered(pageNumber);
-      return;
-    }
-
-    let cancelled = false;
-    let completed = false;
-    let renderTask: ReturnType<Awaited<ReturnType<PDFDocumentProxy['getPage']>>['render']> | null = null;
-    let textLayer:TextLayer|null=null;
-    const textContainer=textLayerRef.current;
-    textDivsRef.current=[];
-    if(textContainer)textContainer.replaceChildren();
-
-    void (async () => {
-      try {
-        setFailed('');
-        const page = await document.getPage(pageNumber);
-        if (cancelled) return;
-
-        const viewport = page.getViewport({ scale, rotation: displayPdfRotation(page.rotate, rotation) });
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        if (shellRef.current) shellRef.current.dataset.pdfRendered = 'false';
-
-        const context = canvas.getContext('2d', { alpha: false });
-        if (!context) throw new Error('Canvas rendering is unavailable.');
-
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        canvas.width = Math.max(1, Math.floor(viewport.width * dpr));
-        canvas.height = Math.max(1, Math.floor(viewport.height * dpr));
-        canvas.style.width = `${Math.floor(viewport.width)}px`;
-        canvas.style.height = `${Math.floor(viewport.height)}px`;
-
-        renderTask = page.render({
-          canvas,
-          canvasContext: context,
-          viewport,
-          optionalContentConfigPromise:optionalContentConfig?Promise.resolve(optionalContentConfig):undefined,
-          transform: dpr === 1 ? undefined : [dpr, 0, 0, dpr, 0, 0],
-        });
-
-        await renderTask.promise;
-        if(cancelled)return;
-        renderedKeyRef.current = { document, key: renderKey, config: optionalContentConfig };
-        // Explicit, testable paint signal (a never-drawn canvas is 300 px wide).
-        if (shellRef.current) shellRef.current.dataset.pdfRendered = 'true';
-        renderBudgetFor(document).retain(pageNumber, canvas.width * canvas.height, releasePixels, pinnedRef.current);
-        onRendered(pageNumber);
-        // PDF.js canvas pixels cannot be selected. Its official TextLayer
-        // overlays real, invisible and selectable text spans on the exact
-        // same viewport, including zoom and rotation.
-        if(textContainer){
+      if (!textReadyRef.current) {
+        // Pixels are cached but the text layer was interrupted earlier:
+        // rebuild only the text so selection and Find keep working.
+        void (async () => {
           try {
-          const textContent=await page.getTextContent();
-          if(cancelled)return;
-          textContainer.style.setProperty('--scale-factor',String(viewport.scale));
-          textContainer.style.setProperty('--total-scale-factor',String(viewport.scale));
-          textLayer=new TextLayer({
-            textContentSource:textContent,
-            container:textContainer,
-            viewport,
-          });
-          await textLayer.render();
-          if(cancelled)return;
-          textDivsRef.current=textLayer.textDivs.filter(
-            (node):node is HTMLSpanElement=>node instanceof HTMLSpanElement,
-          );
-          // PDF.js emits wrapper spans (including marked-content containers)
-          // in addition to TextLayer.textDivs. Those wrappers can be the
-          // browser hit target for an entire selectable text run. Apply the
-          // text cursor to ALL generated spans, not just the leaf textDivs,
-          // so hovering and selecting PDF text works at either DOM depth.
-          // Keep textDivsRef restricted to actual glyph runs for Find highlights.
-          for (const span of textContainer.querySelectorAll('span')) {
-            span.style.setProperty('cursor','text','important');
-            span.style.setProperty('user-select','text','important');
-            span.style.setProperty('-webkit-user-select','text','important');
-          }
-          setTextRevision(revision=>revision+1);
-          completed = true;
-          } catch (error) {
-            // Canvas rendering already succeeded: optional text selection
-            // must not turn a readable page into a fatal page error.
-            if (!cancelled) {
-              textContainer.replaceChildren();
-              textDivsRef.current=[];
-              setTextRevision((revision)=>revision+1);
-            }
-          }
-        }
-      } catch (error) {
-        if (!cancelled && (error as { name?: string }).name !== 'RenderingCancelledException') {
-          setFailed(error instanceof Error ? error.message : String(error));
-        }
+            const page = await document.getPage(pageNumber);
+            if (cancelled) return;
+            const viewport = page.getViewport({ scale, rotation: displayPdfRotation(page.rotate, rotation) });
+            await renderTextLayer(page, viewport);
+          } catch { /* the readable canvas stays; text is optional */ }
+        })();
       }
-    })();
+    } else {
+      textReadyRef.current = false;
+      textDivsRef.current=[];
+      if(textContainer)textContainer.replaceChildren();
+
+      void (async () => {
+        try {
+          setFailed('');
+          const page = await document.getPage(pageNumber);
+          if (cancelled) return;
+
+          const viewport = page.getViewport({ scale, rotation: displayPdfRotation(page.rotate, rotation) });
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          if (shellRef.current) shellRef.current.dataset.pdfRendered = 'false';
+
+          const context = canvas.getContext('2d', { alpha: false });
+          if (!context) throw new Error('Canvas rendering is unavailable.');
+
+          // The old pixels are overwritten by the resize below, so they stop
+          // counting against the budget and are no longer a valid cache.
+          if (renderedKeyRef.current) {
+            renderBudgetFor(renderedKeyRef.current.document).forget(pageNumber);
+            renderedKeyRef.current = null;
+          }
+          const dpr = Math.min(window.devicePixelRatio || 1, 2);
+          pixelsPending = true;
+          canvas.width = Math.max(1, Math.floor(viewport.width * dpr));
+          canvas.height = Math.max(1, Math.floor(viewport.height * dpr));
+          canvas.style.width = `${Math.floor(viewport.width)}px`;
+          canvas.style.height = `${Math.floor(viewport.height)}px`;
+
+          renderTask = page.render({
+            canvas,
+            canvasContext: context,
+            viewport,
+            optionalContentConfigPromise:optionalContentConfig?Promise.resolve(optionalContentConfig):undefined,
+            transform: dpr === 1 ? undefined : [dpr, 0, 0, dpr, 0, 0],
+          });
+
+          await renderTask.promise;
+          if(cancelled)return;
+          pixelsPending = false;
+          renderedKeyRef.current = { document, key: renderKey, config: optionalContentConfig };
+          // Explicit, testable paint signal (a never-drawn canvas is 300 px wide).
+          if (shellRef.current) shellRef.current.dataset.pdfRendered = 'true';
+          renderBudgetFor(document).retain(pageNumber, canvas.width * canvas.height, releasePixels, pinnedRef.current);
+          onRendered(pageNumber);
+          await renderTextLayer(page, viewport);
+        } catch (error) {
+          if (!cancelled && (error as { name?: string }).name !== 'RenderingCancelledException') {
+            setFailed(error instanceof Error ? error.message : String(error));
+          }
+        }
+      })();
+    }
 
     return () => {
       cancelled = true;
       renderTask?.cancel();
       textLayer?.cancel();
+      if (pixelsPending) {
+        // An interrupted first (or re-)render already allocated a full-size
+        // backing store that the budget never saw. Free it now; otherwise
+        // fast scrolling would accumulate untracked canvases.
+        const canvas = canvasRef.current;
+        if (canvas) {
+          canvas.width = 0; canvas.height = 0;
+          canvas.style.width = ''; canvas.style.height = '';
+        }
+        if (shellRef.current) shellRef.current.dataset.pdfRendered = 'false';
+      }
       // Keep a finished page (pixels + selectable text) when it merely scrolls
-      // away; only an interrupted render leaves a partial text layer behind.
-      if(!completed){
+      // away; only an interrupted text render leaves partial spans behind.
+      if(!textReadyRef.current){
         if(textContainer)textContainer.replaceChildren();
         textDivsRef.current=[];
       }
