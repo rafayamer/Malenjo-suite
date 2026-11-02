@@ -731,7 +731,7 @@ export default function App() {
             <LayoutGrid size={18} aria-hidden="true"/><span>Workspaces</span><ChevronDown size={12} aria-hidden="true"/>
           </button>
         </div>
-        <div className="search"><Search size={17}/><input value={query} onFocus={event=>{if(!suppressSearchFocusOpenRef.current)openCommandPalette(event.currentTarget);}} onChange={event=>{setQuery(event.target.value);openCommandPalette(event.currentTarget);}} placeholder="Search commands" aria-label="Search commands"/><kbd>Ctrl K</kbd></div>
+        <div className="search"><Search size={17}/><input value={query} onFocus={event=>{if(!suppressSearchFocusOpenRef.current)openCommandPalette(event.currentTarget);}} onClick={event=>{if(!commandOpenRef.current)openCommandPalette(event.currentTarget);}} onChange={event=>{setQuery(event.target.value);openCommandPalette(event.currentTarget);}} placeholder="Search commands" aria-label="Search commands"/><kbd>Ctrl K</kbd></div>
         <div className="topbar-actions">
           <button type="button" className="command ml-top-ai" aria-label="MALENJO AI"
             title="MALENJO AI — document assistant" aria-expanded={aiOpen}

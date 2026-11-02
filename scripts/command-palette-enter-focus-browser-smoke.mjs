@@ -111,6 +111,13 @@ async function main() {
   check(await dialog.count() === 0, 'Escape from the top search box reopened the palette');
   check(await activeIs(topSearch),
     'Top search box did not regain focus; focus is on ' + await describeActive());
+  // 3b. Clicking the already-focused (restored) search box must reopen it.
+  await topSearch.click();
+  await dialog.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+  check(await dialog.count() === 1, 'Clicking the restored top search box did not reopen the palette');
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+  await frames();
 
   // 4. Close and reopen within one frame: the stale restore must not steal focus.
   await commandButton.focus();
