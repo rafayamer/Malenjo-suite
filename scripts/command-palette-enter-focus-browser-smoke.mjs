@@ -66,6 +66,88 @@ async function main() {
   check(Boolean(active), 'ArrowDown did not select an accessible result');
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'hidden' });
+
+  // Focus restoration (Phase 1 P0). Each scenario failed on integration 7792b99.
+  const frames = (count = 3) => page.evaluate((n) => new Promise((done) => {
+    const step = (left) => left ? requestAnimationFrame(() => step(left - 1)) : done();
+    step(n);
+  }), count);
+  const activeIs = (locator) => locator.evaluate((node) => document.activeElement === node);
+  const describeActive = () => page.evaluate(() => {
+    const node = document.activeElement;
+    return node ? `${node.tagName.toLowerCase()} ${node.getAttribute('aria-label') ?? ''}`.trim() : 'none';
+  });
+  const commandButton = page.getByRole('button', { name: 'Open command palette', exact: true });
+  const topSearch = page.getByRole('textbox', { name: 'Search commands', exact: true });
+
+  // 1. A repeated Ctrl+K must not replace the original launcher.
+  await commandButton.focus();
+  await page.keyboard.press('Control+k');
+  await dialog.waitFor({ state: 'visible' });
+  await page.keyboard.press('Control+k');
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+  await frames();
+  check(await activeIs(commandButton),
+    'Repeated Ctrl+K lost the launcher; focus is on ' + await describeActive());
+
+  // 2. Clicking the top-bar command button restores focus to it on close.
+  await commandButton.click();
+  await dialog.waitFor({ state: 'visible' });
+  await frames();
+  check(await activeIs(search), 'Palette search was not focused after opening from the command button');
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+  await frames();
+  check(await activeIs(commandButton),
+    'Command button did not regain focus; focus is on ' + await describeActive());
+
+  // 3. Restoring focus to the top search box must not reopen the palette.
+  await topSearch.click();
+  await dialog.waitFor({ state: 'visible' });
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+  await frames(4);
+  check(await dialog.count() === 0, 'Escape from the top search box reopened the palette');
+  check(await activeIs(topSearch),
+    'Top search box did not regain focus; focus is on ' + await describeActive());
+
+  // 4. Close and reopen within one frame: the stale restore must not steal focus.
+  await commandButton.focus();
+  await page.keyboard.press('Control+k');
+  await dialog.waitFor({ state: 'visible' });
+  await page.evaluate(() => {
+    const send = (init) => (document.activeElement ?? window).dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
+    send({ key: 'Escape' });
+    send({ key: 'k', ctrlKey: true });
+  });
+  await dialog.waitFor({ state: 'visible' });
+  await frames(4);
+  check(await dialog.count() === 1, 'Palette did not stay open after a rapid reopen');
+  check(await activeIs(search),
+    'A stale close callback stole focus from the reopened palette; focus is on ' + await describeActive());
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+  await frames();
+
+  // 5. A launcher removed while the palette is open falls back to the command button.
+  await page.evaluate(() => {
+    const temporary = document.createElement('button');
+    temporary.id = 'palette-temporary-launcher';
+    temporary.textContent = 'Temporary launcher';
+    document.body.append(temporary);
+    temporary.focus();
+  });
+  await page.keyboard.press('Control+k');
+  await dialog.waitFor({ state: 'visible' });
+  await page.evaluate(() => document.getElementById('palette-temporary-launcher')?.remove());
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+  await frames();
+  check(await activeIs(commandButton),
+    'Focus was dropped after the launcher disappeared; focus is on ' + await describeActive());
+
   check(errors.length === 0, 'Unexpected browser errors: ' + errors.join('; '));
   console.log('Command palette Enter/focus Chromium regression: PASS');
 }

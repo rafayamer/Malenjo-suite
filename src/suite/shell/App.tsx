@@ -84,6 +84,20 @@ export default function App() {
   const registerCallbacksRef = useRef(new Map<string,RegisterDocumentCommands>());
   const [,refreshDocumentCommands] = useState(0);
   const commandPaletteOpenerRef = useRef<HTMLElement | null>(null);
+  // Live open state for handlers registered by effects with narrower deps
+  // (the global Ctrl+K listener would otherwise see a stale `commandOpen`).
+  const commandOpenRef = useRef(false);
+  commandOpenRef.current = commandOpen;
+  // Pending focus-restore frame from the last close; cancelled on reopen so a
+  // stale callback can never pull focus out of a freshly reopened palette.
+  const paletteRestoreFrameRef = useRef<number | null>(null);
+  // Restoring focus to the top "Search commands" input must not re-trigger its
+  // open-on-focus behaviour (Escape would otherwise reopen the palette).
+  const suppressSearchFocusOpenRef = useRef(false);
+  const commandButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => () => {
+    if (paletteRestoreFrameRef.current !== null) window.cancelAnimationFrame(paletteRestoreFrameRef.current);
+  }, []);
   const browserOpenInputRef = useRef<HTMLInputElement>(null);
   const module = modules.find((item) => item.id === active) ?? modules[0];
   const groups = useMemo(() => ['Core','Create','Intelligence','Enterprise','System'] as const, []);
@@ -427,18 +441,40 @@ export default function App() {
     openBrowserFiles(files);
   }
 
-  function openCommandPalette() {
-    if (!commandOpen) commandPaletteOpenerRef.current = document.activeElement as HTMLElement | null;
+  function openCommandPalette(opener?: HTMLElement | null) {
+    if (paletteRestoreFrameRef.current !== null) {
+      window.cancelAnimationFrame(paletteRestoreFrameRef.current);
+      paletteRestoreFrameRef.current = null;
+    }
+    suppressSearchFocusOpenRef.current = false;
+    const candidate = opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    // Record the launcher once per open. A repeated Ctrl+K (or any re-entry)
+    // while open must not replace it with an element inside the palette.
+    if (!commandOpenRef.current && !commandPaletteOpenerRef.current &&
+      candidate && candidate !== document.body && !candidate.closest('.command-palette')) {
+      commandPaletteOpenerRef.current = candidate;
+    }
+    commandOpenRef.current = true;
     setCommandOpen(true);
   }
 
   function closeCommandPalette() {
+    commandOpenRef.current = false;
     setCommandOpen(false);
     setQuery('');
     const opener = commandPaletteOpenerRef.current;
     commandPaletteOpenerRef.current = null;
-    window.requestAnimationFrame(() => {
-      if (opener?.isConnected) opener.focus();
+    if (paletteRestoreFrameRef.current !== null) window.cancelAnimationFrame(paletteRestoreFrameRef.current);
+    paletteRestoreFrameRef.current = window.requestAnimationFrame(() => {
+      paletteRestoreFrameRef.current = null;
+      if (commandOpenRef.current) return;
+      // A disconnected launcher (closed tab, re-rendered toolbar) falls back to
+      // the always-present command button instead of dropping focus to <body>.
+      const target = opener?.isConnected ? opener : commandButtonRef.current;
+      if (!target?.isConnected) return;
+      suppressSearchFocusOpenRef.current = true;
+      target.focus();
+      suppressSearchFocusOpenRef.current = false;
     });
   }
 
@@ -695,7 +731,7 @@ export default function App() {
             <LayoutGrid size={18} aria-hidden="true"/><span>Workspaces</span><ChevronDown size={12} aria-hidden="true"/>
           </button>
         </div>
-        <div className="search"><Search size={17}/><input value={query} onFocus={()=>setCommandOpen(true)} onChange={event=>{setQuery(event.target.value);openCommandPalette();}} placeholder="Search commands" aria-label="Search commands"/><kbd>Ctrl K</kbd></div>
+        <div className="search"><Search size={17}/><input value={query} onFocus={event=>{if(!suppressSearchFocusOpenRef.current)openCommandPalette(event.currentTarget);}} onChange={event=>{setQuery(event.target.value);openCommandPalette(event.currentTarget);}} placeholder="Search commands" aria-label="Search commands"/><kbd>Ctrl K</kbd></div>
         <div className="topbar-actions">
           <button type="button" className="command ml-top-ai" aria-label="MALENJO AI"
             title="MALENJO AI — document assistant" aria-expanded={aiOpen}
@@ -703,7 +739,7 @@ export default function App() {
             onClick={()=>{setAiHasOpened(true);setAiOpen(value=>!value);setModuleMenuOpen(false);}}>
             <Bot size={20} aria-hidden="true"/>
           </button>
-            <button className="command" aria-label="Open command palette" title="Commands (Ctrl+K)" onClick={()=>setCommandOpen(true)}><Command size={19}/></button>
+            <button ref={commandButtonRef} className="command" aria-label="Open command palette" title="Commands (Ctrl+K)" onClick={event=>openCommandPalette(event.currentTarget)}><Command size={19}/></button>
           <button className="theme-toggle command" type="button"
             aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
             aria-pressed={theme === 'light'}
