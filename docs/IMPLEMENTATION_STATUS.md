@@ -53,6 +53,8 @@ Implemented on `feat/pdf-workspace-phase-2`:
 
 Phase 2 branch CI and post-merge main CI #93 passed across frontend, Windows Rust, and Codespaces/Linux. Windows manual print/render checks remain a release-quality gate.
 
+**2026-10-24 Phase 2 QA pass** (PR #295, `audits/PHASE2_QA_PASS_2026-10-24.md`): eleven defects found in real Chromium and fixed. They include page-jump landing on the wrong page, password PDFs that could not be opened, raw library errors shown to users, `/Rotate` pages displayed unrotated, and unbounded canvas memory. The pass also adds 27-check browser acceptance with independent output reopen on Linux and `windows-latest`. Status remains **NOT RELEASE-READY** until owner UAT, a clean-installed Windows desktop check and a physical-printer check are recorded.
+
 ## Phase 3 evidence — Office workspaces
 
 Implemented on `feat/office-workspaces-phase-3`:

@@ -15,7 +15,38 @@ export interface PdfLoadResult {
   loadingTask: PDFDocumentLoadingTask;
 }
 
-export async function loadPdfBytes(data: ArrayBuffer | Uint8Array): Promise<PdfLoadResult> {
+/**
+ * Thrown when a PDF needs a user password to open. `incorrect` is true when a
+ * password was supplied but rejected. The password itself is never stored.
+ */
+export class PdfPasswordRequiredError extends Error {
+  readonly incorrect: boolean;
+  constructor(incorrect: boolean) {
+    super(incorrect
+      ? 'Incorrect password. Check it and try again.'
+      : 'This PDF is password-protected. Enter its password to open it.');
+    this.name = 'PdfPasswordRequiredError';
+    this.incorrect = incorrect;
+  }
+}
+
+// PDF.js PasswordResponses: 1 = NEED_PASSWORD, 2 = INCORRECT_PASSWORD.
+const PDFJS_INCORRECT_PASSWORD = 2;
+
+export function toPdfPasswordError(reason: unknown): PdfPasswordRequiredError | null {
+  if (reason instanceof PdfPasswordRequiredError) return reason;
+  if (typeof reason === 'object' && reason !== null && (reason as { name?: unknown }).name === 'PasswordException') {
+    return new PdfPasswordRequiredError((reason as { code?: unknown }).code === PDFJS_INCORRECT_PASSWORD);
+  }
+  return null;
+}
+
+export interface PdfLoadOptions {
+  /** User password for an encrypted PDF. Passed straight to PDF.js; not retained. */
+  password?: string;
+}
+
+export async function loadPdfBytes(data: ArrayBuffer | Uint8Array, options: PdfLoadOptions = {}): Promise<PdfLoadResult> {
   // PDF.js may transfer the supplied typed-array buffer to its worker, which
   // detaches that ArrayBuffer in the calling realm. MALENJO retains its own
   // working copy for history/edit/export, so PDF.js must receive a dedicated
@@ -27,6 +58,7 @@ export async function loadPdfBytes(data: ArrayBuffer | Uint8Array): Promise<PdfL
   const loadingTask = getDocument({
     data: bytes,
     useSystemFonts: true,
+    ...(options.password === undefined ? {} : { password: options.password }),
   });
 
   try {
@@ -40,7 +72,7 @@ export async function loadPdfBytes(data: ArrayBuffer | Uint8Array): Promise<PdfL
     } catch {
       // The parse error is the actionable failure for the caller.
     }
-    throw reason;
+    throw toPdfPasswordError(reason) ?? reason;
   }
 }
 
