@@ -258,6 +258,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   // memory only; the typed password lives in passwordDraft until submitted.
   const [passwordPrompt, setPasswordPrompt] = useState<{bytes:Uint8Array;name:string;file:File|null;incorrect:boolean}|null>(null);
   const [passwordDraft, setPasswordDraft] = useState('');
+  const passwordFieldRef=useRef<HTMLInputElement>(null);
   // Encrypted PDFs can be viewed but pdf-lib cannot rewrite them safely.
   const [encryptedPdf, setEncryptedPdf] = useState(false);
   const [editPageInput,setEditPageInput]=useState('1');
@@ -270,6 +271,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const previousPresentationViewRef=useRef<{mode:PdfViewMode;fit:PdfFitMode}|null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [loading, setLoading] = useState(false);
+  // The field is disabled while a password is checked, which blurs it. After a
+  // wrong password, put focus back in the field so the user can retype.
+  useEffect(()=>{
+    if(passwordPrompt?.incorrect&&!loading)passwordFieldRef.current?.focus();
+  },[passwordPrompt,loading]);
   const [mutating, setMutating] = useState(false);
   const [exportingText, setExportingText] = useState(false);
   const [comparingPdf, setComparingPdf] = useState(false);
@@ -2953,7 +2959,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       <h1 id={`${domIdPrefix}-password-title`}>Password required</h1>
       <p><strong>{passwordPrompt.name}</strong> is password-protected. Enter its password to open it. MALENJO does not save the password.</p>
       <label className="pdf-password-field">Password
-        <input type="password" autoComplete="off" autoFocus value={passwordDraft}
+        <input ref={passwordFieldRef} type="password" autoComplete="off" autoFocus value={passwordDraft}
           aria-invalid={passwordPrompt.incorrect}
           aria-describedby={passwordPrompt.incorrect?`${domIdPrefix}-password-error`:undefined}
           disabled={loading}
