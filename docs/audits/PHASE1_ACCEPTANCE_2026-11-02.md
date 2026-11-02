@@ -1,10 +1,18 @@
 # Phase 1 — Application Foundation: acceptance record (2 Nov 2026)
 
-**Status: NOT COMPLETED.** The owner set the acceptance policy on 2 Nov 2026:
+**Status: COMPLETED (2 Nov 2026), with the Windows gates (§4) carried over to the final release phase.**
+
+Completion evidence:
+- **Merge:** PR rafayamer/Malenjo-suite#304 merged into `integration/option-b-codespaces-validation` as `f853e42` (head `fb0d246`).
+- **CI on that exact head:** all 8 checks green, including `phase1-visual-matrix-linux` (288 captures, 0 layout or contrast problems) and `pdf-ui-browser-linux`. The session-restore, shell-keyboard and palette suites ran and passed, and Phase 2 acceptance passed 27/27.
+- **Codex review:** the first review found 2 valid defects in session restore. Both were fixed in `fb0d246`, each with a regression check that fails without its fix. The Codex re-review of `fb0d246` found no issues.
+- **Claude review:** no blocking findings.
+
+The owner set the acceptance policy on 2 Nov 2026:
 - Acceptance is by Claude's own review plus the Codex review on each PR: "use ur review, codex review from now on". The owner's manual test is no longer a gate. §3 remains as an optional checklist.
 - The native Windows gates (§4) are deferred until the rest of MALENJO is built: "windows is the last thing we will do". They carry over to the final release phase.
 
-Phase 1 becomes COMPLETED when the Phase 1 completion PR is merged into integration with all of the following:
+Phase 1 completion criteria (all met, see evidence above). The Phase 1 completion PR is merged into integration with:
 - green CI on its exact head (including the visual matrix job);
 - a clean Claude review;
 - a clean Codex review, or every valid finding fixed.
