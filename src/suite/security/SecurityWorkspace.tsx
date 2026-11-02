@@ -133,7 +133,7 @@ export default function SecurityWorkspace({ onBackToFiles }:{ onBackToFiles():vo
   }
 
   return <div className="security-workspace">
-    <input ref={inputRef} className="visually-hidden" type="file" onChange={(event)=>void openFile(event)}/>
+    <input ref={inputRef} className="visually-hidden" type="file" aria-hidden="true" tabIndex={-1} onChange={(event)=>void openFile(event)}/>
     <header className="security-toolbar">
       <button onClick={onBackToFiles}>Files</button>
       <button onClick={()=>inputRef.current?.click()}><ShieldCheck size={16}/> Open local file</button>
@@ -145,7 +145,7 @@ export default function SecurityWorkspace({ onBackToFiles }:{ onBackToFiles():vo
       <section className="security-card">
         <div className="security-section-title"><Bug size={16}/> Malware scan</div>
         <div className={clam?.available?'adapter-state ready':'adapter-state'}><b>{clam?.available?'ClamAV ready':'ClamAV optional'}</b><span>{clam?.version||clam?.detail||'Check native desktop runtime.'}</span></div>
-        <select value={selectedDocument} onChange={(event)=>setSelectedDocument(event.target.value)}>
+        <select aria-label="Library document to scan" value={selectedDocument} onChange={(event)=>setSelectedDocument(event.target.value)}>
           <option value="">Choose MALENJO library document</option>
           {documents.map((document)=><option value={document.id} key={document.id}>{document.name}</option>)}
         </select>

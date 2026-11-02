@@ -743,7 +743,7 @@ export default function App() {
       <input
         ref={browserOpenInputRef}
         className="visually-hidden"
-        aria-label="Choose documents to open"
+        aria-hidden="true"
         tabIndex={-1}
         type="file"
         multiple

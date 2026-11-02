@@ -176,6 +176,8 @@ export default function FileLibrary({ onOpen }: Props) {
     <input
       ref={browserInputRef}
       className="visually-hidden"
+      aria-hidden="true"
+      tabIndex={-1}
       type="file"
       multiple
       accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.webp,.tif,.tiff,.bmp,.dxf,.dwg,.dcm,.dicom"

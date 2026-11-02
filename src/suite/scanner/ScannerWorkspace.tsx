@@ -329,6 +329,8 @@ export default function ScannerWorkspace({ mode, onBackToFiles }: Props) {
     <input
       ref={inputRef}
       className="visually-hidden"
+      aria-hidden="true"
+      tabIndex={-1}
       type="file"
       accept="image/png,image/jpeg,image/webp,image/bmp,image/tiff"
       multiple
