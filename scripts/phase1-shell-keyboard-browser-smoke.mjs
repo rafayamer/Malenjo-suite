@@ -66,6 +66,12 @@ async function main() {
     'Hidden file input is exposed to assistive tech without a name');
   check(await fileInput.evaluate((node) => node.tabIndex) === -1, 'Hidden file input is in the Tab order');
 
+  // 2a. One name, one behaviour: only Home's real history button is "Recent Files".
+  const recentNamed = await page.getByRole('button', { name: 'Recent Files', exact: true })
+    .evaluateAll((nodes) => nodes.map((node) => node.className));
+  check(recentNamed.length === 1 && recentNamed[0].includes('ml-start-recent'),
+    'More than one control is named "Recent Files": ' + recentNamed.join(', '));
+
   // 2b. Every workspace: named controls, valid ARIA id references, unique ids.
   const sweep = () => page.evaluate(() => {
     const visible = (n) => !n.closest('[inert],[aria-hidden="true"]') && n.getClientRects().length > 0;

@@ -33,6 +33,8 @@ jobs:
         run: node scripts/command-palette-enter-focus-browser-smoke.mjs
       - name: Verify shell menus and drawers are keyboard operable in real Chromium
         run: node scripts/phase1-shell-keyboard-browser-smoke.mjs
+      - name: Verify session restore and recovery in real Chromium
+        run: node scripts/phase1-session-restore-browser-smoke.mjs
       - name: Phase 2 PDF core and editor acceptance with independent output reopen
         run: node scripts/pdf-phase2-browser-acceptance.mjs
       - name: Publish Phase 3 light/dark visual review screenshots

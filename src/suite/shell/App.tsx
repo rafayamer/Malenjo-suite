@@ -43,6 +43,7 @@ import RibbonShell from './RibbonShell';
 import { ModuleNavIcon } from './moduleNavIcons';
 import { nextSuiteTheme, readSuiteTheme, saveSuiteTheme, type SuiteTheme } from './appearance';
 import { applySuitePalette } from './themePalette';
+import { planWorkspaceRestore, readSavedWorkspace, restoreNotice, snapshotWorkspace, writeSavedWorkspace } from '../files/sessionRestore';
 import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
 import { CANONICAL_COMMAND_PALETTE_EXAMPLES } from './commandPaletteModel';
 import { pdfCatalogDiscovery } from '../commands/masterCatalog';
@@ -81,6 +82,11 @@ export default function App() {
   const [sessions, setSessions] = useState<DocumentSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [pdfViews,setPdfViews]=useState<Record<string,{page:number;pageCount:number;zoom:string}>>({});
+  // Page to reopen per restored PDF tab (one-shot, consumed by PdfWorkspace).
+  const [restorePages,setRestorePages]=useState<Record<string,number>>({});
+  // Saving starts only after the previous session was read, so an empty
+  // first render can never overwrite what is about to be restored.
+  const [workspaceRestored,setWorkspaceRestored]=useState(false);
   const [workspaceNotices, setWorkspaceNotices] = useState<Record<string,string>>({});
   const [paletteDocuments, setPaletteDocuments] = useState<LibraryDocument[]>([]);
   const commandControllersRef = useRef(new Map<string, DocumentCommandController>());
@@ -285,6 +291,59 @@ export default function App() {
     });
     return () => window.cancelAnimationFrame(frame);
   }, [sessions, activeSessionId]);
+
+  // Session restore. Desktop: reopen the previous session's library tabs (in
+  // order, with the last PDF page) when their files are still available.
+  // Browser/Codespaces files are session-only: only explain that they were
+  // not kept. Document bytes are never written to browser storage.
+  useEffect(()=>{
+    let cancelled=false;
+    let storage:Storage|null=null;
+    try{storage=window.localStorage;}catch{storage=null;}
+    const saved=storage?readSavedWorkspace(storage):null;
+    if(!saved){setWorkspaceRestored(true);return;}
+    const finish=(notice:string)=>{
+      if(cancelled)return;
+      if(notice)setWorkspaceNotices(current=>({...current,__open:notice}));
+      setWorkspaceRestored(true);
+    };
+    if(!isDesktopRuntime()||!saved.tabs.length){
+      finish(restoreNotice({unavailableCount:0,temporaryCount:saved.temporaryCount}));
+      return;
+    }
+    void listLibraryDocuments().then((library)=>{
+      if(cancelled)return;
+      const plan=planWorkspaceRestore(saved,library);
+      const restored=plan.documents
+        .filter(({document})=>isMalenjoDirectOpenKind(document.kind))
+        .map(({document,page})=>({session:createDocumentSession(document),page}));
+      if(restored.length){
+        setSessions(current=>{
+          const openIds=new Set(current.map(session=>session.document.id));
+          return [...restored.map(item=>item.session).filter(session=>!openIds.has(session.document.id)),...current];
+        });
+        setRestorePages(Object.fromEntries(restored.filter(item=>item.page).map(item=>[item.session.id,item.page!])));
+        const active=restored.find(item=>item.session.document.id===plan.activeDocumentId)?.session;
+        if(active){
+          setActiveSessionId(current=>current??active.id);
+          setActive(current=>current==='home'?workspaceForDocument(active.document.kind):current);
+        }
+      }
+      finish(restoreNotice(plan));
+    }).catch(()=>finish('Your previous session could not be restored. Open your documents again from Files / Library.'));
+    return()=>{cancelled=true;};
+  },[]);
+
+  useEffect(()=>{
+    if(!workspaceRestored)return;
+    // Until a restored PDF reports its own view, keep its restored page so a
+    // restart during loading does not lose it.
+    const views:Record<string,{page:number}>={};
+    for(const [id,page] of Object.entries(restorePages))views[id]={page};
+    Object.assign(views,pdfViews);
+    try{writeSavedWorkspace(window.localStorage,snapshotWorkspace(sessions,activeSessionId,views));}
+    catch{/* storage unavailable: restore stays best effort */}
+  },[workspaceRestored,sessions,activeSessionId,pdfViews,restorePages]);
 
   // Local browser files remain available in tabs when navigating, but have
   // not been persisted to disk; warn before leaving with unsaved PDF edits.
@@ -641,6 +700,7 @@ export default function App() {
         onNavigateModule={(id)=>selectModule(id)}
         onDirtyChange={(dirty)=>markSessionDirty(session.id,dirty)}
         onSavingChange={(saving)=>updateSession(session.id,(current)=>markDocumentSaving(current,saving))}
+        initialPage={restorePages[session.id]}
         onViewStatusChange={(status)=>setPdfViews(current=>{
           const previous=current[session.id];
           if(previous?.page===status.page&&previous.pageCount===status.pageCount&&previous.zoom===status.zoom)
