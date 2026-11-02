@@ -21,6 +21,15 @@ This repository contains the **Phase 0–7 executable foundation**. This is not 
 
 Do not mark a module complete until its acceptance criteria and traceability entries in the master guide pass. Home and Help / Support are the two complete registered modules. Home was re-promoted only after correction #139 replaced the inaccurate UI-source claim and corrected implementation CI #224 passed.
 
+## Master Spec v2 milestone status
+
+| Milestone | Status | Record |
+|---|---|---|
+| Phase 1 — Application Foundation | **COMPLETED** 2 Nov 2026. The Windows gates are carried over to the final release phase by owner decision. | `docs/audits/PHASE1_ACCEPTANCE_2026-11-02.md` (merged as `f853e42`) |
+| Phases 2–7 | NOT COMPLETED | Master Spec v2 |
+
+The historical sections below use the earlier phase numbering.
+
 ## Phase 1 evidence — document library
 
 Implemented on `feat/document-library-native-pipeline`:
