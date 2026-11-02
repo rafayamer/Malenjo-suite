@@ -88,7 +88,7 @@ function DmsPanel(){
       {candidates.length?candidates.map(c=><div className="retention-item" key={c.versionId}><b>{c.recordName}</b><span>{new Date(c.createdMs).toLocaleString()}</span><small>{c.reason}</small></div>):<p>No versions currently qualify for retention deletion.</p>}
       <button disabled={!candidates.length||busy} onClick={()=>void purge()}>Apply previewed retention</button>
     </section>
-    <section className="enterprise-card records-card"><div className="enterprise-card-head"><h2>DMS records</h2><button onClick={()=>void refresh()}><RefreshCw size={14}/></button></div>
+    <section className="enterprise-card records-card"><div className="enterprise-card-head"><h2>DMS records</h2><button aria-label="Refresh DMS records" title="Refresh DMS records" onClick={()=>void refresh()}><RefreshCw size={14} aria-hidden="true"/></button></div>
       <div className="dms-record-list">{records.map(record=><article key={record.id}><div><strong>{record.name}</strong><span>{record.tags.join(' · ')||'untagged'}</span></div><div className="dms-stats"><span>{record.versions.length} version(s)</span><span>{record.retentionDays}d retention</span><span>{record.legalHold?'LEGAL HOLD':'normal'}</span></div><div className="enterprise-actions"><button disabled={busy} onClick={()=>void snapshot(record)}>Snapshot</button><button disabled={busy} onClick={()=>void updatePolicy(record,!record.legalHold)}>{record.legalHold?'Release hold':'Legal hold'}</button></div><details><summary>Version history</summary>{record.versions.slice().reverse().map(v=><p key={v.id}><b>{new Date(v.createdMs).toLocaleString()}</b> · {v.sizeBytes} bytes · <code>{v.sha256.slice(0,16)}…</code><br/>{v.note}</p>)}</details></article>)}</div>
     </section>
   </div></>;
@@ -124,7 +124,7 @@ function AutomationPanel(){
     <section className="enterprise-card workflow-builder"><h2><Workflow size={18}/> Workflow contract</h2>
       <label>Name<input value={contract.name} onChange={e=>setContract({...contract,name:e.target.value})}/></label>
       <label>Step note<input value={note} onChange={e=>setNote(e.target.value)}/></label>
-      <div className="enterprise-actions"><button onClick={()=>setContract(addAuditStep(contract,note))}>Add audit step</button><select value={recordId} onChange={e=>setRecordId(e.target.value)}><option value="">DMS record</option>{records.map(r=><option value={r.id} key={r.id}>{r.name}</option>)}</select><button disabled={!recordId} onClick={()=>{try{setContract(addSnapshotStep(contract,recordId,note));}catch(reason){setError(String(reason));}}}>Add snapshot</button></div>
+      <div className="enterprise-actions"><button onClick={()=>setContract(addAuditStep(contract,note))}>Add audit step</button><select aria-label="DMS record for snapshot step" value={recordId} onChange={e=>setRecordId(e.target.value)}><option value="">DMS record</option>{records.map(r=><option value={r.id} key={r.id}>{r.name}</option>)}</select><button disabled={!recordId} onClick={()=>{try{setContract(addSnapshotStep(contract,recordId,note));}catch(reason){setError(String(reason));}}}>Add snapshot</button></div>
       <ol className="workflow-steps">{contract.steps.map((step,index)=><li key={index}>{describeStep(step)}<button onClick={()=>setContract({...contract,steps:contract.steps.filter((_,i)=>i!==index)})}>×</button></li>)}</ol>
       <button disabled={busy||!enterpriseNative()} onClick={()=>void persist()}><Save size={15}/> Save workflow</button>
     </section>

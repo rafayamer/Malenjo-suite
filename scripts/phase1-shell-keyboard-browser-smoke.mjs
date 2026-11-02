@@ -58,10 +58,57 @@ async function main() {
   const closedDangling = await danglingControls();
   check(closedDangling.length === 0, 'aria-controls points at missing elements: ' + closedDangling.join(', '));
 
-  // 2. The hidden browser file input is named and not a stray Tab stop.
+  // 2. The hidden browser file input is not an unnamed control or a stray Tab
+  // stop: it is hidden from assistive tech (the visible Open button is the
+  // control) and removed from the Tab order.
   const fileInput = page.locator('input[type="file"].visually-hidden').first();
-  check(Boolean(await fileInput.getAttribute('aria-label')), 'Hidden file input has no accessible name');
+  check(await fileInput.getAttribute('aria-hidden') === 'true' || Boolean(await fileInput.getAttribute('aria-label')),
+    'Hidden file input is exposed to assistive tech without a name');
   check(await fileInput.evaluate((node) => node.tabIndex) === -1, 'Hidden file input is in the Tab order');
+
+  // 2b. Every workspace: named controls, valid ARIA id references, unique ids.
+  const sweep = () => page.evaluate(() => {
+    const visible = (n) => !n.closest('[inert],[aria-hidden="true"]') && n.getClientRects().length > 0;
+    const textName = (n) => ['INPUT', 'SELECT', 'TEXTAREA'].includes(n.tagName) ? '' : n.textContent;
+    const nameOf = (n) => (n.getAttribute('aria-label') ||
+      (n.getAttribute('aria-labelledby') || '').split(/\s+/).map((id) => document.getElementById(id)?.textContent || '').join(' ') ||
+      (n.labels ? [...n.labels].map((l) => l.textContent).join(' ') : '') || n.getAttribute('title') ||
+      textName(n) || n.getAttribute('placeholder') || '').trim();
+    const problems = [...document.querySelectorAll('button,a[href],input:not([type=hidden]),select,textarea,[role=tab],[role=menuitem]')]
+      .filter(visible).filter((n) => !nameOf(n)).map((n) => 'unnamed ' + n.outerHTML.slice(0, 90));
+    for (const attr of ['aria-labelledby', 'aria-describedby', 'aria-controls', 'aria-activedescendant']) {
+      for (const n of document.querySelectorAll(`[${attr}]`)) {
+        for (const id of (n.getAttribute(attr) || '').split(/\s+/).filter(Boolean)) {
+          if (!document.getElementById(id)) problems.push(`${attr} -> missing #${id}`);
+        }
+      }
+    }
+    for (const n of document.querySelectorAll('input[type="file"].visually-hidden')) {
+      if (n.tabIndex !== -1) problems.push('hidden file input is a Tab stop: ' + n.outerHTML.slice(0, 80));
+      if (n.getAttribute('aria-hidden') !== 'true' && n.getAttribute('aria-label') !== 'Select PDF to replace page') {
+        problems.push('hidden file input exposed to assistive tech: ' + n.outerHTML.slice(0, 80));
+      }
+    }
+    const seen = new Map();
+    for (const n of document.querySelectorAll('[id]')) seen.set(n.id, (seen.get(n.id) || 0) + 1);
+    for (const [id, count] of seen) if (count > 1) problems.push(`duplicate id #${id} x${count}`);
+    return [...new Set(problems)];
+  });
+  await page.getByRole('button', { name: 'All tools', exact: true }).click();
+  const workspaceNames = await page.locator('.ml-tools-popup.is-open .nav-item')
+    .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label')));
+  await page.keyboard.press('Escape');
+  check(workspaceNames.length >= 15, 'Expected the full workspace list, got ' + workspaceNames.length);
+  for (const name of workspaceNames) {
+    await page.getByRole('button', { name: 'All tools', exact: true }).click();
+    await page.locator(`.ml-tools-popup.is-open .nav-item[aria-label="${name}"]`).click();
+    await page.waitForTimeout(800);
+    const problems = await sweep();
+    check(problems.length === 0, `${name} workspace accessibility problems: ` + problems.join('; '));
+  }
+  await page.getByRole('button', { name: 'All tools', exact: true }).click();
+  await page.locator('.ml-tools-popup.is-open .nav-item[aria-label="Home"]').click();
+  await page.locator('.ml-start-recent').waitFor({ timeout: 15000 });
 
   // 3. Workspaces menu: focus moves in on open; Escape closes and returns focus.
   const tools = page.getByRole('button', { name: 'All tools', exact: true });

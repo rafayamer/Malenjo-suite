@@ -2657,6 +2657,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     <input
       ref={fileInputRef}
       className="visually-hidden"
+      aria-hidden="true"
+      tabIndex={-1}
       type="file"
       accept="application/pdf,.pdf"
       onChange={(event) => void chooseBrowserPdf(event)}
@@ -2664,6 +2666,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     <input
       ref={comparisonInputRef}
       className="visually-hidden"
+      aria-hidden="true"
+      tabIndex={-1}
       type="file"
       accept="application/pdf,.pdf"
       onChange={(event)=>void compareWithPdf(event)}
@@ -2671,6 +2675,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     <input
       ref={imagesInputRef}
       className="visually-hidden"
+      aria-hidden="true"
+      tabIndex={-1}
       type="file"
       accept="image/png,image/jpeg,.png,.jpg,.jpeg"
       multiple
@@ -2679,6 +2685,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     <input
       ref={appendInputRef}
       className="visually-hidden"
+      aria-hidden="true"
+      tabIndex={-1}
       type="file"
       accept="application/pdf,.pdf"
       multiple
@@ -2687,6 +2695,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     <input
       ref={insertInputRef}
       className="visually-hidden"
+      aria-hidden="true"
+      tabIndex={-1}
       type="file"
       accept="application/pdf,.pdf"
       multiple
@@ -2695,6 +2705,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     <input
       ref={replaceInputRef}
       className="visually-hidden"
+      tabIndex={-1}
       type="file"
       accept="application/pdf,.pdf"
       aria-label="Select PDF to replace page"
@@ -2703,6 +2714,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     <input
       ref={attachmentInputRef}
       className="visually-hidden"
+      aria-hidden="true"
+      tabIndex={-1}
       type="file"
       multiple
       onChange={(event)=>void attachDocuments(event)}
@@ -2715,7 +2728,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           key={tab.id}
           role="tab"
           aria-selected={masterTab===tab.id}
-          aria-controls={`${domIdPrefix}-task-tools`}
+          aria-controls={`${domIdPrefix}-task-panel`}
           aria-keyshortcuts={tab.shortcut}
           tabIndex={masterTab===tab.id?0:-1}
           className={masterTab===tab.id?'active':''}
@@ -2756,13 +2769,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         </div>
         <small role="note">Select a page on the PDF or in thumbnails. Changes appear in the editor; Undo restores the previous version. Original file is unchanged.</small>
       </section>}
-      <div id={`${domIdPrefix}-task-tools`} className="pdf-context-toolbar" role="toolbar" aria-label={`${PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label} PDF tools`}>
+      <div id={`${domIdPrefix}-task-panel`} className="pdf-context-toolbar" role="toolbar" aria-label={`${PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label} PDF tools`}>
         <div className="pdf-task-actions">
           <button type="button" className="pdf-feature-index-trigger"
             aria-label="Browse all PDF features"
             title="Browse PDF features and availability"
             aria-expanded={featureGalleryOpen}
-            aria-controls={`${domIdPrefix}-feature-gallery`}
+            aria-controls={featureGalleryOpen?`${domIdPrefix}-feature-gallery`:undefined}
             onClick={()=>setFeatureGalleryOpen(value=>!value)}>
             <FileText size={19} aria-hidden="true"/>
             <span className="pdf-feature-caption">Features</span>

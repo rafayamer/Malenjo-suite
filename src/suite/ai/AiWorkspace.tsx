@@ -286,6 +286,8 @@ export default function AiWorkspace({ onBackToFiles, openDocuments, compact = fa
     <input
       ref={sourceInputRef}
       className="visually-hidden"
+      aria-hidden="true"
+      tabIndex={-1}
       type="file"
       multiple
       accept=".txt,.md,.csv,.json,.log,.xml,.html,.pdf,.docx,.xlsx,.pptx"

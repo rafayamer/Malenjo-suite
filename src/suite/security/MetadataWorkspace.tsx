@@ -59,7 +59,7 @@ export default function MetadataWorkspace({ onBackToFiles }:{ onBackToFiles():vo
   }
 
   return <div className="security-workspace">
-    <input ref={inputRef} className="visually-hidden" type="file" accept=".pdf,.docx,.xlsx,.pptx" onChange={(event)=>void openFile(event)}/>
+    <input ref={inputRef} className="visually-hidden" type="file" aria-hidden="true" tabIndex={-1} accept=".pdf,.docx,.xlsx,.pptx" onChange={(event)=>void openFile(event)}/>
     <header className="security-toolbar">
       <button onClick={onBackToFiles}>Files</button>
       <button onClick={()=>inputRef.current?.click()}><FileSearch size={16}/> Inspect document</button>

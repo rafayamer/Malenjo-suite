@@ -265,6 +265,8 @@ export default function OfficeWorkspace({ kind, session, active, onBackToFiles, 
     <input
       ref={inputRef}
       className="visually-hidden"
+      aria-hidden="true"
+      tabIndex={-1}
       type="file"
       accept={`.${expectedExtension}`}
       onChange={(event) => void openBrowserFile(event)}
