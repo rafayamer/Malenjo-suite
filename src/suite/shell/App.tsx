@@ -556,6 +556,22 @@ export default function App() {
     aiButtonRef.current?.focus();
   }
 
+  // Verified capabilities run through the real PDF workspace controls: reopen
+  // the user's PDF when one is open, otherwise the PDF module.
+  function openPdfWorkspace() {
+    const pdfSession=activeSession?.document.kind==='pdf'
+      ? activeSession : sessions.find(session=>session.document.kind==='pdf');
+    if(pdfSession)activateSession(pdfSession.id);else selectModule('pdf');
+    // The launcher (catalog card) disappears with the screen change; land on
+    // the active document tab, or the workspace, instead of <body>.
+    window.requestAnimationFrame(()=>{
+      const focused=document.activeElement;
+      if(focused&&focused!==document.body&&focused.isConnected)return;
+      (document.querySelector<HTMLElement>('.document-tab-main[aria-selected="true"]')??
+        document.getElementById('malenjo-workspace-content'))?.focus();
+    });
+  }
+
   function openCommandPalette(opener?: HTMLElement | null) {
     if (paletteRestoreFrameRef.current !== null) {
       window.cancelAnimationFrame(paletteRestoreFrameRef.current);
@@ -634,7 +650,7 @@ export default function App() {
     // Master v2.0 catalog is source-of-truth for 90 requirements.
     // Unreleased capabilities appear in search with an explanation, never
     // as executable actions until their implementation is independently accepted.
-    ...pdfCatalogDiscovery(),
+    ...pdfCatalogDiscovery(openPdfWorkspace),
     ...sessions.map((session) => ({
       id:`tab-${session.id}`,
       label:`Switch to ${session.document.name}`,
@@ -877,6 +893,7 @@ export default function App() {
         workspace={activeSession ? workspaceForDocument(activeSession.document.kind) : active}
         onNavigate={selectModule}
         onOpenFiles={() => void openDocumentsFromPicker()}
+        onOpenPdfWorkspace={openPdfWorkspace}
       />}
 
       <DocumentTabs

@@ -1898,6 +1898,10 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 .ml-command-catalog-label>b {font-size:12px;font-weight:600;line-height:1.3}
 .ml-command-catalog-label>small {font-size:11px;color:var(--ml-muted)}
 .ml-command-catalog-entry>button {display:none}
+/* Verified (adapter-bound) capabilities show their Open action. */
+.ml-command-catalog-entry.verified>button{display:inline-flex;align-items:center;justify-content:center;margin-left:auto;flex:0 0 auto;border:1px solid var(--ml-border);background:var(--ml-control);color:var(--ml-text);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer}
+.ml-command-catalog-entry.verified>button:hover{background:var(--ml-hover-strong)}
+.ml-command-catalog-entry.verified>button:focus-visible{outline:2px solid var(--ml-brand-blue);outline-offset:1px}
 @media(max-width:630px) {
   .ml-command-catalog {left:4px;width:calc(100vw - 8px);max-height:66vh}
   .ml-command-catalog-grid {grid-template-columns:minmax(0,1fr)}

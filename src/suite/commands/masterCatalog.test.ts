@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   LEGACY_TOOL_REQUIREMENTS, PDF_COMMANDS, PDF_COMMAND_BY_ID,
-  PDFCommandUnavailableError, pdfCatalogDiscovery, pdfCommandsForCategory,
+  PDFCommandRunsInWorkspaceError, PDFCommandUnavailableError, pdfCatalogDiscovery, pdfCommandsForCategory,
 } from './masterCatalog';
+import { VERIFIED_COMMAND_BINDINGS, VERIFIED_COMMAND_BY_ID } from './verifiedCommands';
 import { filterCommandPaletteItems } from '../shell/commandPaletteModel';
 
 const ctx = {permissions:['documents:read','documents:write'],documentId:'test-pdf'};
@@ -20,8 +21,10 @@ describe('Master Specification v2.0 PDF capability contract',()=>{
       expect(command.tooltip).toContain(command.label);
       expect(command.expectedOutput.trim().length).toBeGreaterThan(0);
       expect(command.permissions.length).toBeGreaterThan(0);
-      expect(command.isAvailable(ctx)).toBe(false);
-      expect(command.status).toBe('NOT_RELEASE_READY');
+      // Status comes only from the verified command adapter.
+      const verified=VERIFIED_COMMAND_BY_ID.has(id);
+      expect(command.isAvailable(ctx)).toBe(verified);
+      expect(command.status).toBe(verified?'RELEASE_READY':'NOT_RELEASE_READY');
     });
     expect(new Set(PDF_COMMANDS.map(c=>c.id)).size).toBe(90);
     expect(new Set(PDF_COMMANDS.map(c=>c.icon)).size).toBe(90);
@@ -56,9 +59,17 @@ describe('Master Specification v2.0 PDF capability contract',()=>{
   });
 
   it('exposes all 90 by exact MAL-ID or name in search, but disables every unverified action',()=>{
-    const items=pdfCatalogDiscovery();
+    const opened:string[]=[];
+    const items=pdfCatalogDiscovery(tab=>opened.push(tab));
     expect(items).toHaveLength(90);
-    expect(items.every(item=>item.hiddenWhenEmpty&&item.disabled&&item.disabledReason)).toBe(true);
+    expect(items.every(item=>item.hiddenWhenEmpty)).toBe(true);
+    for(const item of items){
+      const verified=VERIFIED_COMMAND_BY_ID.get(item.id);
+      if(verified){expect(item.disabled).toBe(false);item.run();expect(opened.at(-1)).toBe(verified.workspaceTab);}
+      else expect(item.disabled&&!!item.disabledReason).toBe(true);
+    }
+    // Without a workspace to open, nothing is executable.
+    expect(pdfCatalogDiscovery().every(item=>item.disabled)).toBe(true);
     const a=filterCommandPaletteItems(items,'MAL-037');
     expect(a[0].id).toBe('MAL-037');
     expect(a[0].label).toBe('PDF to Word');
@@ -66,6 +77,14 @@ describe('Master Specification v2.0 PDF capability contract',()=>{
     expect(filterCommandPaletteItems(items,'watermark').length).toBeGreaterThanOrEqual(2);
     expect(filterCommandPaletteItems(items,'')).toHaveLength(0);
     expect(()=>a[0].run()).toThrow(PDFCommandUnavailableError);
+  });
+
+  it('verified commands refuse a headless run and point to the real workspace controls',async()=>{
+    for(const binding of VERIFIED_COMMAND_BINDINGS){
+      const cmd=PDF_COMMAND_BY_ID.get(binding.id)!;
+      await expect(cmd.execute(ctx)).rejects.toBeInstanceOf(PDFCommandRunsInWorkspaceError);
+      expect(cmd.isAvailable({permissions:[]})).toBe(!cmd.requiresDocument);
+    }
   });
 
   it('records required permissions for AI and sensitive actions',()=>{

@@ -13,6 +13,8 @@ interface Props {
   workspace: ModuleId;
   onNavigate(id: ModuleId): void;
   onOpenFiles(): void;
+  /** Opens the user's PDF (or the PDF module) for verified catalog capabilities. */
+  onOpenPdfWorkspace?(): void;
 }
 
 const icons: Record<string, LucideIcon> = {
@@ -26,7 +28,7 @@ const icons: Record<string, LucideIcon> = {
   settings: Settings, help: HelpCircle,
 };
 
-export default function RibbonShell({ workspace, onNavigate, onOpenFiles }: Props) {
+export default function RibbonShell({ workspace, onNavigate, onOpenFiles, onOpenPdfWorkspace }: Props) {
   const [selected, setSelected] = useState<RibbonTabId>(() => defaultRibbonTab(workspace));
   const tabListRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
@@ -151,16 +153,23 @@ export default function RibbonShell({ workspace, onNavigate, onOpenFiles }: Prop
           return <section key={category} aria-label={category+' features'}>
             <h3>{category} <small>{subset.length}</small></h3>
             <div className="ml-command-catalog-grid">
-              {subset.map(command=><div key={command.id} className="ml-command-catalog-entry" tabIndex={0}
-                role="group" aria-label={command.id+' '+command.label+' — Not release-ready. '+command.tooltip}
-                title={command.tooltip} data-mal-command={command.id}>
-                <span className="ml-command-catalog-icon">
-                  {(() => {const Glyph=requirementIcons?.[command.id] ?? commandIcons[category];return <Glyph size={20} aria-hidden="true"/>;})()}
-                </span>
-                <span className="ml-command-catalog-label"><b>{command.label}</b><small>{command.id} · Not release-ready</small></span>
-                <button type="button" disabled aria-label={command.label+' — '+command.id+' unavailable'}
-                  title={command.tooltip}>Unavailable</button>
-              </div>)}
+              {subset.map(command=>{
+                const ready=command.status==='RELEASE_READY';
+                return <div key={command.id} className={ready?'ml-command-catalog-entry verified':'ml-command-catalog-entry'} tabIndex={0}
+                  role="group" aria-label={command.id+' '+command.label+(ready?' — Verified. ':' — Not release-ready. ')+command.tooltip}
+                  title={command.tooltip} data-mal-command={command.id} data-mal-status={command.status}>
+                  <span className="ml-command-catalog-icon">
+                    {(() => {const Glyph=requirementIcons?.[command.id] ?? commandIcons[category];return <Glyph size={20} aria-hidden="true"/>;})()}
+                  </span>
+                  <span className="ml-command-catalog-label"><b>{command.label}</b><small>{command.id} · {ready?'Verified':'Not release-ready'}</small></span>
+                  {ready
+                    ? <button type="button" aria-label={command.label+' — '+command.id+' open in PDF workspace'}
+                        title={command.tooltip}
+                        onClick={()=>{setMoreOpen(false);if(onOpenPdfWorkspace)onOpenPdfWorkspace();else onNavigate('pdf');}}>Open</button>
+                    : <button type="button" disabled aria-label={command.label+' — '+command.id+' unavailable'}
+                        title={command.tooltip}>Unavailable</button>}
+                </div>;
+              })}
             </div>
           </section>;
         })}

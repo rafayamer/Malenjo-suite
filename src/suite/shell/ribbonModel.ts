@@ -24,12 +24,11 @@ import { PDF_COMMAND_BY_ID, type PDFRequirementId } from '../commands/masterCata
 function required(id: PDFRequirementId): RibbonAction {
   const feature = PDF_COMMAND_BY_ID.get(id);
   if (!feature) throw new Error('Missing MALENJO PDF feature: '+id);
-  return {
-    id,
-    label:feature.label,
-    description:feature.tooltip,
-    unavailableReason:feature.id+' — '+feature.tooltip,
-  };
+  // Verified capabilities open the PDF workspace that holds their controls;
+  // everything else stays visibly unavailable with its reason.
+  return feature.status==='RELEASE_READY'
+    ? { id, label:feature.label, description:feature.tooltip, destination:'pdf' }
+    : { id, label:feature.label, description:feature.tooltip, unavailableReason:feature.id+' — '+feature.tooltip };
 }
 
 /** Exactly the ten primary categories from MALENJO Master Specification v2.0.

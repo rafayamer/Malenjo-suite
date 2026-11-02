@@ -223,6 +223,87 @@ async function main(){
   await check('page labels',async()=>{await openPdf(await simpleDoc());await selectPage(1);await action('Organize','Set page label');await notice(/page labels/);
     expect(!!(await PDFDocument.load(await save())).catalog.get(PDFName.of('PageLabels')),'no /PageLabels');});
 
+  // ---- Master Spec v2 organize requirements (verified-command evidence) ----
+  const thumb=n=>panel().locator('.pdf-thumbnail-list').getByRole('button',{name:'Select page '+n,exact:true});
+  async function pagesPanel(){await openRail('Pages');await thumb(1).waitFor({timeout:10000});}
+  async function runCommand(label){
+    await page.keyboard.press('Control+k');
+    await page.getByRole('combobox',{name:'Search MALENJO actions, documents and settings'}).fill(label);
+    await page.getByRole('option',{name:new RegExp(label)}).first().click();
+  }
+  await check('MAL-003 drag-and-drop thumbnail reorder, undo and redo',async()=>{await openPdf(await simpleDoc());await pagesPanel();
+    // Real HTML5 drag events from thumbnail 1 onto thumbnail 4 (one shared
+    // DataTransfer, as a browser drag produces); the app's own handlers run.
+    // Pointer-driven dragTo scrolls the list mid-drag and is not reliable.
+    await thumb(1).click();
+    await page.evaluate(()=>{
+      const list=document.querySelector('.document-session-panel.active .pdf-thumbnail-list');
+      const find=n=>[...list.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')==='Select page '+n);
+      const data=new DataTransfer();
+      find(1).dispatchEvent(new DragEvent('dragstart',{bubbles:true,cancelable:true,dataTransfer:data}));
+      find(4).dispatchEvent(new DragEvent('dragover',{bubbles:true,cancelable:true,dataTransfer:data}));
+      find(4).dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:data}));
+      find(1).dispatchEvent(new DragEvent('dragend',{bubbles:true,cancelable:true,dataTransfer:data}));
+    });
+    await notice(/Moved page 1 to position 4/);
+    expect(order(await pageTexts(await save()))==='2,3,4,1,5,6','drag order');
+    await undo();expect(order(await pageTexts(await save()))==='1,2,3,4,5,6','undo');
+    await redo();expect(order(await pageTexts(await save()))==='2,3,4,1,5,6','redo');});
+  await check('MAL-005 extract a Ctrl-click selection and a Shift-click range; original unchanged',async()=>{await openPdf(await simpleDoc());await pagesPanel();
+    await thumb(2).click();await thumb(4).click({modifiers:['Control']});
+    expect(order(await pageTexts(await savedDownload(()=>action('Organize','Extract selected'))))==='2,4','ctrl selection');
+    await thumb(3).click();await thumb(5).click({modifiers:['Shift']});
+    expect(order(await pageTexts(await savedDownload(()=>action('Organize','Extract selected'))))==='3,4,5','shift range');
+    expect(order(await pageTexts(await save()))==='1,2,3,4,5,6','extraction altered the working document');});
+  await check('MAL-007 rotate a selected range, then the entire document',async()=>{await openPdf(await simpleDoc());await pagesPanel();
+    await thumb(2).click();await thumb(4).click({modifiers:['Shift']});
+    await runCommand('Rotate selected PDF pages permanently');await notice(/rotated/i);
+    let rot=(await PDFDocument.load(await save())).getPages().map(p=>p.getRotation().angle).join();expect(rot==='0,90,90,90,0,0','range '+rot);
+    await panel().locator('.pdf-selection-bar').getByRole('button',{name:'All',exact:true}).click();
+    await runCommand('Rotate selected PDF pages permanently');await page.waitForTimeout(300);
+    rot=(await PDFDocument.load(await save())).getPages().map(p=>p.getRotation().angle).join();expect(rot==='90,180,180,180,90,90','all '+rot);});
+  await check('MAL-008 trim box on all pages and art box on one page',async()=>{await openPdf(await simpleDoc());await selectPage(2);await action('Edit','Edit settings');
+    await panel().getByLabel('Add text').waitFor({timeout:10000});
+    // Scope to the "Crop and page boxes" form: Headers/footers and Bates
+    // forms also have an "Apply to" select. A <label> wrapping a <select>
+    // includes the chosen option in its accessible name, so address these
+    // selects by their label element.
+    const form=page.locator('.pdf-edit-form').filter({has:page.locator('select[aria-label="Crop measurement unit"]')});
+    const labeled=text=>form.locator('label').filter({hasText:new RegExp('^'+text)}).locator('select');
+    await form.locator('select[aria-label="Crop measurement unit"]').selectOption('mm');
+    await labeled('Page box').selectOption('trim');await labeled('Apply to').selectOption('all');
+    for(const side of ['top','right','bottom','left'])await form.getByLabel(`Crop ${side} in mm`).fill('10');
+    await form.getByRole('button',{name:/^Apply page box to 6 page/}).click();await notice(/Updated trim box on 6/);
+    await labeled('Page box').selectOption('art');await labeled('Apply to').selectOption('selected');
+    await form.getByRole('button',{name:/^Apply page box to 1 page/}).click();await notice(/Updated art box on 1/);
+    const pages=(await PDFDocument.load(await save())).getPages();
+    const mm10=10*72/25.4;
+    const trimOk=pages.every(p=>{const t=p.getTrimBox(),m=p.getMediaBox();return Math.abs(t.x-m.x-mm10)<0.6&&Math.abs((m.width-t.width)-2*mm10)<1.2;});
+    const artOk=pages.map((p,i)=>{const a=p.getArtBox(),m=p.getMediaBox();return (i===1)===(Math.abs(a.width-m.width)>1);}).every(Boolean);
+    expect(trimOk,'trim boxes not applied to every page');expect(artOk,'art box not limited to the selected page');});
+
+  await check('verified catalog: MAL-003..008 open their tools, unverified MAL-001 stays unavailable',async()=>{
+    // "More PDF tools" lives on the shell ribbon (Home), not inside a document.
+    await openModule('Home');
+    await page.getByRole('button',{name:'More PDF tools'}).click();
+    const catalog=page.locator('#malenjo-complete-feature-catalog');
+    for(const id of ['MAL-003','MAL-004','MAL-005','MAL-006','MAL-007','MAL-008']){
+      expect(await catalog.locator(`[data-mal-command="${id}"]`).getAttribute('data-mal-status')==='RELEASE_READY',id+' not verified in catalog');
+    }
+    expect(await catalog.locator('[data-mal-command="MAL-001"] button').isDisabled(),'unverified MAL-001 is clickable');
+    // Open returns to the user's open PDF (not an empty module).
+    await catalog.locator('[data-mal-command="MAL-005"] button').click();
+    await panel().locator('.pdf-workspace').waitFor({timeout:10000});
+    await page.waitForTimeout(200);
+    expect(await page.evaluate(()=>document.activeElement?.matches('.document-tab-main[aria-selected="true"]')),'focus lost after Open');
+    await tab('Home');
+    await panel().getByRole('button',{name:'Browse all PDF features',exact:true}).click();
+    await panel().getByRole('button',{name:'All 90 PDF features'}).click();
+    await panel().getByRole('button',{name:/^MAL-007 Rotate PDF Pages — Verified, open Organize tools/}).click();
+    expect(await panel().locator('[aria-label="PDF task categories"] [role="tab"][aria-selected="true"]').textContent()==='Organize','gallery did not open Organize');
+    await page.waitForTimeout(200);
+    expect(await page.evaluate(()=>document.activeElement?.getAttribute('role')==='tab'&&document.activeElement?.textContent==='Organize'),'focus lost after gallery choice');});
+
   // ---- annotations, text, forms, outline, links ----
   await check('placed text is real PDF text',async()=>{await openPdf(await simpleDoc());await selectPage(1);await action('Edit','Edit settings');
     await panel().getByLabel('Add text').fill('MALENJO PLACED TEXT');await action('Edit','Place text');await notice(/text|placed|added/);

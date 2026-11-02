@@ -1722,7 +1722,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       }),
       currentPage,
     );
-    if(committed){endCropPreview();setActionNotice('Crop applied to the working PDF. Undo restores the previous page.');}
+    // Only a crop changes what the page shows; trim/bleed/art keep the
+    // accurate "Updated <box> box" message instead of claiming a crop.
+    if(committed){
+      endCropPreview();
+      if(pageBoxDraft.box==='crop')setActionNotice('Crop applied to the working PDF. Undo restores the previous page.');
+    }
   }
 
   async function searchPdf(){
@@ -2857,18 +2862,30 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             return <section className="pdf-user-tool-group" key={label} aria-label={label+' PDF feature requirements'}>
               <h3>{label} · {commands.length}</h3>
               <div className="pdf-feature-gallery-grid">
-                {commands.map(command=><span key={command.id} data-mal-command={command.id}
-                  className="pdf-feature-gallery-cell planned" tabIndex={0}
-                  role="group" aria-label={command.id+' '+command.label+' — Not release-ready'}
-                  title={command.tooltip}>
-                  <button type="button" disabled
-                    title={command.tooltip}
-                    aria-label={command.id+' '+command.label+' — Not release-ready'}>
-                    <PdfFeatureIcon id={command.id} label={command.label} size={22}/>
-                    <span className="pdf-feature-gallery-label">{command.label}</span>
-                    <small>{command.id} · Not ready</small>
-                  </button>
-                </span>)}
+                {commands.map(command=>{
+                  const ready=command.status==='RELEASE_READY';
+                  // Verified capabilities open the ribbon tab holding their real controls.
+                  const target=ready?PDF_MASTER_TABS.find(tab=>tab.label===label):undefined;
+                  return <span key={command.id} data-mal-command={command.id} data-mal-status={command.status}
+                    className={ready?'pdf-feature-gallery-cell verified':'pdf-feature-gallery-cell planned'} tabIndex={0}
+                    role="group" aria-label={command.id+' '+command.label+(ready?' — Verified':' — Not release-ready')}
+                    title={command.tooltip}>
+                    <button type="button" disabled={!ready}
+                      title={command.tooltip}
+                      aria-label={command.id+' '+command.label+(ready?' — Verified, open '+label+' tools':' — Not release-ready')}
+                      onClick={()=>{
+                        if(!target)return;
+                        setMasterTab(target.id);setTaskCategory(target.category);setFeatureGalleryOpen(false);
+                        if(target.id==='organize')openLeftPanel('pages');
+                        // The gallery closes; focus the ribbon tab that now shows the tools.
+                        window.requestAnimationFrame(()=>document.getElementById(`${domIdPrefix}-task-${target.id}`)?.focus());
+                      }}>
+                      <PdfFeatureIcon id={command.id} label={command.label} size={22}/>
+                      <span className="pdf-feature-gallery-label">{command.label}</span>
+                      <small>{command.id} · {ready?'Verified':'Not ready'}</small>
+                    </button>
+                  </span>;
+                })}
               </div>
             </section>;
           })}
