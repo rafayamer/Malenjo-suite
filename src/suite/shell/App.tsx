@@ -46,7 +46,7 @@ import { applySuitePalette } from './themePalette';
 import { planWorkspaceRestore, readSavedWorkspace, restoreNotice, snapshotWorkspace, writeSavedWorkspace } from '../files/sessionRestore';
 import CommandPalette, { type CommandPaletteItem } from './CommandPalette';
 import { CANONICAL_COMMAND_PALETTE_EXAMPLES } from './commandPaletteModel';
-import { pdfCatalogDiscovery } from '../commands/masterCatalog';
+import { pdfCatalogDiscovery, type PDFRibbonCategory } from '../commands/masterCatalog';
 import type { DocumentCommandController, RegisterDocumentCommands } from '../commands/types';
 
 export default function App() {
@@ -87,6 +87,10 @@ export default function App() {
   // Saving starts only after the previous session was read, so an empty
   // first render can never overwrite what is about to be restored.
   const [workspaceRestored,setWorkspaceRestored]=useState(false);
+  // One-shot request for a PDF workspace to show a ribbon tab (verified
+  // capability opened from the palette, catalog or shell ribbon).
+  const [pdfTabRequest,setPdfTabRequest]=useState<{sessionId:string|null;tab:PDFRibbonCategory;nonce:number}|null>(null);
+  const pdfTabNonceRef=useRef(0);
   const [workspaceNotices, setWorkspaceNotices] = useState<Record<string,string>>({});
   const [paletteDocuments, setPaletteDocuments] = useState<LibraryDocument[]>([]);
   const commandControllersRef = useRef(new Map<string, DocumentCommandController>());
@@ -558,10 +562,11 @@ export default function App() {
 
   // Verified capabilities run through the real PDF workspace controls: reopen
   // the user's PDF when one is open, otherwise the PDF module.
-  function openPdfWorkspace() {
+  function openPdfWorkspace(tab?: PDFRibbonCategory) {
     const pdfSession=activeSession?.document.kind==='pdf'
       ? activeSession : sessions.find(session=>session.document.kind==='pdf');
     if(pdfSession)activateSession(pdfSession.id);else selectModule('pdf');
+    if(tab)setPdfTabRequest({sessionId:pdfSession?.id??null,tab,nonce:++pdfTabNonceRef.current});
     // The launcher (catalog card) disappears with the screen change; land on
     // the active document tab, or the workspace, instead of <body>.
     window.requestAnimationFrame(()=>{
@@ -718,6 +723,7 @@ export default function App() {
         onDirtyChange={(dirty)=>markSessionDirty(session.id,dirty)}
         onSavingChange={(saving)=>updateSession(session.id,(current)=>markDocumentSaving(current,saving))}
         initialPage={restorePages[session.id]}
+        tabRequest={pdfTabRequest?.sessionId===session.id?pdfTabRequest:undefined}
         onViewStatusChange={(status)=>setPdfViews(current=>{
           const previous=current[session.id];
           if(previous?.page===status.page&&previous.pageCount===status.pageCount&&previous.zoom===status.zoom)
@@ -963,6 +969,7 @@ export default function App() {
           : active === 'pdf'
             ? <PdfWorkspace
                 session={null}
+                tabRequest={pdfTabRequest?.sessionId===null?pdfTabRequest:undefined}
                 active
                 notice={workspaceNotices.__open ?? ''}
                 onBackToFiles={()=>selectModule('files')}

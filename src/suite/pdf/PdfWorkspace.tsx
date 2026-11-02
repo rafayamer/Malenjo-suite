@@ -148,7 +148,7 @@ import {
   PDF_MASTER_TABS, moveMasterPdfTab, masterPdfTabFromShortcut, masterTabForCategory,
   type PdfMasterTab,
 } from './masterRibbonTabs';
-import { PDF_COMMANDS } from '../commands/masterCatalog';
+import { PDF_COMMANDS, type PDFRibbonCategory } from '../commands/masterCatalog';
 import type { ModuleId } from '../core/types';
 
 interface Props {
@@ -164,6 +164,8 @@ interface Props {
   onViewStatusChange?(status:{page:number;pageCount:number;zoom:string}):void;
   /** Page to show once the document first loads (session restore). */
   initialPage?:number;
+  /** One-shot request to show a ribbon tab (verified capability opened elsewhere). */
+  tabRequest?:{tab:PDFRibbonCategory;nonce:number};
   registerCommands?: RegisterDocumentCommands;
 }
 
@@ -208,7 +210,7 @@ function PdfMinimalCommandIcon({label}: {label:string}) {
   return <FileText size={18} aria-hidden="true"/>;
 }
 
-export default function PdfWorkspace({ session, active, notice, onBackToFiles, onOpenBrowserPdf, onNavigateModule, onDirtyChange, onSavingChange, onViewStatusChange, registerCommands, initialPage}: Props) {
+export default function PdfWorkspace({ session, active, notice, onBackToFiles, onOpenBrowserPdf, onNavigateModule, onDirtyChange, onSavingChange, onViewStatusChange, registerCommands, initialPage, tabRequest}: Props) {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -2548,6 +2550,20 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setInspectorHidden(true);
     setLeftPanelCollapsed(false);
   };
+  // Apply a one-shot ribbon tab request once (verified capability opened from
+  // the palette, catalog or shell ribbon), then focus the shown tab.
+  const appliedTabRequestRef=useRef(0);
+  useEffect(()=>{
+    if(!tabRequest||tabRequest.nonce===appliedTabRequestRef.current)return;
+    appliedTabRequestRef.current=tabRequest.nonce;
+    const target=PDF_MASTER_TABS.find(tab=>tab.label===tabRequest.tab);
+    if(!target)return;
+    setMasterTab(target.id);setTaskCategory(target.category);setFeatureGalleryOpen(false);
+    if(target.id==='organize')openLeftPanel('pages');
+    window.requestAnimationFrame(()=>document.getElementById(`${domIdPrefix}-task-${target.id}`)?.focus());
+    // openLeftPanel is a plain closure over stable setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[tabRequest,domIdPrefix]);
   const navigateAction=(label:string,id:ModuleId):PdfToolbarAction=>({
     id:`navigate-${id}`,
     label,

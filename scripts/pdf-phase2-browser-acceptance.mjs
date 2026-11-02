@@ -295,14 +295,27 @@ async function main(){
     await catalog.locator('[data-mal-command="MAL-005"] button').click();
     await panel().locator('.pdf-workspace').waitFor({timeout:10000});
     await page.waitForTimeout(200);
-    expect(await page.evaluate(()=>document.activeElement?.matches('.document-tab-main[aria-selected="true"]')),'focus lost after Open');
+    const selectedTab=()=>panel().locator('[aria-label="PDF task categories"] [role="tab"][aria-selected="true"]').textContent();
+    expect(await selectedTab()==='Organize','Open did not show the Organize tools');
+    expect(await page.evaluate(()=>document.activeElement?.getAttribute('role')==='tab'&&document.activeElement?.textContent==='Organize'),'focus lost after Open');
     await tab('Home');
     await panel().getByRole('button',{name:'Browse all PDF features',exact:true}).click();
     await panel().getByRole('button',{name:'All 90 PDF features'}).click();
     await panel().getByRole('button',{name:/^MAL-007 Rotate PDF Pages — Verified, open Organize tools/}).click();
     expect(await panel().locator('[aria-label="PDF task categories"] [role="tab"][aria-selected="true"]').textContent()==='Organize','gallery did not open Organize');
     await page.waitForTimeout(200);
-    expect(await page.evaluate(()=>document.activeElement?.getAttribute('role')==='tab'&&document.activeElement?.textContent==='Organize'),'focus lost after gallery choice');});
+    expect(await page.evaluate(()=>document.activeElement?.getAttribute('role')==='tab'&&document.activeElement?.textContent==='Organize'),'focus lost after gallery choice');
+    // Shell ribbon (Home): a verified action returns to the SAME open PDF on its tab.
+    const openName=await page.locator('.document-tab-main[aria-selected="true"]').textContent();
+    await tab('Review');await openModule('Home');
+    await page.locator('.suite-ribbon-tabs').getByRole('tab',{name:'Organize',exact:true}).click();
+    await page.locator('.suite-ribbon-actions').getByRole('button',{name:'Reorder PDF Pages',exact:true}).click();
+    await panel().locator('.pdf-workspace').waitFor({timeout:10000});await page.waitForTimeout(200);
+    expect(await page.locator('.document-tab-main[aria-selected="true"]').textContent()===openName,'ribbon action did not return to the open PDF');
+    expect(await selectedTab()==='Organize','ribbon action did not show the Organize tools');
+    // Palette: a verified command switches to the tab that holds its controls.
+    await tab('Review');await runCommand('Crop PDF Pages');await page.waitForTimeout(300);
+    expect(await selectedTab()==='Edit','palette did not show the Edit tools for MAL-008');});
 
   // ---- annotations, text, forms, outline, links ----
   await check('placed text is real PDF text',async()=>{await openPdf(await simpleDoc());await selectPage(1);await action('Edit','Edit settings');

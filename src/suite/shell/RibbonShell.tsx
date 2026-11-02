@@ -7,14 +7,15 @@ import {
 } from 'lucide-react';
 import type { ModuleId } from '../core/types';
 import { PDF_COMMANDS, type PDFRibbonCategory } from '../commands/masterCatalog';
+import { VERIFIED_COMMAND_BY_ID } from '../commands/verifiedCommands';
 import { defaultRibbonTab, RIBBON_TABS, specialistRibbonActions, type RibbonTabId } from './ribbonModel';
 
 interface Props {
   workspace: ModuleId;
   onNavigate(id: ModuleId): void;
   onOpenFiles(): void;
-  /** Opens the user's PDF (or the PDF module) for verified catalog capabilities. */
-  onOpenPdfWorkspace?(): void;
+  /** Opens the user's PDF (or the PDF module) on a ribbon tab for verified capabilities. */
+  onOpenPdfWorkspace?(tab?: PDFRibbonCategory): void;
 }
 
 const icons: Record<string, LucideIcon> = {
@@ -112,6 +113,9 @@ export default function RibbonShell({ workspace, onNavigate, onOpenFiles, onOpen
           onClick={() => {
             if (action.unavailableReason) return;
             if (action.opensFiles) onOpenFiles();
+            // Verified capabilities return to the user's open PDF on the right
+            // tab; plain module navigation would clear the active document.
+            else if (action.workspaceTab && onOpenPdfWorkspace) onOpenPdfWorkspace(action.workspaceTab);
             else if (action.destination) onNavigate(action.destination);
           }}
           onKeyDown={(event) => {
@@ -165,7 +169,7 @@ export default function RibbonShell({ workspace, onNavigate, onOpenFiles, onOpen
                   {ready
                     ? <button type="button" aria-label={command.label+' — '+command.id+' open in PDF workspace'}
                         title={command.tooltip}
-                        onClick={()=>{setMoreOpen(false);if(onOpenPdfWorkspace)onOpenPdfWorkspace();else onNavigate('pdf');}}>Open</button>
+                        onClick={()=>{setMoreOpen(false);if(onOpenPdfWorkspace)onOpenPdfWorkspace(VERIFIED_COMMAND_BY_ID.get(command.id)?.workspaceTab);else onNavigate('pdf');}}>Open</button>
                     : <button type="button" disabled aria-label={command.label+' — '+command.id+' unavailable'}
                         title={command.tooltip}>Unavailable</button>}
                 </div>;

@@ -1,4 +1,6 @@
 import type { ModuleId } from '../core/types';
+import type { PDFRibbonCategory } from '../commands/masterCatalog';
+import { VERIFIED_COMMAND_BY_ID } from '../commands/verifiedCommands';
 import { CAPABILITY_WORKSPACES, type CapabilityModuleId } from './CapabilityWorkspace';
 
 export type RibbonTabId = 'home' | 'edit' | 'organize' | 'optimize' | 'convert' |
@@ -9,6 +11,8 @@ export interface RibbonAction {
   label: string;
   description?: string;
   destination?: ModuleId;
+  /** Verified PDF capability: reopen the user's PDF on this ribbon tab. */
+  workspaceTab?: PDFRibbonCategory;
   opensFiles?: boolean;
   unavailableReason?: string;
 }
@@ -26,8 +30,9 @@ function required(id: PDFRequirementId): RibbonAction {
   if (!feature) throw new Error('Missing MALENJO PDF feature: '+id);
   // Verified capabilities open the PDF workspace that holds their controls;
   // everything else stays visibly unavailable with its reason.
-  return feature.status==='RELEASE_READY'
-    ? { id, label:feature.label, description:feature.tooltip, destination:'pdf' }
+  const verified = VERIFIED_COMMAND_BY_ID.get(id);
+  return feature.status==='RELEASE_READY' && verified
+    ? { id, label:feature.label, description:feature.tooltip, destination:'pdf', workspaceTab:verified.workspaceTab }
     : { id, label:feature.label, description:feature.tooltip, unavailableReason:feature.id+' — '+feature.tooltip };
 }
 
