@@ -1,10 +1,13 @@
 # Phase 1 — Application Foundation: acceptance record (2 Nov 2026)
 
-**Status: NOT COMPLETED.** Phase 1 can be marked COMPLETED only after:
-1. the owner acceptance test in §3 passes on a named integration commit, and
-2. the native Windows gates in §4 pass.
+**Status: NOT COMPLETED.** The owner set the acceptance policy on 2 Nov 2026:
+- Acceptance is by Claude's own review plus the Codex review on each PR: "use ur review, codex review from now on". The owner's manual test is no longer a gate. §3 remains as an optional checklist.
+- The native Windows gates (§4) are deferred until the rest of MALENJO is built: "windows is the last thing we will do". They carry over to the final release phase.
 
-The owner deferred the Windows gates (§4) until the rest of MALENJO is built: "windows is the last thing we will do".
+Phase 1 becomes COMPLETED when the Phase 1 completion PR is merged into integration with all of the following:
+- green CI on its exact head (including the visual matrix job);
+- a clean Claude review;
+- a clean Codex review, or every valid finding fixed.
 
 ## 1. Verified automatically (runs in CI on every PR)
 
@@ -38,7 +41,9 @@ The Phase 1 completion PR adds:
 
 Superseded drafts #254–#258 were closed with a feature-by-feature mapping.
 
-## 3. Owner acceptance test (Codespaces/browser)
+## 3. Optional owner checklist (Codespaces/browser)
+
+This is no longer a gate under the 2 Nov acceptance policy. Use it any time for a hands-on check.
 
 Record the integration commit SHA being tested: `__________`
 
@@ -78,7 +83,7 @@ For each step, mark **Pass/Fail** and add a note for any Fail.
     - Download the `phase1-visual-matrix` artifact from the PR's CI run.
     - Look over the 12 contact sheets (both themes × six sizes).
 
-Owner sign-off (name, date, commit): `__________`
+Optional owner notes (name, date, commit): `__________`
 
 ## 4. Deferred Windows gates
 
