@@ -1,0 +1,126 @@
+/* Phase 1 regression: shell menus and drawers must be keyboard operable.
+ * Real mounted MALENJO app in Chromium:
+ *   node scripts/phase1-shell-keyboard-browser-smoke.mjs
+ * PORT overrides the Vite port (default 1420, as in CI).
+ */
+import { spawn } from 'node:child_process';
+import { resolve } from 'node:path';
+import { chromium } from 'playwright';
+
+const root = resolve(import.meta.dirname, '..');
+const port = Number(process.env.PORT || 1420);
+const base = `http://127.0.0.1:${port}`;
+let vite, browser;
+function check(ok, message) {
+  if (!ok) throw Error('Phase 1 shell keyboard acceptance: ' + message);
+}
+async function waitForServer() {
+  for (let attempt = 0; attempt < 80; attempt++) {
+    try {
+      if ((await fetch(base, { signal: AbortSignal.timeout(1000) })).ok) return;
+    } catch { /* Vite is still starting. */ }
+    await new Promise((done) => setTimeout(done, 500));
+  }
+  throw Error(`Vite did not start on port ${port}.`);
+}
+async function main() {
+  vite = spawn(process.execPath, [resolve(root, 'node_modules/vite/bin/vite.js'),
+    '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
+    cwd: root, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  vite.stdout.on('data', (data) => process.stdout.write(data));
+  vite.stderr.on('data', (data) => process.stderr.write(data));
+  await waitForServer();
+  browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  const page = await browser.newPage({ viewport: { width: 1366, height: 850 } });
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto(base, { waitUntil: 'domcontentloaded' });
+  await page.getByRole('tab', { name: 'Home', exact: true }).waitFor({ timeout: 15000 });
+
+  const frames = (count = 3) => page.evaluate((n) => new Promise((done) => {
+    const step = (left) => left ? requestAnimationFrame(() => step(left - 1)) : done();
+    step(n);
+  }), count);
+  const describeActive = () => page.evaluate(() => {
+    const node = document.activeElement;
+    return node ? `${node.tagName.toLowerCase()} ${node.getAttribute('aria-label') ?? ''}`.trim() : 'none';
+  });
+  const focusInside = (selector) => page.evaluate((s) => !!document.activeElement?.closest(s), selector);
+  const activeIs = (locator) => locator.evaluate((node) => document.activeElement === node);
+  const danglingControls = () => page.evaluate(() => [...document.querySelectorAll('[aria-controls]')]
+    .filter((node) => node.getAttribute('aria-controls').split(/\s+/).some((id) => id && !document.getElementById(id)))
+    .map((node) => node.getAttribute('aria-label') || node.outerHTML.slice(0, 80)));
+
+  // 1. aria-controls must always reference rendered elements.
+  const closedDangling = await danglingControls();
+  check(closedDangling.length === 0, 'aria-controls points at missing elements: ' + closedDangling.join(', '));
+
+  // 2. The hidden browser file input is named and not a stray Tab stop.
+  const fileInput = page.locator('input[type="file"].visually-hidden').first();
+  check(Boolean(await fileInput.getAttribute('aria-label')), 'Hidden file input has no accessible name');
+  check(await fileInput.evaluate((node) => node.tabIndex) === -1, 'Hidden file input is in the Tab order');
+
+  // 3. Workspaces menu: focus moves in on open; Escape closes and returns focus.
+  const tools = page.getByRole('button', { name: 'All tools', exact: true });
+  const toolsOpen = page.locator('.ml-tools-popup.is-open');
+  for (const how of ['click', 'keyboard']) {
+    if (how === 'click') await tools.click();
+    else { await tools.focus(); await page.keyboard.press('Enter'); }
+    await frames();
+    check(await toolsOpen.count() === 1, `Workspaces menu did not open (${how})`);
+    check(await focusInside('.ml-tools-popup'),
+      `Focus stayed outside the Workspaces menu after ${how} open; focus is on ` + await describeActive());
+    await page.keyboard.press('Escape');
+    await frames();
+    check(await toolsOpen.count() === 0, `Escape did not close the Workspaces menu (${how})`);
+    check(await activeIs(tools), 'Focus did not return to All tools; focus is on ' + await describeActive());
+  }
+
+  // 3b. Choosing a workspace from the menu must not drop focus to <body>.
+  await tools.click();
+  await frames();
+  await page.locator('.ml-tools-popup.is-open .nav-item').nth(1).press('Enter');
+  await frames();
+  check(await toolsOpen.count() === 0, 'Choosing a workspace did not close the menu');
+  check(await page.evaluate(() => document.activeElement && document.activeElement !== document.body),
+    'Focus was dropped to <body> after choosing a workspace');
+
+  // 4. AI drawer: Escape and Close both close it and return focus to the toggle.
+  const ai = page.getByRole('button', { name: 'MALENJO AI', exact: true });
+  await ai.click();
+  await page.locator('#ml-ai-assistant.is-open').waitFor({ timeout: 15000 });
+  await frames();
+  check(await ai.getAttribute('aria-expanded') === 'true', 'AI toggle did not report expanded');
+  check(await focusInside('#ml-ai-assistant'),
+    'Focus stayed outside the opened AI drawer; focus is on ' + await describeActive());
+  const openDangling = await danglingControls();
+  check(openDangling.length === 0, 'aria-controls points at missing elements (AI open): ' + openDangling.join(', '));
+  await page.keyboard.press('Escape');
+  await frames();
+  check(await ai.getAttribute('aria-expanded') === 'false', 'Escape did not close the AI drawer');
+  check(await activeIs(ai), 'Focus did not return to the AI toggle after Escape; focus is on ' + await describeActive());
+  await ai.click();
+  await page.locator('#ml-ai-assistant.is-open').waitFor();
+  await page.getByRole('button', { name: 'Close MALENJO AI' }).click();
+  await frames();
+  check(await ai.getAttribute('aria-expanded') === 'false', 'Close did not close the AI drawer');
+  check(await activeIs(ai), 'Focus did not return to the AI toggle after Close; focus is on ' + await describeActive());
+
+  // 5. Escape on a closed drawer must not interfere with the command palette.
+  await page.keyboard.press('Control+k');
+  const dialog = page.getByRole('dialog', { name: 'MALENJO command palette' });
+  await dialog.waitFor({ state: 'visible' });
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+  check(await ai.getAttribute('aria-expanded') === 'false', 'Palette Escape toggled the AI drawer');
+
+  check(errors.length === 0, 'Unexpected browser errors: ' + errors.join('; '));
+  console.log('Phase 1 shell menus/drawers keyboard Chromium regression: PASS');
+}
+try { await main(); }
+catch (error) { console.error(error); process.exitCode = 1; }
+finally {
+  if (browser) await browser.close();
+  if (vite) vite.kill('SIGTERM');
+}
