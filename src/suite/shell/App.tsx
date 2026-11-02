@@ -336,11 +336,12 @@ export default function App() {
 
   useEffect(()=>{
     if(!workspaceRestored)return;
-    // Until a restored PDF reports its own view, keep its restored page so a
-    // restart during loading does not lose it.
+    // Until a restored PDF has actually loaded (pageCount > 0), keep its
+    // restored page: a placeholder page 1 while loading, or while waiting for
+    // a password, must not overwrite the saved position.
     const views:Record<string,{page:number}>={};
     for(const [id,page] of Object.entries(restorePages))views[id]={page};
-    Object.assign(views,pdfViews);
+    for(const [id,view] of Object.entries(pdfViews))if(view.pageCount>0)views[id]={page:view.page};
     try{writeSavedWorkspace(window.localStorage,snapshotWorkspace(sessions,activeSessionId,views));}
     catch{/* storage unavailable: restore stays best effort */}
   },[workspaceRestored,sessions,activeSessionId,pdfViews,restorePages]);

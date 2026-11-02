@@ -724,10 +724,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     });
   }, [domIdPrefix,pageCount]);
   useEffect(()=>{
-    if(initialPageAppliedRef.current||!pageCount)return;
+    // An inactive tab's panel is display:none: it cannot scroll and its
+    // reader measures 0 px wide, so page placeholders would be laid out at the
+    // wrong size. Spend the one-shot jump only once the tab is shown and the
+    // reader has been measured.
+    if(initialPageAppliedRef.current||!pageCount||!active||viewport.width<=0)return;
     initialPageAppliedRef.current=true;
     if(initialPage&&initialPage>1)goToPage(initialPage);
-  },[goToPage,initialPage,pageCount]);
+  },[active,goToPage,initialPage,pageCount,viewport.width]);
 
   const onPageVisible = useCallback((page: number) => {
     // The observer also reports pages adjacent to the requested target.

@@ -9,6 +9,7 @@
  */
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { PDFDocument } from 'pdf-lib';
 
@@ -65,10 +66,14 @@ async function browserScenario() {
 async function desktopScenario() {
   const library = [
     { id: 'doc-a', name: 'Alpha.pdf', pages: 6 },
-    { id: 'doc-b', name: 'Bravo.pdf', pages: 2 },
+    { id: 'doc-b', name: 'Bravo.pdf', pages: 4 },
+    { id: 'doc-c', name: 'Locked.pdf' },
   ];
   const fixtures = {};
-  for (const item of library) fixtures[item.id] = await makePdf(item.name, item.pages);
+  for (const item of library.filter((entry) => entry.pages)) fixtures[item.id] = await makePdf(item.name, item.pages);
+  // Real AES-256 password-protected fixture (3 pages): it stays unloaded while
+  // its password prompt waits.
+  fixtures['doc-c'] = Array.from(await readFile(resolve(root, 'testing/suite/fixtures/pdf/encrypted-user-password.pdf')));
   const context = await browser.newContext({ viewport: { width: 1366, height: 850 } });
   // Fake desktop bridge: a local library and real PDF bytes. Unknown native
   // commands resolve to null so unrelated startup work stays inert.
@@ -97,13 +102,15 @@ async function desktopScenario() {
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  // A previous session: Alpha on page 4 (active), a document since deleted, Bravo.
+  // A previous session: Alpha on page 4 (active), a document since deleted,
+  // Bravo on page 3 (inactive), and a password-protected PDF on page 3.
   await page.addInitScript((key) => {
     if (!sessionStorage.getItem('seeded')) {
       sessionStorage.setItem('seeded', '1');
       localStorage.setItem(key, JSON.stringify({
         version: 1,
-        tabs: [{ documentId: 'doc-a', page: 4 }, { documentId: 'doc-deleted' }, { documentId: 'doc-b' }],
+        tabs: [{ documentId: 'doc-a', page: 4 }, { documentId: 'doc-deleted' }, { documentId: 'doc-b', page: 3 },
+          { documentId: 'doc-c', page: 3 }],
         activeDocumentId: 'doc-a', temporaryCount: 0,
       }));
     }
@@ -124,6 +131,31 @@ async function desktopScenario() {
   check((await status.textContent())?.includes('Page 4 / 6'),
     'Restored PDF did not reopen on its saved page: ' + await status.textContent());
 
+  // An inactive restored tab opens on its saved page when first shown: the
+  // indicator and the scrolled reader both show page 3, not the top.
+  await tabs.nth(1).click();
+  await page.waitForFunction(() => document.querySelector('.ml-status-pdf-view')?.textContent?.includes('Page 3 / 4'),
+    null, { timeout: 20000 }).catch(() => {});
+  check((await status.textContent())?.includes('Page 3 / 4'),
+    'Inactive restored tab did not report its saved page: ' + await status.textContent());
+  await page.waitForTimeout(500);
+  const pageThreeVisible = await page.evaluate(() => {
+    const target = document.querySelector('.document-session-panel.active [id$="-page-3"]');
+    const first = document.querySelector('.document-session-panel.active [id$="-page-1"]');
+    if (!target || !first) return false;
+    return Math.abs(target.getBoundingClientRect().top) < Math.abs(first.getBoundingClientRect().top);
+  });
+  check(pageThreeVisible, 'Inactive restored tab reported page 3 but the reader stayed at the top');
+
+  // A PDF still waiting for its password keeps its saved page in storage.
+  await tabs.nth(2).click();
+  await page.locator('.document-session-panel.active .pdf-password-prompt').waitFor({ timeout: 20000 });
+  await page.waitForTimeout(500);
+  const whileLocked = JSON.parse(await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY));
+  check(whileLocked.tabs.find((tab) => tab.documentId === 'doc-c')?.page === 3,
+    'An unloaded (password-protected) PDF lost its saved page: ' + JSON.stringify(whileLocked));
+  await tabs.nth(0).click();
+
   // Recovery after a restart: the newly viewed page is what comes back.
   const pageInput = page.locator('.document-session-panel.active input[aria-label="Current PDF page"]');
   await pageInput.fill('6');
@@ -133,7 +165,7 @@ async function desktopScenario() {
   await tabs.nth(1).click();
   await page.waitForTimeout(500);
   const saved = JSON.parse(await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY));
-  check(saved.activeDocumentId === 'doc-b' && saved.tabs.length === 2 && saved.tabs[0].page === 6,
+  check(saved.activeDocumentId === 'doc-b' && saved.tabs.length === 3 && saved.tabs[0].page === 6,
     'Current session was not saved for recovery: ' + JSON.stringify(saved));
   check(!JSON.stringify(saved).includes('C:/Users'), 'File paths leaked into browser storage');
   await page.reload({ waitUntil: 'domcontentloaded' });
