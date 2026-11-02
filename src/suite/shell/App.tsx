@@ -57,6 +57,9 @@ export default function App() {
   const [aiOpen, setAiOpen] = useState(false);
   const [aiHasOpened, setAiHasOpened] = useState(false);
   const moduleMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const moduleMenuRef = useRef<HTMLElement>(null);
+  const aiButtonRef = useRef<HTMLButtonElement>(null);
+  const aiDrawerRef = useRef<HTMLElement>(null);
   const [theme, setTheme] = useState<SuiteTheme>(() => {
     try { return readSuiteTheme(window.localStorage); } catch { return 'dark'; }
   });
@@ -98,18 +101,44 @@ export default function App() {
   useEffect(() => () => {
     if (paletteRestoreFrameRef.current !== null) window.cancelAnimationFrame(paletteRestoreFrameRef.current);
   }, []);
+  // Opening the AI drawer moves focus into it so it is announced and Escape
+  // reaches it. Effects run after `inert` is removed in the same commit.
+  useEffect(() => { if (aiOpen) aiDrawerRef.current?.focus(); }, [aiOpen]);
   const browserOpenInputRef = useRef<HTMLInputElement>(null);
   const module = modules.find((item) => item.id === active) ?? modules[0];
   const groups = useMemo(() => ['Core','Create','Intelligence','Enterprise','System'] as const, []);
   useEffect(() => {
     if (!moduleMenuOpen) return;
+    // The menu is a dialog: move focus into it (current workspace first) so
+    // keyboard users can navigate it and Escape reaches its handler.
+    const menu = moduleMenuRef.current;
+    (menu?.querySelector<HTMLElement>('.nav-item.active') ??
+      menu?.querySelector<HTMLElement>('.nav-item'))?.focus();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      // A modal command palette above the menu owns Escape first.
+      if (event.key !== 'Escape' || event.defaultPrevented || commandOpenRef.current) return;
+      event.preventDefault();
+      setModuleMenuOpen(false);
+      moduleMenuButtonRef.current?.focus();
+    };
+    document.addEventListener('keydown', closeOnEscape);
     const closeOutside = (event: PointerEvent) => {
       const target = event.target;
       if (target instanceof Element && !target.closest('.ml-tools-popup') &&
         !target.closest('.topbar-tool-trigger')) setModuleMenuOpen(false);
     };
     document.addEventListener('pointerdown', closeOutside);
-    return () => document.removeEventListener('pointerdown', closeOutside);
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+      // Choosing a workspace closes (and inerts) the menu while it holds
+      // focus. Return focus to the trigger instead of dropping it to <body>;
+      // an outside click that focused another control is left alone.
+      const focused = document.activeElement;
+      if (!focused || focused === document.body || menu?.contains(focused)) {
+        moduleMenuButtonRef.current?.focus();
+      }
+    };
   }, [moduleMenuOpen]);
 
 
@@ -441,6 +470,12 @@ export default function App() {
     openBrowserFiles(files);
   }
 
+  function closeAiDrawer() {
+    setAiOpen(false);
+    // The drawer becomes inert; never leave focus stranded inside it.
+    aiButtonRef.current?.focus();
+  }
+
   function openCommandPalette(opener?: HTMLElement | null) {
     if (paletteRestoreFrameRef.current !== null) {
       window.cancelAnimationFrame(paletteRestoreFrameRef.current);
@@ -651,13 +686,7 @@ export default function App() {
     <a className="skip-to-workspace" href="#malenjo-workspace-content">Skip to workspace content</a>
     <aside className={moduleMenuOpen ? 'sidebar ml-tools-popup is-open' : 'sidebar ml-tools-popup'}
       role="dialog" aria-label="All MALENJO tools" aria-hidden={!moduleMenuOpen}
-      inert={!moduleMenuOpen}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') {
-          event.preventDefault(); setModuleMenuOpen(false);
-          moduleMenuButtonRef.current?.focus();
-        }
-      }}>
+      inert={!moduleMenuOpen} ref={moduleMenuRef}>
       <header className="ml-tools-popup-head">
         <strong>Tools</strong><span>All MALENJO workspaces</span>
         <button aria-label="Close tools menu" title="Close tools menu"
@@ -694,6 +723,8 @@ export default function App() {
       <input
         ref={browserOpenInputRef}
         className="visually-hidden"
+        aria-label="Choose documents to open"
+        tabIndex={-1}
         type="file"
         multiple
         accept=".pdf,.dxf,.dwg,.dcm,.dicom"
@@ -734,8 +765,9 @@ export default function App() {
         <div className="search"><Search size={17}/><input value={query} onFocus={event=>{if(!suppressSearchFocusOpenRef.current)openCommandPalette(event.currentTarget);}} onClick={event=>{if(!commandOpenRef.current)openCommandPalette(event.currentTarget);}} onChange={event=>{setQuery(event.target.value);openCommandPalette(event.currentTarget);}} placeholder="Search commands" aria-label="Search commands"/><kbd>Ctrl K</kbd></div>
         <div className="topbar-actions">
           <button type="button" className="command ml-top-ai" aria-label="MALENJO AI"
+            ref={aiButtonRef}
             title="MALENJO AI — document assistant" aria-expanded={aiOpen}
-            aria-controls="ml-ai-assistant"
+            aria-controls={aiHasOpened ? 'ml-ai-assistant' : undefined}
             onClick={()=>{setAiHasOpened(true);setAiOpen(value=>!value);setModuleMenuOpen(false);}}>
             <Bot size={20} aria-hidden="true"/>
           </button>
@@ -781,16 +813,22 @@ export default function App() {
       />
 
       {aiHasOpened && <aside id="ml-ai-assistant" className={aiOpen?'ml-ai-drawer is-open':'ml-ai-drawer'}
-        aria-label="MALENJO AI document assistant" aria-hidden={!aiOpen} inert={!aiOpen}>
+        ref={aiDrawerRef} tabIndex={-1}
+        aria-label="MALENJO AI document assistant" aria-hidden={!aiOpen} inert={!aiOpen}
+        onKeyDown={(event)=>{
+          if(event.key!=='Escape'||event.defaultPrevented)return;
+          event.preventDefault();
+          closeAiDrawer();
+        }}>
         <div className="ml-ai-drawer-title">
           <Bot size={19} aria-hidden="true"/><strong>MALENJO AI</strong>
           <span>Local assistant</span>
           <button type="button" aria-label="Close MALENJO AI" title="Close assistant"
-            onClick={()=>setAiOpen(false)}><X size={18} aria-hidden="true"/></button>
+            onClick={closeAiDrawer}><X size={18} aria-hidden="true"/></button>
         </div>
         <Suspense fallback={<div className="ml-open-feedback" role="status">Opening MALENJO AI…</div>}>
           <AiWorkspace compact openDocuments={openDocumentsForAi}
-            onBackToFiles={()=>{setAiOpen(false);selectModule('files');}}/>
+            onBackToFiles={()=>{closeAiDrawer();selectModule('files');}}/>
         </Suspense>
       </aside>}
 

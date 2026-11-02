@@ -122,7 +122,7 @@ export default function RibbonShell({ workspace, onNavigate, onOpenFiles }: Prop
       })}
       <button type="button" ref={moreButtonRef} className="suite-ribbon-more"
         aria-label="More PDF tools" title="More PDF tools — search all 90 requirements"
-        aria-expanded={moreOpen} aria-controls="malenjo-complete-feature-catalog"
+        aria-expanded={moreOpen} aria-controls={moreOpen ? 'malenjo-complete-feature-catalog' : undefined}
         onClick={()=>setMoreOpen(value=>!value)}>
         <Ellipsis size={20} aria-hidden="true"/><span>More Tools</span>
       </button>
