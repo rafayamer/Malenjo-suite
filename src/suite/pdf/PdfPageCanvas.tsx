@@ -43,7 +43,7 @@ interface Props {
   /** MAL-055: active drawing tool; shapes are reported as fractions of the page as shown. */
   drawTool?:{kind:DrawingKind;color:string;busy:boolean;onShape(shape:DrawnShape):void}|null;
   /** MAL-011: clickable boxes over the page's own text runs (fractions of the page as shown). */
-  textRuns?:{targets:readonly {id:number;text:string;editable:boolean;shown:{x:number;y:number;width:number;height:number}}[];selected:number|null;onSelect(id:number):void}|null;
+  textRuns?:{targets:readonly {id:number;text:string;editable:boolean;shown:{x:number;y:number;width:number;height:number}}[];selected:number|null;onSelect(id:number):void;labelPrefix?:string}|null;
 }
 
 export default function PdfPageCanvas({
@@ -456,12 +456,12 @@ export default function PdfPageCanvas({
         outline:'2px dashed currentColor',boxShadow:'0 0 0 100vmax rgba(15,23,42,.35)',
       }}/>}
     </div>}
-    {textRuns&&<div role="group" aria-label={`Text on PDF page ${pageNumber}`} style={{position:'absolute',inset:0,zIndex:9}}>
+    {textRuns&&<div role="group" aria-label={`${textRuns.labelPrefix==='Select object'?'Objects':'Text'} on PDF page ${pageNumber}`} style={{position:'absolute',inset:0,zIndex:9,pointerEvents:'none'}}>
       {textRuns.targets.map(target=><button key={target.id} type="button"
         className={'pdf-text-run-target'+(textRuns.selected===target.id?' selected':'')}
-        aria-label={`Edit text: ${target.text.slice(0,80)}`} aria-pressed={textRuns.selected===target.id}
-        disabled={!target.editable} title={target.editable?'Edit this text':'This text cannot be edited in place'}
-        style={{position:'absolute',left:`${target.shown.x*100}%`,top:`${target.shown.y*100}%`,width:`${target.shown.width*100}%`,height:`${target.shown.height*100}%`}}
+        aria-label={`${textRuns.labelPrefix??'Edit text'}: ${target.text.slice(0,80)}`} aria-pressed={textRuns.selected===target.id}
+        disabled={!target.editable} title={target.editable?(textRuns.labelPrefix??'Edit this text'):'This text cannot be edited in place'}
+        style={{position:'absolute',pointerEvents:'auto',left:`${target.shown.x*100}%`,top:`${target.shown.y*100}%`,width:`${target.shown.width*100}%`,height:`${target.shown.height*100}%`}}
         onClick={()=>textRuns.onSelect(target.id)}/>)}
     </div>}
     {drawTool&&<PdfDrawOverlay pageNumber={pageNumber} kind={drawTool.kind} color={drawTool.color} busy={drawTool.busy}

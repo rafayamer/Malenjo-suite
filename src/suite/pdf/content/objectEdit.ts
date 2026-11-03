@@ -17,7 +17,7 @@ import { parseColor, viewerFrame } from '../pdfStamp';
 export interface ShownBox { x: number; y: number; width: number; height: number }
 export interface PageObjectInfo { id: number; kind: 'image' | 'path'; box: Box; shown: ShownBox; label: string; pixels?: { width: number; height: number }; stroke?: string; fill?: string; lineWidth?: number }
 export interface ObjectTransform {
-  /** Move as fractions of the page as shown (x right, y down). */
+  /** Move in points along the page as shown (x right, y down). */
   dx?: number; dy?: number;
   /** Uniform scale about the object's centre (1 = unchanged). */
   scale?: number;
@@ -105,7 +105,8 @@ function transformFor(pdf: PDFDocument, pageNumber: number, viewRotation: number
   const theta = (-angle * Math.PI) / 180; // clockwise as shown; shown frame and page differ only by a rotation
   const cos = Math.cos(theta), sin = Math.sin(theta);
   // Shown move (x right, y down) as a page-space vector.
-  const du = (change.dx ?? 0) * frame.width, dv = -(change.dy ?? 0) * frame.height;
+  const du = change.dx ?? 0, dv = -(change.dy ?? 0);
+  if (!Number.isFinite(du) || !Number.isFinite(dv) || Math.abs(du) > 14400 || Math.abs(dv) > 14400) throw new Error('Move must be a reasonable distance.');
   const m = frame.matrix;
   const tx = m[0] * du + m[2] * dv, ty = m[1] * du + m[3] * dv;
   // In page space: move the centre to the origin, rotate and scale, move back and shift.

@@ -32,7 +32,7 @@ describe('image and shape editing (MAL-014, MAL-015)', () => {
   });
 
   it('moves, scales and rotates an image in the page as shown', async () => {
-    let bytes = await transformPdfObject(await sample(), 1, 'image', 0, { dx: 50 / 600, dy: 100 / 800 });
+    let bytes = await transformPdfObject(await sample(), 1, 'image', 0, { dx: 50, dy: 100 });
     let [image] = await listPdfPageObjects(bytes, 1);
     expect(close(image.box, [150, 400, 350, 500])).toBe(true); // right 50, down 100
     bytes = await transformPdfObject(bytes, 1, 'image', 0, { scale: 0.5 });
@@ -45,7 +45,7 @@ describe('image and shape editing (MAL-014, MAL-015)', () => {
 
   it('moves follow the shown page on a rotated page', async () => {
     // On a 90° page, shown "right" is page +y.
-    const bytes = await transformPdfObject(await sample(90), 1, 'image', 0, { dx: 40 / 800 });
+    const bytes = await transformPdfObject(await sample(90), 1, 'image', 0, { dx: 40 });
     const [image] = await listPdfPageObjects(bytes, 1, 0);
     expect(close(image.box, [100, 540, 300, 640])).toBe(true);
   });
@@ -64,7 +64,7 @@ describe('image and shape editing (MAL-014, MAL-015)', () => {
     let bytes = await stylePdfPath(await sample(), 1, 0, { stroke: '#ff0000', fill: '#00ff00', lineWidth: 4 });
     let [, path] = await listPdfPageObjects(bytes, 1);
     expect([path.stroke, path.fill, path.lineWidth]).toEqual(['#ff0000', '#00ff00', 4]);
-    bytes = await transformPdfObject(bytes, 1, 'path', 0, { dx: -50 / 600 });
+    bytes = await transformPdfObject(bytes, 1, 'path', 0, { dx: -50 });
     [, path] = await listPdfPageObjects(bytes, 1);
     expect(path.box[0]).toBeCloseTo(300, 0);
     bytes = await deletePdfObject(bytes, 1, 'path', 0);

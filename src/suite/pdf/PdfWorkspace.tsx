@@ -132,6 +132,8 @@ import PdfCompressDialog from './PdfCompressDialog';
 import PdfMarkupPanel, { MARKUP_AUTHOR, type MarkupSettings } from './PdfMarkupPanel';
 import PdfTextEditPanel, { type TextEditState } from './PdfTextEditPanel';
 import PdfFindReplaceDialog from './PdfFindReplaceDialog';
+import PdfObjectEditPanel, { objectKey, type InsertSettings, type ObjectEditState } from './PdfObjectEditPanel';
+import { insertPdfContent, type InsertKind } from './content/objectEdit';
 import { addPdfDrawing } from './pdfMarkup';
 import PdfProviderToolsPanel from './PdfProviderToolsPanel';
 import { defaultPdfToolProvider } from './defaultProvider';
@@ -407,7 +409,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [masterTab, setMasterTab] = useState<PdfMasterTab>('home');
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
   // MAL-001 / 002 / 009 / 010 dialogs; focus returns to the control that opened them.
-  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup'|'text-edit'|'find';
+  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup'|'text-edit'|'find'|'objects';
+  // MAL-014/015/016: objects on the page being edited, and the insert tool.
+  const [objectState,setObjectState]=useState<ObjectEditState|null>(null);
+  const [insertSettings,setInsertSettings]=useState<InsertSettings>({tool:null,stroke:'#1f3a5f',fill:null,lineWidth:2,text:'',fontSize:14});
   // MAL-011: runs on the page being edited, and the selected one.
   const [textEditState,setTextEditState]=useState<TextEditState|null>(null);
   const [toolDialog, setToolDialog] = useState<null|ToolDialog>(null);
@@ -2663,6 +2668,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'rectangle',label:shapeOverlay.mode==='highlight'?'Highlight rectangle':'Outline rectangle',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage)},
       {id:'configure-edit',label:'Edit settings',enabled:true,run:configureProperties},
       {id:'text-edit',label:'Edit text…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('text-edit')},
+      {id:'edit-objects',label:'Edit objects…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('objects')},
       {id:'find-replace',label:'Find and replace…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('find')},
       {id:'stamp-header-footer',label:'Header & footer…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('header-footer')},
       {id:'stamp-page-numbers',label:'Page numbers…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('page-numbers')},
@@ -2960,7 +2966,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             if(applied)setActionNotice(summary);
             return applied;
           }}/>}
-      {(toolDialog==='properties'||toolDialog==='navigation'||toolDialog==='compress'||toolDialog==='markup'||toolDialog==='text-edit'||toolDialog==='find')&&sourceBytes&&(()=>{
+      {(toolDialog==='properties'||toolDialog==='navigation'||toolDialog==='compress'||toolDialog==='markup'||toolDialog==='text-edit'||toolDialog==='find'||toolDialog==='objects')&&sourceBytes&&(()=>{
         const apply=async (label:string,operation:(latest:Uint8Array)=>Promise<{bytes:Uint8Array;summary:string}>)=>{
           let summary='';
           const applied=await mutate(label,async latest=>{const edited=await operation(latest);summary=edited.summary;return edited.bytes;},currentPage);
@@ -2969,6 +2975,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         };
         if(toolDialog==='text-edit')return <PdfTextEditPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} pageNumber={currentPage} viewRotation={rotation} busy={mutating}
           state={textEditState} onState={setTextEditState} onApply={apply} onClose={()=>{setTextEditState(null);closeToolDialog();}}/>;
+        if(toolDialog==='objects')return <PdfObjectEditPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} pageNumber={currentPage} viewRotation={rotation} busy={mutating}
+          state={objectState} onState={setObjectState} insert={insertSettings} onInsert={setInsertSettings} onApply={apply}
+          onClose={()=>{setObjectState(null);setInsertSettings(current=>({...current,tool:null}));closeToolDialog();}}/>;
         if(toolDialog==='find')return <PdfFindReplaceDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} busy={mutating}
           revisions={(historyRef.current?.entries??[]).map((entry,index)=>({index,label:entry.label,current:index===historyRef.current!.cursor}))}
           onApply={apply} onRestore={index=>void restoreRevision(index)} onSaveRevision={index=>void saveRevision(index)}
@@ -3519,9 +3528,22 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               onReplacePage={()=>beginReplacePage(page)}
               onCropPage={()=>startCropOnPage(page)}
               editingBusy={mutating||loading}
-              textRuns={toolDialog==='text-edit'&&textEditState&&textEditState.pageNumber===page?{targets:textEditState.runs,selected:textEditState.selected,
+              textRuns={toolDialog==='objects'&&objectState&&objectState.pageNumber===page&&!insertSettings.tool?{labelPrefix:'Select object',
+                targets:objectState.objects.map((o,index)=>({id:index,text:o.label,editable:true,shown:o.shown})),
+                selected:objectState.objects.findIndex(o=>objectKey(o)===objectState.selected),
+                onSelect:index=>setObjectState(current=>current?{...current,selected:objectKey(current.objects[index])}:current)}
+              :toolDialog==='text-edit'&&textEditState&&textEditState.pageNumber===page?{targets:textEditState.runs,selected:textEditState.selected,
                 onSelect:id=>setTextEditState(current=>current?{...current,selected:id}:current)}:null}
-              drawTool={toolDialog==='markup'&&markupSettings.tool?{kind:markupSettings.tool,color:markupSettings.style.color,busy:mutating,onShape:shape=>{
+              drawTool={toolDialog==='objects'&&insertSettings.tool?{kind:({text:'FreeText',rectangle:'Square',ellipse:'Circle',line:'Line',arrow:'Arrow'} as const)[insertSettings.tool],
+                color:insertSettings.stroke,busy:mutating,onShape:shape=>{
+                  const kind:InsertKind=insertSettings.tool!;
+                  const rect=shape.rect??(shape.points&&shape.points.length===2
+                    ?{x:shape.points[0].x,y:shape.points[0].y,width:shape.points[1].x-shape.points[0].x,height:shape.points[1].y-shape.points[0].y}:null);
+                  if(!rect)return;
+                  void mutate(`Inserted ${kind==='text'?'text':`a ${kind}`}.`,latest=>insertPdfContent(latest,{pageNumber:page,viewRotation:rotation,kind,rect,
+                    text:insertSettings.text,fontSize:insertSettings.fontSize,stroke:insertSettings.stroke,fill:insertSettings.fill,lineWidth:insertSettings.lineWidth}),page);
+                }}
+              :toolDialog==='markup'&&markupSettings.tool?{kind:markupSettings.tool,color:markupSettings.style.color,busy:mutating,onShape:shape=>{
                 const kind=markupSettings.tool!;
                 void mutate(`Added ${kind==='Ink'?'a freehand drawing':kind==='Note'?'a sticky note':'a drawing'}.`,
                   latest=>addPdfDrawing(latest,{...shape,pageNumber:page,viewRotation:rotation,kind,author:MARKUP_AUTHOR,style:markupSettings.style,text:markupSettings.text}),page);
