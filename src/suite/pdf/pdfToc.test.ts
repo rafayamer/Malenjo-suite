@@ -92,6 +92,18 @@ describe('generatePdfTableOfContents (MAL-022)', () => {
     expect(out[2]).toContain('Section 80');
     expect(labels?.slice(0, 4)).toEqual(['i', 'ii', 'iii', '1']);
     await expect(generatePdfTableOfContents(await doc(2), { title: 'Contents', maxDepth: 2, fontSize: 11 })).rejects.toThrow(/no bookmarks/);
+    // Bookmarks that use a named destination or a GoTo action are included at their page.
+    const named = await PDFDocument.load(await doc(3));
+    const nctx = named.context;
+    named.catalog.set(PDFName.of('Dests'), nctx.obj({ third: nctx.obj([named.getPage(2).ref, PDFName.of('Fit')]) }));
+    const oRoot = nctx.register(nctx.obj({ Type: 'Outlines' }));
+    const byName = nctx.register(nctx.obj({ Title: PDFHexString.fromText('By name'), Parent: oRoot, Dest: PDFName.of('third') }));
+    const byAction = nctx.register(nctx.obj({ Title: PDFHexString.fromText('By action'), Parent: oRoot, Prev: byName, A: nctx.obj({ S: 'GoTo', D: [named.getPage(1).ref, PDFName.of('Fit')] }) }));
+    nctx.lookup(byName, PDFDict).set(PDFName.of('Next'), byAction);
+    nctx.lookup(oRoot, PDFDict).set(PDFName.of('First'), byName); nctx.lookup(oRoot, PDFDict).set(PDFName.of('Last'), byAction);
+    named.catalog.set(PDFName.of('Outlines'), oRoot);
+    const namedResult = await generatePdfTableOfContents(await named.save(), { title: 'Contents', maxDepth: 1, fontSize: 11 });
+    expect([namedResult.entries, namedResult.skipped]).toEqual([2, 0]);
     // Unsupported page-label structure: refused before anything is inserted.
     const kids = await PDFDocument.load(await addPdfOutlineTreeEntry(await doc(2), 'A', 1));
     kids.catalog.set(PDFName.of('PageLabels'), kids.context.obj({ Kids: [kids.context.obj({ Nums: [0, kids.context.obj({ S: 'D' })] })] }));

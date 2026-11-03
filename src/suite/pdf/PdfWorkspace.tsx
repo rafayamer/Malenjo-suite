@@ -402,6 +402,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [inspectorHidden, setInspectorHidden] = useState(true);
   const [taskCategory, setTaskCategory] = useState<PdfTaskCategory>('home');
   const [masterTab, setMasterTab] = useState<PdfMasterTab>('home');
+  // The toolbar's More menu keeps its open state here, so a re-layout that remounts it (for
+  // example when a scrollbar appears while a page loads) does not close it under the pointer.
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  useEffect(() => { setOverflowOpen(false); }, [masterTab]);
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
   // MAL-001 / 002 / 009 / 010 dialogs; focus returns to the control that opened them.
   type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup';
@@ -2875,7 +2879,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             {action.planned&&<span className="pdf-feature-planned-dot" aria-hidden="true"/>}
           </span>)}
           {!activeTaskActions.length&&<span className="pdf-task-empty">No operational {PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label.toLowerCase()} commands are available in this build yet. Use Ctrl+K to discover available document actions.</span>}
-          {overflowTaskActions.length>0&&<details className="pdf-task-overflow">
+          {overflowTaskActions.length>0&&<details className="pdf-task-overflow" open={overflowOpen}
+            onToggle={event=>{const open=event.currentTarget.open;setOverflowOpen(current=>current===open?current:open);}}>
             <summary aria-label={`More ${PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label} tools`}>More</summary>
             <div>
               {overflowTaskActions.map((action)=><button
@@ -2883,7 +2888,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                 disabled={!action.enabled}
                 title={taskActionTitle(action)}
                 aria-label={taskActionTitle(action)}
-                onClick={()=>{void action.run();}}
+                onClick={()=>{setOverflowOpen(false);void action.run();}}
               >{action.label}</button>)}
             </div>
           </details>}

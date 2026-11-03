@@ -102,6 +102,17 @@ describe('runPdfBatch (MAL-010)', () => {
     await loading.destroy();
   });
 
+  it('keeps every remaining page\'s label when pages are removed', async () => {
+    const pdf = await PDFDocument.load(await labelled('L', 6));
+    // Cover (no label), then i, ii, then 1, 2, 3.
+    pdf.catalog.set(PDFName.of('PageLabels'), pdf.context.obj({ Nums: [0, pdf.context.obj({}), 1, pdf.context.obj({ S: 'r' }), 3, pdf.context.obj({ S: 'D' })] }));
+    const result = await runPdfBatch([{ name: 'labels.pdf', bytes: await pdf.save() }], [{ kind: 'remove', pages: '1, 5' }]);
+    const loading = getDocument({ data: unzipSync(result.archive)['results/labels.pdf'].slice(), useSystemFonts: true });
+    const doc = await loading.promise;
+    expect(await doc.getPageLabels()).toEqual(['i', 'ii', '1', '3']);
+    await loading.destroy();
+  });
+
   it('refuses removing every page and validates input', async () => {
     const result = await runPdfBatch([{ name: 'x.pdf', bytes: await labelled('X', 2) }], [{ kind: 'remove', pages: '1-2' }]);
     expect(result.entries[0].message).toMatch(/remove every page/);
