@@ -117,7 +117,6 @@ async function action(tabName,label){
     const more=panel().locator('.pdf-task-overflow');
     if(await more.count()&&!(await more.evaluate(node=>node.open)))await more.locator('summary').click();
   }
-  await button.scrollIntoViewIfNeeded({timeout:10000});
   await button.click({timeout:15000});
 }
 async function notice(pattern,timeout=20000){

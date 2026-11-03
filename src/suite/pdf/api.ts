@@ -6,6 +6,9 @@ export async function readPdfDocumentBytes(documentId: string): Promise<ArrayBuf
   return invoke<ArrayBuffer>('read_pdf_document', { documentId });
 }
 
+/** Largest PDF that Save PDF copy can write here: write_pdf_copy accepts 32 MB on the desktop. */
+export function pdfSaveLimit():number{return isTauri()?32*1024*1024:256*1024*1024;}
+
 export async function exportPdfBytes(name:string,bytes:Uint8Array):Promise<boolean>{
   const copy=Uint8Array.from(bytes);
   if(!isTauri()){

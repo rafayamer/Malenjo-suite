@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { FilePlus2, Plus, X } from 'lucide-react';
 import { exportPdfPartsZip, pdfPartsZipLimit } from './api';
-import { describeBatchRule, runPdfBatch, type PdfBatchEntry, type PdfBatchRule } from './pdfBatch';
+import { PDF_BATCH_MAX_FILES, PDF_BATCH_MAX_TOTAL_BYTES, describeBatchRule, runPdfBatch, type PdfBatchEntry, type PdfBatchRule } from './pdfBatch';
 import type { NupPerSheet } from './pdfNup';
 import { describePdfError } from './pdfUserErrors';
 
@@ -11,6 +11,8 @@ type RuleKind = PdfBatchRule['kind'];
 interface Props {
   domIdPrefix: string;
   currentName: string;
+  /** Size of the open document, counted against the batch input budget. */
+  currentSize: number;
   busy: boolean;
   /** Latest working bytes of the open document at the moment the batch runs. */
   getBytes(): Uint8Array | null;
@@ -21,7 +23,7 @@ interface Props {
 let fileSequence = 0;
 
 /** MAL-010: apply page organization rules to several PDFs and save results plus a manifest. */
-export default function PdfBatchDialog({ domIdPrefix, currentName, busy, getBytes, onDone, onClose }: Props) {
+export default function PdfBatchDialog({ domIdPrefix, currentName, currentSize, busy, getBytes, onDone, onClose }: Props) {
   const [files, setFiles] = useState<FileEntry[]>(() => [{ id: 'current', name: currentName, bytes: null, current: true }]);
   const [rules, setRules] = useState<PdfBatchRule[]>([]);
   const [kind, setKind] = useState<RuleKind>('rotate');
@@ -37,8 +39,15 @@ export default function PdfBatchDialog({ domIdPrefix, currentName, busy, getByte
 
   async function addFiles(list: FileList | null) {
     if (!list?.length) return;
+    // Check the count and total size before reading any file into memory.
+    const chosen = Array.from(list);
+    if (files.length + chosen.length > PDF_BATCH_MAX_FILES) {
+      setError(`Batch supports up to ${PDF_BATCH_MAX_FILES} files; none of the ${chosen.length} chosen were added.`); return;
+    }
+    const total = files.reduce((sum, entry) => sum + (entry.current ? currentSize : entry.bytes?.length ?? 0), 0) + chosen.reduce((sum, file) => sum + file.size, 0);
+    if (total > PDF_BATCH_MAX_TOTAL_BYTES) { setError('These files would bring the batch above 256 MB; none were added.'); return; }
     const added: FileEntry[] = [];
-    for (const file of Array.from(list)) added.push({ id: `batch-${++fileSequence}`, name: file.name, bytes: new Uint8Array(await file.arrayBuffer()), current: false });
+    for (const file of chosen) added.push({ id: `batch-${++fileSequence}`, name: file.name, bytes: new Uint8Array(await file.arrayBuffer()), current: false });
     setFiles((current) => [...current, ...added]);
     setError('');
   }
