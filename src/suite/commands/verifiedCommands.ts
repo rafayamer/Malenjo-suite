@@ -36,6 +36,7 @@ export const VERIFIED_EVIDENCE_SCRIPTS = [
   'scripts/pdf-phase2-objects-acceptance.mjs',
   'scripts/pdf-phase2-paragraph-acceptance.mjs',
   'scripts/pdf-phase3-forms-acceptance.mjs',
+  'scripts/pdf-phase3-export-acceptance.mjs',
 ] as const;
 
 export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Object.freeze([
@@ -223,6 +224,36 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     id: 'MAL-053', workspaceTab: 'Forms',
     guidance: 'In Fill form…, export the values as CSV, JSON, FDF or XFDF, or import one of those files and Save values. Names not in the form, and read-only or calculated fields, are reported and skipped.',
     evidence: ['MAL-053 export and import CSV, JSON, FDF and XFDF'],
+  },
+  {
+    id: 'MAL-029', workspaceTab: 'Convert',
+    guidance: 'Choose Export as… → PNG image. Keep “Transparent page background” on to keep alpha where the PDF draws nothing, turn on “Remove a background colour” to make a colour (with a tolerance) transparent, or choose “Drag a region on the page” to export just that part.',
+    evidence: ['MAL-029 transparent PNG of a page and of a dragged region, with background removal'],
+  },
+  {
+    id: 'MAL-036', workspaceTab: 'Convert',
+    guidance: 'Choose Export as… → PNG, JPG or TIFF image, enter the pages (for example 1-3, 5), the resolution in dpi and, for JPG, the quality. TIFF can be one multi-page file or one file per page, with lossless Deflate or no compression. Several files download as a ZIP.',
+    evidence: ['MAL-036 export chosen pages to PNG, JPG and TIFF at a chosen resolution and quality'],
+  },
+  {
+    id: 'MAL-041', workspaceTab: 'Convert',
+    guidance: 'Choose Export as… → Markdown. Headings (from text size and bold lines), paragraphs, bulleted and numbered lists and tables are rebuilt from the layout; images are saved as PNG files referenced from the Markdown. The export report lists what could not be converted.',
+    evidence: ['MAL-041 Markdown with headings, lists, a table and image files'],
+  },
+  {
+    id: 'MAL-042', workspaceTab: 'Convert',
+    guidance: 'Choose Export as… → HTML. “Structured” writes headings, paragraphs, lists, tables and images; “As on the page” places each piece of text and image where it is on the page.',
+    evidence: ['MAL-042 HTML with structure, tables and images, or positioned layout'],
+  },
+  {
+    id: 'MAL-043', workspaceTab: 'Convert',
+    guidance: 'Choose Export as… → SVG. Paths (lines, curves, rectangles) with their fill, stroke and width, text and JPEG or RGB/grey images become SVG elements; the export report names anything left out (for example gradients, clipping or embedded drawings).',
+    evidence: ['MAL-043 SVG keeps vector paths, text and images where they are on the page'],
+  },
+  {
+    id: 'MAL-044', workspaceTab: 'Convert',
+    guidance: 'Choose Export as… → Plain text, pick the reading order (top to bottom, columns, or as stored) and what goes between pages (blank line, nothing, page break or a custom line with {n} and {total}). Text added by OCR is included.',
+    evidence: ['MAL-044 plain text with reading order, page separators and OCR text'],
   },
 ]);
 

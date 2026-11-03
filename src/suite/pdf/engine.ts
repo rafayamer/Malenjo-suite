@@ -76,6 +76,16 @@ export async function loadPdfBytes(data: ArrayBuffer | Uint8Array, options: PdfL
   }
 }
 
+/**
+ * Opens a separate PDF.js document for conversion: images arrive as raw pixels (not bitmaps)
+ * and font names are available, so exports can read pictures and bold or italic text.
+ */
+export async function loadPdfForConversion(data: Uint8Array): Promise<PdfLoadResult> {
+  const loadingTask = getDocument({ data: Uint8Array.from(data), useSystemFonts: true, isOffscreenCanvasSupported: false, fontExtraProperties: true });
+  try { return { document: await loadingTask.promise, loadingTask }; }
+  catch (reason) { try { await loadingTask.destroy(); } catch { /* keep the parse error */ } throw toPdfPasswordError(reason) ?? reason; }
+}
+
 export async function disposePdf(result: PdfLoadResult | null): Promise<void> {
   if (!result) return;
   await result.loadingTask.destroy();
