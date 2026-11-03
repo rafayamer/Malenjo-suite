@@ -56,6 +56,24 @@ describe('document information (MAL-021)', () => {
     expect(reader.metadata?.get('dc:creator')).toEqual(['Ada', 'Grace']);
   });
 
+  it('reads indirectly stored values and keeps them through a save', async () => {
+    const pdf = await PDFDocument.create();
+    pdf.addPage();
+    const info = pdf.context.lookup(pdf.context.trailerInfo.Info, PDFDict);
+    info.set(PDFName.of('Author'), pdf.context.register(PDFString.of('Indirect author')));
+    info.set(PDFName.of('Project'), pdf.context.register(PDFString.of('Apollo')));
+    info.set(PDFName.of('CreationDate'), pdf.context.register(PDFString.of("D:20200102030405Z")));
+    const read = await readPdfDocumentInfo(await pdf.save());
+    expect(read.standard.Author).toBe('Indirect author');
+    expect(read.custom).toContainEqual(['Project', 'Apollo']);
+    expect(read.creationDate).toBe('D:20200102030405Z');
+    const saved = await writePdfDocumentInfo(await pdf.save(), update({ standard: { ...read.standard, Title: 'New' }, custom: read.custom }));
+    const after = await readPdfDocumentInfo(saved);
+    expect(after.standard.Author).toBe('Indirect author');
+    expect(after.custom).toContainEqual(['Project', 'Apollo']);
+    expect(after.xmp).toContain('<xmp:CreateDate>2020-01-02T03:04:05Z</xmp:CreateDate>');
+  });
+
   it('does not leave indirectly stored property values in the file', async () => {
     const pdf = await PDFDocument.load(await source());
     const info = pdf.context.lookup(pdf.context.trailerInfo.Info, PDFDict);

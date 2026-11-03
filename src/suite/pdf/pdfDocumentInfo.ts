@@ -55,7 +55,9 @@ function infoDict(pdf: PDFDocument, create: boolean): PDFDict | undefined {
   return dict;
 }
 
-function text(value: unknown): string | null {
+/** Decodes a text value, following an indirect reference (`/Author 12 0 R`) to its string. */
+function text(pdf: PDFDocument, raw: unknown): string | null {
+  const value = raw instanceof PDFRef ? pdf.context.lookup(raw) : raw;
   return value instanceof PDFString || value instanceof PDFHexString ? value.decodeText() : null;
 }
 
@@ -126,12 +128,12 @@ function refuseSigned(pdf: PDFDocument): void {
 export async function readPdfDocumentInfo(bytes: Uint8Array): Promise<PdfDocumentInfo> {
   const pdf = await load(bytes);
   const info = infoDict(pdf, false);
-  const standard = Object.fromEntries(STANDARD_INFO_KEYS.map((key) => [key, text(info?.get(PDFName.of(key))) ?? ''])) as Record<StandardKey, string>;
+  const standard = Object.fromEntries(STANDARD_INFO_KEYS.map((key) => [key, text(pdf, info?.get(PDFName.of(key))) ?? ''])) as Record<StandardKey, string>;
   const custom: [string, string][] = [];
   for (const [key, value] of info?.entries() ?? []) {
     const name = key.decodeText();
     if ((STANDARD_INFO_KEYS as readonly string[]).includes(name) || DATE_KEYS.includes(name) || name === 'Trapped') continue;
-    const decoded = text(value);
+    const decoded = text(pdf, value);
     if (decoded !== null) custom.push([name, decoded]);
   }
   const xmp = readXmp(pdf);
@@ -143,8 +145,8 @@ export async function readPdfDocumentInfo(bytes: Uint8Array): Promise<PdfDocumen
   }
   return {
     standard, custom,
-    creationDate: text(info?.get(PDFName.of('CreationDate'))),
-    modDate: text(info?.get(PDFName.of('ModDate'))),
+    creationDate: text(pdf, info?.get(PDFName.of('CreationDate'))),
+    modDate: text(pdf, info?.get(PDFName.of('ModDate'))),
     xmp, xmpFields,
   };
 }
@@ -199,7 +201,7 @@ export async function writePdfDocumentInfo(bytes: Uint8Array, update: PdfDocumen
   const pdf = await load(bytes);
   refuseSigned(pdf);
   const info = infoDict(pdf, true)!;
-  const created = text(info.get(PDFName.of('CreationDate')));
+  const created = text(pdf, info.get(PDFName.of('CreationDate')));
   dropInfoEntries(pdf, info, (name) => DATE_KEYS.includes(name) || name === 'Trapped');
   for (const key of STANDARD_INFO_KEYS) {
     const value = update.standard[key].trim();
