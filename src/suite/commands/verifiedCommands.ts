@@ -35,6 +35,7 @@ export const VERIFIED_EVIDENCE_SCRIPTS = [
   'scripts/pdf-phase2-textedit-acceptance.mjs',
   'scripts/pdf-phase2-objects-acceptance.mjs',
   'scripts/pdf-phase2-paragraph-acceptance.mjs',
+  'scripts/pdf-phase3-forms-acceptance.mjs',
 ] as const;
 
 export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Object.freeze([
@@ -187,6 +188,41 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     id: 'MAL-013', workspaceTab: 'Edit',
     guidance: 'In Paragraphs…, the detected font (and whether it is embedded or a subset) is shown. Change size, weight (font), letter and word spacing and line height; any font substitution is reported. Save settings as a named style and apply it to other paragraphs.',
     evidence: ['MAL-013 font detection, substitution warning, size, weight, spacing, line height and reusable styles'],
+  },
+  {
+    id: 'MAL-046', workspaceTab: 'Forms',
+    guidance: 'Choose Design form…, pick a field type and its settings, choose Place on the page and drag where the field goes. Click a field\'s outline on the page to select it, then move or resize it by dragging, rename it or delete it.',
+    evidence: ['MAL-046 design by dragging fields onto the page, select on the page, move, rename and delete'],
+  },
+  {
+    id: 'MAL-047', workspaceTab: 'Forms',
+    guidance: 'In Design form…, place Text, Number or Date fields with a tooltip, required flag, maximum length, comb boxes, several lines, number decimals, separators and currency, date formats, ranges and patterns. The rules are saved as standard form scripts and checked in Fill form….',
+    evidence: ['MAL-047 text, number and date fields with required, length, comb and format rules'],
+  },
+  {
+    id: 'MAL-048', workspaceTab: 'Forms',
+    guidance: 'In Design form…, place a check box, radio group, dropdown or list box. Options are typed as “export value | label”; choose a default selection and whether several can be selected.',
+    evidence: ['MAL-048 check box, radio group, dropdown and list box with export values and labels'],
+  },
+  {
+    id: 'MAL-049', workspaceTab: 'Forms',
+    guidance: 'In Design form…, place a Signature field: an unsigned placeholder with a tooltip, required flag and the fields that signing locks (all, only some, or all except some). Signing itself happens in a signing tool.',
+    evidence: ['MAL-049 signature placeholder with tooltip, required flag and locked fields'],
+  },
+  {
+    id: 'MAL-050', workspaceTab: 'Forms',
+    guidance: 'Select a field in Design form… to make it a sum, product, average, minimum or maximum of other fields, show it only when another field has a value, and add range or pattern validation. Renaming a field updates the fields that use it. Fill form… applies these rules without running any script from the document; other scripts are listed and kept but never run.',
+    evidence: ['MAL-050 calculations, dependencies, visibility and validation, evaluated without running document scripts'],
+  },
+  {
+    id: 'MAL-052', workspaceTab: 'Forms',
+    guidance: 'Choose Fill form…, enter values (calculated and hidden fields update as you type, problems are shown per field), then Save values. Flatten chosen fields or all fields into the page.',
+    evidence: ['MAL-052 fill and save values, then flatten selected fields and all fields'],
+  },
+  {
+    id: 'MAL-053', workspaceTab: 'Forms',
+    guidance: 'In Fill form…, export the values as CSV, JSON, FDF or XFDF, or import one of those files and Save values. Names not in the form, and read-only or calculated fields, are reported and skipped.',
+    evidence: ['MAL-053 export and import CSV, JSON, FDF and XFDF'],
   },
 ]);
 

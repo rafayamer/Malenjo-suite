@@ -65,6 +65,25 @@ export async function exportPdfPlainText(name:string,text:string):Promise<boolea
   return invoke<boolean>('write_pdf_tool_output',{destination,bytes:Array.from(bytes)});
 }
 
+/** Save exported form data (CSV, JSON, FDF or XFDF). FDF is written byte for byte (Latin-1); the others as UTF-8. */
+export async function exportPdfFormData(name:string,text:string,format:'csv'|'json'|'fdf'|'xfdf',mime:string):Promise<boolean>{
+  if(!new RegExp(`\\.${format}$`,'i').test(name))throw new Error(`Form data exports require a .${format} filename.`);
+  const bytes=format==='fdf'?Uint8Array.from(text,(c)=>c.charCodeAt(0)&0xff):new TextEncoder().encode(text);
+  if(!isTauri()){
+    const url=URL.createObjectURL(new Blob([bytes.buffer as ArrayBuffer],{type:mime}));
+    const anchor=document.createElement('a');
+    anchor.href=url;
+    anchor.download=name;
+    anchor.click();
+    window.setTimeout(()=>URL.revokeObjectURL(url),60_000);
+    return true;
+  }
+  const destination=await save({title:'Export form data',defaultPath:name,filters:[{name:format.toUpperCase(),extensions:[format]}]});
+  if(!destination)return false;
+  if(!new RegExp(`\\.${format}$`,'i').test(destination))throw new Error(`Form data exports require a .${format} destination.`);
+  return invoke<boolean>('write_pdf_tool_output',{destination,bytes:Array.from(bytes)});
+}
+
 /**
  * Save an embedded PDF file as an untrusted local artifact. Never auto-open or
  * preview attachment contents. Unknown/executable extensions become .bin.
