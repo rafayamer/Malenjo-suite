@@ -282,15 +282,15 @@ async function main(){
     const artOk=pages.map((p,i)=>{const a=p.getArtBox(),m=p.getMediaBox();return (i===1)===(Math.abs(a.width-m.width)>1);}).every(Boolean);
     expect(trimOk,'trim boxes not applied to every page');expect(artOk,'art box not limited to the selected page');});
 
-  await check('verified catalog: MAL-003..008 open their tools, unverified MAL-001 stays unavailable',async()=>{
+  await check('verified catalog: verified MAL commands open their tools, unverified MAL-011 stays unavailable',async()=>{
     // "More PDF tools" lives on the shell ribbon (Home), not inside a document.
     await openModule('Home');
     await page.getByRole('button',{name:'More PDF tools'}).click();
     const catalog=page.locator('#malenjo-complete-feature-catalog');
-    for(const id of ['MAL-003','MAL-004','MAL-005','MAL-006','MAL-007','MAL-008']){
+    for(const id of ['MAL-001','MAL-002','MAL-003','MAL-004','MAL-005','MAL-006','MAL-007','MAL-008']){
       expect(await catalog.locator(`[data-mal-command="${id}"]`).getAttribute('data-mal-status')==='RELEASE_READY',id+' not verified in catalog');
     }
-    expect(await catalog.locator('[data-mal-command="MAL-001"] button').isDisabled(),'unverified MAL-001 is clickable');
+    expect(await catalog.locator('[data-mal-command="MAL-011"] button').isDisabled(),'unverified MAL-011 is clickable');
     // Open returns to the user's open PDF (not an empty module).
     await catalog.locator('[data-mal-command="MAL-005"] button').click();
     await panel().locator('.pdf-workspace').waitFor({timeout:10000});
