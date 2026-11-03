@@ -11,6 +11,7 @@
 import { strToU8, zipSync } from 'fflate';
 import { PDFDocument, degrees } from 'pdf-lib';
 import { nupPdf, type NupOptions } from './pdfNup';
+import { pruneNavigationToPages } from './pdfNavigationPrune';
 import { parsePageRanges } from './pdfSplitModes';
 
 export const PDF_BATCH_MAX_FILES = 50;
@@ -57,7 +58,8 @@ export async function sha256Hex(bytes: Uint8Array): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function applyRules(bytes: Uint8Array, rules: PdfBatchRule[]): Promise<{ bytes: Uint8Array; inputPages: number; outputPages: number }> {
+async function applyRules(bytes: Uint8Array, rules: PdfBatchRule[]): Promise<{ bytes: Uint8Array; inputPages: number; outputPages: number; note: string }> {
+  let prunedLinks = 0, prunedBookmarks = 0;
   let pdf: PDFDocument;
   let inputPages: number;
   try {
@@ -86,6 +88,9 @@ async function applyRules(bytes: Uint8Array, rules: PdfBatchRule[]): Promise<{ b
           ? pages
           : Array.from({ length: pdf.getPageCount() }, (_, i) => i + 1).filter((page) => !keep.has(page));
         if (remove.length >= pdf.getPageCount()) throw new Error('it would remove every page');
+        // Bookmarks and links to removed pages would be dead: remove them first.
+        const pruned = pruneNavigationToPages(pdf, new Set(remove.map((page) => pdf.getPage(page - 1).ref.toString())));
+        prunedLinks += pruned.links; prunedBookmarks += pruned.bookmarks;
         for (const page of [...remove].sort((a, b) => b - a)) pdf.removePage(page - 1);
         // pdf-lib keeps a stale page cache after removePage; reload so later rules see the real pages.
         pdf = await PDFDocument.load(await pdf.save(), { updateMetadata: false });
@@ -95,7 +100,8 @@ async function applyRules(bytes: Uint8Array, rules: PdfBatchRule[]): Promise<{ b
     }
   }
   pdf.setProducer('MALENJO');
-  return { bytes: Uint8Array.from(await pdf.save({ useObjectStreams: true })), inputPages, outputPages: pdf.getPageCount() };
+  const note = prunedLinks || prunedBookmarks ? `Removed ${prunedBookmarks} bookmark(s) and ${prunedLinks} link(s) that pointed to removed pages.` : '';
+  return { bytes: Uint8Array.from(await pdf.save({ useObjectStreams: true })), inputPages, outputPages: pdf.getPageCount(), note };
 }
 
 function outputName(source: string, used: Set<string>): string {
@@ -148,7 +154,7 @@ export async function runPdfBatch(sources: { name: string; bytes: Uint8Array }[]
       }
       const output = outputName(source.name, used);
       files[output] = result.bytes;
-      entries.push({ ...base, output, status: 'ok', message: '', inputPages: result.inputPages, outputPages: result.outputPages, outputBytes: result.bytes.length, outputSha256: await sha256Hex(result.bytes) });
+      entries.push({ ...base, output, status: 'ok', message: result.note, inputPages: result.inputPages, outputPages: result.outputPages, outputBytes: result.bytes.length, outputSha256: await sha256Hex(result.bytes) });
     } catch (error) {
       if (error instanceof Error && 'budget' in error) throw error;
       entries.push({ ...base, output: null, status: 'failed', message: error instanceof Error ? error.message : String(error), inputPages: null, outputPages: null, outputBytes: null, outputSha256: null });

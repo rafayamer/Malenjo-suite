@@ -69,7 +69,7 @@ function namedDestination(pdf: PDFDocument, name: PDFObject): PDFObject | undefi
 }
 
 /** Resolves a destination value (array, reference, name or string) to its explicit array. */
-function resolveDestination(pdf: PDFDocument, value: PDFObject | undefined): PDFArray | undefined {
+export function resolveDestination(pdf: PDFDocument, value: PDFObject | undefined): PDFArray | undefined {
   // Follow references, /D dictionaries and names until an array is reached, with cycle protection.
   const seen = new Set<PDFObject>();
   while (value && !seen.has(value) && seen.size < 32) {

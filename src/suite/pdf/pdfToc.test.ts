@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRef, StandardFonts } from 'pdf-lib';
+import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFRef, StandardFonts } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { setPdfPageLabelRange } from './pageLabels';
 import { addPdfOutlineTreeEntry, listPdfOutlineTree, nestPdfOutlineTreeEntry, setPdfOutlineTreeEntryPage } from './pdfOutlineTree';
@@ -72,8 +72,20 @@ describe('generatePdfTableOfContents (MAL-022)', () => {
   });
 
   it('paginates long contents and refuses documents without bookmarks', async () => {
-    let bytes = await doc(80);
-    for (let n = 1; n <= 80; n++) bytes = await addPdfOutlineTreeEntry(bytes, `Section ${n}`, n);
+    // 80 flat bookmarks written in one pass (adding them one save at a time is slow on CI).
+    const pdf = await PDFDocument.load(await doc(80));
+    const ctx = pdf.context;
+    const rootRef = ctx.register(ctx.obj({ Type: 'Outlines', Count: 80 }));
+    const refs = pdf.getPages().map((page, i) => ctx.register(ctx.obj({ Title: PDFHexString.fromText(`Section ${i + 1}`), Parent: rootRef, Dest: [page.ref, PDFName.of('Fit')] })));
+    refs.forEach((ref, i) => {
+      const item = ctx.lookup(ref, PDFDict);
+      if (i) item.set(PDFName.of('Prev'), refs[i - 1]);
+      if (i < refs.length - 1) item.set(PDFName.of('Next'), refs[i + 1]);
+    });
+    const root = ctx.lookup(rootRef, PDFDict);
+    root.set(PDFName.of('First'), refs[0]); root.set(PDFName.of('Last'), refs[79]);
+    pdf.catalog.set(PDFName.of('Outlines'), rootRef);
+    const bytes = await pdf.save();
     const result = await generatePdfTableOfContents(bytes, { title: 'Contents', maxDepth: 1, fontSize: 11 });
     expect(result.tocPages).toBe(3);
     const { out, labels } = await texts(result.bytes);

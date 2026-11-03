@@ -76,7 +76,9 @@ async function digest(bytes: Uint8Array): Promise<string> {
 /** Decoded content of every page, for an equivalence check. */
 export function pageContents(pdf: PDFDocument): string[] {
   return pdf.getPages().map((page) => {
-    const raw = page.node.get(PDFName.of('Contents'));
+    const direct = page.node.get(PDFName.of('Contents'));
+    const resolved = direct instanceof PDFRef ? pdf.context.lookup(direct) : direct;
+    const raw = resolved instanceof PDFArray ? resolved : direct;
     const refs = raw instanceof PDFArray ? raw.asArray() : raw ? [raw] : [];
     return refs.map((ref) => {
       const stream = pdf.context.lookup(ref);

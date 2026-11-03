@@ -41,7 +41,15 @@ async function openMarkup() {
   await tools.waitFor();
   return tools;
 }
+/** Waits for the success notice; if the panel shows an error instead, fails with that error. */
+async function added(tools, pattern) {
+  const alert = tools.getByRole('alert');
+  await Promise.race([notice(pattern), alert.waitFor({ timeout: 30000 })]);
+  if (await alert.isVisible().catch(() => false)) throw Error('markup panel error: ' + await alert.innerText());
+}
 async function selectText(text) {
+  // The text layer is drawn after the canvas; wait for it before selecting.
+  await panel().locator('[id$="-page-1"] .textLayer span').first().waitFor({ timeout: 30000 });
   const span = panel().locator('[id$="-page-1"] .textLayer span').filter({ hasText: text }).first();
   await span.selectText();
 }
@@ -66,11 +74,11 @@ try {
     for (const [text, button] of marks) {
       await selectText(text);
       await tools.getByRole('button', { name: button, exact: true }).click();
-      await notice(new RegExp(`Added ${button.toLowerCase()} on page 1`));
+      await added(tools, new RegExp(`Added ${button.toLowerCase()} on page 1`));
     }
     await selectText('Quarterly revenue grew strongly');
     await tools.getByRole('button', { name: 'Squiggly', exact: true }).click();
-    await notice(/Added squiggly on page 1/);
+    await added(tools, /Added squiggly on page 1/);
     const { annotations, text } = await inspect(await save());
     expect(JSON.stringify(annotations.map((a) => a.subtype)) === JSON.stringify(['Highlight', 'Underline', 'StrikeOut', 'Squiggly']), 'subtypes ' + annotations.map((a) => a.subtype));
     for (const [index, line] of [[0, 0], [1, 1], [2, 2], [3, 0]]) {

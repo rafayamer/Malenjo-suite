@@ -65,6 +65,7 @@ jobs:
           path: |
             .build/pdf-ui-browser/failure.png
             .build/pdf-phase2-browser/*.png
+            .build/phase2-*-browser/*.png
           retention-days: 7
           if-no-files-found: warn
       - name: Report completed browser-acceptance result

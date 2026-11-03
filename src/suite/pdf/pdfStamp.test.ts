@@ -112,6 +112,19 @@ describe('applyHeaderFooter (MAL-017)', () => {
   });
 });
 
+describe('indirect content arrays', () => {
+  it('keeps the original page content when /Contents is an indirect array', async () => {
+    const pdf = await PDFDocument.load(await doc(1));
+    const node = pdf.getPage(0).node;
+    const array = node.get(PDFName.of('Contents'));
+    const list = array instanceof PDFArray ? array : pdf.context.obj([array as never]);
+    node.set(PDFName.of('Contents'), pdf.context.register(list));
+    const result = await applyTextWatermark(await pdf.save(), { text: 'MARK', style: text, position: 'center', margin: 0, rotation: 0, opacity: 1, layer: 'above', scope: all });
+    const [page] = await shown(result.bytes);
+    expect(page.items.map((i) => i.str).sort()).toEqual(['Body1', 'MARK']);
+  });
+});
+
 describe('applyPageNumbers (MAL-018)', () => {
   it('numbers chosen pages with format, prefix, suffix, start, total, alignment and margins', async () => {
     const result = await applyPageNumbers(await doc(4), {

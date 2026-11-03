@@ -162,7 +162,10 @@ class PageStamper {
     const { context } = this.pdf;
     const node = this.pdf.getPage(this.index).node;
     const ours = context.register(context.contentStream(this.ops));
-    const raw = node.get(PDFName.of('Contents'));
+    // /Contents may be an indirect reference to an array of streams: resolve it before splicing.
+    const direct = node.get(PDFName.of('Contents'));
+    const resolved = direct instanceof PDFRef ? context.lookup(direct) : direct;
+    const raw = resolved instanceof PDFArray ? resolved : direct;
     const existing = raw instanceof PDFArray ? raw.asArray() : raw ? [raw] : [];
     const contents = layer === 'below'
       ? [ours, ...existing]

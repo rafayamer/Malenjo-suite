@@ -7,7 +7,7 @@
  * pdf:Producer, xmp:CreatorTool, xmp:CreateDate, xmp:ModifyDate), so readers
  * that prefer XMP show the same values. Signed documents are refused.
  */
-import { PDFDict, PDFDocument, PDFHexString, PDFName, PDFRawStream, PDFStream, PDFString, decodePDFRawStream } from 'pdf-lib';
+import { PDFDict, PDFDocument, PDFHexString, PDFName, PDFRawStream, PDFRef, PDFStream, PDFString, decodePDFRawStream } from 'pdf-lib';
 
 export const PDF_DOCINFO_MAX_INPUT_BYTES = 256 * 1024 * 1024;
 const MAX_VALUE = 4096;
@@ -83,6 +83,13 @@ function readXmp(pdf: PDFDocument): string | null {
   if (!stream) return null;
   const bytes = stream instanceof PDFRawStream ? decodePDFRawStream(stream).decode() : stream.getContents();
   return new TextDecoder().decode(bytes);
+}
+
+/** Detaches the XMP packet and deletes its object, so the old metadata is not written to the file. */
+function dropXmp(pdf: PDFDocument): void {
+  const ref = pdf.catalog.get(PDFName.of('Metadata'));
+  pdf.catalog.delete(PDFName.of('Metadata'));
+  if (ref instanceof PDFRef) pdf.context.delete(ref);
 }
 
 function refuseSigned(pdf: PDFDocument): void {
@@ -176,8 +183,9 @@ export async function writePdfDocumentInfo(bytes: Uint8Array, update: PdfDocumen
   for (const [key, value] of update.custom) info.set(PDFName.of(key), PDFHexString.fromText(value));
   info.set(PDFName.of('ModDate'), PDFString.of(pdfDate(update.now)));
   if (update.xmp === 'remove') {
-    pdf.catalog.delete(PDFName.of('Metadata'));
+    dropXmp(pdf);
   } else {
+    dropXmp(pdf);
     const xml = buildXmp(update.standard, isoFromPdfDate(created), update.now.toISOString().replace(/\.\d{3}Z$/, 'Z'));
     const stream = pdf.context.stream(new TextEncoder().encode(xml), { Type: 'Metadata', Subtype: 'XML' });
     pdf.catalog.set(PDFName.of('Metadata'), pdf.context.register(stream));
@@ -191,6 +199,6 @@ export async function clearPdfDocumentInfo(bytes: Uint8Array): Promise<Uint8Arra
   refuseSigned(pdf);
   const info = infoDict(pdf, false);
   if (info) for (const key of info.keys()) info.delete(key);
-  pdf.catalog.delete(PDFName.of('Metadata'));
+  dropXmp(pdf);
   return Uint8Array.from(await pdf.save({ useObjectStreams: false, updateFieldAppearances: false }));
 }

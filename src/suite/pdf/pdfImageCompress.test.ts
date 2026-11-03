@@ -31,13 +31,28 @@ describe('compressPdfImages (MAL-025)', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0][0]).toMatchObject({ kind: 'raw', width: 1200, height: 1600, components: 3 });
     expect(calls[0][0].bytes.length).toBe(1200 * 1600 * 3);
-    // 1600 px down 11 in = 145 dpi (the higher axis) -> 100 dpi: 825 x 1100.
-    expect(calls[0][1]).toEqual({ width: 825, height: 1100, quality: 0.6 });
+    // 1200 px across 8.5 in = 141 dpi (the lower axis) -> 100 dpi: 850 x 1133, so neither axis drops below 100 dpi.
+    expect(calls[0][1]).toEqual({ width: 850, height: 1133, quality: 0.6 });
     expect(result.after).toBeLessThan(result.before);
     const out = await PDFDocument.load(result.bytes);
-    const image = out.context.enumerateIndirectObjects().map(([, o]) => o).find((o) => o instanceof PDFRawStream && o.dict.lookupMaybe(PDFName.of('Width'), PDFNumber)?.asNumber() === 825) as PDFRawStream;
+    const image = out.context.enumerateIndirectObjects().map(([, o]) => o).find((o) => o instanceof PDFRawStream && o.dict.lookupMaybe(PDFName.of('Width'), PDFNumber)?.asNumber() === 850) as PDFRawStream;
     expect(image.dict.get(PDFName.of('Filter'))?.toString()).toBe('/DCTDecode');
-    expect(image.dict.get(PDFName.of('Height'))?.toString()).toBe('1100');
+    expect(image.dict.get(PDFName.of('Height'))?.toString()).toBe('1133');
+  });
+
+  it('never recompresses an image used as a soft mask', async () => {
+    const pdf = await PDFDocument.load(await scanned());
+    const mask = pdf.context.register(PDFRawStream.of(pdf.context.obj({ Type: 'XObject', Subtype: 'Image', Width: 1200, Height: 1600, ColorSpace: 'DeviceGray', BitsPerComponent: 8, Filter: 'FlateDecode' }),
+      zlibSync(new Uint8Array(1200 * 1600).map((_, i) => i % 251))));
+    const image = pdf.context.enumerateIndirectObjects().find(([, o]) => o instanceof PDFRawStream && o.dict.lookupMaybe(PDFName.of('Width'), PDFNumber)?.asNumber() === 1200)![1] as PDFRawStream;
+    image.dict.set(PDFName.of('SMask'), mask);
+    const seen: number[] = [];
+    const recoder: ImageRecoder = async (input, target) => { seen.push(input.components); return { jpeg: new Uint8Array(100), width: target.width, height: target.height, components: 3 }; };
+    const result = await compressPdfImages(await pdf.save(), { dpi: 100, quality: 0.6, recoder });
+    expect(seen).toEqual([3]);
+    const out = await PDFDocument.load(result.bytes);
+    const grey = out.context.enumerateIndirectObjects().map(([, o]) => o).filter((o) => o instanceof PDFRawStream && o.dict.get(PDFName.of('ColorSpace'))?.toString() === '/DeviceGray' && o.dict.lookupMaybe(PDFName.of('Width'), PDFNumber)?.asNumber() === 1200);
+    expect(grey).toHaveLength(1);
   });
 
   it('leaves images that are already at or below the target alone unless re-encoding clearly helps', async () => {

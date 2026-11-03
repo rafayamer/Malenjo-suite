@@ -33,7 +33,7 @@ function TextStyle({ value, onChange, sizeLabel = 'Font size (pt)' }: { value: S
     <label>Font<select aria-label="Font" value={value.font} onChange={(e) => onChange({ ...value, font: e.target.value as StampFont })}>
       {FONTS.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
     <label>{sizeLabel}<input aria-label={sizeLabel} type="number" min={4} max={400} value={value.size} onChange={(e) => onChange({ ...value, size: Number(e.target.value) })}/></label>
-    <label>Colour<input aria-label="Text colour" type="color" value={value.color} onChange={(e) => onChange({ ...value, color: e.target.value })}/></label>
+    <label><span>Colour</span><input aria-label="Text colour" type="color" value={value.color} onChange={(e) => onChange({ ...value, color: e.target.value })}/></label>
   </>;
 }
 
