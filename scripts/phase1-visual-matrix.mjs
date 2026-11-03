@@ -148,7 +148,8 @@ async function main() {
         }
         await button.click({ timeout: 10000 });
       };
-      for (const [label, dialogName, shot] of [['Merge PDFs…', 'Merge PDFs', '06-merge-dialog'], ['Split…', 'Split PDF', '07-split-dialog']]) {
+      for (const [label, dialogName, shot] of [['Merge PDFs…', 'Merge PDFs', '06-merge-dialog'], ['Split…', 'Split PDF', '07-split-dialog'],
+        ['Pages per sheet…', 'Pages per sheet (N-up)', '08-nup-dialog'], ['Batch organize…', 'Batch organize PDFs', '09-batch-dialog']]) {
         await organizeAction(label);
         await page.getByRole('dialog', { name: dialogName }).waitFor();
         await capture(shot, '.pdf-tool-dialog');

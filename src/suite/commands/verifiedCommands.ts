@@ -27,6 +27,7 @@ export const VERIFIED_EVIDENCE_SCRIPTS = [
   'scripts/pdf-phase2-browser-acceptance.mjs',
   'scripts/pdf-ui-browser-smoke.mjs',
   'scripts/pdf-phase2-organize-acceptance.mjs',
+  'scripts/pdf-phase2-layout-acceptance.mjs',
 ] as const;
 
 export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Object.freeze([
@@ -73,6 +74,18 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     guidance: 'Draw a crop on the page or enter margins under Edit settings → Crop and page boxes; trim, bleed and art boxes apply to selected or all pages.',
     evidence: ['MAL-008 trim box on all pages and art box on one page',
       'PHASE2 visual crop with measured margins and real Delete/Undo independently reopened'],
+  },
+  {
+    id: 'MAL-009', workspaceTab: 'Organize',
+    guidance: 'Choose Pages per sheet…, pick 2, 4, 6, 9 or 16 pages per sheet, the sheet size and orientation, margin and spacing, and the page order, then Arrange pages. Undo restores the original pages.',
+    evidence: ['MAL-009 N-up: 4 pages per portrait Letter sheet, left to right then down, undoable',
+      'MAL-009 N-up: 6 pages per landscape A4 sheet, top to bottom order, chosen spacing'],
+  },
+  {
+    id: 'MAL-010', workspaceTab: 'Organize',
+    guidance: 'Choose Batch organize…, add PDFs, add rules (rotate, remove pages, keep only pages, pages per sheet) in order, then run. Results and a JSON and CSV manifest with status and SHA-256 per file are saved as one ZIP.',
+    evidence: ['MAL-010 batch: rules applied across several files with a JSON and CSV manifest',
+      'MAL-010 batch: keep-range and N-up rules'],
   },
 ]);
 

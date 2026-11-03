@@ -109,6 +109,17 @@ export const pageTexts = (bytes) => withPdfJs(bytes, async (doc) => {
   }
   return out;
 });
+/** Per page: its size and every text item with its origin, to check placement. */
+export const pageTextItems = (bytes) => withPdfJs(bytes, async (doc) => {
+  const out = [];
+  for (let i = 1; i <= doc.numPages; i++) {
+    const p = await doc.getPage(i);
+    const { width, height } = p.getViewport({ scale: 1 });
+    const items = (await p.getTextContent()).items.filter((x) => x.str.trim()).map((x) => ({ str: x.str.trim(), x: x.transform[4], y: x.transform[5] }));
+    out.push({ width, height, items });
+  }
+  return out;
+});
 export const pageAnnotations = (bytes) => withPdfJs(bytes, async (doc) => {
   const out = [];
   for (let i = 1; i <= doc.numPages; i++) out.push((await (await doc.getPage(i)).getAnnotations()).map((a) => a.subtype));

@@ -122,6 +122,8 @@ import {extractPdfPageSearchText,findPdfTextMatches} from './pdfTextHighlights';
 import PdfThumbnail from './PdfThumbnail';
 import PdfMergeDialog from './PdfMergeDialog';
 import PdfSplitDialog from './PdfSplitDialog';
+import PdfNupDialog from './PdfNupDialog';
+import PdfBatchDialog from './PdfBatchDialog';
 import PdfProviderToolsPanel from './PdfProviderToolsPanel';
 import { defaultPdfToolProvider } from './defaultProvider';
 import { ensurePdfProviderRunning } from './providerLifecycle';
@@ -395,10 +397,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [taskCategory, setTaskCategory] = useState<PdfTaskCategory>('home');
   const [masterTab, setMasterTab] = useState<PdfMasterTab>('home');
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
-  // MAL-001 / MAL-002 dialogs; focus returns to the control that opened them.
-  const [toolDialog, setToolDialog] = useState<null|'merge'|'split'>(null);
+  // MAL-001 / 002 / 009 / 010 dialogs; focus returns to the control that opened them.
+  type ToolDialog='merge'|'split'|'nup'|'batch';
+  const [toolDialog, setToolDialog] = useState<null|ToolDialog>(null);
   const toolDialogOpenerRef = useRef<HTMLElement|null>(null);
-  const openToolDialog=(kind:'merge'|'split')=>{
+  const openToolDialog=(kind:ToolDialog)=>{
     toolDialogOpenerRef.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
     setFeatureGalleryOpen(false);setToolDialog(kind);
   };
@@ -2631,6 +2634,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'split',label:'Split here',enabled:!!sourceBytes&&!mutating&&currentPage<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':currentPage>=pageCount?'Move before the final page to split the PDF.':mutating?'Wait for the current PDF edit to finish.':undefined,run:splitCurrent},
       {id:'merge-pdfs',label:'Merge PDFs…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password before merging.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('merge')},
       {id:'split-modes',label:'Split…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('split')},
+      {id:'nup',label:'Pages per sheet…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password before arranging pages.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('nup')},
+      {id:'batch',label:'Batch organize…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('batch')},
       {id:'insert',label:'Insert PDF…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>insertInputRef.current?.click()},
       {id:'append',label:'Append PDF…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>appendInputRef.current?.click()},
       {id:'blank',label:'Blank after',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Inserted a blank page after page ${currentPage}.`,bytes=>insertBlankPdfPage(bytes,currentPage),currentPage+1)},
@@ -2872,6 +2877,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           return applied;
         }}/>}
       {toolDialog==='split'&&sourceBytes&&<PdfSplitDialog domIdPrefix={domIdPrefix} sourceName={sourceName} pageCount={pageCount}
+        busy={mutating} getBytes={()=>currentPdfBytesRef.current} onDone={setActionNotice} onClose={closeToolDialog}/>}
+      {toolDialog==='nup'&&sourceBytes&&<PdfNupDialog domIdPrefix={domIdPrefix} busy={mutating} onClose={closeToolDialog}
+        onApply={async operation=>{
+          let summary='';
+          const applied=await mutate('Arranged pages per sheet.',async latest=>{const arranged=await operation(latest);summary=arranged.summary;return arranged.bytes;},1);
+          if(applied)setActionNotice(summary);
+          return applied;
+        }}/>}
+      {toolDialog==='batch'&&sourceBytes&&<PdfBatchDialog domIdPrefix={domIdPrefix} currentName={sourceName||'Open document.pdf'}
         busy={mutating} getBytes={()=>currentPdfBytesRef.current} onDone={setActionNotice} onClose={closeToolDialog}/>}
       {featureGalleryOpen&&<section id={`${domIdPrefix}-feature-gallery`}
         className="pdf-feature-gallery"
