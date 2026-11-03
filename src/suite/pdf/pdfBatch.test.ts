@@ -113,6 +113,14 @@ describe('runPdfBatch (MAL-010)', () => {
     await loading.destroy();
   });
 
+  it('refuses to remove a page that carries form fields', async () => {
+    const pdf = await PDFDocument.load(await labelled('F', 2));
+    pdf.getForm().createTextField('name').addToPage(pdf.getPage(1), { x: 50, y: 50, width: 100, height: 20 });
+    const result = await runPdfBatch([{ name: 'form.pdf', bytes: await pdf.save() }], [{ kind: 'remove', pages: '2' }]);
+    expect(result.entries[0]).toMatchObject({ status: 'failed' });
+    expect(result.entries[0].message).toMatch(/page 2 has form fields/);
+  });
+
   it('refuses removing every page and validates input', async () => {
     const result = await runPdfBatch([{ name: 'x.pdf', bytes: await labelled('X', 2) }], [{ kind: 'remove', pages: '1-2' }]);
     expect(result.entries[0].message).toMatch(/remove every page/);

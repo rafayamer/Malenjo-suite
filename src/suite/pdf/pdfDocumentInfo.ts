@@ -7,7 +7,7 @@
  * pdf:Producer, xmp:CreatorTool, xmp:CreateDate, xmp:ModifyDate), so readers
  * that prefer XMP show the same values. Signed documents are refused.
  */
-import { PDFDict, PDFDocument, PDFHexString, PDFName, PDFRawStream, PDFRef, PDFStream, PDFString, decodePDFRawStream } from 'pdf-lib';
+import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFRawStream, PDFRef, PDFStream, PDFString, decodePDFRawStream } from 'pdf-lib';
 
 export const PDF_DOCINFO_MAX_INPUT_BYTES = 256 * 1024 * 1024;
 const MAX_VALUE = 4096;
@@ -83,6 +83,28 @@ function readXmp(pdf: PDFDocument): string | null {
   if (!stream) return null;
   const bytes = stream instanceof PDFRawStream ? decodePDFRawStream(stream).decode() : stream.getContents();
   return new TextDecoder().decode(bytes);
+}
+
+/** Removes Info entries; indirect values that nothing else references are deleted so their contents are not saved. */
+function dropInfoEntries(pdf: PDFDocument, info: PDFDict, keep: (name: string) => boolean): void {
+  const detached: PDFRef[] = [];
+  for (const key of info.keys()) {
+    if (keep(key.decodeText())) continue;
+    const value = info.get(key);
+    if (value instanceof PDFRef) detached.push(value);
+    info.delete(key);
+  }
+  if (!detached.length) return;
+  const used = new Set<string>();
+  const visit = (value: unknown): void => {
+    if (value instanceof PDFRef) used.add(value.toString());
+    else if (value instanceof PDFDict) for (const [, v] of value.entries()) visit(v);
+    else if (value instanceof PDFArray) for (const v of value.asArray()) visit(v);
+    else if (value instanceof PDFStream) visit(value.dict);
+  };
+  for (const [, object] of pdf.context.enumerateIndirectObjects()) visit(object);
+  visit(pdf.context.trailerInfo.Root);
+  for (const ref of detached) if (!used.has(ref.toString())) pdf.context.delete(ref);
 }
 
 /** Detaches the XMP packet and deletes its object, so the old metadata is not written to the file. */
@@ -178,7 +200,7 @@ export async function writePdfDocumentInfo(bytes: Uint8Array, update: PdfDocumen
   refuseSigned(pdf);
   const info = infoDict(pdf, true)!;
   const created = text(info.get(PDFName.of('CreationDate')));
-  for (const key of info.keys()) if (!DATE_KEYS.includes(key.decodeText()) && key.decodeText() !== 'Trapped') info.delete(key);
+  dropInfoEntries(pdf, info, (name) => DATE_KEYS.includes(name) || name === 'Trapped');
   for (const key of STANDARD_INFO_KEYS) {
     const value = update.standard[key].trim();
     if (value) info.set(PDFName.of(key), PDFHexString.fromText(value));
@@ -201,7 +223,7 @@ export async function clearPdfDocumentInfo(bytes: Uint8Array): Promise<Uint8Arra
   const pdf = await load(bytes);
   refuseSigned(pdf);
   const info = infoDict(pdf, false);
-  if (info) for (const key of info.keys()) info.delete(key);
+  if (info) dropInfoEntries(pdf, info, () => false);
   dropXmp(pdf);
   return Uint8Array.from(await pdf.save({ useObjectStreams: false, updateFieldAppearances: false }));
 }

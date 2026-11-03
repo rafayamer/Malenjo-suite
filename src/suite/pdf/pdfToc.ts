@@ -46,6 +46,11 @@ export async function generatePdfTableOfContents(bytes: Uint8Array, options: Pdf
   const listed = await listPdfOutlineTree(bytes);
   // Bookmarks with named destinations or GoTo actions are resolved to their page here.
   const source = await PDFDocument.load(bytes, { updateMetadata: false });
+  // Inserting pages rewrites the file, which would break a signature or certification.
+  if (source.catalog.has(PDFName.of('Perms')) || source.context.enumerateIndirectObjects().some(([, o]) => o instanceof PDFDict
+    && (o.has(PDFName.of('ByteRange')) || o.get(PDFName.of('FT'))?.toString() === '/Sig'))) {
+    throw new Error('This PDF is signed or certified; inserting contents pages would invalidate the signature.');
+  }
   const pageIndex = new Map(source.getPages().map((page, index) => [page.ref.toString(), index + 1]));
   const outline = listed.map((entry) => {
     if (entry.pageNumber !== null) return entry;

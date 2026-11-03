@@ -104,6 +104,10 @@ describe('generatePdfTableOfContents (MAL-022)', () => {
     named.catalog.set(PDFName.of('Outlines'), oRoot);
     const namedResult = await generatePdfTableOfContents(await named.save(), { title: 'Contents', maxDepth: 1, fontSize: 11 });
     expect([namedResult.entries, namedResult.skipped]).toEqual([2, 0]);
+    // Signed documents are refused: inserting pages would break the signature.
+    const signed = await PDFDocument.load(await addPdfOutlineTreeEntry(await doc(2), 'A', 1));
+    signed.context.register(signed.context.obj({ Type: 'Sig', ByteRange: [0, 10, 20, 30] }));
+    await expect(generatePdfTableOfContents(await signed.save(), { title: 'Contents', maxDepth: 1, fontSize: 11 })).rejects.toThrow(/signed or certified/);
     // Unsupported page-label structure: refused before anything is inserted.
     const kids = await PDFDocument.load(await addPdfOutlineTreeEntry(await doc(2), 'A', 1));
     kids.catalog.set(PDFName.of('PageLabels'), kids.context.obj({ Kids: [kids.context.obj({ Nums: [0, kids.context.obj({ S: 'D' })] })] }));

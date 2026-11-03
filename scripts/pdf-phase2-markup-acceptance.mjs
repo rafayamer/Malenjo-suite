@@ -112,6 +112,31 @@ try {
     await tools.getByRole('button', { name: 'Close markup tools' }).click();
   });
 
+  await check('MAL-054 a selection across pages is marked on every page', async () => {
+    // Two short pages, so both are rendered on screen together.
+    const pdf = await PDFDocument.create();
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    pdf.addPage([612, 120]).drawText('End of the first page', { x: 72, y: 50, size: 22, font });
+    pdf.addPage([612, 120]).drawText('Start of the second page', { x: 72, y: 50, size: 22, font });
+    await openPdf(await pdf.save(), 'markup-two-pages.pdf');
+    const tools = await openMarkup();
+    for (const n of [1, 2]) await panel().locator(`[id$="-page-${n}"] .textLayer span`).first().waitFor({ timeout: 30000 });
+    await page.evaluate(() => {
+      const spans = [1, 2].map((n) => document.querySelector(`.document-session-panel.active [id$="-page-${n}"] .textLayer span`));
+      const range = document.createRange();
+      range.setStart(spans[0].firstChild, 0); range.setEnd(spans[1].firstChild, spans[1].textContent.length);
+      getSelection().removeAllRanges(); getSelection().addRange(range);
+    });
+    await tools.getByRole('button', { name: 'Highlight', exact: true }).click();
+    await added(tools, /Added highlight on pages 1, 2/);
+    const bytes = await save();
+    const [first, second] = [await inspect(bytes, 1), await inspect(bytes, 2)];
+    expect(first.annotations.length === 1 && second.annotations.length === 1, 'not marked on both pages');
+    expect(first.annotations[0].contentsObj?.str === 'End of the first page' && second.annotations[0].contentsObj?.str === 'Start of the second page',
+      'each page should keep its own text: ' + first.annotations[0].contentsObj?.str + ' / ' + second.annotations[0].contentsObj?.str);
+    await tools.getByRole('button', { name: 'Close markup tools' }).click();
+  });
+
   await check('MAL-055 freehand, arrow, rectangle, ellipse, text box, callout and sticky note drawn on the page', async () => {
     await openPdf(await source(), 'markup-draw.pdf');
     const tools = await openMarkup();
