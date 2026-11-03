@@ -206,7 +206,7 @@ async function main(){
     'Enter executed a disabled command');
   // Master Specification v2.0: every MAL-001..MAL-090 is discoverable,
   // but searching it must NEVER make an unverified feature executable.
-  for(const [requirement,label] of [['MAL-011','Native Inline Text Editing'],
+  for(const [requirement,label] of [['MAL-012','Paragraph Reflow and Reconstruction'],
       ['MAL-037','PDF to Word'],['MAL-063','Permanent PDF Redaction'],
       ['MAL-071','AI Chat with PDF'],['MAL-090','Advanced Print and Prepress']]){
     await commandSearch.fill(requirement);
@@ -632,7 +632,7 @@ async function main(){
     .evaluateAll(nodes=>nodes.map(node=>node.getAttribute('class')??''));
   requireEvidence(masterGlyphs.length===90&&new Set(masterGlyphs).size===90,
     'All 90 master PDF requirements must use UNIQUE, purpose-matched pictograms');
-  for(const id of ['MAL-011','MAL-037','MAL-063','MAL-090']){
+  for(const id of ['MAL-012','MAL-037','MAL-063','MAL-090']){
     requireEvidence(await featureGrid.locator('[data-mal-command="'+id+'"] button').isDisabled(),
       'Master v2 unverified command became executable: '+id);
   }

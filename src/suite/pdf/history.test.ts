@@ -4,6 +4,7 @@ import {
   canUndoPdfHistory,
   createPdfHistory,
   currentPdfHistoryEntry,
+  goToPdfHistory,
   recordPdfHistory,
   redoPdfHistory,
   undoPdfHistory,
@@ -12,6 +13,17 @@ import {
 const bytes = (...values:number[]) => new Uint8Array(values);
 
 describe('PDF history',()=>{
+  it('jumps to any revision and keeps later ones for redo',()=>{
+    let history=createPdfHistory(bytes(1),1);
+    history=recordPdfHistory(history,bytes(2),1,'A');
+    history=recordPdfHistory(history,bytes(3),1,'B');
+    const back=goToPdfHistory(history,0);
+    expect([back.changed,Array.from(back.entry.bytes)]).toEqual([true,[1]]);
+    const forward=goToPdfHistory(back.history,2);
+    expect(Array.from(forward.entry.bytes)).toEqual([3]);
+    expect(goToPdfHistory(forward.history,7).changed).toBe(false);
+  });
+
   it('restores clean baseline through undo and redoes the edit',()=>{
     let history=createPdfHistory(bytes(1,2,3),2);
     history=recordPdfHistory(history,bytes(4,5),3,'Delete page 2');

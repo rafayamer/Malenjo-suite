@@ -98,6 +98,7 @@ import {
   canRedoPdfHistory,
   canUndoPdfHistory,
   createPdfHistory,
+  goToPdfHistory,
   recordPdfHistory,
   redoPdfHistory,
   undoPdfHistory,
@@ -129,6 +130,8 @@ import PdfPropertiesDialog from './PdfPropertiesDialog';
 import PdfNavigationDialog from './PdfNavigationDialog';
 import PdfCompressDialog from './PdfCompressDialog';
 import PdfMarkupPanel, { MARKUP_AUTHOR, type MarkupSettings } from './PdfMarkupPanel';
+import PdfTextEditPanel, { type TextEditState } from './PdfTextEditPanel';
+import PdfFindReplaceDialog from './PdfFindReplaceDialog';
 import { addPdfDrawing } from './pdfMarkup';
 import PdfProviderToolsPanel from './PdfProviderToolsPanel';
 import { defaultPdfToolProvider } from './defaultProvider';
@@ -404,7 +407,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [masterTab, setMasterTab] = useState<PdfMasterTab>('home');
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
   // MAL-001 / 002 / 009 / 010 dialogs; focus returns to the control that opened them.
-  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup';
+  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup'|'text-edit'|'find';
+  // MAL-011: runs on the page being edited, and the selected one.
+  const [textEditState,setTextEditState]=useState<TextEditState|null>(null);
   const [toolDialog, setToolDialog] = useState<null|ToolDialog>(null);
   const toolDialogOpenerRef = useRef<HTMLElement|null>(null);
   // MAL-054/055 markup tools: the active drawing tool and its style live here so every page can draw.
@@ -1072,6 +1077,43 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       mutationPendingRef.current=false;
       setMutating(false);
     }
+  }
+
+  /** MAL-023: go to any revision in this session's history (undoable like any other step). */
+  async function restoreRevision(index:number){
+    const history=historyRef.current;
+    if(!history||mutating||mutationPendingRef.current||replacementPendingRef.current||currentPdfBytesRef.current!==sourceBytes)return;
+    const transition=goToPdfHistory(history,index);
+    if(!transition.changed)return;
+    mutationPendingRef.current=true;
+    setMutating(true);
+    setError('');
+    try{
+      await installPdf(transition.entry.bytes,sourceName,browserFile,true,()=>{
+        historyRef.current=transition.history;
+        setHistoryRevision((value)=>value+1);
+        setCurrentPage(transition.entry.page);
+        setSelectedPages(new Set([transition.entry.page]));
+        selectionAnchorRef.current=transition.entry.page;
+        setDirty(transition.entry.dirty);
+        onDirtyChange?.(transition.entry.dirty);
+        setActionNotice(index===0?'Restored the document as it was opened.':`Restored revision ${index}: ${transition.entry.label}`);
+      });
+    }catch(reason){
+      setError(describePdfError(reason));
+    }finally{
+      mutationPendingRef.current=false;
+      setMutating(false);
+    }
+  }
+  async function saveRevision(index:number){
+    const entry=historyRef.current?.entries[index];
+    if(!entry)return;
+    const base=(sourceName||'document').replace(/\.pdf$/i,'');
+    try{
+      const saved=await exportPdfBytes(`${base}-revision-${index}.pdf`,entry.bytes);
+      if(saved)setActionNotice(`Saved revision ${index} as ${base}-revision-${index}.pdf.`);
+    }catch(reason){setError(describePdfError(reason));}
   }
 
   async function redoEdit(){
@@ -2620,6 +2662,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'place-text',label:'Place text',enabled:!!sourceBytes&&!mutating&&!!textOverlay.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!textOverlay.text.trim()?'Enter text in the Properties inspector first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Added permanent text to the PDF.',bytes=>addPdfTextOverlay(bytes,{pageNumber:currentPage,...textOverlay}),currentPage)},
       {id:'rectangle',label:shapeOverlay.mode==='highlight'?'Highlight rectangle':'Outline rectangle',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage)},
       {id:'configure-edit',label:'Edit settings',enabled:true,run:configureProperties},
+      {id:'text-edit',label:'Edit text…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('text-edit')},
+      {id:'find-replace',label:'Find and replace…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('find')},
       {id:'stamp-header-footer',label:'Header & footer…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('header-footer')},
       {id:'stamp-page-numbers',label:'Page numbers…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('page-numbers')},
       {id:'stamp-text-watermark',label:'Text watermark…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('text-watermark')},
@@ -2916,13 +2960,19 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             if(applied)setActionNotice(summary);
             return applied;
           }}/>}
-      {(toolDialog==='properties'||toolDialog==='navigation'||toolDialog==='compress'||toolDialog==='markup')&&sourceBytes&&(()=>{
+      {(toolDialog==='properties'||toolDialog==='navigation'||toolDialog==='compress'||toolDialog==='markup'||toolDialog==='text-edit'||toolDialog==='find')&&sourceBytes&&(()=>{
         const apply=async (label:string,operation:(latest:Uint8Array)=>Promise<{bytes:Uint8Array;summary:string}>)=>{
           let summary='';
           const applied=await mutate(label,async latest=>{const edited=await operation(latest);summary=edited.summary;return edited.bytes;},currentPage);
           if(applied)setActionNotice(summary);
           return applied;
         };
+        if(toolDialog==='text-edit')return <PdfTextEditPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} pageNumber={currentPage} viewRotation={rotation} busy={mutating}
+          state={textEditState} onState={setTextEditState} onApply={apply} onClose={()=>{setTextEditState(null);closeToolDialog();}}/>;
+        if(toolDialog==='find')return <PdfFindReplaceDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} busy={mutating}
+          revisions={(historyRef.current?.entries??[]).map((entry,index)=>({index,label:entry.label,current:index===historyRef.current!.cursor}))}
+          onApply={apply} onRestore={index=>void restoreRevision(index)} onSaveRevision={index=>void saveRevision(index)}
+          onGoToPage={page=>goToPage(page)} onClose={closeToolDialog}/>;
         if(toolDialog==='markup')return <PdfMarkupPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} viewRotation={rotation} busy={mutating}
           settings={markupSettings} onSettings={setMarkupSettings} onApply={apply} onClose={closeToolDialog}/>;
         if(toolDialog==='compress')return <PdfCompressDialog domIdPrefix={domIdPrefix} busy={mutating} onApply={apply} onClose={closeToolDialog}/>;
@@ -3469,6 +3519,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               onReplacePage={()=>beginReplacePage(page)}
               onCropPage={()=>startCropOnPage(page)}
               editingBusy={mutating||loading}
+              textRuns={toolDialog==='text-edit'&&textEditState&&textEditState.pageNumber===page?{targets:textEditState.runs,selected:textEditState.selected,
+                onSelect:id=>setTextEditState(current=>current?{...current,selected:id}:current)}:null}
               drawTool={toolDialog==='markup'&&markupSettings.tool?{kind:markupSettings.tool,color:markupSettings.style.color,busy:mutating,onShape:shape=>{
                 const kind=markupSettings.tool!;
                 void mutate(`Added ${kind==='Ink'?'a freehand drawing':kind==='Note'?'a sticky note':'a drawing'}.`,

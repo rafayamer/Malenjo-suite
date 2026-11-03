@@ -2412,6 +2412,10 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 .pdf-markup-panel button:disabled{opacity:.45;cursor:not-allowed}
 .pdf-markup-panel input:not([type=radio]):not([type=color]),.pdf-markup-panel textarea{border:1px solid var(--ml-border);background:var(--ml-field);color:var(--ml-text);border-radius:6px;padding:5px 7px;font:inherit}
 .pdf-markup-panel .pdf-tool-dialog-choice{flex-direction:row;align-items:center}
+.pdf-text-run-target{background:transparent;border:1px dashed rgba(61,159,255,.55);border-radius:2px;padding:0;cursor:text}
+.pdf-text-run-target:hover,.pdf-text-run-target:focus-visible{background:rgba(61,159,255,.12);outline:2px solid #3d9fff}
+.pdf-text-run-target.selected{background:rgba(61,159,255,.18);border:2px solid #1269cc}
+.pdf-text-run-target:disabled{border-color:rgba(150,150,150,.4);cursor:not-allowed}
 .pdf-markup-swatch{display:inline-block;width:10px;height:10px;border-radius:2px;border:1px solid var(--ml-border);margin-right:4px}
 .pdf-markup-panel .pdf-tool-dialog-error{color:var(--ml-error-fg);background:var(--ml-error-bg);border-radius:6px;padding:6px 8px}
 .pdf-tool-dialog-tabs{display:flex;gap:4px;border-bottom:1px solid var(--ml-border)}

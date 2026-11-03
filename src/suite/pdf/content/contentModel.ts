@@ -58,8 +58,9 @@ const numberOf = (o: Operand | undefined) => (o && o.type === 'number' ? o.value
 
 export function pageContentBytes(pdf: PDFDocument, pageIndex: number): Uint8Array {
   const node = pdf.getPage(pageIndex).node;
-  const raw = node.get(N('Contents'));
-  const refs = raw instanceof PDFArray ? raw.asArray() : raw ? [raw] : [];
+  const direct = node.get(N('Contents'));
+  const resolved = direct ? pdf.context.lookup(direct) : undefined;
+  const refs = resolved instanceof PDFArray ? resolved.asArray() : direct ? [direct] : [];
   const parts = refs.map((ref) => {
     const stream = pdf.context.lookup(ref);
     if (!(stream instanceof PDFStream)) return new Uint8Array();

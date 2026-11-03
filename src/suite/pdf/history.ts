@@ -123,3 +123,8 @@ export function undoPdfHistory(history: PdfHistory): PdfHistoryTransition {
 export function redoPdfHistory(history: PdfHistory): PdfHistoryTransition {
   return move(history, history.cursor + 1);
 }
+
+/** Moves to any recorded revision (0 = the document as opened); later revisions stay available for redo. */
+export function goToPdfHistory(history: PdfHistory, index: number): PdfHistoryTransition {
+  return move(history, index);
+}

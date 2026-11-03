@@ -42,6 +42,10 @@ describe('native text editing (MAL-011)', () => {
     const runs = await listPdfTextRuns(source, 1);
     expect(runs.map((r) => r.text)).toEqual(['Invoice total: 120 EUR', 'Due in 30 days', 'Kerned line', 'Next line']);
     expect(runs.every((r) => r.editable && r.fontName === 'Helvetica')).toBe(true);
+    // First run starts at (50, 700) on a 600 x 800 page: shown x = 50/600, baseline 100/800 from the top.
+    expect(runs[0].shown.x).toBeCloseTo(50 / 600, 3);
+    expect(runs[0].shown.y + runs[0].shown.height).toBeGreaterThan(100 / 800);
+    expect(runs[0].shown.y).toBeLessThan(100 / 800);
     const edited = await replacePdfTextRun(source, 1, runs[0].id, 'Invoice total: 120 EUR', 'Invoice total: 145 EUR');
     expect(await texts(edited)).toEqual(['Invoice total: 145 EUR|Due in 30 days|Kerned line|Next line']);
     const pdf = await PDFDocument.load(edited);

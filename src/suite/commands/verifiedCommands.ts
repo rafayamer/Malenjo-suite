@@ -32,6 +32,7 @@ export const VERIFIED_EVIDENCE_SCRIPTS = [
   'scripts/pdf-phase2-navigation-acceptance.mjs',
   'scripts/pdf-phase2-optimize-acceptance.mjs',
   'scripts/pdf-phase2-markup-acceptance.mjs',
+  'scripts/pdf-phase2-textedit-acceptance.mjs',
 ] as const;
 
 export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Object.freeze([
@@ -145,6 +146,18 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     guidance: 'Choose Markup tools…, pick Pen, Line, Arrow, Rectangle, Ellipse, Text box, Callout or Sticky note, then drag or click on the page. Colour, opacity, line width and text are set in the panel; markup can be edited or deleted from the list.',
     evidence: ['MAL-055 freehand, arrow, rectangle, ellipse, text box, callout and sticky note drawn on the page',
       'MAL-055 shapes on a rotated page land where they were drawn'],
+  },
+  {
+    id: 'MAL-011', workspaceTab: 'Edit',
+    guidance: 'Choose Edit text…, click the text on the page (or pick it in the list), change it and choose Replace text. The PDF\'s own text is rewritten in its original font; characters the font does not contain are refused, with an option to add a clearly labelled overlay instead.',
+    evidence: ['MAL-011 edit existing text in place, in its own font, by clicking it on the page',
+      'MAL-011 characters missing from the font are refused, and an overlay is offered and labelled'],
+  },
+  {
+    id: 'MAL-023', workspaceTab: 'Edit',
+    guidance: 'Choose Find and replace… to find text and replace it in place. Every edit is a revision: undo and redo, restore any earlier revision, or save any revision as its own PDF. Revisions are kept for the editing session.',
+    evidence: ['MAL-023 find and replace in place across the document',
+      'MAL-023 revision history: restore an earlier revision, save any revision, undo and redo'],
   },
 ]);
 

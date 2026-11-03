@@ -10,6 +10,7 @@
 import { PDFDocument, PDFName } from 'pdf-lib';
 import { rewriteContent, serializeOperand, type ContentOp, type Operand } from './contentLexer';
 import { documentModels, type PageModel, type TextRun } from './contentModel';
+import { viewerFrame } from '../pdfStamp';
 
 export class GlyphUnavailableError extends Error {
   constructor(readonly missing: string[], readonly fontName: string) {
@@ -18,7 +19,14 @@ export class GlyphUnavailableError extends Error {
   }
 }
 
-export interface TextRunInfo { id: number; text: string; fontName: string; size: number; box: [number, number, number, number]; editable: boolean; reason: string }
+export interface TextRunInfo {
+  id: number; text: string; fontName: string; size: number;
+  /** Box in page space. */
+  box: [number, number, number, number];
+  /** Box as fractions of the page as shown (origin top-left), after /Rotate, crop box and view rotation. */
+  shown: { x: number; y: number; width: number; height: number };
+  editable: boolean; reason: string;
+}
 
 async function load(bytes: Uint8Array): Promise<PDFDocument> {
   if (!(bytes instanceof Uint8Array) || bytes.length < 5 || bytes.length > 256 * 1024 * 1024) throw new Error('Text editing accepts PDFs up to 256 MB.');
@@ -36,11 +44,23 @@ function editability(run: TextRun): { editable: boolean; reason: string } {
 }
 
 /** Text runs on a page, in drawing order, with whether they can be edited natively. */
-export async function listPdfTextRuns(bytes: Uint8Array, pageNumber: number): Promise<TextRunInfo[]> {
+export async function listPdfTextRuns(bytes: Uint8Array, pageNumber: number, viewRotation = 0): Promise<TextRunInfo[]> {
   const pdf = await load(bytes);
   if (!Number.isSafeInteger(pageNumber) || pageNumber < 1 || pageNumber > pdf.getPageCount()) throw new Error('That page is not in this PDF.');
   const model = documentModels(pdf)[pageNumber - 1];
-  return model.runs.filter((run) => run.text.trim()).map((run) => ({ id: run.id, text: run.text, fontName: run.font.baseFont.replace(/^[A-Z]{6}\+/, ''), size: Math.round(Math.hypot(run.start[2], run.start[3]) * 100) / 100, box: run.box, ...editability(run) }));
+  const frame = viewerFrame(pdf, pageNumber - 1, viewRotation);
+  const [a, b, c, d, e, f] = frame.matrix; const det = a * d - b * c;
+  const toShown = (x: number, y: number): [number, number] => {
+    const u = (d * (x - e) - c * (y - f)) / det, v = (a * (y - f) - b * (x - e)) / det;
+    return [u / frame.width, 1 - v / frame.height];
+  };
+  const shownOf = (box: TextRun['box']) => {
+    const pts = [toShown(box[0], box[1]), toShown(box[2], box[3]), toShown(box[0], box[3]), toShown(box[2], box[1])];
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    return { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
+  };
+  return model.runs.filter((run) => run.text.trim()).map((run) => ({
+    shown: shownOf(run.box), id: run.id, text: run.text, fontName: run.font.baseFont.replace(/^[A-Z]{6}\+/, ''), size: Math.round(Math.hypot(run.start[2], run.start[3]) * 100) / 100, box: run.box, ...editability(run) }));
 }
 
 /** Replacement text for one text-showing operation, keeping its operator semantics. */
