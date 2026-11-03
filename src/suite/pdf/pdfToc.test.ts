@@ -92,5 +92,14 @@ describe('generatePdfTableOfContents (MAL-022)', () => {
     expect(out[2]).toContain('Section 80');
     expect(labels?.slice(0, 4)).toEqual(['i', 'ii', 'iii', '1']);
     await expect(generatePdfTableOfContents(await doc(2), { title: 'Contents', maxDepth: 2, fontSize: 11 })).rejects.toThrow(/no bookmarks/);
+    // Unsupported page-label structure: refused before anything is inserted.
+    const kids = await PDFDocument.load(await addPdfOutlineTreeEntry(await doc(2), 'A', 1));
+    kids.catalog.set(PDFName.of('PageLabels'), kids.context.obj({ Kids: [kids.context.obj({ Nums: [0, kids.context.obj({ S: 'D' })] })] }));
+    await expect(generatePdfTableOfContents(await kids.save(), { title: 'Contents', maxDepth: 1, fontSize: 11 })).rejects.toThrow(/cannot be updated/);
+    // A page-label prefix the font cannot draw does not stop generation.
+    let cjk = await addPdfOutlineTreeEntry(await doc(2), 'Intro', 1);
+    cjk = await setPdfPageLabelRange(cjk, { startPage: 1, style: 'D', prefix: '第', startNumber: 1 });
+    const cjkResult = await generatePdfTableOfContents(cjk, { title: 'Contents', maxDepth: 1, fontSize: 11 });
+    expect(cjkResult.entries).toBe(1);
   });
 });

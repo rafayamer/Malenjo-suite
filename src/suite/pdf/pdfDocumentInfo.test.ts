@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PDFDict, PDFDocument, PDFName } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { clearPdfDocumentInfo, readPdfDocumentInfo, writePdfDocumentInfo, type PdfDocumentInfoUpdate } from './pdfDocumentInfo';
+import { clearPdfDocumentInfo, isoFromPdfDate, readPdfDocumentInfo, writePdfDocumentInfo, type PdfDocumentInfoUpdate } from './pdfDocumentInfo';
 
 async function source() {
   const pdf = await PDFDocument.create();
@@ -26,6 +26,14 @@ async function pdfjsMetadata(bytes: Uint8Array) {
 }
 
 describe('document information (MAL-021)', () => {
+  it('converts PDF dates with offsets to UTC for XMP', () => {
+    expect(isoFromPdfDate("D:20260101100000+05'30'")).toBe('2026-01-01T04:30:00Z');
+    expect(isoFromPdfDate("D:20260101100000-02'00'")).toBe('2026-01-01T12:00:00Z');
+    expect(isoFromPdfDate('D:20260101100000Z')).toBe('2026-01-01T10:00:00Z');
+    expect(isoFromPdfDate('D:2026')).toBe('2026-01-01T00:00:00Z');
+    expect(isoFromPdfDate('garbage')).toBeUndefined();
+  });
+
   it('reads, writes standard and custom Info entries, and writes matching XMP', async () => {
     const before = await readPdfDocumentInfo(await source());
     expect(before.standard.Title).toBe('Old title');

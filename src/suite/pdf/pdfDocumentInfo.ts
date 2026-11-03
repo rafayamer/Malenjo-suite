@@ -132,12 +132,15 @@ function pdfDate(date: Date): string {
   return `D:${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}Z`;
 }
 
-/** PDF date (D:YYYYMMDDHHmmSS...) to ISO 8601 for XMP; undefined when unreadable. */
-function isoFromPdfDate(value: string | null): string | undefined {
-  const match = value && /^D:(\d{4})(\d{2})?(\d{2})?(\d{2})?(\d{2})?(\d{2})?/.exec(value);
+/** PDF date (D:YYYYMMDDHHmmSSOHH'mm') to ISO 8601 in UTC for XMP, honouring the offset; undefined when unreadable. */
+export function isoFromPdfDate(value: string | null): string | undefined {
+  const match = value && /^D:(\d{4})(\d{2})?(\d{2})?(\d{2})?(\d{2})?(\d{2})?(?:([Zz+-])(\d{2})?'?(\d{2})?'?)?/.exec(value);
   if (!match) return undefined;
-  const [, y, mo = '01', d = '01', h = '00', mi = '00', s = '00'] = match;
-  return `${y}-${mo}-${d}T${h}:${mi}:${s}Z`;
+  const [, y, mo = '01', d = '01', h = '00', mi = '00', s = '00', sign, oh = '00', om = '00'] = match;
+  const local = Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s));
+  const offset = sign === '+' || sign === '-' ? (sign === '+' ? 1 : -1) * (Number(oh) * 60 + Number(om)) : 0;
+  if (!Number.isFinite(local)) return undefined;
+  return new Date(local - offset * 60_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
 function buildXmp(standard: Record<StandardKey, string>, created: string | undefined, modified: string): string {

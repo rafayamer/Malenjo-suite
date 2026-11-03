@@ -48,10 +48,15 @@ async function added(tools, pattern) {
   if (await alert.isVisible().catch(() => false)) throw Error('markup panel error: ' + await alert.innerText());
 }
 async function selectText(text) {
-  // The text layer is drawn after the canvas; wait for it before selecting.
-  await panel().locator('[id$="-page-1"] .textLayer span').first().waitFor({ timeout: 30000 });
-  const span = panel().locator('[id$="-page-1"] .textLayer span').filter({ hasText: text }).first();
-  await span.selectText();
+  // The text layer can be redrawn once after the page first renders (slower machines), which drops a
+  // selection made too early. Select, let it settle, and select again if it was lost.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const span = panel().locator('[id$="-page-1"] .textLayer span').filter({ hasText: text }).first();
+    await span.selectText({ timeout: 30000 });
+    await page.waitForTimeout(400);
+    if (await page.evaluate((t) => (getSelection()?.toString() ?? '').includes(t), text)) return;
+  }
+  throw Error(`could not keep a selection on “${text}”`);
 }
 const canvasBox = () => panel().locator('[id$="-page-1"] canvas').first().boundingBox();
 /** Drags on page 1 between two points given as fractions of the shown page. */

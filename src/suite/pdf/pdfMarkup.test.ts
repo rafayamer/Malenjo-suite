@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PDFDocument, StandardFonts, degrees } from 'pdf-lib';
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, StandardFonts, decodePDFRawStream, degrees } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { addPdfDrawing, addPdfTextMarkup, deletePdfMarkupAnnotation, listPdfMarkupAnnotations, updatePdfMarkupAnnotation, type MarkupStyle } from './pdfMarkup';
 
@@ -64,6 +64,9 @@ describe('text markup (MAL-054)', () => {
     expect(Math.max(...xs)).toBeCloseTo(260, 0);
     expect(Math.min(...ys)).toBeCloseTo(598, 0);
     expect(Math.max(...ys)).toBeCloseTo(620, 0);
+    // The quad's first edge (top-left -> top-right) runs along the text baseline (page x), not across it.
+    expect(quad[2] - quad[0]).toBeCloseTo(160, 0);
+    expect(quad[3]).toBeCloseTo(quad[1], 3);
   });
 });
 
@@ -98,6 +101,13 @@ describe('drawings and notes (MAL-055)', () => {
     bytes = await updatePdfMarkupAnnotation(bytes, item, { color: '#0000ff', contents: 'Final' });
     [item] = await listPdfMarkupAnnotations(bytes);
     expect([item.color, item.contents]).toEqual(['#0000ff', 'Final']);
+    // A text box drawn in a 90° view keeps its orientation when its style is edited.
+    let turned = await addPdfDrawing(await doc(), { pageNumber: 1, viewRotation: 90, author: 'Ada', style, kind: 'FreeText', rect: { x: 0.1, y: 0.1, width: 0.4, height: 0.1 }, text: 'Turned' });
+    const ap = async (b: Uint8Array) => { const p = await PDFDocument.load(b); const a = p.getPage(0).node.lookup(PDFName.of('Annots'), PDFArray).lookup(0, PDFDict); return new TextDecoder().decode(decodePDFRawStream(p.context.lookup(a.lookup(PDFName.of('AP'), PDFDict).get(PDFName.of('N'))) as PDFRawStream).decode()); };
+    const before = (await ap(turned)).match(/q ([-\d. ]+) cm/)![1];
+    const [turnedItem] = await listPdfMarkupAnnotations(turned);
+    turned = await updatePdfMarkupAnnotation(turned, turnedItem, { color: '#ff0000' });
+    expect((await ap(turned)).match(/q ([-\d. ]+) cm/)![1]).toBe(before);
     bytes = await deletePdfMarkupAnnotation(bytes, item);
     expect(await listPdfMarkupAnnotations(bytes)).toEqual([]);
     await expect(updatePdfMarkupAnnotation(bytes, item, { color: '#000000' })).rejects.toThrow(/changed or was removed/);
