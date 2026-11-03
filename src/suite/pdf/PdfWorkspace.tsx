@@ -125,6 +125,8 @@ import PdfSplitDialog from './PdfSplitDialog';
 import PdfNupDialog from './PdfNupDialog';
 import PdfBatchDialog from './PdfBatchDialog';
 import PdfStampDialog, { type StampDialogKind } from './PdfStampDialogs';
+import PdfPropertiesDialog from './PdfPropertiesDialog';
+import PdfNavigationDialog from './PdfNavigationDialog';
 import PdfProviderToolsPanel from './PdfProviderToolsPanel';
 import { defaultPdfToolProvider } from './defaultProvider';
 import { ensurePdfProviderRunning } from './providerLifecycle';
@@ -399,7 +401,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [masterTab, setMasterTab] = useState<PdfMasterTab>('home');
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
   // MAL-001 / 002 / 009 / 010 dialogs; focus returns to the control that opened them.
-  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind;
+  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation';
   const [toolDialog, setToolDialog] = useState<null|ToolDialog>(null);
   const toolDialogOpenerRef = useRef<HTMLElement|null>(null);
   const openToolDialog=(kind:ToolDialog)=>{
@@ -2616,6 +2618,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'stamp-page-numbers',label:'Page numbers…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('page-numbers')},
       {id:'stamp-text-watermark',label:'Text watermark…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('text-watermark')},
       {id:'stamp-image-watermark',label:'Image watermark…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('image-watermark')},
+      {id:'document-properties',label:'Document properties…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('properties')},
+      {id:'navigation',label:'Navigation…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('navigation')},
       {id:'open-page-numbers',label:'Page numbers settings',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF before adding page numbers.':mutating?'Wait for the current PDF edit.':undefined,run:configureProperties},
       providerAction,
     ],
@@ -2903,6 +2907,17 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             if(applied)setActionNotice(summary);
             return applied;
           }}/>}
+      {(toolDialog==='properties'||toolDialog==='navigation')&&sourceBytes&&(()=>{
+        const apply=async (label:string,operation:(latest:Uint8Array)=>Promise<{bytes:Uint8Array;summary:string}>)=>{
+          let summary='';
+          const applied=await mutate(label,async latest=>{const edited=await operation(latest);summary=edited.summary;return edited.bytes;},currentPage);
+          if(applied)setActionNotice(summary);
+          return applied;
+        };
+        return toolDialog==='properties'
+          ? <PdfPropertiesDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} busy={mutating} onApply={apply} onClose={closeToolDialog}/>
+          : <PdfNavigationDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} pageCount={pageCount} currentPage={currentPage} busy={mutating} onApply={apply} onClose={closeToolDialog}/>;
+      })()}
       {toolDialog==='batch'&&sourceBytes&&<PdfBatchDialog domIdPrefix={domIdPrefix} currentName={sourceName||'Open document.pdf'}
         currentSize={sourceBytes.length} busy={mutating} getBytes={()=>currentPdfBytesRef.current} onDone={setActionNotice} onClose={closeToolDialog}/>}
       {featureGalleryOpen&&<section id={`${domIdPrefix}-feature-gallery`}

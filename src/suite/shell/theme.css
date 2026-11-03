@@ -2399,6 +2399,13 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 .pdf-merge-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .pdf-merge-list li{display:flex;align-items:center;gap:6px;border:1px solid var(--ml-border);background:var(--ml-card);border-radius:8px;padding:6px 8px;cursor:grab}
 .pdf-merge-list.static li{cursor:default}
+.pdf-tool-dialog-actions{display:flex;flex-wrap:wrap;gap:6px}
+.pdf-tool-dialog-tabs{display:flex;gap:4px;border-bottom:1px solid var(--ml-border)}
+.pdf-tool-dialog .pdf-tool-dialog-tabs button{border-radius:7px 7px 0 0;border-bottom:0}
+.pdf-tool-dialog .pdf-tool-dialog-tabs button[aria-selected=true]{background:var(--ml-card);font-weight:600;box-shadow:inset 0 -2px 0 #3d9fff}
+.pdf-tool-dialog [role=tabpanel]{display:flex;flex-direction:column;gap:10px}
+.pdf-properties-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr) auto;gap:6px;width:100%}
+.pdf-properties-xmp{max-height:180px;overflow:auto;font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--ml-field);color:var(--ml-text);padding:6px;border-radius:6px}
 .pdf-batch-results{border-collapse:collapse;font-size:12px;width:100%}
 .pdf-batch-results th,.pdf-batch-results td{border:1px solid var(--ml-border);padding:4px 6px;text-align:left;vertical-align:top;overflow-wrap:anywhere}
 .pdf-batch-results th{background:var(--ml-card);color:var(--ml-text)}

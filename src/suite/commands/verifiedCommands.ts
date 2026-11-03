@@ -29,6 +29,7 @@ export const VERIFIED_EVIDENCE_SCRIPTS = [
   'scripts/pdf-phase2-organize-acceptance.mjs',
   'scripts/pdf-phase2-layout-acceptance.mjs',
   'scripts/pdf-phase2-stamp-acceptance.mjs',
+  'scripts/pdf-phase2-navigation-acceptance.mjs',
 ] as const;
 
 export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Object.freeze([
@@ -108,6 +109,18 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     id: 'MAL-020', workspaceTab: 'Edit',
     guidance: 'Choose Image watermark…, choose a PNG or JPEG, set its width, position, rotation, opacity, above or below the page content, and pages, then Apply.',
     evidence: ['MAL-020 image watermark: scaling, position, transparency and layer order'],
+  },
+  {
+    id: 'MAL-021', workspaceTab: 'Edit',
+    guidance: 'Choose Document properties… to see and edit the title, author, subject, keywords, creator, producer and custom properties, keep XMP metadata in step or remove it, or clear every property. Undo restores the earlier values.',
+    evidence: ['MAL-021 inspect, modify and save Info and XMP metadata with custom properties', 'MAL-021 remove XMP, then clear every property'],
+  },
+  {
+    id: 'MAL-022', workspaceTab: 'Edit',
+    guidance: 'Choose Navigation…: add, nest, rename, retarget, reorder and delete bookmarks; add web or page links, change their destination or remove them; or generate a linked table of contents from the bookmarks.',
+    evidence: ['MAL-022 bookmarks: create, nest, rename, retarget, reorder and remove',
+      'MAL-022 links: add web and page links, change a destination, remove a link',
+      'MAL-022 generated table of contents from bookmarks, with working links'],
   },
 ]);
 

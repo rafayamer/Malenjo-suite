@@ -55,7 +55,7 @@ export function formatNumber(value: number, format: NumberFormat): string {
   return format === 'alpha-lower' ? letter.toLowerCase() : letter;
 }
 
-function labelFor(page: number, ranges: PdfPageLabelRange[]): string {
+export function labelFor(page: number, ranges: PdfPageLabelRange[]): string {
   const range = [...ranges].reverse().find((item) => item.startPage <= page);
   if (!range) return String(page);
   const n = range.startNumber + page - range.startPage;
