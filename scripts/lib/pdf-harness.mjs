@@ -109,13 +109,18 @@ export const pageTexts = (bytes) => withPdfJs(bytes, async (doc) => {
   }
   return out;
 });
-/** Per page: its size and every text item with its origin, to check placement. */
+/** Per page: its size and every text item with its origin (page space and as shown), to check placement. */
 export const pageTextItems = (bytes) => withPdfJs(bytes, async (doc) => {
   const out = [];
   for (let i = 1; i <= doc.numPages; i++) {
     const p = await doc.getPage(i);
     const { width, height } = p.getViewport({ scale: 1 });
-    const items = (await p.getTextContent()).items.filter((x) => x.str.trim()).map((x) => ({ str: x.str.trim(), x: x.transform[4], y: x.transform[5] }));
+    const viewport = p.getViewport({ scale: 1 });
+    const items = (await p.getTextContent()).items.filter((x) => x.str.trim()).map((x) => {
+      // vx/vy: position on the page as shown (origin top-left), after /Rotate and the crop box.
+      const [vx, vy] = viewport.convertToViewportPoint(x.transform[4], x.transform[5]);
+      return { str: x.str.trim(), x: x.transform[4], y: x.transform[5], vx, vy, fontName: x.fontName };
+    });
     out.push({ width, height, items });
   }
   return out;

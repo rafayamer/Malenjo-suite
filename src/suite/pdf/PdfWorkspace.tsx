@@ -124,6 +124,7 @@ import PdfMergeDialog from './PdfMergeDialog';
 import PdfSplitDialog from './PdfSplitDialog';
 import PdfNupDialog from './PdfNupDialog';
 import PdfBatchDialog from './PdfBatchDialog';
+import PdfStampDialog, { type StampDialogKind } from './PdfStampDialogs';
 import PdfProviderToolsPanel from './PdfProviderToolsPanel';
 import { defaultPdfToolProvider } from './defaultProvider';
 import { ensurePdfProviderRunning } from './providerLifecycle';
@@ -398,7 +399,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [masterTab, setMasterTab] = useState<PdfMasterTab>('home');
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
   // MAL-001 / 002 / 009 / 010 dialogs; focus returns to the control that opened them.
-  type ToolDialog='merge'|'split'|'nup'|'batch';
+  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind;
   const [toolDialog, setToolDialog] = useState<null|ToolDialog>(null);
   const toolDialogOpenerRef = useRef<HTMLElement|null>(null);
   const openToolDialog=(kind:ToolDialog)=>{
@@ -2606,6 +2607,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'place-text',label:'Place text',enabled:!!sourceBytes&&!mutating&&!!textOverlay.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!textOverlay.text.trim()?'Enter text in the Properties inspector first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Added permanent text to the PDF.',bytes=>addPdfTextOverlay(bytes,{pageNumber:currentPage,...textOverlay}),currentPage)},
       {id:'rectangle',label:shapeOverlay.mode==='highlight'?'Highlight rectangle':'Outline rectangle',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage)},
       {id:'configure-edit',label:'Edit settings',enabled:true,run:configureProperties},
+      {id:'stamp-header-footer',label:'Header & footer…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('header-footer')},
+      {id:'stamp-page-numbers',label:'Page numbers…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('page-numbers')},
+      {id:'stamp-text-watermark',label:'Text watermark…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('text-watermark')},
+      {id:'stamp-image-watermark',label:'Image watermark…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('image-watermark')},
       {id:'open-page-numbers',label:'Page numbers settings',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF before adding page numbers.':mutating?'Wait for the current PDF edit.':undefined,run:configureProperties},
       providerAction,
     ],
@@ -2885,6 +2890,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           if(applied)setActionNotice(summary);
           return applied;
         }}/>}
+      {(toolDialog==='header-footer'||toolDialog==='page-numbers'||toolDialog==='text-watermark'||toolDialog==='image-watermark')&&sourceBytes&&
+        <PdfStampDialog key={toolDialog} kind={toolDialog} domIdPrefix={domIdPrefix} sourceName={sourceName||'document.pdf'} busy={mutating} onClose={closeToolDialog}
+          onApply={async (label,operation)=>{
+            let summary='';
+            const applied=await mutate(label,async latest=>{const stamped=await operation(latest);summary=stamped.summary;return stamped.bytes;},currentPage);
+            if(applied)setActionNotice(summary);
+            return applied;
+          }}/>}
       {toolDialog==='batch'&&sourceBytes&&<PdfBatchDialog domIdPrefix={domIdPrefix} currentName={sourceName||'Open document.pdf'}
         busy={mutating} getBytes={()=>currentPdfBytesRef.current} onDone={setActionNotice} onClose={closeToolDialog}/>}
       {featureGalleryOpen&&<section id={`${domIdPrefix}-feature-gallery`}

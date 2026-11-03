@@ -28,6 +28,7 @@ export const VERIFIED_EVIDENCE_SCRIPTS = [
   'scripts/pdf-ui-browser-smoke.mjs',
   'scripts/pdf-phase2-organize-acceptance.mjs',
   'scripts/pdf-phase2-layout-acceptance.mjs',
+  'scripts/pdf-phase2-stamp-acceptance.mjs',
 ] as const;
 
 export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Object.freeze([
@@ -86,6 +87,27 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     guidance: 'Choose Batch organize…, add PDFs, add rules (rotate, remove pages, keep only pages, pages per sheet) in order, then run. Results and a JSON and CSV manifest with status and SHA-256 per file are saved as one ZIP.',
     evidence: ['MAL-010 batch: rules applied across several files with a JSON and CSV manifest',
       'MAL-010 batch: keep-range and N-up rules'],
+  },
+  {
+    id: 'MAL-017', workspaceTab: 'Edit',
+    guidance: 'Choose Header & footer…, type text for any of the six header and footer positions using fields such as {file}, {date}, {label}, {title} and {page}, pick the font, margins and pages, then Apply. Undo removes them.',
+    evidence: ['MAL-017 headers and footers with file name, date, page label, document fields and custom text'],
+  },
+  {
+    id: 'MAL-018', workspaceTab: 'Edit',
+    guidance: 'Choose Page numbers…, pick the format (1, i, I, a, A), start number, prefix, suffix, optional “of total”, position, margins and pages, then Apply.',
+    evidence: ['MAL-018 page numbers: roman format with prefix, suffix, total, alignment and margins',
+      'MAL-018 page numbers: start number, letters, top-left, first page skipped'],
+  },
+  {
+    id: 'MAL-019', workspaceTab: 'Edit',
+    guidance: 'Choose Text watermark…, enter the text and choose font, size, colour, rotation, opacity, position, layer and pages, then Apply.',
+    evidence: ['MAL-019 text watermark: typography, orientation, transparency, position and page scope'],
+  },
+  {
+    id: 'MAL-020', workspaceTab: 'Edit',
+    guidance: 'Choose Image watermark…, choose a PNG or JPEG, set its width, position, rotation, opacity, above or below the page content, and pages, then Apply.',
+    evidence: ['MAL-020 image watermark: scaling, position, transparency and layer order'],
   },
 ]);
 
