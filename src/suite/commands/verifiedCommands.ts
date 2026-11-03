@@ -30,6 +30,7 @@ export const VERIFIED_EVIDENCE_SCRIPTS = [
   'scripts/pdf-phase2-layout-acceptance.mjs',
   'scripts/pdf-phase2-stamp-acceptance.mjs',
   'scripts/pdf-phase2-navigation-acceptance.mjs',
+  'scripts/pdf-phase2-optimize-acceptance.mjs',
 ] as const;
 
 export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Object.freeze([
@@ -121,6 +122,17 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     evidence: ['MAL-022 bookmarks: create, nest, rename, retarget, reorder and remove',
       'MAL-022 links: add web and page links, change a destination, remove a link',
       'MAL-022 generated table of contents from bookmarks, with working links'],
+  },
+  {
+    id: 'MAL-024', workspaceTab: 'Optimize',
+    guidance: 'Choose Compress… and Lossless. Unfiltered streams are compressed, duplicate objects merged and unused objects removed; page content is checked to be identical and the size change is reported.',
+    evidence: ['MAL-024 lossless compression: smaller file, identical page content and images'],
+  },
+  {
+    id: 'MAL-025', workspaceTab: 'Optimize',
+    guidance: 'Choose Compress… and Reduce images, pick a quality profile or a custom resolution and JPEG quality, then Compress. The report shows the size before and after and how many images changed.',
+    evidence: ['MAL-025 image compression profile: downsampled JPEG, size report, same page text, faithful colours',
+      'MAL-025 custom resolution and quality'],
   },
 ]);
 

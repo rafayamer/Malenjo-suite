@@ -152,7 +152,8 @@ async function main() {
         ['Pages per sheet…', 'Pages per sheet (N-up)', '08-nup-dialog'], ['Batch organize…', 'Batch organize PDFs', '09-batch-dialog'],
         ['Header & footer…', 'Header and footer', '10-header-footer-dialog', 'Edit'], ['Page numbers…', 'Page numbers', '11-page-numbers-dialog', 'Edit'],
         ['Text watermark…', 'Text watermark', '12-text-watermark-dialog', 'Edit'], ['Image watermark…', 'Image watermark', '13-image-watermark-dialog', 'Edit'],
-        ['Document properties…', 'Document properties', '14-properties-dialog', 'Edit'], ['Navigation…', 'Navigation', '15-navigation-dialog', 'Edit']]) {
+        ['Document properties…', 'Document properties', '14-properties-dialog', 'Edit'], ['Navigation…', 'Navigation', '15-navigation-dialog', 'Edit'],
+        ['Compress…', 'Compress PDF', '16-compress-dialog', 'Optimize']]) {
         await organizeAction(label, tabName);
         await page.getByRole('dialog', { name: dialogName }).waitFor();
         await capture(shot, '.pdf-tool-dialog');
