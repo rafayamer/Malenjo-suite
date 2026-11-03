@@ -5,7 +5,8 @@
  * certified and interactive-form documents are refused, as in the other modes.
  */
 import { zipSync } from 'fflate';
-import { PDFDocument } from 'pdf-lib';
+import { PDFArray, PDFDocument, PDFName } from 'pdf-lib';
+import { annotationsOf, destinationArray, detachLinkTargets, type LinkTarget } from './pdfMerge';
 import { refusesSignedOrInteractive } from './splitByPageCount';
 
 export const PDF_RANGE_SPLIT_MAX_PARTS = 200;
@@ -53,18 +54,43 @@ export function parsePageRanges(text: string, pageCount: number): number[][] {
   });
 }
 
-async function loadForSplit(bytes: Uint8Array): Promise<PDFDocument> {
+/** The loaded source with its internal links detached (page index instead of page ref). */
+interface SplitSource { pdf: PDFDocument; links: LinkTarget[] }
+
+async function loadForSplit(bytes: Uint8Array): Promise<SplitSource> {
   let pdf: PDFDocument;
   try { pdf = await PDFDocument.load(bytes, { updateMetadata: false }); }
   catch { throw new Error('This file could not be split because it is encrypted, invalid or damaged.'); }
   refusesSignedOrInteractive(pdf);
-  return pdf;
+  // Copying would otherwise clone link targets as orphan pages, and named
+  // destinations have no /Dests in a part; both are resolved here.
+  return { pdf, links: detachLinkTargets(pdf) };
 }
 
-async function partBytes(source: PDFDocument, pages: number[]): Promise<Uint8Array> {
+/**
+ * One part as a standalone PDF. Internal links to pages in the part point at
+ * their new page; links to pages outside the part are removed (they could
+ * not go anywhere in this file).
+ */
+async function partBytes(source: SplitSource, pages: number[]): Promise<Uint8Array> {
   const output = await PDFDocument.create();
-  const copied = await output.copyPages(source, pages.map((page) => page - 1));
+  const copied = await output.copyPages(source.pdf, pages.map((page) => page - 1));
   copied.forEach((page) => output.addPage(page));
+  const position = new Map(pages.map((page, index) => [page - 1, index]));
+  const removals = new Map<number, number[]>();
+  for (const link of source.links) {
+    const at = position.get(link.page);
+    if (at === undefined) continue;
+    const target = position.get(link.target);
+    if (target === undefined) { removals.set(at, [...(removals.get(at) ?? []), link.annot]); continue; }
+    const annot = annotationsOf(output, at)[link.annot];
+    const dest = annot ? destinationArray(output, annot, link.viaAction) : undefined;
+    dest?.set(0, output.getPage(target).ref);
+  }
+  for (const [at, indexes] of removals) {
+    const annots = output.getPage(at).node.lookupMaybe(PDFName.of('Annots'), PDFArray);
+    for (const index of [...new Set(indexes)].sort((a, b) => b - a)) annots?.remove(index);
+  }
   return Uint8Array.from(await output.save({ useObjectStreams: true }));
 }
 
@@ -86,10 +112,10 @@ export async function splitPdfByRanges(bytes: Uint8Array, rangeText: string,
   maxOutputBytes = PDF_SPLIT_PARTS_MAX_OUTPUT_BYTES): Promise<PdfSplitResult> {
   const retain = outputBudget(maxOutputBytes);
   const source = await loadForSplit(bytes);
-  const groups = parsePageRanges(rangeText, source.getPageCount());
+  const groups = parsePageRanges(rangeText, source.pdf.getPageCount());
   const parts = [];
   for (const pages of groups) parts.push({ pages, data: retain(await partBytes(source, pages)) });
-  return { ...archive(parts), sourcePageCount: source.getPageCount() };
+  return { ...archive(parts), sourcePageCount: source.pdf.getPageCount() };
 }
 
 /**
@@ -108,7 +134,7 @@ export async function splitPdfBySize(bytes: Uint8Array, maxBytes: number,
   const retain = outputBudget(maxOutputBytes);
   if (bytes.length > PDF_SIZE_SPLIT_MAX_INPUT_BYTES) throw new Error('Size-based splitting accepts PDFs up to 128 MB.');
   const source = await loadForSplit(bytes);
-  const pageCount = source.getPageCount();
+  const pageCount = source.pdf.getPageCount();
   if (pageCount > PDF_SIZE_SPLIT_MAX_PAGES) throw new Error(`Size-based splitting supports up to ${PDF_SIZE_SPLIT_MAX_PAGES} pages.`);
 
   const alone: Uint8Array[] = [];

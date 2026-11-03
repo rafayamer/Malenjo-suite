@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { unzipSync } from 'fflate';
-import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRef, PDFString, StandardFonts } from 'pdf-lib';
 import { parsePageRanges, splitPdfByRanges, splitPdfBySize } from './pdfSplitModes';
 
 /** Page n is (300 + n) points wide, so each part's pages can be identified after reopening. */
@@ -69,6 +69,25 @@ describe('split modes (MAL-002)', () => {
     const source = await numberedDoc(2);
     await expect(splitPdfBySize(source, 100)).rejects.toThrow(/at least 10 KB/);
     await expect(splitPdfByRanges(new TextEncoder().encode('%PDF-nope'), '1')).rejects.toThrow(/could not be split/);
+  });
+
+  it('keeps internal links inside a part on the right page and removes links to pages in other parts', async () => {
+    const pdf = await PDFDocument.load(await numberedDoc(5));
+    const ctx = pdf.context;
+    // Page 1 links to page 3 explicitly; page 2 links to page 5 by a named destination.
+    pdf.catalog.set(PDFName.of('Names'), ctx.obj({ Dests: ctx.obj({ Names: [PDFString.of('end'), ctx.obj([pdf.getPage(4).ref, PDFName.of('Fit')])] }) }));
+    const link = (dest: unknown) => ctx.register(ctx.obj({ Type: 'Annot', Subtype: 'Link', Rect: [0, 0, 50, 20], Dest: dest as never }));
+    pdf.getPage(0).node.set(PDFName.of('Annots'), ctx.obj([link(ctx.obj([pdf.getPage(2).ref, PDFName.of('Fit')]))]));
+    pdf.getPage(1).node.set(PDFName.of('Annots'), ctx.obj([link(PDFString.of('end'))]));
+    const result = await splitPdfByRanges(await pdf.save(), '1-3, 4-5');
+    const first = await PDFDocument.load(unzipSync(result.archive)[result.parts[0].filename]);
+    const pageObjects = first.context.enumerateIndirectObjects()
+      .filter(([, obj]) => obj instanceof PDFDict && obj.get(PDFName.of('Type'))?.toString() === '/Page').length;
+    expect(pageObjects).toBe(3);
+    const annot = first.context.lookup(first.getPage(0).node.lookup(PDFName.of('Annots'), PDFArray).get(0), PDFDict);
+    const target = annot.lookup(PDFName.of('Dest'), PDFArray).get(0) as PDFRef;
+    expect(target.toString()).toBe(first.getPage(2).ref.toString());
+    expect(first.getPage(1).node.lookup(PDFName.of('Annots'), PDFArray).size()).toBe(0);
   });
 
   it('refuses before retaining more output than the budget (repeated ranges, desktop limit)', async () => {

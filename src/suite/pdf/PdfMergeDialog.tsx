@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, FilePlus2, X } from 'lucide-react';
-import { mergePdfs, type PdfMergeOptions } from './pdfMerge';
+import { pdfSaveLimit } from './api';
+import { PDF_MERGE_MAX_SOURCES, PDF_MERGE_MAX_TOTAL_BYTES, mergePdfs, type PdfMergeOptions } from './pdfMerge';
 import { describePdfError } from './pdfUserErrors';
 
 /** The open document's bytes are read when the merge runs (never a stale copy). */
@@ -9,6 +10,8 @@ interface Entry { id: string; name: string; bytes: Uint8Array | null; current: b
 interface Props {
   domIdPrefix: string;
   currentName: string;
+  /** Size of the open document, counted against the merge input budget. */
+  currentSize: number;
   busy: boolean;
   /**
    * Apply a merge to the working document (undoable). The operation receives
@@ -21,7 +24,7 @@ interface Props {
 let entrySequence = 0;
 
 /** MAL-001: merge several PDFs in a user-chosen order with bookmark/metadata options. */
-export default function PdfMergeDialog({ domIdPrefix, currentName, busy, onApply, onClose }: Props) {
+export default function PdfMergeDialog({ domIdPrefix, currentName, currentSize, busy, onApply, onClose }: Props) {
   const [entries, setEntries] = useState<Entry[]>(() => [{ id: 'current', name: currentName, bytes: null, current: true }]);
   const [options, setOptions] = useState<PdfMergeOptions>({ bookmarks: 'keep', metadata: 'first' });
   const [error, setError] = useState('');
@@ -56,8 +59,17 @@ export default function PdfMergeDialog({ domIdPrefix, currentName, busy, onApply
 
   async function addFiles(files: FileList | null) {
     if (!files?.length) return;
+    // Check the count and total size before reading any file into memory.
+    const chosen = Array.from(files);
+    if (entries.length + chosen.length > PDF_MERGE_MAX_SOURCES) {
+      setError(`Merge supports up to ${PDF_MERGE_MAX_SOURCES} files at once; none of the ${chosen.length} chosen were added.`); return;
+    }
+    const total = currentSize + entries.reduce((sum, entry) => sum + (entry.bytes?.length ?? 0), 0) + chosen.reduce((sum, file) => sum + file.size, 0);
+    if (total > PDF_MERGE_MAX_TOTAL_BYTES) {
+      setError('These files would bring the merge above 256 MB; none were added. Choose fewer or smaller files.'); return;
+    }
     const added: Entry[] = [];
-    for (const file of Array.from(files)) {
+    for (const file of chosen) {
       added.push({ id: `merge-${++entrySequence}`, name: file.name, bytes: new Uint8Array(await file.arrayBuffer()), current: false });
     }
     setEntries((current) => [...current, ...added]);
@@ -69,7 +81,7 @@ export default function PdfMergeDialog({ domIdPrefix, currentName, busy, onApply
     try {
       const ordered = entries;
       const applied = await onApply(async (latest) => {
-        const result = await mergePdfs(ordered.map(({ name, bytes }) => ({ name, bytes: bytes ?? latest })), options);
+        const result = await mergePdfs(ordered.map(({ name, bytes }) => ({ name, bytes: bytes ?? latest })), { ...options, maxOutputBytes: pdfSaveLimit() });
         const retargeted = result.retargetedBookmarks ? ` ${result.retargetedBookmarks} bookmark(s) without a page target now open their file's first page.` : '';
         return { bytes: result.bytes,
           summary: `Merged ${ordered.length} PDFs into ${result.pageCount} pages with ${result.bookmarkCount} bookmark(s).${retargeted}` };
