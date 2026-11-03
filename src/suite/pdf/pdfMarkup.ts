@@ -338,7 +338,20 @@ export async function updatePdfMarkupAnnotation(bytes: Uint8Array, target: Marku
   const { dict } = locate(pdf, target);
   if (change.color !== undefined) dict.set(N('C'), pdf.context.obj(parseColor(change.color)));
   if (change.opacity !== undefined) { if (!(change.opacity >= 0.1 && change.opacity <= 1)) throw new Error('Opacity must be between 10% and 100%.'); dict.set(N('CA'), PDFNumber.of(change.opacity)); }
-  if (change.width !== undefined) { if (!(change.width >= 0.5 && change.width <= 24)) throw new Error('Line width must be between 0.5 and 24 points.'); dict.set(N('BS'), pdf.context.obj({ W: change.width })); }
+  if (change.width !== undefined) {
+    if (!(change.width >= 0.5 && change.width <= 24)) throw new Error('Line width must be between 0.5 and 24 points.');
+    dict.set(N('BS'), pdf.context.obj({ W: change.width }));
+    // Freehand strokes and lines are bounded by their geometry plus the stroke: grow or shrink the box with it.
+    const kind = dict.get(N('Subtype'))?.toString();
+    const pairs = (values: number[]) => values.flatMap((v, i) => (i % 2 ? [] : [[v, values[i + 1]] as [number, number]]));
+    if (kind === '/Ink') {
+      const points = (dict.lookupMaybe(N('InkList'), PDFArray)?.asArray() ?? []).flatMap((stroke) => pairs(numbers(pdf.context.lookup(stroke) as PDFArray)));
+      if (points.length) dict.set(N('Rect'), pdf.context.obj(bounds(points, change.width).map(r2)));
+    } else if (kind === '/Line') {
+      const points = pairs(numbers(dict.lookupMaybe(N('L'), PDFArray)));
+      if (points.length === 2) dict.set(N('Rect'), pdf.context.obj(bounds(points, change.width * 4 + 6).map(r2)));
+    }
+  }
   if (change.contents !== undefined) dict.set(N('Contents'), PDFHexString.fromText(checkText(change.contents, 'Text', 4000)));
   dict.set(N('M'), PDFString.fromDate(new Date()));
   await buildAppearance(pdf, target.pageNumber, dict, dict.lookupMaybe(N('MALENJO_ViewRotation'), PDFNumber)?.asNumber() ?? 0);

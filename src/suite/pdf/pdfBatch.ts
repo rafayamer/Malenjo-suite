@@ -9,8 +9,9 @@
  * Source bytes are never modified.
  */
 import { strToU8, zipSync } from 'fflate';
-import { PDFDocument, degrees } from 'pdf-lib';
+import { PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber, degrees } from 'pdf-lib';
 import { nupPdf, type NupOptions } from './pdfNup';
+import { listPdfPageLabelRanges, type PdfPageLabelRange } from './pageLabels';
 import { pruneNavigationToPages } from './pdfNavigationPrune';
 import { parsePageRanges } from './pdfSplitModes';
 
@@ -88,10 +89,14 @@ async function applyRules(bytes: Uint8Array, rules: PdfBatchRule[]): Promise<{ b
           ? pages
           : Array.from({ length: pdf.getPageCount() }, (_, i) => i + 1).filter((page) => !keep.has(page));
         if (remove.length >= pdf.getPageCount()) throw new Error('it would remove every page');
+        // Page labels are indexed by page position: work out each kept page's label first.
+        const labels = pdf.catalog.has(PDFName.of('PageLabels')) ? await labelRanges(pdf) : null;
+        const kept = Array.from({ length: pdf.getPageCount() }, (_, i) => i + 1).filter((page) => !remove.includes(page));
         // Bookmarks and links to removed pages would be dead: remove them first.
         const pruned = pruneNavigationToPages(pdf, new Set(remove.map((page) => pdf.getPage(page - 1).ref.toString())));
         prunedLinks += pruned.links; prunedBookmarks += pruned.bookmarks;
         for (const page of [...remove].sort((a, b) => b - a)) pdf.removePage(page - 1);
+        if (labels) writeLabelsFor(pdf, kept, labels);
         // pdf-lib keeps a stale page cache after removePage; reload so later rules see the real pages.
         pdf = await PDFDocument.load(await pdf.save(), { updateMetadata: false });
       }
@@ -102,6 +107,34 @@ async function applyRules(bytes: Uint8Array, rules: PdfBatchRule[]): Promise<{ b
   pdf.setProducer('MALENJO');
   const note = prunedLinks || prunedBookmarks ? `Removed ${prunedBookmarks} bookmark(s) and ${prunedLinks} link(s) that pointed to removed pages.` : '';
   return { bytes: Uint8Array.from(await pdf.save({ useObjectStreams: true })), inputPages, outputPages: pdf.getPageCount(), note };
+}
+
+async function labelRanges(pdf: PDFDocument): Promise<PdfPageLabelRange[]> {
+  try { return await listPdfPageLabelRanges(Uint8Array.from(await pdf.save())); }
+  catch { throw new Error('its page labels use a structure that cannot be updated when pages are removed'); }
+}
+
+/** Rewrites /PageLabels so each kept page (original numbers, in order) shows the label it had before. */
+function writeLabelsFor(pdf: PDFDocument, kept: number[], ranges: PdfPageLabelRange[]): void {
+  const sorted = [...ranges].sort((a, b) => a.startPage - b.startPage);
+  const nums: unknown[] = [];
+  let previous: { range: PdfPageLabelRange; number: number } | null = null;
+  kept.forEach((page, index) => {
+    const range = [...sorted].reverse().find((item) => item.startPage <= page);
+    if (!range) return;
+    const number = range.startNumber + page - range.startPage;
+    const continues = previous && previous.range === range && (range.style === 'none' || number === previous.number + 1);
+    if (!continues) {
+      const dict = pdf.context.obj({}) as PDFDict;
+      if (range.style !== 'none') dict.set(PDFName.of('S'), PDFName.of(range.style));
+      if (range.prefix) dict.set(PDFName.of('P'), PDFHexString.fromText(range.prefix));
+      if (number !== 1) dict.set(PDFName.of('St'), PDFNumber.of(number));
+      nums.push(index, dict);
+    }
+    previous = { range, number };
+  });
+  if (nums.length && nums[0] !== 0) nums.unshift(0, pdf.context.obj({}));
+  pdf.catalog.set(PDFName.of('PageLabels'), pdf.context.obj({ Nums: nums as never }));
 }
 
 function outputName(source: string, used: Set<string>): string {

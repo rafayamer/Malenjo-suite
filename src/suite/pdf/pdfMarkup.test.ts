@@ -95,6 +95,15 @@ describe('drawings and notes (MAL-055)', () => {
     expect(items.map((i) => i.label)).toEqual(['Freehand', 'Arrow', 'Rectangle', 'Ellipse', 'Text box', 'Callout', 'Sticky note']);
   });
 
+  it('grows a freehand stroke\'s box when its line gets thicker', async () => {
+    let bytes = await addPdfDrawing(await doc(), { pageNumber: 1, viewRotation: 0, author: 'Ada', style: { ...style, width: 2 }, kind: 'Ink', points: [{ x: 0.1, y: 0.5 }, { x: 0.5, y: 0.5 }] });
+    const [ink] = await listPdfMarkupAnnotations(bytes);
+    bytes = await updatePdfMarkupAnnotation(bytes, ink, { width: 24 });
+    const { list } = await annotations(bytes);
+    const rect = list[0].rect as number[];
+    expect(rect[3] - rect[1]).toBeGreaterThanOrEqual(48);
+  });
+
   it('edits colour and text, rebuilds the appearance, and deletes markup', async () => {
     let bytes = await addPdfDrawing(await doc(), { pageNumber: 1, viewRotation: 0, author: 'Ada', style, kind: 'FreeText', rect: { x: 0.1, y: 0.1, width: 0.4, height: 0.1 }, text: 'Draft' });
     let [item] = await listPdfMarkupAnnotations(bytes);

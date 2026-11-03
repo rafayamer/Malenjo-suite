@@ -5,7 +5,8 @@
  * to that page. Existing page labels are shifted so every original page keeps
  * its label; the contents pages are labelled i, ii, ...
  */
-import { PDFArray, PDFDict, PDFDocument, PDFFont, PDFHexString, PDFName, PDFNumber, StandardFonts, rgb } from 'pdf-lib';
+import { PDFArray, PDFDict, PDFDocument, PDFFont, PDFHexString, PDFName, PDFNumber, PDFRef, StandardFonts, rgb } from 'pdf-lib';
+import { resolveDestination } from './pdfMerge';
 import { listPdfPageLabelRanges, type PdfPageLabelRange } from './pageLabels';
 import { listPdfOutlineTree } from './pdfOutlineTree';
 import { labelFor } from './pdfStamp';
@@ -42,7 +43,20 @@ export async function generatePdfTableOfContents(bytes: Uint8Array, options: Pdf
   if (!title || title.length > 120) throw new Error('Enter a contents title of up to 120 characters.');
   if (!Number.isInteger(options.maxDepth) || options.maxDepth < 1 || options.maxDepth > 16) throw new Error('Choose 1 to 16 bookmark levels.');
   if (!(options.fontSize >= 6 && options.fontSize <= 24)) throw new Error('Entry size must be between 6 and 24 points.');
-  const outline = await listPdfOutlineTree(bytes);
+  const listed = await listPdfOutlineTree(bytes);
+  // Bookmarks with named destinations or GoTo actions are resolved to their page here.
+  const source = await PDFDocument.load(bytes, { updateMetadata: false });
+  const pageIndex = new Map(source.getPages().map((page, index) => [page.ref.toString(), index + 1]));
+  const outline = listed.map((entry) => {
+    if (entry.pageNumber !== null) return entry;
+    const [num, gen] = entry.ref.split(' ').map(Number);
+    const dict = source.context.lookup(PDFRef.of(num, gen));
+    if (!(dict instanceof PDFDict)) return entry;
+    const action = dict.get(PDFName.of('A')) ? source.context.lookup(dict.get(PDFName.of('A'))) : undefined;
+    const value = dict.get(PDFName.of('Dest')) ?? (action instanceof PDFDict && action.get(PDFName.of('S'))?.toString() === '/GoTo' ? action : undefined);
+    const target = resolveDestination(source, value)?.get(0);
+    return { ...entry, pageNumber: target instanceof PDFRef ? pageIndex.get(target.toString()) ?? null : null };
+  });
   const inDepth = outline.filter((entry) => entry.depth < options.maxDepth);
   const usable = inDepth.filter((entry) => entry.pageNumber !== null);
   if (!outline.length) throw new Error('This PDF has no bookmarks to build a table of contents from. Add bookmarks first.');

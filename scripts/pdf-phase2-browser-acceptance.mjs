@@ -120,7 +120,15 @@ async function action(tabName,label){
     if(await more.count()&&!(await more.evaluate(node=>node.open).catch(()=>true)))await more.locator('summary').click();
     await button.waitFor({state:'visible',timeout:3000}).catch(()=>{});
   }
-  await button.click({timeout:15000});
+  // Retry the click a few times in case the menu was re-laid out between opening and clicking.
+  for(let attempt=0;;attempt++){
+    try{await button.click({timeout:4000});return;}
+    catch(error){
+      if(attempt>=4)throw error;
+      const more=panel().locator('.pdf-task-overflow').first();
+      if(await more.count()&&!(await more.evaluate(node=>node.open).catch(()=>true)))await more.locator('summary').click().catch(()=>{});
+    }
+  }
 }
 async function notice(pattern,timeout=20000){
   await page.waitForFunction(source=>[...document.querySelectorAll('.pdf-notice,[role="alert"],[role="status"]')]
