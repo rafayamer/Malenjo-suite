@@ -2869,7 +2869,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
 
       </div>
       {toolDialog==='merge'&&sourceBytes&&<PdfMergeDialog domIdPrefix={domIdPrefix} currentName={sourceName||'Open document.pdf'}
-        busy={mutating} onClose={closeToolDialog}
+        currentSize={sourceBytes.length} busy={mutating} onClose={closeToolDialog}
         onApply={async operation=>{
           let summary='';
           const applied=await mutate('Merged PDFs.',async latest=>{const merged=await operation(latest);summary=merged.summary;return merged.bytes;},1);

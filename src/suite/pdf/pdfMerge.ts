@@ -24,6 +24,8 @@ export interface PdfMergeOptions {
   bookmarks: 'keep' | 'per-file' | 'none';
   /** first: title/author/subject/keywords from the first file; none: no document info. */
   metadata: 'first' | 'none';
+  /** Largest merged PDF that can be saved here (the desktop writer accepts 32 MB). */
+  maxOutputBytes?: number;
 }
 export interface PdfMergeResult {
   bytes: Uint8Array;
@@ -37,7 +39,7 @@ export interface PdfMergeResult {
 interface OutlineNode { title: string; page: number; children: OutlineNode[] }
 
 /** A link annotation whose destination array points at a page of the same file. */
-interface LinkTarget { page: number; annot: number; viaAction: boolean; target: number }
+export interface LinkTarget { page: number; annot: number; viaAction: boolean; target: number }
 
 const MAX_NAME_TREE_NODES = 10000;
 
@@ -85,7 +87,7 @@ function destinationSlot(annot: PDFDict, viaAction: boolean): { holder: PDFDict;
   return { holder: action, key: PDFName.of('D') };
 }
 
-function destinationArray(pdf: PDFDocument, annot: PDFDict, viaAction: boolean): PDFArray | undefined {
+export function destinationArray(pdf: PDFDocument, annot: PDFDict, viaAction: boolean): PDFArray | undefined {
   const slot = destinationSlot(annot, viaAction);
   const value = slot?.holder.get(slot.key);
   if (value instanceof PDFArray) return value;
@@ -93,15 +95,18 @@ function destinationArray(pdf: PDFDocument, annot: PDFDict, viaAction: boolean):
 }
 
 /** Annotation dictionaries by position (undefined where unresolvable, so indexes stay aligned). */
-function annotationsOf(pdf: PDFDocument, pageIndex: number): (PDFDict | undefined)[] {
+export function annotationsOf(pdf: PDFDocument, pageIndex: number): (PDFDict | undefined)[] {
   const annots = pdf.getPage(pageIndex).node.lookupMaybe(PDFName.of('Annots'), PDFArray);
   if (!annots) return [];
   return annots.asArray().map((item) =>
     item instanceof PDFRef ? pdf.context.lookupMaybe(item, PDFDict) : item instanceof PDFDict ? item : undefined);
 }
 
-/** Replace internal link page refs with page indexes so copying does not clone target pages. */
-function detachLinkTargets(pdf: PDFDocument): LinkTarget[] {
+/**
+ * Replace internal link page refs with page indexes so copying does not clone
+ * target pages. Also used by the range and size splits (pdfSplitModes).
+ */
+export function detachLinkTargets(pdf: PDFDocument): LinkTarget[] {
   const pageIndex = new Map(pdf.getPages().map((page, index) => [page.ref.toString(), index]));
   const found: LinkTarget[] = [];
   pdf.getPages().forEach((_, page) => {
@@ -273,5 +278,9 @@ export async function mergePdfs(sources: PdfMergeSource[], options: PdfMergeOpti
   output.setProducer('MALENJO');
 
   const bytes = Uint8Array.from(await output.save({ useObjectStreams: false }));
+  const limit = options.maxOutputBytes ?? PDF_MERGE_MAX_TOTAL_BYTES;
+  if (bytes.length > limit) {
+    throw new Error(`The merged PDF would be ${(bytes.length / (1024 * 1024)).toFixed(1)} MB, more than the ${Math.round(limit / (1024 * 1024))} MB that can be saved here. Merge fewer or smaller files.`);
+  }
   return { bytes, pageCount: output.getPageCount(), bookmarkCount: countNodes(outline), sources: placed, retargetedBookmarks };
 }
