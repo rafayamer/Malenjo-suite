@@ -10,8 +10,7 @@
  * real merged page. Bookmarks are rebuilt from each source's outline tree and
  * retargeted to the merged page numbers.
  */
-import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber, PDFRef } from 'pdf-lib';
-import { listPdfOutlineTree } from './pdfOutlineTree';
+import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber, PDFObject, PDFRef, PDFString } from 'pdf-lib';
 
 export const PDF_MERGE_MAX_SOURCES = 50;
 export const PDF_MERGE_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
@@ -31,7 +30,7 @@ export interface PdfMergeResult {
   pageCount: number;
   bookmarkCount: number;
   sources: { name: string; firstPage: number; pageCount: number }[];
-  /** Bookmarks whose destination could not be resolved (named destinations) were pointed at their file's first page. */
+  /** Bookmarks without a resolvable page destination (e.g. web links) were pointed at their file's first page. */
   retargetedBookmarks: number;
 }
 
@@ -40,10 +39,55 @@ interface OutlineNode { title: string; page: number; children: OutlineNode[] }
 /** A link annotation whose destination array points at a page of the same file. */
 interface LinkTarget { page: number; annot: number; viaAction: boolean; target: number }
 
+const MAX_NAME_TREE_NODES = 10000;
+
+/** Looks a named destination up in the catalog's /Dests dictionary or /Names /Dests tree. */
+function namedDestination(pdf: PDFDocument, name: PDFObject): PDFObject | undefined {
+  if (name instanceof PDFName) {
+    return pdf.catalog.lookupMaybe(PDFName.of('Dests'), PDFDict)?.get(PDFName.of(name.decodeText()));
+  }
+  if (!(name instanceof PDFString || name instanceof PDFHexString)) return undefined;
+  const wanted = name.decodeText();
+  const root = pdf.catalog.lookupMaybe(PDFName.of('Names'), PDFDict)?.lookupMaybe(PDFName.of('Dests'), PDFDict);
+  const pending = root ? [root] : [];
+  const seen = new Set<PDFDict>();
+  while (pending.length && seen.size < MAX_NAME_TREE_NODES) {
+    const node = pending.pop()!;
+    if (seen.has(node)) continue;
+    seen.add(node);
+    const names = node.lookupMaybe(PDFName.of('Names'), PDFArray);
+    for (let i = 0; names && i + 1 < names.size(); i += 2) {
+      const key = names.lookup(i);
+      if ((key instanceof PDFString || key instanceof PDFHexString) && key.decodeText() === wanted) return names.get(i + 1);
+    }
+    const kids = node.lookupMaybe(PDFName.of('Kids'), PDFArray);
+    kids?.asArray().forEach((kid) => { const dict = pdf.context.lookupMaybe(kid, PDFDict); if (dict) pending.push(dict); });
+  }
+  return undefined;
+}
+
+/** Resolves a destination value (array, reference, name or string) to its explicit array. */
+function resolveDestination(pdf: PDFDocument, value: PDFObject | undefined): PDFArray | undefined {
+  for (let hops = 0; value && hops < 4; hops++) {
+    if (value instanceof PDFRef) { value = pdf.context.lookup(value); continue; }
+    if (value instanceof PDFArray) return value;
+    if (value instanceof PDFDict) { value = value.get(PDFName.of('D')); continue; }
+    value = namedDestination(pdf, value);
+  }
+  return undefined;
+}
+
+/** The holder dictionary and key of an annotation's or outline item's GoTo destination. */
+function destinationSlot(annot: PDFDict, viaAction: boolean): { holder: PDFDict; key: PDFName } | undefined {
+  if (!viaAction) return annot.has(PDFName.of('Dest')) ? { holder: annot, key: PDFName.of('Dest') } : undefined;
+  const action = annot.lookupMaybe(PDFName.of('A'), PDFDict);
+  if (!action || action.get(PDFName.of('S'))?.toString() !== '/GoTo') return undefined;
+  return { holder: action, key: PDFName.of('D') };
+}
+
 function destinationArray(pdf: PDFDocument, annot: PDFDict, viaAction: boolean): PDFArray | undefined {
-  const holder = viaAction ? annot.lookupMaybe(PDFName.of('A'), PDFDict) : annot;
-  if (!holder) return undefined;
-  const value = holder.get(PDFName.of(viaAction ? 'D' : 'Dest'));
+  const slot = destinationSlot(annot, viaAction);
+  const value = slot?.holder.get(slot.key);
   if (value instanceof PDFArray) return value;
   return value instanceof PDFRef ? pdf.context.lookupMaybe(value, PDFArray) : undefined;
 }
@@ -64,11 +108,15 @@ function detachLinkTargets(pdf: PDFDocument): LinkTarget[] {
     annotationsOf(pdf, page).forEach((annot, index) => {
       if (!annot) return;
       for (const viaAction of [false, true]) {
-        const dest = destinationArray(pdf, annot, viaAction);
-        const first = dest?.get(0);
+        const slot = destinationSlot(annot, viaAction);
+        if (!slot) continue;
+        // Named destinations are resolved here: the merged file has no /Dests for them.
+        const resolved = resolveDestination(pdf, slot.holder.get(slot.key));
+        const first = resolved?.get(0);
         const target = first instanceof PDFRef ? pageIndex.get(first.toString()) : undefined;
-        if (dest && target !== undefined) {
-          dest.set(0, PDFNumber.of(target));
+        if (resolved && target !== undefined) {
+          // A fresh array per link: shared or named destination arrays are never mutated.
+          slot.holder.set(slot.key, pdf.context.obj([PDFNumber.of(target), ...resolved.asArray().slice(1)]));
           found.push({ page, annot: index, viaAction, target });
         }
       }
@@ -133,22 +181,35 @@ function writeOutline(pdf: PDFDocument, nodes: OutlineNode[]): void {
   pdf.catalog.set(PDFName.of('Outlines'), rootRef);
 }
 
-async function sourceOutline(bytes: Uint8Array, firstPage: number, pageCount: number):
-  Promise<{ nodes: OutlineNode[]; retargeted: number }> {
-  let entries;
-  try { entries = await listPdfOutlineTree(bytes); } catch { return { nodes: [], retargeted: 0 }; }
-  const byRef = new Map<string, OutlineNode>();
-  const roots: OutlineNode[] = [];
+/**
+ * Reads a source's outline from the already-loaded document (no separate
+ * size-limited reader), resolving explicit and named destinations. Items
+ * without a page destination point at the file's first page and are counted.
+ */
+function sourceOutline(pdf: PDFDocument, firstPage: number): { nodes: OutlineNode[]; retargeted: number } {
+  const pageIndex = new Map(pdf.getPages().map((page, index) => [page.ref.toString(), index]));
+  const root = pdf.catalog.lookupMaybe(PDFName.of('Outlines'), PDFDict);
+  const seen = new Set<PDFDict>();
   let retargeted = 0;
-  for (const entry of entries) {
-    const local = entry.pageNumber && entry.pageNumber <= pageCount ? entry.pageNumber : null;
-    if (local === null) retargeted++;
-    const node: OutlineNode = { title: entry.title, page: firstPage + (local ?? 1) - 1, children: [] };
-    byRef.set(entry.ref, node);
-    const parent = entry.parentRef ? byRef.get(entry.parentRef) : undefined;
-    (parent ? parent.children : roots).push(node);
-  }
-  return { nodes: roots, retargeted };
+  const read = (first: PDFDict | undefined, depth: number): OutlineNode[] => {
+    const nodes: OutlineNode[] = [];
+    for (let item = first; item; item = item.lookupMaybe(PDFName.of('Next'), PDFDict)) {
+      if (seen.has(item)) throw new Error('A source PDF has a looping bookmark tree; merge without bookmarks.');
+      seen.add(item);
+      if (seen.size > MAX_OUTLINE_ENTRIES || depth > MAX_OUTLINE_DEPTH) {
+        throw new Error('A source PDF has more than 1,000 bookmarks or 16 levels; merge without bookmarks.');
+      }
+      const raw = item.lookupMaybe(PDFName.of('Title'), PDFString, PDFHexString);
+      const dest = resolveDestination(pdf, item.get(PDFName.of('Dest')) ?? (destinationSlot(item, true) ? item.lookupMaybe(PDFName.of('A'), PDFDict) : undefined));
+      const target = dest?.get(0);
+      const local = target instanceof PDFRef ? pageIndex.get(target.toString()) : undefined;
+      if (local === undefined) retargeted++;
+      nodes.push({ title: (raw?.decodeText() ?? '').slice(0, 500) || 'Untitled', page: firstPage + (local ?? 0),
+        children: read(item.lookupMaybe(PDFName.of('First'), PDFDict), depth + 1) });
+    }
+    return nodes;
+  };
+  return { nodes: read(root?.lookupMaybe(PDFName.of('First'), PDFDict), 1), retargeted };
 }
 
 export async function mergePdfs(sources: PdfMergeSource[], options: PdfMergeOptions): Promise<PdfMergeResult> {
@@ -179,14 +240,16 @@ export async function mergePdfs(sources: PdfMergeSource[], options: PdfMergeOpti
       throw new Error(`Merged result would exceed ${PDF_MERGE_MAX_PAGES} pages.`);
     }
     const firstPage = output.getPageCount() + 1;
+    // Read bookmarks before link targets are rewritten for copying.
+    const bookmarks = options.bookmarks === 'none' ? null : sourceOutline(doc, firstPage);
     const links = detachLinkTargets(doc);
     const copied = await output.copyPages(doc, doc.getPageIndices());
     copied.forEach((page) => output.addPage(page));
     reattachLinkTargets(output, firstPage - 1, links);
     placed.push({ name: source.name, firstPage, pageCount });
 
-    if (options.bookmarks !== 'none') {
-      const { nodes, retargeted } = await sourceOutline(source.bytes, firstPage, pageCount);
+    if (bookmarks) {
+      const { nodes, retargeted } = bookmarks;
       retargetedBookmarks += retargeted;
       if (options.bookmarks === 'per-file') {
         outline.push({ title: displayName(source.name), page: firstPage, children: nodes });

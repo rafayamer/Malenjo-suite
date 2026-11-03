@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
-import { exportPdfPartsZip } from './api';
-import { splitPdfByChapters } from './pdfChapterSplit';
+import { exportPdfPartsZip, pdfPartsZipLimit } from './api';
+import { PDF_CHAPTER_SPLIT_MAX_OUTPUT_BYTES, splitPdfByChapters } from './pdfChapterSplit';
 import { parsePageRanges, splitPdfByRanges, splitPdfBySize } from './pdfSplitModes';
 import { describePdfError } from './pdfUserErrors';
 import { splitPdfByPageCount } from './splitByPageCount';
@@ -36,15 +36,16 @@ export default function PdfSplitDialog({ domIdPrefix, sourceName, pageCount, bus
     setWorking(true); setError('');
     try {
       let archive: Uint8Array; let parts: number; let extra = '';
+      const budget = pdfPartsZipLimit();
       if (mode === 'ranges') {
         parsePageRanges(ranges, pageCount); // validate before work, with a plain message
-        const result = await splitPdfByRanges(bytes, ranges); archive = result.archive; parts = result.parts.length;
+        const result = await splitPdfByRanges(bytes, ranges, budget); archive = result.archive; parts = result.parts.length;
       } else if (mode === 'count') {
-        const result = await splitPdfByPageCount(bytes, perPart); archive = result.archive; parts = result.pageCounts.length;
+        const result = await splitPdfByPageCount(bytes, perPart, budget); archive = result.archive; parts = result.pageCounts.length;
       } else if (mode === 'bookmarks') {
-        const result = await splitPdfByChapters(bytes); archive = result.archive; parts = result.chapters.length;
+        const result = await splitPdfByChapters(bytes, Math.min(budget, PDF_CHAPTER_SPLIT_MAX_OUTPUT_BYTES)); archive = result.archive; parts = result.chapters.length;
       } else {
-        const result = await splitPdfBySize(bytes, Math.round(sizeMb * 1024 * 1024)); archive = result.archive; parts = result.parts.length;
+        const result = await splitPdfBySize(bytes, Math.round(sizeMb * 1024 * 1024), budget); archive = result.archive; parts = result.parts.length;
         if (result.oversizedPages.length) extra = ` Page(s) ${result.oversizedPages.join(', ')} are larger than the limit on their own and were saved as single-page parts.`;
       }
       const base = sourceName.replace(/\.pdf$/i, '') || 'MALENJO-document';

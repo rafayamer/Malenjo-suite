@@ -118,10 +118,19 @@ export async function exportPdfPageImagesZip(name:string,bytes:Uint8Array):Promi
   return invoke<boolean>('write_pdf_tool_output',{destination,bytes:Array.from(copy)});
 }
 
+/**
+ * Largest ZIP of PDF parts that can be saved here: the desktop writer
+ * (write_pdf_tool_output) accepts 32 MB; browser downloads 256 MB. Split
+ * passes this budget into generation so an unsaveable archive is refused
+ * before any work, not after choosing a destination.
+ */
+export function pdfPartsZipLimit():number{return isTauri()?32*1024*1024:256*1024*1024;}
+
 /** Save split PDF parts as one ZIP archive (MAL-002). */
 export async function exportPdfPartsZip(name:string,bytes:Uint8Array):Promise<boolean>{
   if(!/\.zip$/i.test(name))throw new Error('Split PDF archives must use .zip.');
-  if(!bytes.length||bytes.length>256*1024*1024)throw new Error('Split archive is empty or exceeds the 256 MB output safety limit.');
+  const limit=pdfPartsZipLimit();
+  if(!bytes.length||bytes.length>limit)throw new Error(`Split archive is empty or exceeds the ${limit/(1024*1024)} MB output safety limit.`);
   if(bytes.length<4||bytes[0]!==0x50||bytes[1]!==0x4b||bytes[2]!==0x03||bytes[3]!==0x04){
     throw new Error('Split archive does not have a valid ZIP signature.');
   }
