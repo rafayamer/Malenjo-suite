@@ -9,7 +9,7 @@
  * Source bytes are never modified.
  */
 import { strToU8, zipSync } from 'fflate';
-import { PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber, degrees } from 'pdf-lib';
+import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber, degrees } from 'pdf-lib';
 import { nupPdf, type NupOptions } from './pdfNup';
 import { listPdfPageLabelRanges, type PdfPageLabelRange } from './pageLabels';
 import { pruneNavigationToPages } from './pdfNavigationPrune';
@@ -90,6 +90,13 @@ async function applyRules(bytes: Uint8Array, rules: PdfBatchRule[]): Promise<{ b
           : Array.from({ length: pdf.getPageCount() }, (_, i) => i + 1).filter((page) => !keep.has(page));
         if (remove.length >= pdf.getPageCount()) throw new Error('it would remove every page');
         // Page labels are indexed by page position: work out each kept page's label first.
+        // Form fields keep widget references to their pages; removing such a page would leave orphaned fields.
+        for (const page of remove) {
+          const annots = pdf.getPage(page - 1).node.lookupMaybe(PDFName.of('Annots'), PDFArray)?.asArray() ?? [];
+          if (annots.some((a) => { const d = pdf.context.lookup(a); return d instanceof PDFDict && d.get(PDFName.of('Subtype'))?.toString() === '/Widget'; })) {
+            throw new Error(`page ${page} has form fields; remove them or flatten the form before removing the page`);
+          }
+        }
         const labels = pdf.catalog.has(PDFName.of('PageLabels')) ? await labelRanges(pdf) : null;
         const kept = Array.from({ length: pdf.getPageCount() }, (_, i) => i + 1).filter((page) => !remove.includes(page));
         // Bookmarks and links to removed pages would be dead: remove them first.

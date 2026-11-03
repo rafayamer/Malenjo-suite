@@ -25,7 +25,9 @@ const DRAW_TOOLS: [DrawingKind, string][] = [['Ink', 'Pen'], ['Line', 'Line'], [
 export const MARKUP_AUTHOR = 'MALENJO User';
 
 /** The current text selection on this workspace's pages, as fractions of each page as shown. */
-function selectionByPage(domIdPrefix: string): { pageNumber: number; rects: ShownRect[]; text: string } | null {
+interface PageSelection { pageNumber: number; rects: ShownRect[]; text: string }
+/** The current selection grouped by page (a selection can cross pages), with each page's own selected text. */
+function selectionByPage(domIdPrefix: string): PageSelection[] | null {
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed || !selection.rangeCount) return null;
   const pages = Array.from(document.querySelectorAll<HTMLElement>(`[id^="${domIdPrefix}-page-"]`)).map((shell) => ({
@@ -47,8 +49,20 @@ function selectionByPage(domIdPrefix: string): { pageNumber: number; rects: Show
     list.push({ x, y, width: clamp((rect.right - box.left) / box.width) - x, height: clamp((rect.bottom - box.top) / box.height) - y });
     byPage.set(page.pageNumber, list);
   }
-  const first = [...byPage.keys()].sort((a, b) => a - b)[0];
-  return first === undefined ? null : { pageNumber: first, rects: byPage.get(first)!, text: selection.toString().trim() };
+  if (!byPage.size) return null;
+  const range = selection.getRangeAt(0);
+  return [...byPage.keys()].sort((a, b) => a - b).map((pageNumber) => {
+    // The page's own share of the selected text: the selected part of its text-layer spans.
+    const spans = Array.from(document.querySelectorAll<HTMLElement>(`#${CSS.escape(`${domIdPrefix}-page-${pageNumber}`)} .textLayer span`))
+      .filter((span) => selection.containsNode(span, true));
+    const text = spans.map((span) => {
+      const part = document.createRange(); part.selectNodeContents(span);
+      if (span.contains(range.startContainer)) part.setStart(range.startContainer, range.startOffset);
+      if (span.contains(range.endContainer)) part.setEnd(range.endContainer, range.endOffset);
+      return part.toString();
+    }).join(' ').replace(/\s+/g, ' ').trim();
+    return { pageNumber, rects: byPage.get(pageNumber)!, text: byPage.size === 1 ? selection.toString().trim() : text };
+  });
 }
 
 /** MAL-054 / MAL-055 markup tools: text markup on the selection, drawing tools, and editing. */
@@ -75,10 +89,13 @@ export default function PdfMarkupPanel({ domIdPrefix, bytes, viewRotation, busy,
     const found = pending.current ?? selectionByPage(domIdPrefix);
     pending.current = null;
     if (!found) { setError('Select text on a page first, then choose the markup.'); return; }
-    void run(`Added ${name.toLowerCase()}.`, async (latest) => ({
-      bytes: await addPdfTextMarkup(latest, { pageNumber: found.pageNumber, viewRotation, kind, rects: found.rects, text: found.text, note: '', author: MARKUP_AUTHOR, style: settings.style }),
-      summary: `Added ${name.toLowerCase()} on page ${found.pageNumber}.`,
-    }));
+    const pages = found.map((group) => group.pageNumber);
+    // Every page of the selection is marked in one undoable edit.
+    void run(`Added ${name.toLowerCase()}.`, async (latest) => {
+      let bytes = latest;
+      for (const group of found) bytes = await addPdfTextMarkup(bytes, { pageNumber: group.pageNumber, viewRotation, kind, rects: group.rects, text: group.text, note: '', author: MARKUP_AUTHOR, style: settings.style });
+      return { bytes, summary: `Added ${name.toLowerCase()} on page${pages.length > 1 ? 's' : ''} ${pages.join(', ')}.` };
+    });
     window.getSelection()?.removeAllRanges();
   }
   const item = selected === null ? null : items[selected] ?? null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PDFDict, PDFDocument, PDFName } from 'pdf-lib';
+import { PDFDict, PDFDocument, PDFName, PDFString } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { clearPdfDocumentInfo, isoFromPdfDate, readPdfDocumentInfo, writePdfDocumentInfo, type PdfDocumentInfoUpdate } from './pdfDocumentInfo';
 
@@ -54,6 +54,17 @@ describe('document information (MAL-021)', () => {
     expect((reader.info.Custom as Map<string, string>).get('Department')).toBe('Finance');
     expect(reader.metadata?.get('dc:title')).toBe('Q3 report & plan');
     expect(reader.metadata?.get('dc:creator')).toEqual(['Ada', 'Grace']);
+  });
+
+  it('does not leave indirectly stored property values in the file', async () => {
+    const pdf = await PDFDocument.load(await source());
+    const info = pdf.context.lookup(pdf.context.trailerInfo.Info, PDFDict);
+    info.set(PDFName.of('Author'), pdf.context.register(PDFString.of('Secret Indirect Author')));
+    const bytes = await pdf.save({ useObjectStreams: false });
+    const has = (b: Uint8Array) => new TextDecoder('latin1').decode(b).includes('Secret Indirect');
+    expect(has(bytes)).toBe(true);
+    expect(has(await clearPdfDocumentInfo(bytes))).toBe(false);
+    expect(has(await writePdfDocumentInfo(bytes, update({ xmp: 'remove' })))).toBe(false);
   });
 
   it('removes XMP on request, clears everything, and validates input', async () => {

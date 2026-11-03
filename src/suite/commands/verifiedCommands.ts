@@ -141,7 +141,8 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
   {
     id: 'MAL-054', workspaceTab: 'Review',
     guidance: 'Choose Markup tools…, select text on the page, then Highlight, Underline, Strike out or Squiggly. Pick a markup in the list to change its colour or delete it.',
-    evidence: ['MAL-054 highlight, underline, strikeout and squiggly on selected text', 'MAL-054 change a markup colour, then delete it'],
+    evidence: ['MAL-054 highlight, underline, strikeout and squiggly on selected text', 'MAL-054 change a markup colour, then delete it',
+      'MAL-054 a selection across pages is marked on every page'],
   },
   {
     id: 'MAL-055', workspaceTab: 'Review',
