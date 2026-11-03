@@ -9,12 +9,13 @@
  * content, which is wrapped in q/Q so its graphics state cannot leak.
  */
 import {
-  PDFArray, PDFDict, PDFDocument, PDFFont, PDFImage, PDFName, PDFOperator, PDFRef, StandardFonts,
+  PDFArray, PDFDocument, PDFFont, PDFImage, PDFName, PDFOperator, PDFRef, StandardFonts,
   beginText, concatTransformationMatrix, drawObject, endText, moveText, popGraphicsState,
   pushGraphicsState, setFillingRgbColor, setFontAndSize, setGraphicsState, showText,
 } from 'pdf-lib';
 import { listPdfPageLabelRanges, type PdfPageLabelRange } from './pageLabels';
 import { parsePageRanges } from './pdfSplitModes';
+import { refuseSignedPdf } from './pdfSignatureGuard';
 
 export type StampFont = 'helvetica' | 'helvetica-bold' | 'times' | 'times-bold' | 'courier';
 export type StampPosition = 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'center' | 'middle-right'
@@ -92,18 +93,8 @@ async function loadForStamp(bytes: Uint8Array): Promise<PDFDocument> {
     if (pdf.getPageCount() < 1) throw new Error('no pages');
     pdf0 = pdf;
   } catch { throw new Error('This PDF could not be stamped because it is encrypted, invalid or damaged.'); }
-  refuseSignedForStamp(pdf0);
+  refuseSignedPdf(pdf0, 'stamping it');
   return pdf0;
-}
-
-/** Stamping rewrites page content, which would invalidate a signature or certification. */
-function refuseSignedForStamp(pdf: PDFDocument): void {
-  if (pdf.catalog.has(PDFName.of('Perms'))) throw new Error('This PDF is certified; stamping it would invalidate the certification.');
-  for (const [, object] of pdf.context.enumerateIndirectObjects()) {
-    if (!(object instanceof PDFDict)) continue;
-    const signedField = object.get(PDFName.of('FT'))?.toString() === '/Sig' && object.has(PDFName.of('V'));
-    if (object.has(PDFName.of('ByteRange')) || signedField) throw new Error('This PDF is signed; stamping it would invalidate the signature.');
-  }
 }
 
 /**

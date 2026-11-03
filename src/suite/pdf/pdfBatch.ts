@@ -11,6 +11,7 @@
 import { strToU8, zipSync } from 'fflate';
 import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber, degrees } from 'pdf-lib';
 import { nupPdf, type NupOptions } from './pdfNup';
+import { refuseSignedPdf } from './pdfSignatureGuard';
 import { listPdfPageLabelRanges, type PdfPageLabelRange } from './pageLabels';
 import { pruneNavigationToPages } from './pdfNavigationPrune';
 import { parsePageRanges } from './pdfSplitModes';
@@ -68,6 +69,7 @@ async function applyRules(bytes: Uint8Array, rules: PdfBatchRule[]): Promise<{ b
     inputPages = pdf.getPageCount();
     if (inputPages < 1) throw new Error('no pages');
   } catch { throw new Error('This file is encrypted, invalid or damaged.'); }
+  refuseSignedPdf(pdf, 'changing it');
   for (const [index, rule] of rules.entries()) {
     const step = `Rule ${index + 1} (${describeBatchRule(rule)})`;
     try {
@@ -90,6 +92,8 @@ async function applyRules(bytes: Uint8Array, rules: PdfBatchRule[]): Promise<{ b
           ? pages
           : Array.from({ length: pdf.getPageCount() }, (_, i) => i + 1).filter((page) => !keep.has(page));
         if (remove.length >= pdf.getPageCount()) throw new Error('it would remove every page');
+        // Tagged structure points at pages by reference; removing pages would leave it broken.
+        if (pdf.catalog.has(PDFName.of('StructTreeRoot'))) throw new Error('this PDF is tagged for accessibility, and removing pages would break its structure');
         // Page labels are indexed by page position: work out each kept page's label first.
         // Form fields keep widget references to their pages; removing such a page would leave orphaned fields.
         for (const page of remove) {
