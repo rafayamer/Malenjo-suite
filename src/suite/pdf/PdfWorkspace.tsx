@@ -132,6 +132,7 @@ import PdfCompressDialog from './PdfCompressDialog';
 import PdfMarkupPanel, { MARKUP_AUTHOR, type MarkupSettings } from './PdfMarkupPanel';
 import PdfTextEditPanel, { type TextEditState } from './PdfTextEditPanel';
 import PdfFindReplaceDialog from './PdfFindReplaceDialog';
+import PdfParagraphPanel, { type ParagraphEditState } from './PdfParagraphPanel';
 import PdfObjectEditPanel, { objectKey, type InsertSettings, type ObjectEditState } from './PdfObjectEditPanel';
 import { insertPdfContent, type InsertKind } from './content/objectEdit';
 import { addPdfDrawing } from './pdfMarkup';
@@ -413,7 +414,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   useEffect(() => { setOverflowOpen(false); }, [masterTab]);
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
   // MAL-001 / 002 / 009 / 010 dialogs; focus returns to the control that opened them.
-  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup'|'text-edit'|'find'|'objects';
+  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup'|'text-edit'|'find'|'objects'|'paragraphs';
+  const [paragraphState,setParagraphState]=useState<ParagraphEditState|null>(null);
   // MAL-014/015/016: objects on the page being edited, and the insert tool.
   const [objectState,setObjectState]=useState<ObjectEditState|null>(null);
   const [insertSettings,setInsertSettings]=useState<InsertSettings>({tool:null,stroke:'#1f3a5f',fill:null,lineWidth:2,text:'',fontSize:14});
@@ -2672,6 +2674,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'rectangle',label:shapeOverlay.mode==='highlight'?'Highlight rectangle':'Outline rectangle',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage)},
       {id:'configure-edit',label:'Edit settings',enabled:true,run:configureProperties},
       {id:'text-edit',label:'Edit text…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('text-edit')},
+      {id:'paragraphs',label:'Paragraphs…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('paragraphs')},
       {id:'edit-objects',label:'Edit objects…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('objects')},
       {id:'find-replace',label:'Find and replace…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('find')},
       {id:'stamp-header-footer',label:'Header & footer…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('header-footer')},
@@ -2971,7 +2974,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             if(applied)setActionNotice(summary);
             return applied;
           }}/>}
-      {(toolDialog==='properties'||toolDialog==='navigation'||toolDialog==='compress'||toolDialog==='markup'||toolDialog==='text-edit'||toolDialog==='find'||toolDialog==='objects')&&sourceBytes&&(()=>{
+      {(toolDialog==='properties'||toolDialog==='navigation'||toolDialog==='compress'||toolDialog==='markup'||toolDialog==='text-edit'||toolDialog==='find'||toolDialog==='objects'||toolDialog==='paragraphs')&&sourceBytes&&(()=>{
         const apply=async (label:string,operation:(latest:Uint8Array)=>Promise<{bytes:Uint8Array;summary:string}>)=>{
           let summary='';
           const applied=await mutate(label,async latest=>{const edited=await operation(latest);summary=edited.summary;return edited.bytes;},currentPage);
@@ -2980,6 +2983,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         };
         if(toolDialog==='text-edit')return <PdfTextEditPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} pageNumber={currentPage} viewRotation={rotation} busy={mutating}
           state={textEditState} onState={setTextEditState} onApply={apply} onClose={()=>{setTextEditState(null);closeToolDialog();}}/>;
+        if(toolDialog==='paragraphs')return <PdfParagraphPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} pageNumber={currentPage} viewRotation={rotation} busy={mutating}
+          state={paragraphState} onState={setParagraphState} onApply={apply} onClose={()=>{setParagraphState(null);closeToolDialog();}}/>;
         if(toolDialog==='objects')return <PdfObjectEditPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} pageNumber={currentPage} viewRotation={rotation} busy={mutating}
           state={objectState} onState={setObjectState} insert={insertSettings} onInsert={setInsertSettings} onApply={apply}
           onClose={()=>{setObjectState(null);setInsertSettings(current=>({...current,tool:null}));closeToolDialog();}}/>;
@@ -3533,7 +3538,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               onReplacePage={()=>beginReplacePage(page)}
               onCropPage={()=>startCropOnPage(page)}
               editingBusy={mutating||loading}
-              textRuns={toolDialog==='objects'&&objectState&&objectState.pageNumber===page&&!insertSettings.tool?{labelPrefix:'Select object',
+              textRuns={toolDialog==='paragraphs'&&paragraphState&&paragraphState.pageNumber===page?{labelPrefix:'Edit paragraph',
+                targets:paragraphState.paragraphs.map(p=>({id:p.id,text:p.text.replace(/\n/g,' '),editable:p.editable,shown:p.shown})),
+                selected:paragraphState.selected,onSelect:id=>setParagraphState(current=>current?{...current,selected:id}:current)}
+              :toolDialog==='objects'&&objectState&&objectState.pageNumber===page&&!insertSettings.tool?{labelPrefix:'Select object',
                 targets:objectState.objects.map((o,index)=>({id:index,text:o.label,editable:true,shown:o.shown})),
                 selected:objectState.objects.findIndex(o=>objectKey(o)===objectState.selected),
                 onSelect:index=>setObjectState(current=>current?{...current,selected:objectKey(current.objects[index])}:current)}

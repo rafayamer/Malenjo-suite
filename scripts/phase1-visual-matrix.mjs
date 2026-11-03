@@ -155,7 +155,7 @@ async function main() {
         ['Document properties…', 'Document properties', '14-properties-dialog', 'Edit'], ['Navigation…', 'Navigation', '15-navigation-dialog', 'Edit'],
         ['Compress…', 'Compress PDF', '16-compress-dialog', 'Optimize'], ['Markup tools…', 'Markup tools', '17-markup-panel', 'Review', '.pdf-markup-panel'],
         ['Edit text…', 'Edit text', '18-edit-text-panel', 'Edit', '.pdf-markup-panel'], ['Find and replace…', 'Find and replace', '19-find-replace-dialog', 'Edit'],
-        ['Edit objects…', 'Edit objects', '20-edit-objects-panel', 'Edit', '.pdf-markup-panel']]) {
+        ['Edit objects…', 'Edit objects', '20-edit-objects-panel', 'Edit', '.pdf-markup-panel'], ['Paragraphs…', 'Paragraphs', '21-paragraphs-panel', 'Edit', '.pdf-markup-panel']]) {
         await organizeAction(label, tabName);
         await page.getByRole('dialog', { name: dialogName }).waitFor();
         await capture(shot, scope);

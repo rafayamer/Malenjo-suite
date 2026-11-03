@@ -34,6 +34,7 @@ export const VERIFIED_EVIDENCE_SCRIPTS = [
   'scripts/pdf-phase2-markup-acceptance.mjs',
   'scripts/pdf-phase2-textedit-acceptance.mjs',
   'scripts/pdf-phase2-objects-acceptance.mjs',
+  'scripts/pdf-phase2-paragraph-acceptance.mjs',
 ] as const;
 
 export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Object.freeze([
@@ -174,6 +175,17 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     id: 'MAL-016', workspaceTab: 'Edit',
     guidance: 'Choose Edit objects…, pick Text, Rectangle, Ellipse, Line or Arrow under Insert, set colour, fill, width and text, and drag on the page. Inserted items become part of the page and can be edited again.',
     evidence: ['MAL-016 insert text and shapes as page content, then edit the inserted text'],
+  },
+  {
+    id: 'MAL-012', workspaceTab: 'Edit',
+    guidance: 'Choose Paragraphs…, click a paragraph on the page, change its text and alignment (left, centre, right, justify), size, line height and spacing, then Apply. Text reflows inside the paragraph\'s width; text that would not fit is refused unless you allow it to grow.',
+    evidence: ['MAL-012 rewrite a paragraph: reflow inside its width, centred, other text untouched',
+      'MAL-012 overflow is detected, and growing is an explicit choice'],
+  },
+  {
+    id: 'MAL-013', workspaceTab: 'Edit',
+    guidance: 'In Paragraphs…, the detected font (and whether it is embedded or a subset) is shown. Change size, weight (font), letter and word spacing and line height; any font substitution is reported. Save settings as a named style and apply it to other paragraphs.',
+    evidence: ['MAL-013 font detection, substitution warning, size, weight, spacing, line height and reusable styles'],
   },
 ]);
 
