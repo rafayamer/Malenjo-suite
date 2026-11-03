@@ -112,8 +112,13 @@ async function tab(name){await panel().locator('[aria-label="PDF task categories
 async function action(tabName,label){
   await tab(tabName);
   const button=panel().locator(`.pdf-task-toolbar button[aria-label="${label}"]`).first();
-  if(!(await button.isVisible().catch(()=>false))){const more=panel().locator('.pdf-task-overflow summary');if(await more.count())await more.click();}
-  await button.click({timeout:10000});
+  if(!(await button.isVisible().catch(()=>false))){
+    // Open the overflow only when it is closed (clicking an open summary closes it).
+    const more=panel().locator('.pdf-task-overflow');
+    if(await more.count()&&!(await more.evaluate(node=>node.open)))await more.locator('summary').click();
+  }
+  await button.scrollIntoViewIfNeeded({timeout:10000});
+  await button.click({timeout:15000});
 }
 async function notice(pattern,timeout=20000){
   await page.waitForFunction(source=>[...document.querySelectorAll('.pdf-notice,[role="alert"],[role="status"]')]
@@ -208,13 +213,13 @@ async function main(){
     const parts=[];for(const d of downloads){const f=join(mkdtempSync(join(tmpdir(),'malenjo-phase2-')),'p.pdf');await d.saveAs(f);parts.push(order(await pageTexts(readFileSync(f))));}
     expect(parts[0]==='1,2'&&parts[1]==='3,4,5,6','parts '+JSON.stringify(parts));});
   await check('insert PDF after page 2',async()=>{await openPdf(await simpleDoc());await selectPage(2);
-    const chooser=page.waitForEvent('filechooser',{timeout:10000});await action('Organize','Insert PDF…');
-    await (await chooser).setFiles({name:'insert.pdf',mimeType:'application/pdf',buffer:Buffer.from(await simpleDoc(2,'INS page '))});await notice(/insert/);
+    const [chooser]=await Promise.all([page.waitForEvent('filechooser',{timeout:20000}),action('Organize','Insert PDF…')]);
+    await chooser.setFiles({name:'insert.pdf',mimeType:'application/pdf',buffer:Buffer.from(await simpleDoc(2,'INS page '))});await notice(/insert/);
     const texts=(await pageTexts(await save())).map(t=>t.replace('QA page ','Q').replace('INS page ','I')).join();
     expect(texts==='Q1,Q2,I1,I2,Q3,Q4,Q5,Q6','order '+texts);});
   await check('append PDF',async()=>{await openPdf(await simpleDoc(3));
-    const chooser=page.waitForEvent('filechooser',{timeout:10000});await action('Organize','Append PDF…');
-    await (await chooser).setFiles({name:'append.pdf',mimeType:'application/pdf',buffer:Buffer.from(await simpleDoc(2,'APP page '))});await notice(/append/);
+    const [chooser]=await Promise.all([page.waitForEvent('filechooser',{timeout:20000}),action('Organize','Append PDF…')]);
+    await chooser.setFiles({name:'append.pdf',mimeType:'application/pdf',buffer:Buffer.from(await simpleDoc(2,'APP page '))});await notice(/append/);
     const texts=(await pageTexts(await save())).map(t=>t.replace('QA page ','Q').replace('APP page ','A')).join();
     expect(texts==='Q1,Q2,Q3,A1,A2','order '+texts);});
   await check('permanent page rotation',async()=>{await openPdf(await simpleDoc());await selectPage(3);
