@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { FilePlus2, Plus, X } from 'lucide-react';
-import { exportPdfPartsZip } from './api';
+import { exportPdfPartsZip, pdfPartsZipLimit } from './api';
 import { describeBatchRule, runPdfBatch, type PdfBatchEntry, type PdfBatchRule } from './pdfBatch';
 import type { NupPerSheet } from './pdfNup';
 import { describePdfError } from './pdfUserErrors';
@@ -58,7 +58,7 @@ export default function PdfBatchDialog({ domIdPrefix, currentName, busy, getByte
       const latest = getBytes();
       const sources = files.map(({ name, bytes, current }) => ({ name, bytes: current ? latest : bytes }))
         .filter((source): source is { name: string; bytes: Uint8Array } => !!source.bytes);
-      const result = await runPdfBatch(sources, rules);
+      const result = await runPdfBatch(sources, rules, pdfPartsZipLimit());
       setResults(result.entries);
       const saved = await exportPdfPartsZip('MALENJO-batch.zip', result.archive);
       onDone(saved

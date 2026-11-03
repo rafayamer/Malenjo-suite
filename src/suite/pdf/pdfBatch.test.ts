@@ -79,6 +79,8 @@ describe('runPdfBatch (MAL-010)', () => {
     expect(result.entries[0].message).toMatch(/remove every page/);
     await expect(runPdfBatch([], [{ kind: 'remove', pages: '1' }])).rejects.toThrow(/at least one PDF/);
     await expect(runPdfBatch([{ name: 'x.pdf', bytes: await labelled('X', 1) }], [])).rejects.toThrow(/at least one rule/);
+    await expect(runPdfBatch([{ name: 'a.pdf', bytes: await labelled('A', 3) }, { name: 'b.pdf', bytes: await labelled('B', 3) }],
+      [{ kind: 'rotate', pages: 'all', angle: 90 }], 64 * 1024 + 1500)).rejects.toThrow(/would exceed/);
     expect(batchPages('all', 3)).toEqual([1, 2, 3]);
     expect(batchPages('3, 1-2, 2', 3)).toEqual([1, 2, 3]);
   });

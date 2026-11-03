@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRef, StandardFonts } from 'pdf-lib';
+import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFRef, PDFString, StandardFonts } from 'pdf-lib';
 import { mergePdfs } from './pdfMerge';
 import { addPdfOutlineTreeEntry, listPdfOutlineTree } from './pdfOutlineTree';
 
@@ -92,6 +92,34 @@ describe('mergePdfs (MAL-001)', () => {
     const plainDoc = await PDFDocument.load(plain.bytes);
     expect(plainDoc.getTitle()).toBeUndefined();
     expect((await texts(plain.bytes)).length).toBe(3);
+  });
+
+  it('resolves named link and bookmark destinations (name tree and /Dests) onto merged pages', async () => {
+    const pdf = await PDFDocument.load(await sourceDoc('N', 3));
+    const ctx = pdf.context;
+    const dest = (page: number) => ctx.obj([pdf.getPage(page - 1).ref, PDFName.of('Fit')]);
+    // String-named destination in the /Names /Dests tree (nested under Kids), and a /Dests name.
+    const leaf = ctx.register(ctx.obj({ Names: [PDFString.of('chapter-3'), dest(3)], Limits: [PDFString.of('chapter-3'), PDFString.of('chapter-3')] }));
+    pdf.catalog.set(PDFName.of('Names'), ctx.obj({ Dests: ctx.obj({ Kids: [leaf] }) }));
+    pdf.catalog.set(PDFName.of('Dests'), ctx.obj({ intro: ctx.obj({ D: dest(2) }) }));
+    const link = ctx.register(ctx.obj({ Type: 'Annot', Subtype: 'Link', Rect: [10, 10, 100, 40],
+      A: ctx.obj({ S: 'GoTo', D: PDFString.of('chapter-3') }) }));
+    pdf.getPage(0).node.set(PDFName.of('Annots'), ctx.obj([link]));
+    const outlines = ctx.obj({ Type: 'Outlines' });
+    const outlinesRef = ctx.register(outlines);
+    const item = ctx.register(ctx.obj({ Title: PDFHexString.fromText('Intro'), Parent: outlinesRef, Dest: PDFName.of('intro') }));
+    outlines.set(PDFName.of('First'), item); outlines.set(PDFName.of('Last'), item);
+    pdf.catalog.set(PDFName.of('Outlines'), outlinesRef);
+    const named = await pdf.save();
+
+    const result = await mergePdfs([{ name: 'first.pdf', bytes: await sourceDoc('F', 2) }, { name: 'named.pdf', bytes: named }],
+      { bookmarks: 'keep', metadata: 'none' });
+    expect(result.retargetedBookmarks).toBe(0);
+    const merged = await PDFDocument.load(result.bytes);
+    const annot = merged.context.lookup(merged.getPage(2).node.lookup(PDFName.of('Annots'), PDFArray).get(0), PDFDict);
+    const target = annot.lookup(PDFName.of('A'), PDFDict).lookup(PDFName.of('D'), PDFArray).get(0) as PDFRef;
+    expect(merged.getPages().findIndex((page) => page.ref.toString() === target.toString())).toBe(4);
+    expect((await listPdfOutlineTree(result.bytes)).map((e) => [e.title, e.pageNumber])).toEqual([['Intro', 4]]);
   });
 
   it('refuses fewer than two files and explains encrypted or invalid inputs', async () => {

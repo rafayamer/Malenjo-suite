@@ -11,6 +11,23 @@ import { refusesSignedOrInteractive } from './splitByPageCount';
 export const PDF_RANGE_SPLIT_MAX_PARTS = 200;
 export const PDF_SIZE_SPLIT_MAX_PAGES = 500;
 export const PDF_SIZE_SPLIT_MAX_INPUT_BYTES = 128 * 1024 * 1024;
+/** Default cumulative output budget; callers pass a smaller one (the desktop writer's) when needed. */
+export const PDF_SPLIT_PARTS_MAX_OUTPUT_BYTES = 256 * 1024 * 1024;
+
+/** Tracks retained output and refuses before a split grows past its budget. */
+function outputBudget(maxBytes: number) {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1024 || maxBytes > PDF_SPLIT_PARTS_MAX_OUTPUT_BYTES) {
+    throw new Error('Split output budget must be between 1 KB and 256 MB.');
+  }
+  let used = 0;
+  return (data: Uint8Array) => {
+    used += data.length + 128; // per-entry ZIP header allowance
+    if (used > maxBytes) {
+      throw new Error(`The split parts would exceed ${Math.round(maxBytes / (1024 * 1024))} MB together. Use fewer or non-overlapping ranges, or split a smaller document.`);
+    }
+    return data;
+  };
+}
 
 export interface PdfSplitPart { filename: string; pages: number[]; bytes: number }
 export interface PdfSplitResult { archive: Uint8Array; parts: PdfSplitPart[]; sourcePageCount: number }
@@ -65,11 +82,13 @@ function archive(parts: { pages: number[]; data: Uint8Array }[]): { archive: Uin
   return { archive: zipSync(entries, { level: 0 }), parts: listed };
 }
 
-export async function splitPdfByRanges(bytes: Uint8Array, rangeText: string): Promise<PdfSplitResult> {
+export async function splitPdfByRanges(bytes: Uint8Array, rangeText: string,
+  maxOutputBytes = PDF_SPLIT_PARTS_MAX_OUTPUT_BYTES): Promise<PdfSplitResult> {
+  const retain = outputBudget(maxOutputBytes);
   const source = await loadForSplit(bytes);
   const groups = parsePageRanges(rangeText, source.getPageCount());
   const parts = [];
-  for (const pages of groups) parts.push({ pages, data: await partBytes(source, pages) });
+  for (const pages of groups) parts.push({ pages, data: retain(await partBytes(source, pages)) });
   return { ...archive(parts), sourcePageCount: source.getPageCount() };
 }
 
@@ -81,15 +100,19 @@ export async function splitPdfByRanges(bytes: Uint8Array, rangeText: string): Pr
  * so parts may be smaller than strictly necessary but never over the limit).
  * A page that alone exceeds the limit becomes its own part and is reported.
  */
-export async function splitPdfBySize(bytes: Uint8Array, maxBytes: number): Promise<PdfSizeSplitResult> {
+export async function splitPdfBySize(bytes: Uint8Array, maxBytes: number,
+  maxOutputBytes = PDF_SPLIT_PARTS_MAX_OUTPUT_BYTES): Promise<PdfSizeSplitResult> {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 10 * 1024) throw new Error('Choose a size limit of at least 10 KB.');
+  // Single-page measurements and the saved parts each stay within the budget.
+  const measure = outputBudget(maxOutputBytes);
+  const retain = outputBudget(maxOutputBytes);
   if (bytes.length > PDF_SIZE_SPLIT_MAX_INPUT_BYTES) throw new Error('Size-based splitting accepts PDFs up to 128 MB.');
   const source = await loadForSplit(bytes);
   const pageCount = source.getPageCount();
   if (pageCount > PDF_SIZE_SPLIT_MAX_PAGES) throw new Error(`Size-based splitting supports up to ${PDF_SIZE_SPLIT_MAX_PAGES} pages.`);
 
   const alone: Uint8Array[] = [];
-  for (let page = 1; page <= pageCount; page++) alone.push(await partBytes(source, [page]));
+  for (let page = 1; page <= pageCount; page++) alone.push(measure(await partBytes(source, [page])));
   const oversizedPages = alone.flatMap((data, index) => data.length > maxBytes ? [index + 1] : []);
 
   // Greedy packing by single-page sizes; oversized pages stand alone.
@@ -112,7 +135,7 @@ export async function splitPdfBySize(bytes: Uint8Array, maxBytes: number): Promi
   while (pending.length) {
     const pages = pending.shift()!;
     const data = pages.length === 1 ? alone[pages[0] - 1] : await partBytes(source, pages);
-    if (data.length <= maxBytes || pages.length === 1) { parts.push({ pages, data }); continue; }
+    if (data.length <= maxBytes || pages.length === 1) { parts.push({ pages, data: retain(data) }); continue; }
     const middle = Math.ceil(pages.length / 2);
     pending.unshift(pages.slice(0, middle), pages.slice(middle));
   }

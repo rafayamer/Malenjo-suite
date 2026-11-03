@@ -70,4 +70,15 @@ describe('split modes (MAL-002)', () => {
     await expect(splitPdfBySize(source, 100)).rejects.toThrow(/at least 10 KB/);
     await expect(splitPdfByRanges(new TextEncoder().encode('%PDF-nope'), '1')).rejects.toThrow(/could not be split/);
   });
+
+  it('refuses before retaining more output than the budget (repeated ranges, desktop limit)', async () => {
+    const source = await numberedDoc(3, [1, 2, 3]);
+    const one = (await splitPdfByRanges(source, '1-3')).parts[0].bytes;
+    // 50 copies of the whole document cannot fit a budget of ~3 copies.
+    const repeated = Array.from({ length: 50 }, () => '1-3').join(',');
+    await expect(splitPdfByRanges(source, repeated, one * 3)).rejects.toThrow(/would exceed/);
+    await expect(splitPdfBySize(source, 10 * 1024, 2048)).rejects.toThrow(/would exceed/);
+    await expect(splitPdfByRanges(source, '1', 10)).rejects.toThrow(/budget must be between/);
+    expect((await splitPdfByRanges(source, '1-3,1-3', one * 3)).parts).toHaveLength(2);
+  });
 });

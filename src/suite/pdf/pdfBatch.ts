@@ -118,13 +118,22 @@ export function batchManifestCsv(entries: PdfBatchEntry[]): string {
   return [columns.join(','), ...entries.map((entry) => columns.map((column) => csvCell(entry[column])).join(','))].join('\r\n') + '\r\n';
 }
 
-export async function runPdfBatch(sources: { name: string; bytes: Uint8Array }[], rules: PdfBatchRule[]): Promise<PdfBatchResult> {
+/**
+ * maxOutputBytes bounds the retained results (the desktop writer saves 32 MB;
+ * browser downloads 256 MB); the batch is refused as soon as it would exceed it.
+ */
+export async function runPdfBatch(sources: { name: string; bytes: Uint8Array }[], rules: PdfBatchRule[],
+  maxOutputBytes = PDF_BATCH_MAX_TOTAL_BYTES): Promise<PdfBatchResult> {
   if (!sources.length) throw new Error('Choose at least one PDF.');
   if (sources.length > PDF_BATCH_MAX_FILES) throw new Error(`Batch supports up to ${PDF_BATCH_MAX_FILES} files.`);
   if (sources.reduce((sum, source) => sum + source.bytes.length, 0) > PDF_BATCH_MAX_TOTAL_BYTES) throw new Error('Batch supports up to 256 MB of input.');
   if (!rules.length) throw new Error('Add at least one rule.');
   if (rules.length > PDF_BATCH_MAX_RULES) throw new Error(`Batch supports up to ${PDF_BATCH_MAX_RULES} rules.`);
 
+  if (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes < 1024 || maxOutputBytes > PDF_BATCH_MAX_TOTAL_BYTES) {
+    throw new Error('Batch output budget must be between 1 KB and 256 MB.');
+  }
+  let retained = 64 * 1024; // room for the manifests
   const files: Record<string, Uint8Array> = {};
   const used = new Set<string>();
   const entries: PdfBatchEntry[] = [];
@@ -133,10 +142,15 @@ export async function runPdfBatch(sources: { name: string; bytes: Uint8Array }[]
     const base = { source: source.name, inputBytes: source.bytes.length, inputSha256 };
     try {
       const result = await applyRules(source.bytes, rules);
+      retained += result.bytes.length + 256;
+      if (retained > maxOutputBytes) {
+        throw Object.assign(new Error(`The batch results would exceed ${Math.round(maxOutputBytes / (1024 * 1024))} MB together. Run fewer files at once.`), { budget: true });
+      }
       const output = outputName(source.name, used);
       files[output] = result.bytes;
       entries.push({ ...base, output, status: 'ok', message: '', inputPages: result.inputPages, outputPages: result.outputPages, outputBytes: result.bytes.length, outputSha256: await sha256Hex(result.bytes) });
     } catch (error) {
+      if (error instanceof Error && 'budget' in error) throw error;
       entries.push({ ...base, output: null, status: 'failed', message: error instanceof Error ? error.message : String(error), inputPages: null, outputPages: null, outputBytes: null, outputSha256: null });
     }
   }
