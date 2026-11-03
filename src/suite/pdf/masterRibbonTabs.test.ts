@@ -40,10 +40,10 @@ describe('Master v2 PDF-first ribbon contract', () => {
     expect(LEGACY_TOOL_REQUIREMENTS).toHaveLength(15);
     for(const command of PDF_COMMANDS){
       expect(exact).toContain(command.category);
-      // Only adapter-verified requirements are release-ready, and none runs
-      // without a document.
-      if(command.status==='RELEASE_READY')expect(command.requiresDocument).toBe(true);
-      expect(command.isAvailable({permissions:[]})).toBe(false);
+      // Only adapter-verified requirements are release-ready; without a
+      // document, only those that need no source document are available.
+      expect(command.isAvailable({permissions:[]}))
+        .toBe(command.status==='RELEASE_READY'&&!command.requiresDocument);
       expect(command.tooltip.length).toBeGreaterThan(20);
     }
   });

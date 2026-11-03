@@ -26,9 +26,22 @@ export interface VerifiedCommandBinding {
 export const VERIFIED_EVIDENCE_SCRIPTS = [
   'scripts/pdf-phase2-browser-acceptance.mjs',
   'scripts/pdf-ui-browser-smoke.mjs',
+  'scripts/pdf-phase2-organize-acceptance.mjs',
 ] as const;
 
 export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Object.freeze([
+  {
+    id: 'MAL-001', workspaceTab: 'Organize',
+    guidance: 'Choose Merge PDFs…, add files, set their order with the arrows or by dragging, choose how bookmarks and document information are kept, then Merge. Undo restores the original.',
+    evidence: ['MAL-001 merge files in a user-chosen order, keeping pages, annotations, bookmarks and metadata',
+      'MAL-001 merge options: bookmarks grouped by file, no document information'],
+  },
+  {
+    id: 'MAL-002', workspaceTab: 'Organize',
+    guidance: 'Choose Split… and split by page ranges, every N pages, top-level bookmarks or a maximum file size. Parts are saved as one ZIP; the open document is unchanged.',
+    evidence: ['MAL-002 split by page ranges', 'MAL-002 split every N pages', 'MAL-002 split by top-level bookmarks',
+      'MAL-002 split by size threshold'],
+  },
   {
     id: 'MAL-003', workspaceTab: 'Organize',
     guidance: 'Drag a page thumbnail to its new position, or use Move earlier / Move later. Undo and Redo restore the order.',

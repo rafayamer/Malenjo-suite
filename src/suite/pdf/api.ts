@@ -117,3 +117,29 @@ export async function exportPdfPageImagesZip(name:string,bytes:Uint8Array):Promi
   if(!/\.zip$/i.test(destination))throw new Error('PNG archive destination must use .zip.');
   return invoke<boolean>('write_pdf_tool_output',{destination,bytes:Array.from(copy)});
 }
+
+/** Save split PDF parts as one ZIP archive (MAL-002). */
+export async function exportPdfPartsZip(name:string,bytes:Uint8Array):Promise<boolean>{
+  if(!/\.zip$/i.test(name))throw new Error('Split PDF archives must use .zip.');
+  if(!bytes.length||bytes.length>256*1024*1024)throw new Error('Split archive is empty or exceeds the 256 MB output safety limit.');
+  if(bytes.length<4||bytes[0]!==0x50||bytes[1]!==0x4b||bytes[2]!==0x03||bytes[3]!==0x04){
+    throw new Error('Split archive does not have a valid ZIP signature.');
+  }
+  const copy=Uint8Array.from(bytes);
+  if(!isTauri()){
+    const blob=new Blob([copy.buffer],{type:'application/zip'});
+    const url=URL.createObjectURL(blob);
+    const anchor=document.createElement('a');
+    anchor.href=url;
+    anchor.download=name;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(()=>URL.revokeObjectURL(url),60_000);
+    return true;
+  }
+  const destination=await save({title:'Export split PDF parts',defaultPath:name,filters:[{name:'ZIP archive',extensions:['zip']}]});
+  if(!destination)return false;
+  if(!/\.zip$/i.test(destination))throw new Error('Split archive destination must use .zip.');
+  return invoke<boolean>('write_pdf_tool_output',{destination,bytes:Array.from(copy)});
+}
