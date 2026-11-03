@@ -71,7 +71,12 @@ export async function startHarness(prefix) {
   async function action(tabName, label) {
     await tab(tabName);
     const button = panel().locator(`.pdf-task-toolbar button[aria-label="${label}"]`).first();
-    if (!(await button.isVisible().catch(() => false))) { const more = panel().locator('.pdf-task-overflow summary'); if (await more.count()) await more.click(); }
+    // Open More only when closed, and retry while the toolbar settles after a document loads.
+    for (let attempt = 0; attempt < 4 && !(await button.isVisible().catch(() => false)); attempt++) {
+      const more = panel().locator('.pdf-task-overflow').first();
+      if (await more.count() && !(await more.evaluate((node) => node.open).catch(() => true))) await more.locator('summary').click();
+      await button.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {});
+    }
     await button.click({ timeout: 10000 });
   }
   async function notice(pattern, timeout = 30000) {

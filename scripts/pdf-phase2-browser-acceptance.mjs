@@ -112,10 +112,13 @@ async function tab(name){await panel().locator('[aria-label="PDF task categories
 async function action(tabName,label){
   await tab(tabName);
   const button=panel().locator(`.pdf-task-toolbar button[aria-label="${label}"]`).first();
-  if(!(await button.isVisible().catch(()=>false))){
-    // Open the overflow only when it is closed (clicking an open summary closes it).
-    const more=panel().locator('.pdf-task-overflow');
-    if(await more.count()&&!(await more.evaluate(node=>node.open)))await more.locator('summary').click();
+  // The toolbar can re-lay out while a new document settles (e.g. a scrollbar
+  // appears on Windows), which may move the command or close the More menu.
+  // Open More only when it is closed, and retry until the command is visible.
+  for(let attempt=0;attempt<4&&!(await button.isVisible().catch(()=>false));attempt++){
+    const more=panel().locator('.pdf-task-overflow').first();
+    if(await more.count()&&!(await more.evaluate(node=>node.open).catch(()=>true)))await more.locator('summary').click();
+    await button.waitFor({state:'visible',timeout:3000}).catch(()=>{});
   }
   await button.click({timeout:15000});
 }
