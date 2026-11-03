@@ -14,6 +14,7 @@ import {
   PDFArray, PDFBool, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber, PDFRef, PDFString, StandardFonts,
 } from 'pdf-lib';
 import { parseColor, viewerFrame, type Matrix } from './pdfStamp';
+import { refuseSignedPdf } from './pdfSignatureGuard';
 
 export type TextMarkupKind = 'Highlight' | 'Underline' | 'StrikeOut' | 'Squiggly';
 export type DrawingKind = 'Ink' | 'Line' | 'Arrow' | 'Square' | 'Circle' | 'FreeText' | 'Callout' | 'Note';
@@ -147,11 +148,15 @@ async function buildAppearance(pdf: PDFDocument, pageNumber: number, dict: PDFDi
   }
   const box = numbers(dict.lookupMaybe(N('RD'), PDFArray));
   const [bx1, by1, bx2, by2] = [rect[0] + (box[0] ?? 0), rect[1] + (box[3] ?? 0), rect[2] - (box[2] ?? 0), rect[3] - (box[1] ?? 0)];
-  if (kind === 'Square') ops.push(`${bx1 + width / 2} ${by1 + width / 2} ${bx2 - bx1 - width} ${by2 - by1 - width} re S`);
+  // An interior colour (/IC) fills rectangles and ellipses under their outline.
+  const interior = numbers(dict.lookupMaybe(N('IC'), PDFArray));
+  const fillShape = interior.length >= 3 ? `${interior.slice(0, 3).join(' ')} rg ` : '';
+  const shapePaint = fillShape ? 'B' : 'S';
+  if (kind === 'Square') ops.push(`${fillShape}${bx1 + width / 2} ${by1 + width / 2} ${bx2 - bx1 - width} ${by2 - by1 - width} re ${shapePaint}`);
   if (kind === 'Circle') {
     const cx = (bx1 + bx2) / 2, cy = (by1 + by2) / 2, rx = (bx2 - bx1 - width) / 2, ry = (by2 - by1 - width) / 2, k = 0.5523;
-    ops.push(`${cx + rx} ${cy} m ${cx + rx} ${cy + ry * k} ${cx + rx * k} ${cy + ry} ${cx} ${cy + ry} c ${cx - rx * k} ${cy + ry} ${cx - rx} ${cy + ry * k} ${cx - rx} ${cy} c`
-      + ` ${cx - rx} ${cy - ry * k} ${cx - rx * k} ${cy - ry} ${cx} ${cy - ry} c ${cx + rx * k} ${cy - ry} ${cx + rx} ${cy - ry * k} ${cx + rx} ${cy} c S`);
+    ops.push(`${fillShape}${cx + rx} ${cy} m ${cx + rx} ${cy + ry * k} ${cx + rx * k} ${cy + ry} ${cx} ${cy + ry} c ${cx - rx * k} ${cy + ry} ${cx - rx} ${cy + ry * k} ${cx - rx} ${cy} c`
+      + ` ${cx - rx} ${cy - ry * k} ${cx - rx * k} ${cy - ry} ${cx} ${cy - ry} c ${cx + rx * k} ${cy - ry} ${cx + rx} ${cy - ry * k} ${cx + rx} ${cy} c ${shapePaint}`);
   }
   if (kind === 'Text') {
     // A note icon: a folded square with lines.
@@ -220,6 +225,7 @@ export async function addPdfTextMarkup(bytes: Uint8Array, spec: TextMarkupSpec):
   checkStyle(spec.style);
   if (!spec.rects.length || spec.rects.length > 500) throw new Error('Select some text on the page first.');
   const pdf = await load(bytes);
+  refuseSignedPdf(pdf, 'changing its markup');
   pageFor(pdf, spec.pageNumber);
   const map = mapper(pdf, spec.pageNumber, spec.viewRotation);
   const quads: number[] = []; const all: [number, number][] = [];
@@ -245,6 +251,7 @@ export async function addPdfTextMarkup(bytes: Uint8Array, spec: TextMarkupSpec):
 export async function addPdfDrawing(bytes: Uint8Array, spec: DrawingSpec): Promise<Uint8Array> {
   checkStyle(spec.style);
   const pdf = await load(bytes);
+  refuseSignedPdf(pdf, 'changing its markup');
   pageFor(pdf, spec.pageNumber);
   const map = mapper(pdf, spec.pageNumber, spec.viewRotation);
   const points = (spec.points ?? []).map((p) => map.point(p));
@@ -338,6 +345,7 @@ function locate(pdf: PDFDocument, target: MarkupTarget): { annots: PDFArray; dic
 /** Changes colour, opacity, line width or text, and rebuilds the appearance. */
 export async function updatePdfMarkupAnnotation(bytes: Uint8Array, target: MarkupTarget, change: { color?: string; opacity?: number; width?: number; contents?: string }): Promise<Uint8Array> {
   const pdf = await load(bytes);
+  refuseSignedPdf(pdf, 'changing its markup');
   const { dict } = locate(pdf, target);
   if (change.color !== undefined) dict.set(N('C'), pdf.context.obj(parseColor(change.color)));
   if (change.opacity !== undefined) { if (!(change.opacity >= 0.1 && change.opacity <= 1)) throw new Error('Opacity must be between 10% and 100%.'); dict.set(N('CA'), PDFNumber.of(change.opacity)); }
@@ -364,6 +372,7 @@ export async function updatePdfMarkupAnnotation(bytes: Uint8Array, target: Marku
 /** Removes the markup and its pop-up and replies on the same page. */
 export async function deletePdfMarkupAnnotation(bytes: Uint8Array, target: MarkupTarget): Promise<Uint8Array> {
   const pdf = await load(bytes);
+  refuseSignedPdf(pdf, 'changing its markup');
   const { annots, dict } = locate(pdf, target);
   const own = annots.get(target.index);
   const popup = dict.get(N('Popup'));
