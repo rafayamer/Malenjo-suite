@@ -35,8 +35,11 @@ function selectionByPage(domIdPrefix: string): { pageNumber: number; rects: Show
   for (const rect of Array.from(selection.getRangeAt(0).getClientRects())) {
     if (rect.width < 0.5 || rect.height < 0.5) continue;
     const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
-    const page = pages.find(({ box }) => cx >= box.left && cx <= box.right && cy >= box.top && cy <= box.bottom);
-    if (!page) continue;
+    // The page containing the rectangle's centre, or failing that the nearest page within a few pixels
+    // (text-layer boxes can extend slightly past the canvas edge).
+    const distance = ({ box }: { box: DOMRect }) => Math.hypot(Math.max(box.left - cx, 0, cx - box.right), Math.max(box.top - cy, 0, cy - box.bottom));
+    const page = [...pages].sort((a, b) => distance(a) - distance(b))[0];
+    if (!page || distance(page) > 8) continue;
     const { box } = page;
     const clamp = (v: number) => Math.max(0, Math.min(1, v));
     const x = clamp((rect.left - box.left) / box.width), y = clamp((rect.top - box.top) / box.height);
@@ -102,7 +105,7 @@ export default function PdfMarkupPanel({ domIdPrefix, bytes, viewRotation, busy,
     </fieldset>
     <fieldset>
       <legend>Style</legend>
-      <label>Colour<input aria-label="Markup colour" type="color" value={style.color} onChange={(e) => set({ style: { ...style, color: e.target.value } })}/></label>
+      <label><span>Colour</span><input aria-label="Markup colour" type="color" value={style.color} onChange={(e) => set({ style: { ...style, color: e.target.value } })}/></label>
       <label>Opacity (%)<input aria-label="Markup opacity percent" type="number" min={10} max={100} value={Math.round(style.opacity * 100)} onChange={(e) => set({ style: { ...style, opacity: Number(e.target.value) / 100 } })}/></label>
       <label>Line width (pt)<input aria-label="Markup line width" type="number" min={0.5} max={24} step={0.5} value={style.width} onChange={(e) => set({ style: { ...style, width: Number(e.target.value) } })}/></label>
       <label>Text for text box, callout or note<textarea aria-label="Markup text" rows={2} value={settings.text} onChange={(e) => set({ text: e.target.value })}/></label>

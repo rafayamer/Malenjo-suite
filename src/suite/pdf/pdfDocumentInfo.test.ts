@@ -54,7 +54,12 @@ describe('document information (MAL-021)', () => {
     expect((await readPdfDocumentInfo(noXmp)).xmp).toBeNull();
     expect((await readPdfDocumentInfo(noXmp)).custom).toEqual([]);
 
+    // The old packet is gone from the file, not just disconnected.
+    const latin = (b: Uint8Array) => new TextDecoder('latin1').decode(b);
+    expect(latin(synced)).toContain('Q3 report &amp; plan');
+    expect(latin(noXmp)).not.toContain('x:xmpmeta');
     const cleared = await clearPdfDocumentInfo(synced);
+    expect(latin(cleared)).not.toContain('x:xmpmeta');
     const info = await readPdfDocumentInfo(cleared);
     expect(Object.values(info.standard).every((value) => value === '')).toBe(true);
     expect([info.custom, info.xmp, info.creationDate, info.modDate]).toEqual([[], null, null, null]);

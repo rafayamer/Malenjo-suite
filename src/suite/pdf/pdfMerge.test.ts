@@ -122,6 +122,19 @@ describe('mergePdfs (MAL-001)', () => {
     expect((await listPdfOutlineTree(result.bytes)).map((e) => [e.title, e.pageNumber])).toEqual([['Intro', 4]]);
   });
 
+  it('resolves a named destination stored as an indirect dictionary with an indirect /D array, and survives a cycle', async () => {
+    const pdf = await PDFDocument.load(await sourceDoc('N', 3));
+    const ctx = pdf.context;
+    const array = ctx.register(ctx.obj([pdf.getPage(2).ref, PDFName.of('Fit')]));
+    const holder = ctx.register(ctx.obj({ D: array }));
+    pdf.catalog.set(PDFName.of('Names'), ctx.obj({ Dests: ctx.obj({ Names: [PDFString.of('deep'), holder, PDFString.of('loop'), PDFString.of('loop')] }) }));
+    const link = (dest: unknown) => ctx.register(ctx.obj({ Type: 'Annot', Subtype: 'Link', Rect: [0, 0, 50, 20], Dest: dest as never }));
+    pdf.getPage(0).node.set(PDFName.of('Annots'), ctx.obj([link(PDFString.of('deep')), link(PDFString.of('loop'))]));
+    const result = await mergePdfs([{ name: 'a.pdf', bytes: await sourceDoc('A', 1) }, { name: 'n.pdf', bytes: await pdf.save() }], { bookmarks: 'none', metadata: 'none' });
+    const merged = await PDFDocument.load(result.bytes);
+    expect(linkTargetIndex(merged, 1)).toBe(3); // n.pdf page 3 is merged page 4
+  });
+
   it('refuses fewer than two files and explains encrypted or invalid inputs', async () => {
     const a = await sourceDoc('A', 1);
     await expect(mergePdfs([{ name: 'a.pdf', bytes: a }], { bookmarks: 'keep', metadata: 'first' }))

@@ -19,7 +19,8 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAEElEQVR
 
 /** Decoded content streams of a page, in drawing order. */
 function contentStreams(pdf, index) {
-  const raw = pdf.getPage(index).node.get(PDFName.of('Contents'));
+  const direct = pdf.getPage(index).node.get(PDFName.of('Contents'));
+  const raw = direct && pdf.context.lookup(direct) instanceof PDFArray ? pdf.context.lookup(direct) : direct;
   const refs = raw instanceof PDFArray ? raw.asArray() : [raw];
   return refs.map((ref) => new TextDecoder().decode(decodePDFRawStream(pdf.context.lookup(ref)).decode()));
 }

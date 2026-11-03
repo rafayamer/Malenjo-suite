@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PDFDocument, StandardFonts, degrees } from 'pdf-lib';
+import { PDFDocument, PDFName, StandardFonts, degrees } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { nupCell, nupGrid, nupPdf, type NupOptions } from './pdfNup';
 
@@ -83,6 +83,25 @@ describe('nupPdf (MAL-009)', () => {
     expect(rotated[0].text).toBe('Label1');
     // A page rotated 90° clockwise shows its text running downward, not across.
     expect(Math.abs(rotated[0].x - plain[0].x) + Math.abs(rotated[0].y - plain[0].y)).toBeGreaterThan(20);
+  });
+
+  it('places only the visible crop box and keeps a slot for blank pages', async () => {
+    const pdf = await PDFDocument.load(await labelled(2));
+    // Page 1: crop to the top-left quarter, which holds the label at (60, 700).
+    pdf.getPage(0).setCropBox(0, 396, 306, 396);
+    const blank = pdf.insertPage(1, [612, 792]);
+    blank.node.delete(PDFName.of('Contents'));
+    const result = await nupPdf(await pdf.save(), { ...base, perSheet: 4 });
+    expect(result.sheets).toBe(1);
+    const labels = await sheetLabels(result.bytes);
+    expect(labels.map((l) => l.text)).toEqual(['Label1', 'Label2']);
+    // Cells are 283.5 x 373.5. The 306 x 396 crop scales by 0.9265, so its label (x 60) lands at 18 + 60 * 0.9265 = 73.6;
+    // the uncropped 612 x 792 page scales by 0.4632, so its label lands at 18 + 60 * 0.4632 = 45.8.
+    const [cropped, plain] = labels;
+    expect(cropped.x).toBeCloseTo(73.6, 0);
+    expect(plain.x).toBeCloseTo(45.8, 0);
+    // Label2 is page 3, in slot 3 (second row, first column).
+    expect(plain.y).toBeLessThan(cropped.y - 100);
   });
 
   it('rejects impossible layouts and invalid input in plain language', async () => {

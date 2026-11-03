@@ -90,6 +90,29 @@ describe('split modes (MAL-002)', () => {
     expect(first.getPage(1).node.lookup(PDFName.of('Annots'), PDFArray).size()).toBe(0);
   });
 
+  it('keeps links that share one GoTo action or one annotation dictionary', async () => {
+    const pdf = await PDFDocument.load(await numberedDoc(5));
+    const ctx = pdf.context;
+    // Pages 1 and 3 share one indirect GoTo action to page 5; page 2 and 4 share one annotation to page 4.
+    const action = ctx.register(ctx.obj({ S: 'GoTo', D: ctx.obj([pdf.getPage(4).ref, PDFName.of('Fit')]) }));
+    const shared = ctx.register(ctx.obj({ Type: 'Annot', Subtype: 'Link', Rect: [0, 0, 50, 20], Dest: ctx.obj([pdf.getPage(3).ref, PDFName.of('Fit')]) }));
+    for (const index of [0, 2]) pdf.getPage(index).node.set(PDFName.of('Annots'), ctx.obj([ctx.register(ctx.obj({ Type: 'Annot', Subtype: 'Link', Rect: [0, 0, 50, 20], A: action }))]));
+    for (const index of [1, 3]) pdf.getPage(index).node.set(PDFName.of('Annots'), ctx.obj([shared]));
+    const result = await splitPdfByRanges(await pdf.save(), '3-5, 2-4');
+    const files = unzipSync(result.archive);
+    const pageOf = (doc: PDFDocument, index: number, viaAction: boolean) => {
+      const annot = doc.context.lookup(doc.getPage(index).node.lookup(PDFName.of('Annots'), PDFArray).get(0), PDFDict);
+      const dest = viaAction ? annot.lookup(PDFName.of('A'), PDFDict).lookup(PDFName.of('D'), PDFArray) : annot.lookup(PDFName.of('Dest'), PDFArray);
+      const ref = dest.get(0) as PDFRef;
+      return doc.getPages().findIndex((page) => page.ref.toString() === ref.toString()) + 1;
+    };
+    const first = await PDFDocument.load(files[result.parts[0].filename]);
+    expect(pageOf(first, 0, true)).toBe(3); // source page 3 -> page 5, which is part page 3
+    const second = await PDFDocument.load(files[result.parts[1].filename]);
+    expect(pageOf(second, 0, false)).toBe(3); // source page 2 -> page 4 = part page 3
+    expect(pageOf(second, 2, false)).toBe(3); // source page 4 -> page 4 = part page 3
+  });
+
   it('refuses before retaining more output than the budget (repeated ranges, desktop limit)', async () => {
     const source = await numberedDoc(3, [1, 2, 3]);
     const one = (await splitPdfByRanges(source, '1-3')).parts[0].bytes;

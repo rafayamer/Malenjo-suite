@@ -63,7 +63,7 @@ export async function nupPdf(bytes: Uint8Array, options: NupOptions): Promise<Nu
   } catch { throw new Error('This file could not be arranged because it is encrypted, invalid or damaged.'); }
   if (count > PDF_NUP_MAX_PAGES) throw new Error(`N-up supports up to ${PDF_NUP_MAX_PAGES} pages.`);
 
-  const firstSize = source.getPage(0).getSize();
+  const firstSize = source.getPage(0).getCropBox();
   let [sheetWidth, sheetHeight] = options.sheet === 'source' ? [firstSize.width, firstSize.height] : SHEETS[options.sheet];
   if ((options.orientation === 'landscape') !== (sheetWidth > sheetHeight)) [sheetWidth, sheetHeight] = [sheetHeight, sheetWidth];
 
@@ -74,7 +74,17 @@ export async function nupPdf(bytes: Uint8Array, options: NupOptions): Promise<Nu
 
   const output = await PDFDocument.create();
   const sourcePages = source.getPages();
-  const embedded = await output.embedPages(sourcePages);
+  // Only the visible area (crop box) is placed. Blank pages without content keep their slot but draw nothing.
+  const crops = sourcePages.map((page) => page.getCropBox());
+  const hasContent = sourcePages.map((page) => {
+    const contents = page.node.get(PDFName.of('Contents'));
+    const resolved = contents ? source.context.lookup(contents) : undefined;
+    return !!resolved && !(resolved instanceof PDFArray && resolved.size() === 0);
+  });
+  const drawable = sourcePages.flatMap((page, i) => hasContent[i] ? [i] : []);
+  const embeddedList = await output.embedPages(drawable.map((i) => sourcePages[i]),
+    drawable.map((i) => ({ left: crops[i].x, bottom: crops[i].y, right: crops[i].x + crops[i].width, top: crops[i].y + crops[i].height })));
+  const embedded = new Map(drawable.map((i, k) => [i, embeddedList[k]]));
   let droppedAnnotations = 0;
   let sheet = output.addPage([sheetWidth, sheetHeight]);
   let sheets = 1;
@@ -89,8 +99,8 @@ export async function nupPdf(bytes: Uint8Array, options: NupOptions): Promise<Nu
     const cellY = cellTop - cellHeight;
 
     const rotation = ((sourcePage.getRotation().angle % 360) + 360) % 360;
-    const page = embedded[index];
-    const [width, height] = [page.width, page.height];
+    const page = embedded.get(index);
+    const [width, height] = [crops[index].width, crops[index].height];
     const [shownWidth, shownHeight] = rotation % 180 === 90 ? [height, width] : [width, height];
     const scale = Math.min(cellWidth / shownWidth, cellHeight / shownHeight);
     const boxX = cellX + (cellWidth - shownWidth * scale) / 2;
@@ -99,7 +109,7 @@ export async function nupPdf(bytes: Uint8Array, options: NupOptions): Promise<Nu
     const origin = rotation === 90 ? [boxX, boxY + width * scale]
       : rotation === 180 ? [boxX + width * scale, boxY + height * scale]
         : rotation === 270 ? [boxX + height * scale, boxY] : [boxX, boxY];
-    sheet.drawPage(page, { x: origin[0], y: origin[1], xScale: scale, yScale: scale, rotate: degrees(-rotation) });
+    if (page) sheet.drawPage(page, { x: origin[0], y: origin[1], xScale: scale, yScale: scale, rotate: degrees(-rotation) });
     if (options.borders) {
       sheet.drawRectangle({ x: boxX, y: boxY, width: shownWidth * scale, height: shownHeight * scale, borderColor: rgb(0.6, 0.6, 0.6), borderWidth: 0.5 });
     }

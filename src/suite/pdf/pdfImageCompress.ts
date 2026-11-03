@@ -3,7 +3,7 @@
  * profile, then the lossless passes of MAL-024, with a size report.
  *
  * Eligible images: 8-bit DeviceGray/DeviceRGB (or ICCBased with 1 or 3
- * components) stored as JPEG (DCTDecode) or Flate without predictors, with no
+ * components) that are not used as another image's mask, stored as JPEG (DCTDecode) or Flate without predictors, with no
  * Decode array, colour-key mask or image mask. Soft masks are kept. Everything
  * else is left untouched and counted, so nothing is silently degraded.
  *
@@ -82,11 +82,17 @@ export async function compressPdfImages(bytes: Uint8Array, options: ImageCompres
   const used = usage(pdf);
   const largest = pdf.getPages().reduce((max, page) => ({ w: Math.max(max.w, page.getWidth() / 72), h: Math.max(max.h, page.getHeight() / 72) }), { w: 0, h: 0 });
   let images = 0, downsampled = 0, recompressed = 0, skipped = 0;
+  // Images used as another image's soft mask or mask must stay single-channel and lossless.
+  const masks = new Set<string>();
+  for (const [, object] of pdf.context.enumerateIndirectObjects()) {
+    if (!(object instanceof PDFRawStream)) continue;
+    for (const key of ['SMask', 'Mask']) { const ref = object.dict.get(PDFName.of(key)); if (ref instanceof PDFRef) masks.add(ref.toString()); }
+  }
 
   for (const [ref, object] of pdf.context.enumerateIndirectObjects()) {
     if (!(object instanceof PDFRawStream) || object.dict.get(PDFName.of('Subtype'))?.toString() !== '/Image') continue;
     const dict = object.dict;
-    if (dict.get(PDFName.of('ImageMask'))?.toString() === 'true') continue; // stencil masks are not pictures
+    if (dict.get(PDFName.of('ImageMask'))?.toString() === 'true' || masks.has(ref.toString())) continue; // masks are not pictures
     images++;
     const width = dict.lookupMaybe(PDFName.of('Width'), PDFNumber)?.asNumber() ?? 0;
     const height = dict.lookupMaybe(PDFName.of('Height'), PDFNumber)?.asNumber() ?? 0;
@@ -99,7 +105,8 @@ export async function compressPdfImages(bytes: Uint8Array, options: ImageCompres
     if (!eligible) { skipped++; continue; }
 
     const page = used.get(ref.toString()) ?? largest;
-    const dpi = Math.max(width / page.w, height / page.h);
+    // The lower axis resolution bounds the reduction, so neither axis falls below the target.
+    const dpi = Math.min(width / page.w, height / page.h);
     const scale = dpi > options.dpi * 1.1 ? options.dpi / dpi : 1;
     const target = { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)), quality: options.quality };
     const input: RecodeInput = filterName === '/DCTDecode'

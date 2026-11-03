@@ -2405,7 +2405,7 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 .pdf-markup-panel h2{margin:0;font-size:16px}
 .pdf-markup-panel fieldset{border:1px solid var(--ml-border);border-radius:8px;padding:6px 8px;display:flex;flex-wrap:wrap;gap:6px}
 .pdf-markup-panel legend{font-size:12px;color:var(--ml-muted);padding:0 4px}
-.pdf-markup-panel label{display:flex;flex-direction:column;gap:3px;font-size:12px}
+.pdf-markup-panel label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ml-text)}
 .pdf-markup-panel p{margin:0;font-size:12px;color:var(--ml-muted)}
 .pdf-markup-panel button{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--ml-border);background:var(--ml-control);color:var(--ml-text);border-radius:7px;padding:5px 9px;cursor:pointer;font-size:12px}
 .pdf-markup-panel button[aria-pressed=true]{background:#1269cc;border-color:#3d9fff;color:#fff}

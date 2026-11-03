@@ -69,12 +69,15 @@ function namedDestination(pdf: PDFDocument, name: PDFObject): PDFObject | undefi
 }
 
 /** Resolves a destination value (array, reference, name or string) to its explicit array. */
-function resolveDestination(pdf: PDFDocument, value: PDFObject | undefined): PDFArray | undefined {
-  for (let hops = 0; value && hops < 4; hops++) {
-    if (value instanceof PDFRef) { value = pdf.context.lookup(value); continue; }
+export function resolveDestination(pdf: PDFDocument, value: PDFObject | undefined): PDFArray | undefined {
+  // Follow references, /D dictionaries and names until an array is reached, with cycle protection.
+  const seen = new Set<PDFObject>();
+  while (value && !seen.has(value) && seen.size < 32) {
     if (value instanceof PDFArray) return value;
-    if (value instanceof PDFDict) { value = value.get(PDFName.of('D')); continue; }
-    value = namedDestination(pdf, value);
+    seen.add(value);
+    if (value instanceof PDFRef) value = pdf.context.lookup(value);
+    else if (value instanceof PDFDict) value = value.get(PDFName.of('D'));
+    else value = namedDestination(pdf, value);
   }
   return undefined;
 }
@@ -105,29 +108,53 @@ export function annotationsOf(pdf: PDFDocument, pageIndex: number): (PDFDict | u
 /**
  * Replace internal link page refs with page indexes so copying does not clone
  * target pages. Also used by the range and size splits (pdfSplitModes).
+ *
+ * All targets are resolved first, then each link gets its own annotation
+ * dictionary and its own GoTo action, so links that share an annotation or
+ * action dictionary (or a named destination) never overwrite each other.
  */
 export function detachLinkTargets(pdf: PDFDocument): LinkTarget[] {
   const pageIndex = new Map(pdf.getPages().map((page, index) => [page.ref.toString(), index]));
-  const found: LinkTarget[] = [];
+  const found: (LinkTarget & { rest: PDFObject[] })[] = [];
   pdf.getPages().forEach((_, page) => {
     annotationsOf(pdf, page).forEach((annot, index) => {
       if (!annot) return;
       for (const viaAction of [false, true]) {
         const slot = destinationSlot(annot, viaAction);
         if (!slot) continue;
-        // Named destinations are resolved here: the merged file has no /Dests for them.
+        // Named destinations are resolved here: the output file has no /Dests for them.
         const resolved = resolveDestination(pdf, slot.holder.get(slot.key));
         const first = resolved?.get(0);
         const target = first instanceof PDFRef ? pageIndex.get(first.toString()) : undefined;
-        if (resolved && target !== undefined) {
-          // A fresh array per link: shared or named destination arrays are never mutated.
-          slot.holder.set(slot.key, pdf.context.obj([PDFNumber.of(target), ...resolved.asArray().slice(1)]));
-          found.push({ page, annot: index, viaAction, target });
-        }
+        if (resolved && target !== undefined) found.push({ page, annot: index, viaAction, target, rest: resolved.asArray().slice(1) });
       }
     });
   });
-  return found;
+  const owned = new Set<PDFDict>();
+  const unique = new Map<string, PDFDict>();
+  for (const link of found) {
+    const key = `${link.page}:${link.annot}`;
+    let annot = unique.get(key);
+    if (!annot) {
+      annot = annotationsOf(pdf, link.page)[link.annot]!;
+      if (owned.has(annot)) {
+        // The same annotation dictionary appears on another page or slot: give this slot its own copy.
+        annot = annot.clone(pdf.context);
+        pdf.getPage(link.page).node.lookup(PDFName.of('Annots'), PDFArray).set(link.annot, pdf.context.register(annot));
+      }
+      owned.add(annot);
+      unique.set(key, annot);
+    }
+    const destination = pdf.context.obj([PDFNumber.of(link.target), ...link.rest]);
+    if (link.viaAction) {
+      const action = annot.lookup(PDFName.of('A'), PDFDict).clone(pdf.context);
+      action.set(PDFName.of('D'), destination);
+      annot.set(PDFName.of('A'), action);
+    } else {
+      annot.set(PDFName.of('Dest'), destination);
+    }
+  }
+  return found.map(({ page, annot, viaAction, target }) => ({ page, annot, viaAction, target }));
 }
 
 function reattachLinkTargets(output: PDFDocument, firstPageIndex: number, links: LinkTarget[]): void {

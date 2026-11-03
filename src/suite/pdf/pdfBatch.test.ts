@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { strFromU8, unzipSync } from 'fflate';
-import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { PDFDict, PDFDocument, PDFHexString, PDFName, StandardFonts } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { batchManifestCsv, batchPages, runPdfBatch, type PdfBatchEntry } from './pdfBatch';
 
@@ -72,6 +72,34 @@ describe('runPdfBatch (MAL-010)', () => {
       [{ kind: 'rotate', pages: 'all', angle: 180 }],
     );
     expect(again.entries.map((entry) => entry.output)).toEqual(['results/report.pdf', 'results/report (2).pdf']);
+  });
+
+  it('drops bookmarks and links that point to removed pages, keeping the rest', async () => {
+    const pdf = await PDFDocument.load(await labelled('N', 4));
+    const ctx = pdf.context;
+    const dest = (n: number) => ctx.obj([pdf.getPage(n - 1).ref, PDFName.of('Fit')]);
+    // Bookmarks: "Two" (page 2, removed) has a child "Three" (page 3, kept); "Four" (page 4).
+    const rootRef = ctx.register(ctx.obj({ Type: 'Outlines' }));
+    const [two, three, four] = ['Two', 'Three', 'Four'].map((title, i) => ctx.register(ctx.obj({ Title: PDFHexString.fromText(title), Dest: dest(i + 2) })));
+    const d = (ref: typeof two) => ctx.lookup(ref, PDFDict);
+    d(two).set(PDFName.of('Parent'), rootRef); d(two).set(PDFName.of('Next'), four); d(two).set(PDFName.of('First'), three); d(two).set(PDFName.of('Last'), three); d(two).set(PDFName.of('Count'), ctx.obj(1));
+    d(three).set(PDFName.of('Parent'), two);
+    d(four).set(PDFName.of('Parent'), rootRef); d(four).set(PDFName.of('Prev'), two);
+    const root = ctx.lookup(rootRef, PDFDict); root.set(PDFName.of('First'), two); root.set(PDFName.of('Last'), four);
+    pdf.catalog.set(PDFName.of('Outlines'), rootRef);
+    const link = (n: number) => ctx.register(ctx.obj({ Type: 'Annot', Subtype: 'Link', Rect: [0, 0, 10, 10], Dest: dest(n) }));
+    pdf.getPage(0).node.set(PDFName.of('Annots'), ctx.obj([link(2), link(4)]));
+    const result = await runPdfBatch([{ name: 'nav.pdf', bytes: await pdf.save() }], [{ kind: 'remove', pages: '2' }]);
+    expect(result.entries[0].message).toBe('Removed 1 bookmark(s) and 1 link(s) that pointed to removed pages.');
+    const out = unzipSync(result.archive)['results/nav.pdf'];
+    const loading = getDocument({ data: out.slice(), useSystemFonts: true });
+    const doc = await loading.promise;
+    const outline = await doc.getOutline();
+    expect(outline.map((o) => o.title)).toEqual(['Three', 'Four']);
+    const annots = await (await doc.getPage(1)).getAnnotations();
+    expect(annots.filter((a) => a.subtype === 'Link')).toHaveLength(1);
+    expect(await doc.getPageIndex((annots[0].dest as { num: number; gen: number }[])[0])).toBe(2);
+    await loading.destroy();
   });
 
   it('refuses removing every page and validates input', async () => {

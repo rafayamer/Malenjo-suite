@@ -15,7 +15,8 @@ const { page, expect, check, action, notice, openPdf, save } = h;
 /** Decoded page content streams (what is drawn), for an equivalence check. */
 function drawn(pdf) {
   return pdf.getPages().map((p) => {
-    const raw = p.node.get(PDFName.of('Contents'));
+    const direct = p.node.get(PDFName.of('Contents'));
+    const raw = direct && pdf.context.lookup(direct) instanceof PDFArray ? pdf.context.lookup(direct) : direct;
     const refs = raw instanceof PDFArray ? raw.asArray() : [raw];
     return refs.map((ref) => Buffer.from(decodePDFRawStream(pdf.context.lookup(ref)).decode()).toString('latin1')).join('\n');
   });
