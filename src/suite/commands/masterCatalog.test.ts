@@ -52,7 +52,7 @@ describe('Master Specification v2.0 PDF capability contract',()=>{
   });
 
   it('never fabricates success for unverified PDF editing, conversions, redaction or AI',async()=>{
-    for(const id of ['MAL-026','MAL-027','MAL-037','MAL-038','MAL-039','MAL-063','MAL-071','MAL-090']){
+    for(const id of ['MAL-026','MAL-027','MAL-035','MAL-040','MAL-051','MAL-063','MAL-071','MAL-090']){
       const cmd=PDF_COMMAND_BY_ID.get(id)!;
       await expect(cmd.execute(ctx)).rejects.toBeInstanceOf(PDFCommandUnavailableError);
     }
@@ -70,9 +70,9 @@ describe('Master Specification v2.0 PDF capability contract',()=>{
     }
     // Without a workspace to open, nothing is executable.
     expect(pdfCatalogDiscovery().every(item=>item.disabled)).toBe(true);
-    const a=filterCommandPaletteItems(items,'MAL-037');
-    expect(a[0].id).toBe('MAL-037');
-    expect(a[0].label).toBe('PDF to Word');
+    const a=filterCommandPaletteItems(items,'MAL-040');
+    expect(a[0].id).toBe('MAL-040');
+    expect(a[0].label).toBe('PDF to PDF/A');
     expect(filterCommandPaletteItems(items,'MAL-035').some(x=>x.id==='MAL-035')).toBe(true);
     expect(filterCommandPaletteItems(items,'watermark').length).toBeGreaterThanOrEqual(2);
     expect(filterCommandPaletteItems(items,'')).toHaveLength(0);

@@ -37,6 +37,7 @@ export const VERIFIED_EVIDENCE_SCRIPTS = [
   'scripts/pdf-phase2-paragraph-acceptance.mjs',
   'scripts/pdf-phase3-forms-acceptance.mjs',
   'scripts/pdf-phase3-export-acceptance.mjs',
+  'scripts/pdf-phase3-office-acceptance.mjs',
 ] as const;
 
 export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Object.freeze([
@@ -254,6 +255,26 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     id: 'MAL-044', workspaceTab: 'Convert',
     guidance: 'Choose Export as… → Plain text, pick the reading order (top to bottom, columns, or as stored) and what goes between pages (blank line, nothing, page break or a custom line with {n} and {total}). Text added by OCR is included.',
     evidence: ['MAL-044 plain text with reading order, page separators and OCR text'],
+  },
+  {
+    id: 'MAL-037', workspaceTab: 'Convert',
+    guidance: 'Choose Convert to Office… with a Word profile. Headings, paragraphs (size, bold, italic), bulleted and numbered lists, tables and images are rebuilt from the page layout; the DOCX opens in the Word result editor for review, correction and Export copy. The fidelity report lists what could not be reconstructed.',
+    evidence: ['MAL-037 PDF to Word: headings, lists, table and image, opened in the Word editor, edited and exported'],
+  },
+  {
+    id: 'MAL-038', workspaceTab: 'Convert',
+    guidance: 'Choose Convert to Office… with the PowerPoint profile. Each page becomes a slide at the page size with editable text boxes where the text is, pictures, and rectangles from the page drawing; the PPTX opens in the presentation result editor.',
+    evidence: ['MAL-038 PDF to PowerPoint: a slide per page with positioned text boxes, picture and shape, edited and exported'],
+  },
+  {
+    id: 'MAL-039', workspaceTab: 'Convert',
+    guidance: 'Choose Convert to Office… with the Excel tables profile. Each table found becomes a sheet with numbers stored as numbers; pages without a table get their lines as rows. The XLSX opens in the spreadsheet result editor.',
+    evidence: ['MAL-039 PDF to Excel: the table as a sheet with numbers, edited and exported'],
+  },
+  {
+    id: 'MAL-045', workspaceTab: 'Convert',
+    guidance: 'In Convert to Office…, pick or save a conversion profile (format, pages, images), add several PDFs and Convert. Every file gets a fidelity report (failures say why); successful DOCX, XLSX and PPTX results open in their result editors, and all results download as a ZIP with a JSON report.',
+    evidence: ['MAL-045 batch conversion with a saved profile, a fidelity report per file and results opened in editors'],
   },
 ]);
 

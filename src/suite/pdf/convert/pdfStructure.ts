@@ -14,8 +14,8 @@ export interface ImageItem { x: number; y: number; width: number; height: number
 export interface PageStructure { pageNumber: number; width: number; height: number; items: TextItem[]; images: ImageItem[]; skippedImages: number }
 export interface Line { y: number; size: number; cells: { x: number; end: number; text: string; bold: boolean; italic: boolean }[]; text: string; x: number; end: number }
 export type Block =
-  | { kind: 'heading'; level: number; text: string; y: number }
-  | { kind: 'paragraph'; text: string; y: number; bold: boolean; italic: boolean }
+  | { kind: 'heading'; level: number; text: string; y: number; size: number }
+  | { kind: 'paragraph'; text: string; y: number; bold: boolean; italic: boolean; size: number }
   | { kind: 'list'; ordered: boolean; items: string[]; y: number }
   | { kind: 'table'; rows: string[][]; y: number }
   | { kind: 'image'; index: number; y: number };
@@ -148,9 +148,9 @@ export function blocksOf(page: PageStructure, headingSizes?: number[]): Block[] 
     else {
       const text = joinLines(current.lines.map((l) => l.text));
       const bold = current.lines.every((l) => l.cells.every((c) => c.bold)), italic = current.lines.every((l) => l.cells.every((c) => c.italic));
-      if (first.size >= body * 1.15 && current.lines.length <= 3) blocks.push({ kind: 'heading', level: Math.min(6, level(first.size)), text, y: first.y });
-      else if (bold && current.lines.length === 1 && text.length < 90 && !/[.:;,]$/.test(text)) blocks.push({ kind: 'heading', level: Math.min(6, sizes.length + 1), text, y: first.y });
-      else blocks.push({ kind: 'paragraph', text, y: first.y, bold, italic });
+      if (first.size >= body * 1.15 && current.lines.length <= 3) blocks.push({ kind: 'heading', level: Math.min(6, level(first.size)), text, y: first.y, size: first.size });
+      else if (bold && current.lines.length === 1 && text.length < 90 && !/[.:;,]$/.test(text)) blocks.push({ kind: 'heading', level: Math.min(6, sizes.length + 1), text, y: first.y, size: first.size });
+      else blocks.push({ kind: 'paragraph', text, y: first.y, bold, italic, size: first.size });
     }
     current = null;
   };

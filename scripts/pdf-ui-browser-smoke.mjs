@@ -85,10 +85,10 @@ async function main(){
   requireEvidence(await gallery.locator('[data-mal-command]').count()===90,
     'Home ribbon cannot discover all 90 features');
   const gallerySearch=gallery.getByRole('searchbox',{name:'Find a PDF tool'});
-  await gallerySearch.fill('MAL-037');
+  await gallerySearch.fill('MAL-040');
   requireEvidence(await gallery.locator('[data-mal-command]').count()===1 &&
-    await gallery.locator('[data-mal-command="MAL-037"] button').isDisabled(),
-    'PDF to Word missing or executable without converter');
+    await gallery.locator('[data-mal-command="MAL-040"] button').isDisabled(),
+    'PDF to PDF/A missing or executable without a validator');
   await gallerySearch.fill('');
   await page.keyboard.press('Escape');
   requireEvidence(await gallery.count()===0 && await galleryTrigger.evaluate(el=>document.activeElement===el),
@@ -207,7 +207,7 @@ async function main(){
   // Master Specification v2.0: every MAL-001..MAL-090 is discoverable,
   // but searching it must NEVER make an unverified feature executable.
   for(const [requirement,label] of [['MAL-027','OCR PDF'],
-      ['MAL-037','PDF to Word'],['MAL-063','Permanent PDF Redaction'],
+      ['MAL-040','PDF to PDF/A'],['MAL-063','Permanent PDF Redaction'],
       ['MAL-071','AI Chat with PDF'],['MAL-090','Advanced Print and Prepress']]){
     await commandSearch.fill(requirement);
     const option=page.getByRole('option',{name:new RegExp(label)}).first();
@@ -632,7 +632,7 @@ async function main(){
     .evaluateAll(nodes=>nodes.map(node=>node.getAttribute('class')??''));
   requireEvidence(masterGlyphs.length===90&&new Set(masterGlyphs).size===90,
     'All 90 master PDF requirements must use UNIQUE, purpose-matched pictograms');
-  for(const id of ['MAL-027','MAL-037','MAL-063','MAL-090']){
+  for(const id of ['MAL-027','MAL-040','MAL-063','MAL-090']){
     requireEvidence(await featureGrid.locator('[data-mal-command="'+id+'"] button').isDisabled(),
       'Master v2 unverified command became executable: '+id);
   }

@@ -136,6 +136,7 @@ import PdfParagraphPanel, { type ParagraphEditState } from './PdfParagraphPanel'
 import PdfFormDesignerPanel, { NEW_DESIGN_DRAFT, designSpec, type FormDesignState } from './PdfFormDesignerPanel';
 import PdfFormFillPanel from './PdfFormFillPanel';
 import PdfExportDialog, { type ExportRegion } from './PdfExportDialog';
+import PdfOfficeConvertDialog from './PdfOfficeConvertDialog';
 import { addFormField as addDesignedFormField, moveFormWidget } from './forms/formDesign';
 import PdfObjectEditPanel, { objectKey, type InsertSettings, type ObjectEditState } from './PdfObjectEditPanel';
 import { insertPdfContent, type InsertKind } from './content/objectEdit';
@@ -177,6 +178,8 @@ interface Props {
   notice: string;
   onBackToFiles(): void;
   onOpenBrowserPdf?(file:File):void;
+  /** Opens DOCX, XLSX or PPTX conversion results as tabs in their result editors. */
+  onOpenConversionOutputs?(files:File[]):void;
   onNavigateModule?(id:ModuleId): void;
   onDirtyChange?(dirty:boolean): void;
   onSavingChange?(saving:boolean): void;
@@ -230,7 +233,7 @@ function PdfMinimalCommandIcon({label}: {label:string}) {
   return <FileText size={18} aria-hidden="true"/>;
 }
 
-export default function PdfWorkspace({ session, active, notice, onBackToFiles, onOpenBrowserPdf, onNavigateModule, onDirtyChange, onSavingChange, onViewStatusChange, registerCommands, initialPage, tabRequest}: Props) {
+export default function PdfWorkspace({ session, active, notice, onBackToFiles, onOpenBrowserPdf, onOpenConversionOutputs, onNavigateModule, onDirtyChange, onSavingChange, onViewStatusChange, registerCommands, initialPage, tabRequest}: Props) {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -418,7 +421,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   useEffect(() => { setOverflowOpen(false); }, [masterTab]);
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
   // MAL-001 / 002 / 009 / 010 dialogs; focus returns to the control that opened them.
-  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup'|'text-edit'|'find'|'objects'|'paragraphs'|'form-design'|'form-fill'|'export';
+  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup'|'text-edit'|'find'|'objects'|'paragraphs'|'form-design'|'form-fill'|'export'|'office-convert';
   const [paragraphState,setParagraphState]=useState<ParagraphEditState|null>(null);
   const [formDesign,setFormDesign]=useState<FormDesignState|null>(null);
   const [exportRegion,setExportRegion]=useState<ExportRegion|null>(null);
@@ -2694,6 +2697,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       providerAction,
     ],
     convert:[
+      {id:'convert-office',label:'Convert to Office…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('office-convert')},
       {id:'export-as',label:'Export as…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('export')},
       {id:'export-text',label:exportingText?'Extracting text '+textExportProgress+'%':'PDF to text (.txt)',enabled:!!pdf&&!mutating&&!exportingText,disabledReason:!pdf?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':exportingText?'PDF text export is running.':undefined,run:exportText},
       {id:'export-page-images',label:exportingPageImages?'PNG '+pageImageProgress+'%':'PDF pages to PNG ZIP',enabled:!!pdf&&!mutating&&!loading&&!exportingPageImages,disabledReason:!pdf?'No PDF is loaded.':exportingPageImages?'An image export is in progress.':'Wait for the current PDF operation to finish.',run:exportPageImages},
@@ -3013,6 +3017,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           ? <PdfPropertiesDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} busy={mutating} onApply={apply} onClose={closeToolDialog}/>
           : <PdfNavigationDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} pageCount={pageCount} currentPage={currentPage} busy={mutating} onApply={apply} onClose={closeToolDialog}/>;
       })()}
+      {toolDialog==='office-convert'&&sourceBytes&&<PdfOfficeConvertDialog domIdPrefix={domIdPrefix} sourceName={sourceName} getBytes={()=>currentPdfBytesRef.current}
+        busy={mutating} onOpenOutputs={onOpenConversionOutputs} onNotice={setActionNotice} onClose={closeToolDialog}/>}
       {toolDialog==='export'&&sourceBytes&&<PdfExportDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} sourceName={sourceName} pageCount={pageCount}
         currentPage={currentPage} busy={mutating} region={exportRegion} picking={exportPicking} onPickRegion={setExportPicking} onClearRegion={()=>setExportRegion(null)}
         onNotice={setActionNotice} onClose={()=>{setExportPicking(false);setExportRegion(null);closeToolDialog();}}/>}

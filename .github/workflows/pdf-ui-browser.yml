@@ -59,6 +59,8 @@ jobs:
         run: node scripts/pdf-phase3-forms-acceptance.mjs
       - name: Phase 3 export acceptance (images, transparent PNG, Markdown, HTML, SVG, plain text) with independent output decoding
         run: node scripts/pdf-phase3-export-acceptance.mjs
+      - name: Phase 3 Office conversion acceptance (Word, PowerPoint, Excel, batch with result editors) with independent package checks
+        run: node scripts/pdf-phase3-office-acceptance.mjs
       - name: Publish Phase 3 light/dark visual review screenshots
         if: success()
         uses: actions/upload-artifact@v4

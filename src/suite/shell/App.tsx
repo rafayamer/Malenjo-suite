@@ -226,6 +226,18 @@ export default function App() {
     registerBrowserFiles(supported).forEach(document=>openFromLibrary(markBrowserDocumentOpened(document)));
   }
 
+  /** DOCX, XLSX and PPTX made by a PDF conversion open as tabs in their result editors. */
+  function openConversionOutputs(files: File[]) {
+    const outputs=files.filter(file=>/\.(docx|xlsx|pptx)$/i.test(file.name));
+    let last:DocumentSession|null=null;
+    const created=registerBrowserFiles(outputs).map(document=>createDocumentSession(markBrowserDocumentOpened(document)));
+    if(!created.length)return;
+    last=created[created.length-1];
+    setSessions(current=>[...current,...created]);
+    setActiveSessionId(last.id);
+    setActive(workspaceForDocument(last.document.kind));
+  }
+
   async function openDocumentsFromPicker() {
     if (!isDesktopRuntime()) {
       browserOpenInputRef.current?.click();
@@ -720,6 +732,7 @@ export default function App() {
         notice={notice}
         onBackToFiles={() => selectModule('files')}
         onNavigateModule={(id)=>selectModule(id)}
+        onOpenConversionOutputs={openConversionOutputs}
         onDirtyChange={(dirty)=>markSessionDirty(session.id,dirty)}
         onSavingChange={(saving)=>updateSession(session.id,(current)=>markDocumentSaving(current,saving))}
         initialPage={restorePages[session.id]}
@@ -975,6 +988,7 @@ export default function App() {
                 onBackToFiles={()=>selectModule('files')}
                 onOpenBrowserPdf={(file)=>openBrowserFiles([file])}
                 onNavigateModule={(id)=>selectModule(id)}
+                onOpenConversionOutputs={openConversionOutputs}
               />
             : active === 'word' || active === 'spreadsheet' || active === 'presentation'
               ? <OfficeWorkspace
