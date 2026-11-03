@@ -55,6 +55,16 @@ describe('compressPdfImages (MAL-025)', () => {
     expect(grey).toHaveLength(1);
   });
 
+  it('leaves ICC-based images alone (their colours would need profile conversion)', async () => {
+    const pdf = await PDFDocument.load(await scanned());
+    const image = pdf.context.enumerateIndirectObjects().find(([, o]) => o instanceof PDFRawStream && o.dict.lookupMaybe(PDFName.of('Width'), PDFNumber)?.asNumber() === 1200)![1] as PDFRawStream;
+    image.dict.set(PDFName.of('ColorSpace'), pdf.context.obj([PDFName.of('ICCBased'), pdf.context.register(pdf.context.stream('profile', { N: 3 }))]));
+    let calls = 0;
+    const recoder: ImageRecoder = async (_input, target) => { calls++; return { jpeg: new Uint8Array(100), width: target.width, height: target.height, components: 3 }; };
+    const result = await compressPdfImages(await pdf.save(), { dpi: 100, quality: 0.6, recoder });
+    expect([calls, result.skipped, result.downsampled]).toEqual([0, 2, 0]);
+  });
+
   it('leaves images that are already at or below the target alone unless re-encoding clearly helps', async () => {
     const recoder: ImageRecoder = async (_input, target) => ({ jpeg: new Uint8Array(10_000_000), width: target.width, height: target.height, components: 3 });
     const result = await compressPdfImages(await scanned(), { dpi: 300, quality: 0.8, recoder });

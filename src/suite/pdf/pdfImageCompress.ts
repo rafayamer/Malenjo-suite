@@ -2,8 +2,8 @@
  * MAL-025 Advanced PDF compression: image downsampling and JPEG quality by
  * profile, then the lossless passes of MAL-024, with a size report.
  *
- * Eligible images: 8-bit DeviceGray/DeviceRGB (or ICCBased with 1 or 3
- * components) that are not used as another image's mask, stored as JPEG (DCTDecode) or Flate without predictors, with no
+ * Eligible images: 8-bit DeviceGray/DeviceRGB that are not used as another
+ * image's mask (ICC-based colour is left as is), stored as JPEG (DCTDecode) or Flate without predictors, with no
  * Decode array, colour-key mask or image mask. Soft masks are kept. Everything
  * else is left untouched and counted, so nothing is silently degraded.
  *
@@ -51,11 +51,7 @@ function colorComponents(pdf: PDFDocument, dict: PDFDict): 1 | 3 | null {
   const name = resolved?.toString();
   if (name === '/DeviceGray') return 1;
   if (name === '/DeviceRGB') return 3;
-  if (resolved instanceof PDFArray && resolved.get(0)?.toString() === '/ICCBased') {
-    const n = pdf.context.lookup(resolved.get(1));
-    const count = n instanceof PDFRawStream ? n.dict.lookupMaybe(PDFName.of('N'), PDFNumber)?.asNumber() : undefined;
-    return count === 1 ? 1 : count === 3 ? 3 : null;
-  }
+  // ICC-based images are left alone: their samples would need converting through the profile first.
   return null;
 }
 

@@ -222,9 +222,12 @@ export async function addPdfTextMarkup(bytes: Uint8Array, spec: TextMarkupSpec):
   const quads: number[] = []; const all: [number, number][] = [];
   for (const r of spec.rects) {
     if (!(r.width > 0 && r.height > 0)) continue;
-    // Shown corners: top-left, top-right, bottom-left, bottom-right.
+    // Text runs along page-space x, whatever the page or view rotation: take the selection's box in
+    // page space and order the quad along the baseline (top-left, top-right, bottom-left, bottom-right).
     const corners = [map.point({ x: r.x, y: r.y }), map.point({ x: r.x + r.width, y: r.y }), map.point({ x: r.x, y: r.y + r.height }), map.point({ x: r.x + r.width, y: r.y + r.height })];
-    corners.forEach((c) => { quads.push(r2(c[0]), r2(c[1])); all.push(c); });
+    const [x1, y1, x2, y2] = bounds(corners, 0);
+    quads.push(...[x1, y2, x2, y2, x1, y1, x2, y1].map(r2));
+    all.push(...corners);
   }
   if (!quads.length) throw new Error('Select some text on the page first.');
   const note = checkText(spec.note, 'Note', 4000);
@@ -289,6 +292,8 @@ export async function addPdfDrawing(bytes: Uint8Array, spec: DrawingSpec): Promi
     }
     default: throw new Error('Unsupported drawing.');
   }
+  // Text boxes are laid out upright for the view they were drawn in; remember it for later edits.
+  if (dict.get(N('Subtype'))?.toString() === '/FreeText') dict.set(N('MALENJO_ViewRotation'), PDFNumber.of(((spec.viewRotation % 360) + 360) % 360));
   await buildAppearance(pdf, spec.pageNumber, dict, spec.viewRotation);
   annotsOf(pdf, spec.pageNumber).push(pdf.context.register(dict));
   return save(pdf);
@@ -336,7 +341,7 @@ export async function updatePdfMarkupAnnotation(bytes: Uint8Array, target: Marku
   if (change.width !== undefined) { if (!(change.width >= 0.5 && change.width <= 24)) throw new Error('Line width must be between 0.5 and 24 points.'); dict.set(N('BS'), pdf.context.obj({ W: change.width })); }
   if (change.contents !== undefined) dict.set(N('Contents'), PDFHexString.fromText(checkText(change.contents, 'Text', 4000)));
   dict.set(N('M'), PDFString.fromDate(new Date()));
-  await buildAppearance(pdf, target.pageNumber, dict);
+  await buildAppearance(pdf, target.pageNumber, dict, dict.lookupMaybe(N('MALENJO_ViewRotation'), PDFNumber)?.asNumber() ?? 0);
   return save(pdf);
 }
 

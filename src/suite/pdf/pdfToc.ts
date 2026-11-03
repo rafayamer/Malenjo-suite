@@ -48,7 +48,11 @@ export async function generatePdfTableOfContents(bytes: Uint8Array, options: Pdf
   if (!outline.length) throw new Error('This PDF has no bookmarks to build a table of contents from. Add bookmarks first.');
   if (!usable.length) throw new Error('None of the bookmarks at the chosen levels points to a page in this PDF.');
   let ranges: PdfPageLabelRange[] | null = null;
-  try { ranges = await listPdfPageLabelRanges(bytes); } catch { ranges = null; }
+  try { ranges = await listPdfPageLabelRanges(bytes); }
+  catch {
+    // Inserting pages would shift labels we cannot rewrite (for example a /Kids number tree).
+    throw new Error('This PDF\'s page labels use a structure that cannot be updated, so contents pages were not inserted.');
+  }
 
   const pdf = await PDFDocument.load(bytes, { updateMetadata: false });
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
@@ -78,7 +82,7 @@ export async function generatePdfTableOfContents(bytes: Uint8Array, options: Pdf
     const y = top - (slot + 1) * line + (line - size) / 2;
     const page = pages[pageIndex];
     const font = entry.depth === 0 ? bold : regular;
-    const number = ranges ? labelFor(entry.pageNumber!, ranges) : String(entry.pageNumber! + tocPages);
+    const number = encodable(regular, ranges ? labelFor(entry.pageNumber!, ranges) : String(entry.pageNumber! + tocPages)).text;
     const numberWidth = regular.widthOfTextAtSize(number, size);
     const indent = MARGIN + entry.depth * size * 1.5;
     const available = width - MARGIN - numberWidth - size * 2 - indent;
