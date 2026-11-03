@@ -52,7 +52,7 @@ describe('Master Specification v2.0 PDF capability contract',()=>{
   });
 
   it('never fabricates success for unverified PDF editing, conversions, redaction or AI',async()=>{
-    for(const id of ['MAL-009','MAL-011','MAL-037','MAL-038','MAL-039','MAL-063','MAL-071','MAL-090']){
+    for(const id of ['MAL-011','MAL-012','MAL-037','MAL-038','MAL-039','MAL-063','MAL-071','MAL-090']){
       const cmd=PDF_COMMAND_BY_ID.get(id)!;
       await expect(cmd.execute(ctx)).rejects.toBeInstanceOf(PDFCommandUnavailableError);
     }

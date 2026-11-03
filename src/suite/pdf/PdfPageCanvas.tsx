@@ -6,6 +6,8 @@ import type {PdfLinkAnnotation} from './links';
 import type { PdfOptionalContentConfig } from './optionalLayers';
 import { displayPdfRotation, effectivePdfScale, type PdfFitMode } from './layout';
 import { renderBudgetFor } from './renderBudget';
+import PdfDrawOverlay, { type DrawnShape } from './PdfDrawOverlay';
+import type { DrawingKind } from './pdfMarkup';
 
 interface Props {
   document: PDFDocumentProxy;
@@ -38,6 +40,8 @@ interface Props {
   onReplacePage?():void;
   onCropPage?():void;
   editingBusy?:boolean;
+  /** MAL-055: active drawing tool; shapes are reported as fractions of the page as shown. */
+  drawTool?:{kind:DrawingKind;color:string;busy:boolean;onShape(shape:DrawnShape):void}|null;
 }
 
 export default function PdfPageCanvas({
@@ -70,6 +74,7 @@ export default function PdfPageCanvas({
   onReplacePage,
   onCropPage,
   editingBusy=false,
+  drawTool=null,
 }: Props) {
   const shellRef = useRef<HTMLDivElement>(null);
   const cropOriginRef=useRef<{x:number;y:number}|null>(null);
@@ -448,6 +453,8 @@ export default function PdfPageCanvas({
         outline:'2px dashed currentColor',boxShadow:'0 0 0 100vmax rgba(15,23,42,.35)',
       }}/>}
     </div>}
+    {drawTool&&<PdfDrawOverlay pageNumber={pageNumber} kind={drawTool.kind} color={drawTool.color} busy={drawTool.busy}
+      surface={()=>canvasRef.current} onShape={drawTool.onShape}/>}
     {showEditSelection&&<div role="group" aria-label={`Actions for PDF page ${pageNumber}`}
       className="pdf-page-inline-actions">
       <button type="button" onClick={onSelectForEdit} disabled={editingBusy}

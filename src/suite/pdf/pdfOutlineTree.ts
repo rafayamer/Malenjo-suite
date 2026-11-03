@@ -284,3 +284,48 @@ export async function deletePdfOutlineTreeEntry(
   match.items.splice(match.index,1);
   return saveOutline(source);
 }
+/** Points a bookmark at another page (fit page), replacing any earlier destination or GoTo action. */
+export async function setPdfOutlineTreeEntryPage(
+  bytes:Uint8Array,targetRef:string,pageNumber:number,
+):Promise<Uint8Array>{
+  const source=await openOutline(bytes,true);
+  const selected=find(source.nodes,targetRef);
+  if(!selected)throw new Error('Selected bookmark no longer exists.');
+  if(!Number.isSafeInteger(pageNumber)||pageNumber<1||pageNumber>source.pdf.getPageCount()){
+    throw new Error('Bookmark page is out of range.');
+  }
+  selected.dict.delete(N('A'));
+  selected.dict.set(N('Dest'),source.pdf.context.obj([source.pdf.getPage(pageNumber-1).ref,N('Fit')]));
+  return saveOutline(source);
+}
+/**
+ * in: the bookmark becomes the last child of the bookmark above it.
+ * out: the bookmark moves up one level, directly after its former parent.
+ */
+export async function nestPdfOutlineTreeEntry(
+  bytes:Uint8Array,targetRef:string,direction:'in'|'out',
+):Promise<Uint8Array>{
+  const source=await openOutline(bytes,true);
+  const match=siblings(source.nodes,targetRef);
+  if(!match)throw new Error('Selected bookmark no longer exists.');
+  const node=match.items[match.index];
+  if(direction==='in'){
+    if(match.index===0)throw new Error('There is no bookmark above this one at the same level to nest under.');
+    let depth=0,height=0;
+    walk(source.nodes,(item,d)=>{if(item.ref.toString()===targetRef)depth=d;});
+    walk(node.children,(_,d)=>{height=Math.max(height,d+1);});
+    if(depth+1+height>=PDF_OUTLINE_MAX_DEPTH)throw new Error('PDF bookmark nesting would exceed 16 levels.');
+    const parent=match.items[match.index-1];
+    match.items.splice(match.index,1);
+    parent.children.push(node);
+    parent.expanded=true;
+  }else{
+    let parent:Node|undefined;
+    walk(source.nodes,(item)=>{if(item.children.includes(node))parent=item;});
+    if(!parent)throw new Error('This bookmark is already at the top level.');
+    const outer=siblings(source.nodes,parent.ref.toString())!;
+    match.items.splice(match.index,1);
+    outer.items.splice(outer.index+1,0,node);
+  }
+  return saveOutline(source);
+}

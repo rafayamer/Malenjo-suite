@@ -137,21 +137,26 @@ async function main() {
       await page.locator('#ml-ai-assistant.is-open').waitFor({ timeout: 15000 });
       await capture('05-pdf-with-ai-drawer');
       await page.keyboard.press('Escape');
-      // Phase 2 dialogs (MAL-001 merge, MAL-002 split): layout and contrast.
+      // Phase 2 dialogs (organize and stamping tools): layout and contrast.
       const panel = page.locator('.document-session-panel.active');
-      const organizeAction = async (label) => {
-        await panel.locator('[aria-label="PDF task categories"]').getByRole('tab', { name: 'Organize', exact: true }).click();
+      const organizeAction = async (label, tabName = 'Organize') => {
+        await panel.locator('[aria-label="PDF task categories"]').getByRole('tab', { name: tabName, exact: true }).click();
         const button = panel.locator(`.pdf-task-toolbar button[aria-label="${label}"]`).first();
         if (!(await button.isVisible().catch(() => false))) {
-          const more = panel.locator('.pdf-task-overflow summary');
-          if (await more.count()) await more.click();
+          const more = panel.locator('.pdf-task-overflow');
+          if (await more.count() && !(await more.evaluate((node) => node.open))) await more.locator('summary').click();
         }
         await button.click({ timeout: 10000 });
       };
-      for (const [label, dialogName, shot] of [['Merge PDFs…', 'Merge PDFs', '06-merge-dialog'], ['Split…', 'Split PDF', '07-split-dialog']]) {
-        await organizeAction(label);
+      for (const [label, dialogName, shot, tabName, scope = '.pdf-tool-dialog'] of [['Merge PDFs…', 'Merge PDFs', '06-merge-dialog'], ['Split…', 'Split PDF', '07-split-dialog'],
+        ['Pages per sheet…', 'Pages per sheet (N-up)', '08-nup-dialog'], ['Batch organize…', 'Batch organize PDFs', '09-batch-dialog'],
+        ['Header & footer…', 'Header and footer', '10-header-footer-dialog', 'Edit'], ['Page numbers…', 'Page numbers', '11-page-numbers-dialog', 'Edit'],
+        ['Text watermark…', 'Text watermark', '12-text-watermark-dialog', 'Edit'], ['Image watermark…', 'Image watermark', '13-image-watermark-dialog', 'Edit'],
+        ['Document properties…', 'Document properties', '14-properties-dialog', 'Edit'], ['Navigation…', 'Navigation', '15-navigation-dialog', 'Edit'],
+        ['Compress…', 'Compress PDF', '16-compress-dialog', 'Optimize'], ['Markup tools…', 'Markup tools', '17-markup-panel', 'Review', '.pdf-markup-panel']]) {
+        await organizeAction(label, tabName);
         await page.getByRole('dialog', { name: dialogName }).waitFor();
-        await capture(shot, '.pdf-tool-dialog');
+        await capture(shot, scope);
         await page.keyboard.press('Escape');
         await page.getByRole('dialog', { name: dialogName }).waitFor({ state: 'hidden' });
       }
