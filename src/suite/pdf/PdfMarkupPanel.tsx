@@ -49,6 +49,13 @@ function selectionByPage(domIdPrefix: string): PageSelection[] | null {
       if (!part.collapsed) textRects.push(...Array.from(part.getClientRects()));
     }
   }
+  if (!textRects.length) {
+    // Fallback: the range's own rectangles, but only those lying inside a text-layer span's box
+    // (never a canvas or page shell).
+    const spans = Array.from(document.querySelectorAll<HTMLElement>(`[id^="${domIdPrefix}-page-"] .textLayer span`)).map((span) => span.getBoundingClientRect());
+    const inside = (r: DOMRect) => spans.some((b) => r.left >= b.left - 1 && r.right <= b.right + 1 && r.top >= b.top - 1 && r.bottom <= b.bottom + 1);
+    textRects.push(...Array.from(range.getClientRects()).filter(inside));
+  }
   for (const rect of textRects) {
     if (rect.width < 0.5 || rect.height < 0.5) continue;
     const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;

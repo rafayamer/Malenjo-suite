@@ -121,12 +121,18 @@ try {
     await openPdf(await pdf.save(), 'markup-two-pages.pdf');
     const tools = await openMarkup();
     for (const n of [1, 2]) await panel().locator(`[id$="-page-${n}"] .textLayer span`).first().waitFor({ timeout: 30000 });
-    await page.evaluate(() => {
-      const spans = [1, 2].map((n) => document.querySelector(`.document-session-panel.active [id$="-page-${n}"] .textLayer span`));
-      const range = document.createRange();
-      range.setStart(spans[0].firstChild, 0); range.setEnd(spans[1].firstChild, spans[1].textContent.length);
-      getSelection().removeAllRanges(); getSelection().addRange(range);
-    });
+    // Text layers can be re-rendered while the pages settle: set the selection, let it settle, and retry until it holds.
+    for (let attempt = 0; attempt < 6; attempt++) {
+      await page.evaluate(() => {
+        const spans = [1, 2].map((n) => document.querySelector(`.document-session-panel.active [id$="-page-${n}"] .textLayer span`));
+        const range = document.createRange();
+        range.setStart(spans[0].firstChild, 0); range.setEnd(spans[1].firstChild, spans[1].textContent.length);
+        getSelection().removeAllRanges(); getSelection().addRange(range);
+      });
+      await page.waitForTimeout(400);
+      const held = await page.evaluate(() => { const t = getSelection()?.toString() ?? ''; return t.includes('End of the first page') && t.includes('Start of the second page'); });
+      if (held) break;
+    }
     await tools.getByRole('button', { name: 'Highlight', exact: true }).click();
     await added(tools, /Added highlight on pages 1, 2/);
     const bytes = await save();

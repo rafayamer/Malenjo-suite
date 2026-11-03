@@ -9,7 +9,7 @@
  * content, which is wrapped in q/Q so its graphics state cannot leak.
  */
 import {
-  PDFArray, PDFDocument, PDFFont, PDFImage, PDFName, PDFOperator, PDFRef, StandardFonts,
+  PDFArray, PDFDict, PDFDocument, PDFFont, PDFImage, PDFName, PDFOperator, PDFRef, StandardFonts,
   beginText, concatTransformationMatrix, drawObject, endText, moveText, popGraphicsState,
   pushGraphicsState, setFillingRgbColor, setFontAndSize, setGraphicsState, showText,
 } from 'pdf-lib';
@@ -83,14 +83,27 @@ export function scopePages(scope: StampScope, pageCount: number): number[] {
 
 // ---- document plumbing ----
 async function loadForStamp(bytes: Uint8Array): Promise<PDFDocument> {
+  let pdf0: PDFDocument;
   if (!(bytes instanceof Uint8Array) || bytes.length < 5 || bytes.length > STAMP_MAX_INPUT_BYTES) {
     throw new Error('Stamping accepts PDFs up to 128 MB.');
   }
   try {
     const pdf = await PDFDocument.load(bytes, { updateMetadata: false });
     if (pdf.getPageCount() < 1) throw new Error('no pages');
-    return pdf;
+    pdf0 = pdf;
   } catch { throw new Error('This PDF could not be stamped because it is encrypted, invalid or damaged.'); }
+  refuseSignedForStamp(pdf0);
+  return pdf0;
+}
+
+/** Stamping rewrites page content, which would invalidate a signature or certification. */
+function refuseSignedForStamp(pdf: PDFDocument): void {
+  if (pdf.catalog.has(PDFName.of('Perms'))) throw new Error('This PDF is certified; stamping it would invalidate the certification.');
+  for (const [, object] of pdf.context.enumerateIndirectObjects()) {
+    if (!(object instanceof PDFDict)) continue;
+    const signedField = object.get(PDFName.of('FT'))?.toString() === '/Sig' && object.has(PDFName.of('V'));
+    if (object.has(PDFName.of('ByteRange')) || signedField) throw new Error('This PDF is signed; stamping it would invalidate the signature.');
+  }
 }
 
 /**
