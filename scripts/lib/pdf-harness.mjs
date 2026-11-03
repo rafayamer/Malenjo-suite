@@ -71,13 +71,16 @@ export async function startHarness(prefix) {
   async function action(tabName, label) {
     await tab(tabName);
     const button = panel().locator(`.pdf-task-toolbar button[aria-label="${label}"]`).first();
-    // Open More only when closed, and retry while the toolbar settles after a document loads.
-    for (let attempt = 0; attempt < 4 && !(await button.isVisible().catch(() => false)); attempt++) {
-      const more = panel().locator('.pdf-task-overflow').first();
-      if (await more.count() && !(await more.evaluate((node) => node.open).catch(() => true))) await more.locator('summary').click();
-      await button.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {});
+    // Open More only when closed, and retry while the toolbar settles after a document loads
+    // (the menu can close again between opening it and clicking, so the click is retried too).
+    for (let round = 0; ; round++) {
+      for (let attempt = 0; attempt < 4 && !(await button.isVisible().catch(() => false)); attempt++) {
+        const more = panel().locator('.pdf-task-overflow').first();
+        if (await more.count() && !(await more.evaluate((node) => node.open).catch(() => true))) await more.locator('summary').click().catch(() => {});
+        await button.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {});
+      }
+      try { await button.click({ timeout: 5000 }); return; } catch (error) { if (round >= 2) throw error; }
     }
-    await button.click({ timeout: 10000 });
   }
   async function notice(pattern, timeout = 30000) {
     await page.waitForFunction((source) => [...document.querySelectorAll('.pdf-notice,[role="alert"],[role="status"]')]
