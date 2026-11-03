@@ -25,7 +25,7 @@ import {
 import type { DocumentSession } from '../files/session';
 import type { RegisterDocumentCommands } from '../commands/types';
 import { isDesktopRuntime } from '../files/api';
-import { exportPdfBytes, exportPdfPlainText, exportPdfEmbeddedAttachment, exportPdfPageImagesZip, readPdfDocumentBytes } from './api';
+import { exportPdfBytes, exportPdfPlainText, exportPdfEmbeddedAttachment, exportPdfPageImagesZip, pdfSaveLimit, readPdfDocumentBytes } from './api';
 import { exportPdfPagesAsJpegZip, exportPdfPagesAsPngZip } from './pageImageExport';
 import {finishPdfInstallCommit} from './pdfInstallCommit';
 import {
@@ -908,6 +908,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setActionNotice('Applying PDF edit to the live document…');
     try{
       const result=await operation(Uint8Array.from(sourceBytes));
+      // Never apply an edit whose result Save PDF copy could not write.
+      const saveLimit=pdfSaveLimit();
+      if(result.length>saveLimit){
+        throw new Error(`This edit would make the PDF ${(result.length/(1024*1024)).toFixed(1)} MB, more than the ${Math.round(saveLimit/(1024*1024))} MB that can be saved here. Nothing was changed.`);
+      }
       if(currentPdfBytesRef.current!==sourceBytes||
         requestIdRef.current!==sourceRevision||replacementPendingRef.current){
         throw new Error('This PDF changed or began loading another version while the tool was running. The older result was not applied.');
@@ -2886,7 +2891,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           return applied;
         }}/>}
       {toolDialog==='batch'&&sourceBytes&&<PdfBatchDialog domIdPrefix={domIdPrefix} currentName={sourceName||'Open document.pdf'}
-        busy={mutating} getBytes={()=>currentPdfBytesRef.current} onDone={setActionNotice} onClose={closeToolDialog}/>}
+        currentSize={sourceBytes.length} busy={mutating} getBytes={()=>currentPdfBytesRef.current} onDone={setActionNotice} onClose={closeToolDialog}/>}
       {featureGalleryOpen&&<section id={`${domIdPrefix}-feature-gallery`}
         className="pdf-feature-gallery"
         aria-label={`${PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label} PDF features`}
