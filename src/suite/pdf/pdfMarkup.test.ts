@@ -95,6 +95,15 @@ describe('drawings and notes (MAL-055)', () => {
     expect(items.map((i) => i.label)).toEqual(['Freehand', 'Arrow', 'Rectangle', 'Ellipse', 'Text box', 'Callout', 'Sticky note']);
   });
 
+  it('draws a sticky note in its chosen colour, and recolours it on edit', async () => {
+    const ap = async (b: Uint8Array) => { const p = await PDFDocument.load(b); const a = p.getPage(0).node.lookup(PDFName.of('Annots'), PDFArray).lookup(0, PDFDict); return new TextDecoder().decode(decodePDFRawStream(p.context.lookup(a.lookup(PDFName.of('AP'), PDFDict).get(PDFName.of('N'))) as PDFRawStream).decode()); };
+    let bytes = await addPdfDrawing(await doc(), { pageNumber: 1, viewRotation: 0, author: 'Ada', style: { ...style, color: '#3366ff' }, kind: 'Note', points: [{ x: 0.5, y: 0.5 }], text: 'Blue note' });
+    expect(await ap(bytes)).toMatch(/\n0\.2 0\.4 1 rg [\d.]+ [\d.]+ 20 20 re f 0\.07 0\.14 0\.35 RG/);
+    const [note] = await listPdfMarkupAnnotations(bytes);
+    bytes = await updatePdfMarkupAnnotation(bytes, note, { color: '#00aa44' });
+    expect(await ap(bytes)).toMatch(/\n0 0\.66\d* 0\.26\d* rg [\d.]+ [\d.]+ 20 20 re f 0 0\.23\d* 0\.09\d* RG/);
+  });
+
   it('grows a freehand stroke\'s box when its line gets thicker', async () => {
     let bytes = await addPdfDrawing(await doc(), { pageNumber: 1, viewRotation: 0, author: 'Ada', style: { ...style, width: 2 }, kind: 'Ink', points: [{ x: 0.1, y: 0.5 }, { x: 0.5, y: 0.5 }] });
     const [ink] = await listPdfMarkupAnnotations(bytes);

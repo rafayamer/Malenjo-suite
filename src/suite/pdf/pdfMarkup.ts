@@ -156,7 +156,10 @@ async function buildAppearance(pdf: PDFDocument, pageNumber: number, dict: PDFDi
   if (kind === 'Text') {
     // A note icon: a folded square with lines.
     const [x, y] = [rect[0], rect[1]];
-    ops.push(`1 0.85 0.2 rg ${x} ${y} 20 20 re f 0.35 0.25 0 RG 0.8 w ${x} ${y} 20 20 re S ${x + 4} ${y + 14} m ${x + 16} ${y + 14} l ${x + 4} ${y + 10} m ${x + 16} ${y + 10} l ${x + 4} ${y + 6} m ${x + 12} ${y + 6} l S`);
+    // Filled with the note's stored colour (/C), outlined in a darker shade of it.
+    const fill = colorOf(dict).length >= 3 ? [cr, cg, cb] : [1, 0.85, 0.2];
+    const border = fill.map((c) => Math.round(c * 0.35 * 1000) / 1000).join(' ');
+    ops.push(`${fill.join(' ')} rg ${x} ${y} 20 20 re f ${border} RG 0.8 w ${x} ${y} 20 20 re S ${x + 4} ${y + 14} m ${x + 16} ${y + 14} l ${x + 4} ${y + 10} m ${x + 16} ${y + 10} l ${x + 4} ${y + 6} m ${x + 12} ${y + 6} l S`);
   }
   if (kind === 'FreeText') {
     const callout = numbers(dict.lookupMaybe(N('CL'), PDFArray));

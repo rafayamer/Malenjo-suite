@@ -134,6 +134,12 @@ try {
     expect(first.annotations.length === 1 && second.annotations.length === 1, 'not marked on both pages');
     expect(first.annotations[0].contentsObj?.str === 'End of the first page' && second.annotations[0].contentsObj?.str === 'Start of the second page',
       'each page should keep its own text: ' + first.annotations[0].contentsObj?.str + ' / ' + second.annotations[0].contentsObj?.str);
+    // Every quad hugs the text line (22 pt type on a 120 pt page), never a canvas or page box.
+    for (const [n, { annotations }] of [[1, first], [2, second]]) {
+      const q = annotations[0].quadPoints; const ys = []; for (let i = 1; i < q.length; i += 2) ys.push(q[i]);
+      const quads = q.length / 8; const tallest = Math.max(...Array.from({ length: quads }, (_, k) => Math.max(...ys.slice(k * 4, k * 4 + 4)) - Math.min(...ys.slice(k * 4, k * 4 + 4))));
+      expect(tallest > 15 && tallest < 40 && Math.min(...ys) > 35 && Math.max(...ys) < 85, `page ${n} quads ${JSON.stringify(Array.from(q))}`);
+    }
     await tools.getByRole('button', { name: 'Close markup tools' }).click();
   });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { strFromU8, unzipSync } from 'fflate';
-import { PDFDict, PDFDocument, PDFHexString, PDFName, StandardFonts } from 'pdf-lib';
+import { PDFDict, PDFDocument, PDFHexString, PDFName, PDFString, StandardFonts } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { batchManifestCsv, batchPages, runPdfBatch, type PdfBatchEntry } from './pdfBatch';
 
@@ -72,6 +72,16 @@ describe('runPdfBatch (MAL-010)', () => {
       [{ kind: 'rotate', pages: 'all', angle: 180 }],
     );
     expect(again.entries.map((entry) => entry.output)).toEqual(['results/report.pdf', 'results/report (2).pdf']);
+  });
+
+  it('reports annotations that N-up could not carry onto the sheets', async () => {
+    const pdf = await PDFDocument.load(await labelled('A', 2));
+    const note = pdf.context.obj({ Type: 'Annot', Subtype: 'Text', Rect: [10, 10, 30, 30], Contents: PDFString.of('Check') });
+    pdf.getPage(0).node.set(PDFName.of('Annots'), pdf.context.obj([pdf.context.register(note)]));
+    const result = await runPdfBatch([{ name: 'notes.pdf', bytes: await pdf.save() }],
+      [{ kind: 'nup', options: { perSheet: 2, sheet: 'letter', orientation: 'landscape', margin: 18, gap: 9, order: 'rows', borders: false } }]);
+    expect(result.entries[0]).toMatchObject({ status: 'ok', outputPages: 1 });
+    expect(result.entries[0].message).toBe('1 annotation(s), link(s) or form field(s) were not carried onto the N-up sheets.');
   });
 
   it('drops bookmarks and links that point to removed pages, keeping the rest', async () => {

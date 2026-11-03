@@ -60,7 +60,7 @@ export async function sha256Hex(bytes: Uint8Array): Promise<string> {
 }
 
 async function applyRules(bytes: Uint8Array, rules: PdfBatchRule[]): Promise<{ bytes: Uint8Array; inputPages: number; outputPages: number; note: string }> {
-  let prunedLinks = 0, prunedBookmarks = 0;
+  let prunedLinks = 0, prunedBookmarks = 0, droppedOnSheets = 0;
   let pdf: PDFDocument;
   let inputPages: number;
   try {
@@ -73,6 +73,7 @@ async function applyRules(bytes: Uint8Array, rules: PdfBatchRule[]): Promise<{ b
     try {
       if (rule.kind === 'nup') {
         const arranged = await nupPdf(Uint8Array.from(await pdf.save()), rule.options);
+        droppedOnSheets += arranged.droppedAnnotations;
         pdf = await PDFDocument.load(arranged.bytes);
         continue;
       }
@@ -112,7 +113,10 @@ async function applyRules(bytes: Uint8Array, rules: PdfBatchRule[]): Promise<{ b
     }
   }
   pdf.setProducer('MALENJO');
-  const note = prunedLinks || prunedBookmarks ? `Removed ${prunedBookmarks} bookmark(s) and ${prunedLinks} link(s) that pointed to removed pages.` : '';
+  const note = [
+    prunedLinks || prunedBookmarks ? `Removed ${prunedBookmarks} bookmark(s) and ${prunedLinks} link(s) that pointed to removed pages.` : '',
+    droppedOnSheets ? `${droppedOnSheets} annotation(s), link(s) or form field(s) were not carried onto the N-up sheets.` : '',
+  ].filter(Boolean).join(' ');
   return { bytes: Uint8Array.from(await pdf.save({ useObjectStreams: true })), inputPages, outputPages: pdf.getPageCount(), note };
 }
 

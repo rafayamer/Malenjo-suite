@@ -34,7 +34,22 @@ function selectionByPage(domIdPrefix: string): PageSelection[] | null {
     pageNumber: Number(shell.id.slice(`${domIdPrefix}-page-`.length)), box: (shell.querySelector('canvas') ?? shell).getBoundingClientRect(),
   })).filter((page) => Number.isInteger(page.pageNumber));
   const byPage = new Map<number, ShownRect[]>();
-  for (const rect of Array.from(selection.getRangeAt(0).getClientRects())) {
+  const range = selection.getRangeAt(0);
+  // Rectangles come only from selected text in the pages' text layers: a range's own client rects
+  // also include the boxes of whole elements it spans (canvases, page shells) when it crosses pages.
+  const textRects: DOMRect[] = [];
+  for (const layer of Array.from(document.querySelectorAll<HTMLElement>(`[id^="${domIdPrefix}-page-"] .textLayer`))) {
+    if (!selection.containsNode(layer, true)) continue;
+    const walker = document.createTreeWalker(layer, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!node.nodeValue?.trim() || !selection.containsNode(node, true)) continue;
+      const part = document.createRange(); part.selectNodeContents(node);
+      if (node === range.startContainer) part.setStart(node, range.startOffset);
+      if (node === range.endContainer) part.setEnd(node, range.endOffset);
+      if (!part.collapsed) textRects.push(...Array.from(part.getClientRects()));
+    }
+  }
+  for (const rect of textRects) {
     if (rect.width < 0.5 || rect.height < 0.5) continue;
     const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
     // The page containing the rectangle's centre, or failing that the nearest page within a few pixels
@@ -50,7 +65,6 @@ function selectionByPage(domIdPrefix: string): PageSelection[] | null {
     byPage.set(page.pageNumber, list);
   }
   if (!byPage.size) return null;
-  const range = selection.getRangeAt(0);
   return [...byPage.keys()].sort((a, b) => a - b).map((pageNumber) => {
     // The page's own share of the selected text: the selected part of its text-layer spans.
     const spans = Array.from(document.querySelectorAll<HTMLElement>(`#${CSS.escape(`${domIdPrefix}-page-${pageNumber}`)} .textLayer span`))
