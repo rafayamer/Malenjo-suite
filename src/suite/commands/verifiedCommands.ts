@@ -31,6 +31,7 @@ export const VERIFIED_EVIDENCE_SCRIPTS = [
   'scripts/pdf-phase2-stamp-acceptance.mjs',
   'scripts/pdf-phase2-navigation-acceptance.mjs',
   'scripts/pdf-phase2-optimize-acceptance.mjs',
+  'scripts/pdf-phase2-markup-acceptance.mjs',
 ] as const;
 
 export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Object.freeze([
@@ -133,6 +134,17 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     guidance: 'Choose Compress… and Reduce images, pick a quality profile or a custom resolution and JPEG quality, then Compress. The report shows the size before and after and how many images changed.',
     evidence: ['MAL-025 image compression profile: downsampled JPEG, size report, same page text, faithful colours',
       'MAL-025 custom resolution and quality'],
+  },
+  {
+    id: 'MAL-054', workspaceTab: 'Review',
+    guidance: 'Choose Markup tools…, select text on the page, then Highlight, Underline, Strike out or Squiggly. Pick a markup in the list to change its colour or delete it.',
+    evidence: ['MAL-054 highlight, underline, strikeout and squiggly on selected text', 'MAL-054 change a markup colour, then delete it'],
+  },
+  {
+    id: 'MAL-055', workspaceTab: 'Review',
+    guidance: 'Choose Markup tools…, pick Pen, Line, Arrow, Rectangle, Ellipse, Text box, Callout or Sticky note, then drag or click on the page. Colour, opacity, line width and text are set in the panel; markup can be edited or deleted from the list.',
+    evidence: ['MAL-055 freehand, arrow, rectangle, ellipse, text box, callout and sticky note drawn on the page',
+      'MAL-055 shapes on a rotated page land where they were drawn'],
   },
 ]);
 

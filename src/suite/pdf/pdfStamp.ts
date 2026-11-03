@@ -31,8 +31,8 @@ const FONTS: Record<StampFont, StandardFonts> = {
   times: StandardFonts.TimesRoman, 'times-bold': StandardFonts.TimesRomanBold, courier: StandardFonts.Courier,
 };
 
-type Matrix = [number, number, number, number, number, number];
-const compose = (m: Matrix, n: Matrix): Matrix => [
+export type Matrix = [number, number, number, number, number, number];
+export const compose = (m: Matrix, n: Matrix): Matrix => [
   m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1],
   m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3],
   m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5],
@@ -93,11 +93,14 @@ async function loadForStamp(bytes: Uint8Array): Promise<PDFDocument> {
   } catch { throw new Error('This PDF could not be stamped because it is encrypted, invalid or damaged.'); }
 }
 
-/** Visible size and the matrix from that upright frame into page space. */
-export function viewerFrame(pdf: PDFDocument, index: number): { width: number; height: number; matrix: Matrix } {
+/**
+ * Visible size and the matrix from that upright frame into page space.
+ * extraRotation adds a viewing rotation (clockwise) on top of the page's /Rotate.
+ */
+export function viewerFrame(pdf: PDFDocument, index: number, extraRotation = 0): { width: number; height: number; matrix: Matrix } {
   const page = pdf.getPage(index);
   const { x, y, width, height } = page.getCropBox();
-  const rotation = ((page.getRotation().angle % 360) + 360) % 360;
+  const rotation = ((((page.getRotation().angle + extraRotation) % 360) + 360) % 360);
   if (rotation === 90) return { width: height, height: width, matrix: [0, 1, -1, 0, x + width, y] };
   if (rotation === 180) return { width, height, matrix: [-1, 0, 0, -1, x + width, y + height] };
   if (rotation === 270) return { width: height, height: width, matrix: [0, -1, 1, 0, x, y + height] };

@@ -47,6 +47,8 @@ jobs:
         run: node scripts/pdf-phase2-navigation-acceptance.mjs
       - name: Phase 2 optimize acceptance (lossless and image compression) with independent output reopen
         run: node scripts/pdf-phase2-optimize-acceptance.mjs
+      - name: Phase 2 markup acceptance (text markup, drawings, notes) with independent output reopen
+        run: node scripts/pdf-phase2-markup-acceptance.mjs
       - name: Publish Phase 3 light/dark visual review screenshots
         if: success()
         uses: actions/upload-artifact@v4

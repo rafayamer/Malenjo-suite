@@ -128,6 +128,8 @@ import PdfStampDialog, { type StampDialogKind } from './PdfStampDialogs';
 import PdfPropertiesDialog from './PdfPropertiesDialog';
 import PdfNavigationDialog from './PdfNavigationDialog';
 import PdfCompressDialog from './PdfCompressDialog';
+import PdfMarkupPanel, { MARKUP_AUTHOR, type MarkupSettings } from './PdfMarkupPanel';
+import { addPdfDrawing } from './pdfMarkup';
 import PdfProviderToolsPanel from './PdfProviderToolsPanel';
 import { defaultPdfToolProvider } from './defaultProvider';
 import { ensurePdfProviderRunning } from './providerLifecycle';
@@ -402,15 +404,18 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [masterTab, setMasterTab] = useState<PdfMasterTab>('home');
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
   // MAL-001 / 002 / 009 / 010 dialogs; focus returns to the control that opened them.
-  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress';
+  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup';
   const [toolDialog, setToolDialog] = useState<null|ToolDialog>(null);
   const toolDialogOpenerRef = useRef<HTMLElement|null>(null);
+  // MAL-054/055 markup tools: the active drawing tool and its style live here so every page can draw.
+  const [markupSettings,setMarkupSettings]=useState<MarkupSettings>({tool:null,style:{color:'#e0b000',opacity:0.6,width:2},text:''});
   const openToolDialog=(kind:ToolDialog)=>{
     toolDialogOpenerRef.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
     setFeatureGalleryOpen(false);setToolDialog(kind);
   };
   const closeToolDialog=()=>{
     setToolDialog(null);
+    setMarkupSettings(current=>({...current,tool:null}));
     const opener=toolDialogOpenerRef.current;toolDialogOpenerRef.current=null;
     window.requestAnimationFrame(()=>{if(opener?.isConnected)opener.focus();});
   };
@@ -2660,6 +2665,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       providerAction,
     ],
     comment:[
+      {id:'markup-tools',label:'Markup tools…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('markup')},
       {id:'comments-panel',label:'Comments panel',enabled:true,run:()=>openLeftPanel('comments')},
       {id:'add-comment',label:'Add comment',enabled:!!sourceBytes&&!mutating&&!!commentDraft.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!commentDraft.text.trim()?'Enter comment text in the Comments panel first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addComment},
       {id:'markup-region',label:'Add '+markupDraft.kind+' region',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addReviewMarkup},
@@ -2910,13 +2916,15 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             if(applied)setActionNotice(summary);
             return applied;
           }}/>}
-      {(toolDialog==='properties'||toolDialog==='navigation'||toolDialog==='compress')&&sourceBytes&&(()=>{
+      {(toolDialog==='properties'||toolDialog==='navigation'||toolDialog==='compress'||toolDialog==='markup')&&sourceBytes&&(()=>{
         const apply=async (label:string,operation:(latest:Uint8Array)=>Promise<{bytes:Uint8Array;summary:string}>)=>{
           let summary='';
           const applied=await mutate(label,async latest=>{const edited=await operation(latest);summary=edited.summary;return edited.bytes;},currentPage);
           if(applied)setActionNotice(summary);
           return applied;
         };
+        if(toolDialog==='markup')return <PdfMarkupPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} viewRotation={rotation} busy={mutating}
+          settings={markupSettings} onSettings={setMarkupSettings} onApply={apply} onClose={closeToolDialog}/>;
         if(toolDialog==='compress')return <PdfCompressDialog domIdPrefix={domIdPrefix} busy={mutating} onApply={apply} onClose={closeToolDialog}/>;
         return toolDialog==='properties'
           ? <PdfPropertiesDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} busy={mutating} onApply={apply} onClose={closeToolDialog}/>
@@ -3461,6 +3469,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               onReplacePage={()=>beginReplacePage(page)}
               onCropPage={()=>startCropOnPage(page)}
               editingBusy={mutating||loading}
+              drawTool={toolDialog==='markup'&&markupSettings.tool?{kind:markupSettings.tool,color:markupSettings.style.color,busy:mutating,onShape:shape=>{
+                const kind=markupSettings.tool!;
+                void mutate(`Added ${kind==='Ink'?'a freehand drawing':kind==='Note'?'a sticky note':'a drawing'}.`,
+                  latest=>addPdfDrawing(latest,{...shape,pageNumber:page,viewRotation:rotation,kind,author:MARKUP_AUTHOR,style:markupSettings.style,text:markupSettings.text}),page);
+              }}:null}
             />;
           })}
         </div>
