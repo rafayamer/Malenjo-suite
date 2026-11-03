@@ -137,6 +137,24 @@ async function main() {
       await page.locator('#ml-ai-assistant.is-open').waitFor({ timeout: 15000 });
       await capture('05-pdf-with-ai-drawer');
       await page.keyboard.press('Escape');
+      // Phase 2 dialogs (MAL-001 merge, MAL-002 split): layout and contrast.
+      const panel = page.locator('.document-session-panel.active');
+      const organizeAction = async (label) => {
+        await panel.locator('[aria-label="PDF task categories"]').getByRole('tab', { name: 'Organize', exact: true }).click();
+        const button = panel.locator(`.pdf-task-toolbar button[aria-label="${label}"]`).first();
+        if (!(await button.isVisible().catch(() => false))) {
+          const more = panel.locator('.pdf-task-overflow summary');
+          if (await more.count()) await more.click();
+        }
+        await button.click({ timeout: 10000 });
+      };
+      for (const [label, dialogName, shot] of [['Merge PDFs…', 'Merge PDFs', '06-merge-dialog'], ['Split…', 'Split PDF', '07-split-dialog']]) {
+        await organizeAction(label);
+        await page.getByRole('dialog', { name: dialogName }).waitFor();
+        await capture(shot, '.pdf-tool-dialog');
+        await page.keyboard.press('Escape');
+        await page.getByRole('dialog', { name: dialogName }).waitFor({ state: 'hidden' });
+      }
       await page.close();
       console.log(`captured ${theme} ${width}x${height}`);
     }

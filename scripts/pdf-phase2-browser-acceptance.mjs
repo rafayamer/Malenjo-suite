@@ -112,8 +112,15 @@ async function tab(name){await panel().locator('[aria-label="PDF task categories
 async function action(tabName,label){
   await tab(tabName);
   const button=panel().locator(`.pdf-task-toolbar button[aria-label="${label}"]`).first();
-  if(!(await button.isVisible().catch(()=>false))){const more=panel().locator('.pdf-task-overflow summary');if(await more.count())await more.click();}
-  await button.click({timeout:10000});
+  // The toolbar can re-lay out while a new document settles (e.g. a scrollbar
+  // appears on Windows), which may move the command or close the More menu.
+  // Open More only when it is closed, and retry until the command is visible.
+  for(let attempt=0;attempt<4&&!(await button.isVisible().catch(()=>false));attempt++){
+    const more=panel().locator('.pdf-task-overflow').first();
+    if(await more.count()&&!(await more.evaluate(node=>node.open).catch(()=>true)))await more.locator('summary').click();
+    await button.waitFor({state:'visible',timeout:3000}).catch(()=>{});
+  }
+  await button.click({timeout:15000});
 }
 async function notice(pattern,timeout=20000){
   await page.waitForFunction(source=>[...document.querySelectorAll('.pdf-notice,[role="alert"],[role="status"]')]
@@ -208,13 +215,13 @@ async function main(){
     const parts=[];for(const d of downloads){const f=join(mkdtempSync(join(tmpdir(),'malenjo-phase2-')),'p.pdf');await d.saveAs(f);parts.push(order(await pageTexts(readFileSync(f))));}
     expect(parts[0]==='1,2'&&parts[1]==='3,4,5,6','parts '+JSON.stringify(parts));});
   await check('insert PDF after page 2',async()=>{await openPdf(await simpleDoc());await selectPage(2);
-    const chooser=page.waitForEvent('filechooser',{timeout:10000});await action('Organize','Insert PDF…');
-    await (await chooser).setFiles({name:'insert.pdf',mimeType:'application/pdf',buffer:Buffer.from(await simpleDoc(2,'INS page '))});await notice(/insert/);
+    const [chooser]=await Promise.all([page.waitForEvent('filechooser',{timeout:20000}),action('Organize','Insert PDF…')]);
+    await chooser.setFiles({name:'insert.pdf',mimeType:'application/pdf',buffer:Buffer.from(await simpleDoc(2,'INS page '))});await notice(/insert/);
     const texts=(await pageTexts(await save())).map(t=>t.replace('QA page ','Q').replace('INS page ','I')).join();
     expect(texts==='Q1,Q2,I1,I2,Q3,Q4,Q5,Q6','order '+texts);});
   await check('append PDF',async()=>{await openPdf(await simpleDoc(3));
-    const chooser=page.waitForEvent('filechooser',{timeout:10000});await action('Organize','Append PDF…');
-    await (await chooser).setFiles({name:'append.pdf',mimeType:'application/pdf',buffer:Buffer.from(await simpleDoc(2,'APP page '))});await notice(/append/);
+    const [chooser]=await Promise.all([page.waitForEvent('filechooser',{timeout:20000}),action('Organize','Append PDF…')]);
+    await chooser.setFiles({name:'append.pdf',mimeType:'application/pdf',buffer:Buffer.from(await simpleDoc(2,'APP page '))});await notice(/append/);
     const texts=(await pageTexts(await save())).map(t=>t.replace('QA page ','Q').replace('APP page ','A')).join();
     expect(texts==='Q1,Q2,Q3,A1,A2','order '+texts);});
   await check('permanent page rotation',async()=>{await openPdf(await simpleDoc());await selectPage(3);
@@ -282,15 +289,15 @@ async function main(){
     const artOk=pages.map((p,i)=>{const a=p.getArtBox(),m=p.getMediaBox();return (i===1)===(Math.abs(a.width-m.width)>1);}).every(Boolean);
     expect(trimOk,'trim boxes not applied to every page');expect(artOk,'art box not limited to the selected page');});
 
-  await check('verified catalog: MAL-003..008 open their tools, unverified MAL-001 stays unavailable',async()=>{
+  await check('verified catalog: verified MAL commands open their tools, unverified MAL-011 stays unavailable',async()=>{
     // "More PDF tools" lives on the shell ribbon (Home), not inside a document.
     await openModule('Home');
     await page.getByRole('button',{name:'More PDF tools'}).click();
     const catalog=page.locator('#malenjo-complete-feature-catalog');
-    for(const id of ['MAL-003','MAL-004','MAL-005','MAL-006','MAL-007','MAL-008']){
+    for(const id of ['MAL-001','MAL-002','MAL-003','MAL-004','MAL-005','MAL-006','MAL-007','MAL-008']){
       expect(await catalog.locator(`[data-mal-command="${id}"]`).getAttribute('data-mal-status')==='RELEASE_READY',id+' not verified in catalog');
     }
-    expect(await catalog.locator('[data-mal-command="MAL-001"] button').isDisabled(),'unverified MAL-001 is clickable');
+    expect(await catalog.locator('[data-mal-command="MAL-011"] button').isDisabled(),'unverified MAL-011 is clickable');
     // Open returns to the user's open PDF (not an empty module).
     await catalog.locator('[data-mal-command="MAL-005"] button').click();
     await panel().locator('.pdf-workspace').waitFor({timeout:10000});

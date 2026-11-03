@@ -2381,3 +2381,21 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
   grid-template-columns:minmax(180px,250px) minmax(0,1fr) minmax(190px,220px)!important;
 }
 .app-shell-top-only .pdf-left-panel .pdf-thumb-canvas{max-width:100%}
+
+/* MAL-001/002 merge and split dialogs */
+.pdf-tool-dialog{position:fixed;z-index:60;top:12vh;left:50%;transform:translateX(-50%);width:min(560px,calc(100vw - 32px));max-height:76vh;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:16px 18px;border:1px solid var(--ml-border);border-radius:12px;background:var(--ml-surface);color:var(--ml-text);box-shadow:0 18px 50px rgba(0,0,0,.35)}
+.pdf-tool-dialog header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.pdf-tool-dialog h2{margin:0;font-size:17px}
+.pdf-tool-dialog p,.pdf-tool-dialog small{margin:0;color:var(--ml-muted);font-size:12px;line-height:1.5}
+.pdf-tool-dialog label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ml-text)}
+.pdf-tool-dialog input:not([type=radio]),.pdf-tool-dialog select{border:1px solid var(--ml-border);background:var(--ml-field);color:var(--ml-text);border-radius:7px;padding:7px 9px;font:inherit}
+.pdf-tool-dialog button{display:inline-flex;align-items:center;gap:6px;justify-content:center;border:1px solid var(--ml-border);background:var(--ml-control);color:var(--ml-text);border-radius:7px;padding:6px 10px;cursor:pointer}
+.pdf-tool-dialog button:disabled{opacity:.45;cursor:not-allowed}
+.pdf-tool-dialog button.primary-action{background:#1269cc;border-color:#3d9fff;color:#fff}
+.pdf-tool-dialog fieldset{border:1px solid var(--ml-border);border-radius:8px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:10px}
+.pdf-tool-dialog legend{font-size:12px;color:var(--ml-muted);padding:0 4px}
+.pdf-tool-dialog .pdf-tool-dialog-choice{flex-direction:row;align-items:center;gap:6px}
+.pdf-tool-dialog-error{color:var(--ml-error-fg)!important;background:var(--ml-error-bg);border-radius:6px;padding:6px 8px}
+.pdf-merge-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.pdf-merge-list li{display:flex;align-items:center;gap:6px;border:1px solid var(--ml-border);background:var(--ml-card);border-radius:8px;padding:6px 8px;cursor:grab}
+.pdf-merge-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
