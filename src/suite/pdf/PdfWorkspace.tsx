@@ -137,6 +137,7 @@ import PdfFormDesignerPanel, { NEW_DESIGN_DRAFT, designSpec, type FormDesignStat
 import PdfFormFillPanel from './PdfFormFillPanel';
 import PdfExportDialog, { type ExportRegion } from './PdfExportDialog';
 import PdfOfficeConvertDialog from './PdfOfficeConvertDialog';
+import PdfCreateDialog from './PdfCreateDialog';
 import { addFormField as addDesignedFormField, moveFormWidget } from './forms/formDesign';
 import PdfObjectEditPanel, { objectKey, type InsertSettings, type ObjectEditState } from './PdfObjectEditPanel';
 import { insertPdfContent, type InsertKind } from './content/objectEdit';
@@ -421,7 +422,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   useEffect(() => { setOverflowOpen(false); }, [masterTab]);
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
   // MAL-001 / 002 / 009 / 010 dialogs; focus returns to the control that opened them.
-  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup'|'text-edit'|'find'|'objects'|'paragraphs'|'form-design'|'form-fill'|'export'|'office-convert';
+  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup'|'text-edit'|'find'|'objects'|'paragraphs'|'form-design'|'form-fill'|'export'|'office-convert'|'create-pdf';
   const [paragraphState,setParagraphState]=useState<ParagraphEditState|null>(null);
   const [formDesign,setFormDesign]=useState<FormDesignState|null>(null);
   const [exportRegion,setExportRegion]=useState<ExportRegion|null>(null);
@@ -2697,6 +2698,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       providerAction,
     ],
     convert:[
+      {id:'create-pdf',label:'Create PDF from files…',enabled:true,run:()=>openToolDialog('create-pdf')},
       {id:'convert-office',label:'Convert to Office…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('office-convert')},
       {id:'export-as',label:'Export as…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('export')},
       {id:'export-text',label:exportingText?'Extracting text '+textExportProgress+'%':'PDF to text (.txt)',enabled:!!pdf&&!mutating&&!exportingText,disabledReason:!pdf?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':exportingText?'PDF text export is running.':undefined,run:exportText},
@@ -3017,6 +3019,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           ? <PdfPropertiesDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} busy={mutating} onApply={apply} onClose={closeToolDialog}/>
           : <PdfNavigationDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} pageCount={pageCount} currentPage={currentPage} busy={mutating} onApply={apply} onClose={closeToolDialog}/>;
       })()}
+      {toolDialog==='create-pdf'&&<PdfCreateDialog domIdPrefix={domIdPrefix} onOpenPdfs={onOpenConversionOutputs} onNotice={setActionNotice} onClose={closeToolDialog}/>}
       {toolDialog==='office-convert'&&sourceBytes&&<PdfOfficeConvertDialog domIdPrefix={domIdPrefix} sourceName={sourceName} getBytes={()=>currentPdfBytesRef.current}
         busy={mutating} onOpenOutputs={onOpenConversionOutputs} onNotice={setActionNotice} onClose={closeToolDialog}/>}
       {toolDialog==='export'&&sourceBytes&&<PdfExportDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} sourceName={sourceName} pageCount={pageCount}

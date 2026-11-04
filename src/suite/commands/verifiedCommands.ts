@@ -38,6 +38,7 @@ export const VERIFIED_EVIDENCE_SCRIPTS = [
   'scripts/pdf-phase3-forms-acceptance.mjs',
   'scripts/pdf-phase3-export-acceptance.mjs',
   'scripts/pdf-phase3-office-acceptance.mjs',
+  'scripts/pdf-phase3-topdf-acceptance.mjs',
 ] as const;
 
 export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Object.freeze([
@@ -275,6 +276,31 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     id: 'MAL-045', workspaceTab: 'Convert',
     guidance: 'In Convert to Office…, pick or save a conversion profile (format, pages, images), add several PDFs and Convert. Every file gets a fidelity report (failures say why); successful DOCX, XLSX and PPTX results open in their result editors, and all results download as a ZIP with a JSON report.',
     evidence: ['MAL-045 batch conversion with a saved profile, a fidelity report per file and results opened in editors'],
+  },
+  {
+    id: 'MAL-030', workspaceTab: 'Convert',
+    guidance: 'Choose Create PDF from files… → Images, add JPG, PNG, TIFF (every page), WebP or BMP files, put them in order with the arrows, and choose the page size (or the image size), orientation, margins and whether each image fits the page or keeps its actual size.',
+    evidence: ['MAL-030 images to PDF: several images, page size, orientation, margins and order'],
+  },
+  {
+    id: 'MAL-031', workspaceTab: 'Convert',
+    guidance: 'Choose Create PDF from files… → Word. Styles, headings, alignment, spacing, numbered and bulleted lists, tables, pictures and the document\'s page size and margins are drawn with standard PDF fonts; the report lists anything not reproduced (for example headers, footnotes, charts or characters outside the standard fonts).',
+    evidence: ['MAL-031 Word to PDF: styles, lists, table and picture at the document page size'],
+  },
+  {
+    id: 'MAL-032', workspaceTab: 'Convert',
+    guidance: 'Choose Create PDF from files… → PowerPoint. Each slide becomes a page at the slide size with its backgrounds, shapes, text boxes, pictures, groups and simple tables; charts, SmartArt and rotation are reported.',
+    evidence: ['MAL-032 PowerPoint to PDF: a page per slide at the slide size with shapes, text and pictures'],
+  },
+  {
+    id: 'MAL-033', workspaceTab: 'Convert',
+    guidance: 'Choose Create PDF from files… → Excel, pick the page size, orientation, gridlines and sheets. A sheet\'s print area is used when it has one; number formats, fonts, fills, widths, heights and merged cells are kept, and wide sheets continue on following pages.',
+    evidence: ['MAL-033 Excel to PDF: the print area with formats, widths, merges, gridlines and orientation'],
+  },
+  {
+    id: 'MAL-034', workspaceTab: 'Convert',
+    guidance: 'Choose Create PDF from files… → HTML. MALENJO\'s own renderer lays out headings, paragraphs, lists, tables, embedded images and a CSS subset (colours, sizes, weights, alignment, margins, page breaks); it never runs scripts or downloads anything, and reports unsupported CSS and elements.',
+    evidence: ['MAL-034 HTML to PDF through the controlled renderer: supported CSS applied, scripts and remote content blocked'],
   },
 ]);
 

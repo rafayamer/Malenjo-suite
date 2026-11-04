@@ -226,8 +226,11 @@ export default function App() {
     registerBrowserFiles(supported).forEach(document=>openFromLibrary(markBrowserDocumentOpened(document)));
   }
 
-  /** DOCX, XLSX and PPTX made by a PDF conversion open as tabs in their result editors. */
+  /** Conversion results open as tabs: PDFs in the PDF workspace, DOCX/XLSX/PPTX in their result editors. */
   function openConversionOutputs(files: File[]) {
+    // Created PDFs open like any PDF; Office results open in their result editors.
+    const pdfs=files.filter(file=>/\.pdf$/i.test(file.name));
+    if(pdfs.length)openBrowserFiles(pdfs);
     const outputs=files.filter(file=>/\.(docx|xlsx|pptx)$/i.test(file.name));
     let last:DocumentSession|null=null;
     const created=registerBrowserFiles(outputs).map(document=>createDocumentSession(markBrowserDocumentOpened(document)));
