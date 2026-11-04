@@ -9,6 +9,7 @@
  * text and shapes are ordinary page content, so they can be edited again
  * with the same tools (MAL-011 for text, MAL-015 for shapes).
  */
+import { refuseSignedPdf } from '../pdfSignatureGuard';
 import { PDFDocument, PDFName, PDFRawStream, PDFRef, StandardFonts, degrees, rgb } from 'pdf-lib';
 import { rewriteContent } from './contentLexer';
 import { IDENTITY, apply, documentModels, multiply, type Box, type Matrix, type PageModel } from './contentModel';
@@ -129,6 +130,7 @@ function wrap(model: PageModel, start: number, end: number, prefix: string, inne
 
 export async function transformPdfObject(bytes: Uint8Array, pageNumber: number, kind: 'image' | 'path', id: number, change: ObjectTransform, viewRotation = 0): Promise<Uint8Array> {
   const pdf = await load(bytes);
+  refuseSignedPdf(pdf, 'editing it');
   const model = pageModel(pdf, pageNumber);
   const where = locate(model, kind, id);
   const ctm = kind === 'image' ? model.images[id].ctm : model.paths[id].ctm;
@@ -139,6 +141,7 @@ export async function transformPdfObject(bytes: Uint8Array, pageNumber: number, 
 
 export async function deletePdfObject(bytes: Uint8Array, pageNumber: number, kind: 'image' | 'path', id: number): Promise<Uint8Array> {
   const pdf = await load(bytes);
+  refuseSignedPdf(pdf, 'editing it');
   const model = pageModel(pdf, pageNumber);
   const where = locate(model, kind, id);
   const edits = new Map<number, string>();
@@ -152,6 +155,7 @@ export async function cropPdfImage(bytes: Uint8Array, pageNumber: number, id: nu
   const values = [inset.left, inset.top, inset.right, inset.bottom];
   if (values.some((v) => !(v >= 0 && v < 1)) || inset.left + inset.right >= 0.98 || inset.top + inset.bottom >= 0.98) throw new Error('Crop must leave part of the image visible.');
   const pdf = await load(bytes);
+  refuseSignedPdf(pdf, 'editing it');
   const model = pageModel(pdf, pageNumber);
   const where = locate(model, 'image', id);
   // Image space is the unit square, origin bottom-left of the image.
@@ -167,6 +171,7 @@ export async function replacePdfImage(bytes: Uint8Array, pageNumber: number, id:
   if (!png && !jpeg) throw new Error('Choose a PNG or JPEG image.');
   if (image.length > 32 * 1024 * 1024) throw new Error('Replacement images must be 32 MB or smaller.');
   const pdf = await load(bytes);
+  refuseSignedPdf(pdf, 'editing it');
   const model = pageModel(pdf, pageNumber);
   const placement = model.images[id];
   if (!placement) throw new Error('That image is no longer on this page. Choose it again.');
@@ -191,6 +196,7 @@ export type ImageAdjuster = (input: { kind: 'jpeg' | 'raw'; bytes: Uint8Array; w
 export async function adjustPdfImage(bytes: Uint8Array, pageNumber: number, id: number, adjustment: ImageAdjustment, adjuster: ImageAdjuster): Promise<Uint8Array> {
   if (!(adjustment.brightness >= 0.2 && adjustment.brightness <= 3) || !(adjustment.contrast >= 0.2 && adjustment.contrast <= 3)) throw new Error('Brightness and contrast must be between 20% and 300%.');
   const pdf = await load(bytes);
+  refuseSignedPdf(pdf, 'editing it');
   const model = pageModel(pdf, pageNumber);
   const placement = model.images[id];
   if (!placement?.ref) throw new Error('That image is no longer on this page. Choose it again.');
@@ -220,6 +226,7 @@ export async function adjustPdfImage(bytes: Uint8Array, pageNumber: number, id: 
 /** Recolours a path: stroke and/or fill colour and line width, applied inside a q/Q wrapper. */
 export async function stylePdfPath(bytes: Uint8Array, pageNumber: number, id: number, style: { stroke?: string; fill?: string; lineWidth?: number }): Promise<Uint8Array> {
   const pdf = await load(bytes);
+  refuseSignedPdf(pdf, 'editing it');
   const model = pageModel(pdf, pageNumber);
   const where = locate(model, 'path', id);
   const parts: string[] = [];
@@ -246,6 +253,7 @@ export interface InsertSpec {
 /** Adds new text or a shape to the page content itself, upright on the page as shown. */
 export async function insertPdfContent(bytes: Uint8Array, spec: InsertSpec): Promise<Uint8Array> {
   const pdf = await load(bytes);
+  refuseSignedPdf(pdf, 'editing it');
   pageModel(pdf, spec.pageNumber);
   const page = pdf.getPage(spec.pageNumber - 1);
   const { frame, toPage } = frameOf(pdf, spec.pageNumber, spec.viewRotation);

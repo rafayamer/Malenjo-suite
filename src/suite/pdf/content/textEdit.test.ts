@@ -100,3 +100,21 @@ describe('search and replace (MAL-023)', () => {
     await expect(replacePdfText(bytes, 'absent', 'x')).rejects.toThrow(/was not found/);
   });
 });
+
+describe('signed documents', () => {
+  it('refuses to edit text, paragraphs or objects of a signed PDF, but still lists them', async () => {
+    const { listPdfParagraphs, reflowPdfParagraph } = await import('./paragraphs');
+    const { deletePdfObject, listPdfPageObjects } = await import('./objectEdit');
+    const pdf = await PDFDocument.load(await sample());
+    pdf.context.register(pdf.context.obj({ FT: 'Sig', V: pdf.context.obj({ Type: 'Sig', ByteRange: [0, 1, 2, 3] }) }));
+    const signed = await pdf.save();
+    const [run] = await listPdfTextRuns(signed, 1);
+    await expect(replacePdfTextRun(signed, 1, run.id, run.text, 'x')).rejects.toThrow(/signed; editing it would invalidate the signature/);
+    await expect(replacePdfText(signed, 'line', 'row')).rejects.toThrow(/signed/);
+    expect((await searchPdfText(signed, 'line')).length).toBeGreaterThan(0);
+    const [paragraph] = await listPdfParagraphs(signed, 1);
+    await expect(reflowPdfParagraph(signed, 1, paragraph.id, paragraph.text, 'x', { align: 'left', size: 12, lineHeight: 1.2, charSpacing: 0, wordSpacing: 0, font: 'keep' }, true)).rejects.toThrow(/signed/);
+    await listPdfPageObjects(signed, 1);
+    await expect(deletePdfObject(signed, 1, 'path', 0)).rejects.toThrow(/signed/);
+  });
+});

@@ -11,6 +11,7 @@
  * Text that needs more height than the original box is detected and refused
  * unless growing is allowed.
  */
+import { refuseSignedPdf } from '../pdfSignatureGuard';
 import { PDFDocument, PDFName, StandardFonts, type PDFFont } from 'pdf-lib';
 import { rewriteContent, serializeOperand } from './contentLexer';
 import { documentModels, type Box, type PageModel, type TextRun } from './contentModel';
@@ -121,6 +122,7 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
   if (!(style.lineHeight >= 0.8 && style.lineHeight <= 4)) throw new Error('Line height must be between 0.8 and 4 times the text size.');
   if (!(Math.abs(style.charSpacing) <= 20) || !(Math.abs(style.wordSpacing) <= 50)) throw new Error('Spacing values are out of range.');
   const pdf = await load(bytes);
+  refuseSignedPdf(pdf, 'editing it');
   const models = documentModels(pdf);
   const model = models[pageNumber - 1];
   if (!model) throw new Error('That page is not in this PDF.');
