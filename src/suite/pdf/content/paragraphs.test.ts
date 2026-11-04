@@ -255,4 +255,20 @@ describe('paragraph fonts and spacing', () => {
     const out = await reflowPdfParagraph(uniform, 1, big.id, big.text, big.text, { ...base, size: 24 }, false);
     expect(out.lines).toBe(1);
   });
+
+  it('measures a substituted font without pair kerning, and refuses mixed transparency', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([600, 800]);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    page.node.set(PDFName.of('Resources'), pdf.context.obj({ Font: { F1: font.ref }, ExtGState: { G1: { ca: 0.25 } } }));
+    page.node.addContentStream(pdf.context.register(pdf.context.stream(
+      'BT /F1 12 Tf 72 700 Td (AVAVAVAVAVAV TAWAYAVA) Tj ET q /G1 gs BT /F1 12 Tf 72 500 Td (Faint first line here) Tj ET Q BT /F1 12 Tf 72 486 Td (Solid second line here) Tj ET')));
+    const bytes = await pdf.save();
+    const [kerned, mixed] = await listPdfParagraphs(bytes, 1);
+    const out = await reflowPdfParagraph(bytes, 1, kerned.id, kerned.text, kerned.text, { ...base, size: 12, font: 'helvetica', align: 'right' }, false);
+    const { documentModels } = await import('./contentModel');
+    const run = documentModels(await PDFDocument.load(out.bytes))[0].runs.find((r) => r.text.startsWith('AVAV'))!;
+    expect(run.box[2]).toBeCloseTo(kerned.box[2], 0);
+    await expect(reflowPdfParagraph(bytes, 1, mixed.id, mixed.text, mixed.text, { ...base, size: 12 }, true)).rejects.toThrow(/transparency/);
+  });
 });

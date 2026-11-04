@@ -160,11 +160,17 @@ function wrap(model: PageModel, start: number, end: number, prefix: string, inne
   return edits;
 }
 
+/** A path whose span also draws an XObject cannot be wrapped without moving or restyling that object too. */
+function refuseInterleaved(model: PageModel, start: number, end: number): void {
+  for (let k = start; k <= end; k++) if (model.ops[k].op === 'Do') throw new Error('Another object is drawn in the middle of this shape, so it cannot be moved or restyled on its own.');
+}
+
 export async function transformPdfObject(bytes: Uint8Array, pageNumber: number, kind: 'image' | 'path', id: number, change: ObjectTransform, viewRotation = 0): Promise<Uint8Array> {
   const pdf = await load(bytes);
   refuseSignedPdf(pdf, 'editing it');
   const model = pageModel(pdf, pageNumber);
   const where = locate(model, kind, id);
+  if (kind === 'path') refuseInterleaved(model, where.start, where.end);
   const ctm = where.ctm ?? model.paths[id].ctm;
   const matrix = transformFor(pdf, pageNumber, viewRotation, where.box, ctm, change);
   writePage(pdf, pageNumber, model, wrap(model, where.start, where.end, cm(matrix)));
@@ -187,7 +193,8 @@ export async function deletePdfObject(bytes: Uint8Array, pageNumber: number, kin
     if (op === 'q') depth++; else if (op === 'Q') depth--; else if ((op === 'W' || op === 'W*') && depth === 0) clips = true;
   }
   if (kind === 'path' && clips) edits.set(where.end, 'n');
-  else for (let i = where.start; i <= where.end; i++) if (kind === 'image' || DRAWING.has(model.ops[i].op)) edits.set(i, '');
+  // Another object drawn between the path's construction and painting (an image's Do) is not this path's.
+  else for (let i = where.start; i <= where.end; i++) if (kind === 'image' || (DRAWING.has(model.ops[i].op) && model.ops[i].op !== 'Do')) edits.set(i, '');
   writePage(pdf, pageNumber, model, edits);
   return save(pdf);
 }
@@ -271,6 +278,7 @@ export async function stylePdfPath(bytes: Uint8Array, pageNumber: number, id: nu
   refuseSignedPdf(pdf, 'editing it');
   const model = pageModel(pdf, pageNumber);
   const where = locate(model, 'path', id);
+  refuseInterleaved(model, where.start, where.end);
   const parts: string[] = [];
   if (style.stroke) parts.push(`${parseColor(style.stroke).map(r).join(' ')} RG`);
   if (style.fill) parts.push(`${parseColor(style.fill).map(r).join(' ')} rg`);

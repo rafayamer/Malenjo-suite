@@ -202,4 +202,17 @@ describe('content rewriting details', () => {
     const removed = await deletePdfObject(moved, 1, 'image', 0);
     expect(await content(removed)).not.toMatch(/ W n/);
   });
+
+  it('keeps an image drawn in the middle of a deleted path, and refuses to move such a path', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([400, 400]);
+    const image = await pdf.embedPng(PNG);
+    const name = page.node.newXObject('Im', image.ref).decodeText();
+    page.node.addContentStream(pdf.context.register(pdf.context.stream(`0 0 100 100 re q 20 0 0 20 200 200 cm /${name} Do Q f`)));
+    const bytes = await pdf.save();
+    await expect(transformPdfObject(bytes, 1, 'path', 0, { dx: 10, dy: 0 })).rejects.toThrow(/Another object is drawn/);
+    const removed = await deletePdfObject(bytes, 1, 'path', 0);
+    const objects = await listPdfPageObjects(removed, 1);
+    expect(objects.map((o) => o.kind)).toEqual(['image']);
+  });
 });
