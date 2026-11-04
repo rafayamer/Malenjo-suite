@@ -33,6 +33,15 @@ async function sheetLabels(bytes: Uint8Array) {
 }
 
 describe('N-up grid and order (MAL-009)', () => {
+  it('refuses PDFs with hidden layers, which would show on the sheets', async () => {
+    const pdf = await PDFDocument.load(await labelled(2));
+    const group = pdf.context.register(pdf.context.obj({ Type: 'OCG', Name: PDFName.of('Draft') }));
+    pdf.catalog.set(PDFName.of('OCProperties'), pdf.context.obj({ OCGs: [group], D: pdf.context.obj({ OFF: [group] }) }));
+    await expect(nupPdf(await pdf.save(), base)).rejects.toThrow(/hidden layers/);
+    pdf.catalog.set(PDFName.of('OCProperties'), pdf.context.obj({ OCGs: [group], D: pdf.context.obj({ ON: [group] }) }));
+    await expect(nupPdf(await pdf.save(), base)).resolves.toMatchObject({ sheets: 1 });
+  });
+
   it('chooses grids by count and orientation', () => {
     expect(nupGrid(2, 'landscape')).toEqual({ columns: 2, rows: 1 });
     expect(nupGrid(2, 'portrait')).toEqual({ columns: 1, rows: 2 });

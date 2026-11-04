@@ -131,6 +131,21 @@ describe('runPdfBatch (MAL-010)', () => {
     expect(result.entries[0].message).toMatch(/page 2 has form fields/);
   });
 
+  it('refuses signed inputs, and page removal from tagged PDFs', async () => {
+    const signed = await PDFDocument.load(await labelled('S', 2));
+    signed.context.register(signed.context.obj({ FT: 'Sig', T: PDFString.of('Sig'), V: signed.context.obj({ Type: 'Sig', ByteRange: [0, 1, 2, 3] }) }));
+    const tagged = await PDFDocument.load(await labelled('T', 2));
+    tagged.catalog.set(PDFName.of('StructTreeRoot'), tagged.context.register(tagged.context.obj({ Type: 'StructTreeRoot' })));
+    const taggedBytes = await tagged.save();
+    const result = await runPdfBatch([{ name: 'signed.pdf', bytes: await signed.save() }, { name: 'tagged.pdf', bytes: taggedBytes }], [{ kind: 'remove', pages: '2' }]);
+    expect(result.entries.map((e) => e.status)).toEqual(['failed', 'failed']);
+    expect(result.entries[0].message).toMatch(/signed; changing it would invalidate the signature/);
+    expect(result.entries[1].message).toMatch(/tagged for accessibility/);
+    // Rotation keeps every page, so a tagged PDF is fine.
+    const rotated = await runPdfBatch([{ name: 'tagged.pdf', bytes: taggedBytes }], [{ kind: 'rotate', pages: 'all', angle: 90 }]);
+    expect(rotated.entries[0].status).toBe('ok');
+  });
+
   it('refuses removing every page and validates input', async () => {
     const result = await runPdfBatch([{ name: 'x.pdf', bytes: await labelled('X', 2) }], [{ kind: 'remove', pages: '1-2' }]);
     expect(result.entries[0].message).toMatch(/remove every page/);

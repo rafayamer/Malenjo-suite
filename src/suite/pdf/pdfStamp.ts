@@ -15,6 +15,7 @@ import {
 } from 'pdf-lib';
 import { listPdfPageLabelRanges, type PdfPageLabelRange } from './pageLabels';
 import { parsePageRanges } from './pdfSplitModes';
+import { refuseSignedPdf } from './pdfSignatureGuard';
 
 export type StampFont = 'helvetica' | 'helvetica-bold' | 'times' | 'times-bold' | 'courier';
 export type StampPosition = 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'center' | 'middle-right'
@@ -83,14 +84,17 @@ export function scopePages(scope: StampScope, pageCount: number): number[] {
 
 // ---- document plumbing ----
 async function loadForStamp(bytes: Uint8Array): Promise<PDFDocument> {
+  let pdf0: PDFDocument;
   if (!(bytes instanceof Uint8Array) || bytes.length < 5 || bytes.length > STAMP_MAX_INPUT_BYTES) {
     throw new Error('Stamping accepts PDFs up to 128 MB.');
   }
   try {
     const pdf = await PDFDocument.load(bytes, { updateMetadata: false });
     if (pdf.getPageCount() < 1) throw new Error('no pages');
-    return pdf;
+    pdf0 = pdf;
   } catch { throw new Error('This PDF could not be stamped because it is encrypted, invalid or damaged.'); }
+  refuseSignedPdf(pdf0, 'stamping it');
+  return pdf0;
 }
 
 /**

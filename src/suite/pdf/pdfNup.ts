@@ -8,7 +8,7 @@
  * embedded page content; the result reports how many were present so the
  * user is told rather than surprised.
  */
-import { PDFArray, PDFDocument, PDFName, degrees, rgb } from 'pdf-lib';
+import { PDFArray, PDFDict, PDFDocument, PDFName, degrees, rgb } from 'pdf-lib';
 
 export const PDF_NUP_MAX_INPUT_BYTES = 128 * 1024 * 1024;
 export const PDF_NUP_MAX_PAGES = 1000;
@@ -62,6 +62,11 @@ export async function nupPdf(bytes: Uint8Array, options: NupOptions): Promise<Nu
     if (count < 1) throw new Error('no pages');
   } catch { throw new Error('This file could not be arranged because it is encrypted, invalid or damaged.'); }
   if (count > PDF_NUP_MAX_PAGES) throw new Error(`N-up supports up to ${PDF_NUP_MAX_PAGES} pages.`);
+  // Hidden layers would show on the sheets: their visibility lives in the catalog, which is not carried over.
+  const layers = source.catalog.lookupMaybe(PDFName.of('OCProperties'), PDFDict)?.lookupMaybe(PDFName.of('D'), PDFDict);
+  if (layers && ((layers.lookupMaybe(PDFName.of('OFF'), PDFArray)?.size() ?? 0) > 0 || layers.lookupMaybe(PDFName.of('BaseState'), PDFName)?.decodeText() === 'OFF')) {
+    throw new Error('This PDF has hidden layers, which would become visible on the sheets. Show or remove the layers first.');
+  }
 
   const firstSize = source.getPage(0).getCropBox();
   let [sheetWidth, sheetHeight] = options.sheet === 'source' ? [firstSize.width, firstSize.height] : SHEETS[options.sheet];
