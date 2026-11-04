@@ -173,4 +173,10 @@ describe('content rewriting details', () => {
     expect(runs.map((r) => r.text).join('')).toBe(url);
     expect(runs.every((r) => r.box[2] - r.box[0] <= 0.2 * 600 + 0.5)).toBe(true);
   });
+
+  it('refuses inserted lines whose last baseline falls outside the box', async () => {
+    const spec = { pageNumber: 1, viewRotation: 0, kind: 'text' as const, rect: { x: 0.1, y: 0.05, width: 0.5, height: 20 / 800 }, fontSize: 12, stroke: '#000000', lineWidth: 1 };
+    await expect(insertPdfContent(await sample(), { ...spec, text: 'First line\nSecond line' })).rejects.toThrow(/does not fit the box/);
+    expect(await insertPdfContent(await sample(), { ...spec, text: 'One line' })).toBeInstanceOf(Uint8Array);
+  });
 });

@@ -314,7 +314,8 @@ export async function insertPdfContent(bytes: Uint8Array, spec: InsertSpec): Pro
       lines.push(line);
     }
     const lineHeight = size * 1.25;
-    if (lines.length * lineHeight > h + size) throw new Error(`The text needs ${lines.length} lines and does not fit the box; make the box taller or the text smaller.`);
+    // Same positions as the drawing below: the last baseline plus Helvetica's descent must stay in the box.
+    if ((lines.length - 1) * lineHeight + size * 0.8 + size * 0.21 > h + 0.5) throw new Error(`The text needs ${lines.length} lines and does not fit the box; make the box taller or the text smaller.`);
     // Draw each line as its own run so it can be edited later; position along the shown axes.
     const down: [number, number] = [-frame.matrix[2], -frame.matrix[3]];
     const top = toPage(Math.min(x, x + width), Math.min(y, y + height));

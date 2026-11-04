@@ -195,4 +195,15 @@ describe('paragraph fonts and spacing', () => {
     const [mixed] = await listPdfParagraphs(bytes, 1);
     await expect(reflowPdfParagraph(bytes, 1, mixed.id, mixed.text, mixed.text, { ...base, size: 12 }, true)).rejects.toThrow(/mixes text colours/);
   });
+
+  it('reports a single line made taller than its box as overflow', async () => {
+    const pdf = await PDFDocument.create();
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    pdf.addPage([600, 800]).drawText('A single wide line of ordinary body text', { x: 72, y: 700, size: 12, font });
+    const bytes = await pdf.save();
+    const [line] = await listPdfParagraphs(bytes, 1);
+    await expect(reflowPdfParagraph(bytes, 1, line.id, line.text, 'Hi', { ...base, size: 48 }, false)).rejects.toBeInstanceOf(ParagraphOverflowError);
+    expect((await reflowPdfParagraph(bytes, 1, line.id, line.text, 'Hi', { ...base, size: 48 }, true)).overflow).toBe(true);
+    expect((await reflowPdfParagraph(bytes, 1, line.id, line.text, 'Short line', { ...base, size: 12 }, false)).overflow).toBe(false);
+  });
 });
