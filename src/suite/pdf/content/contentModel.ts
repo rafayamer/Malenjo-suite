@@ -4,7 +4,7 @@
  * to the operations that draw it. Form XObjects are listed but not entered.
  */
 import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFStream, decodePDFRawStream } from 'pdf-lib';
-import { tokenizeContent, type ContentOp, type Operand } from './contentLexer';
+import { serializeOperand, tokenizeContent, type ContentOp, type Operand } from './contentLexer';
 import { fontCodec, type FontCodec } from './fontCodec';
 
 export type Matrix = [number, number, number, number, number, number];
@@ -48,6 +48,8 @@ export interface TextRun {
   horizontalScale: number;
   leading: number;
   fill: string;
+  /** Operators that reproduce the nonstroking colour exactly (rg/g/k, or cs with sc/scn). */
+  fillOps: string;
   /** Text rendering mode (Tr): 0 fill, 1 stroke, 2 both, 3 invisible, 4–7 the same and add to the clip. */
   render: number;
   /** Current transformation matrix while the run is drawn (fixed for a text object). */
@@ -112,8 +114,8 @@ export function readPageModel(pdf: PDFDocument, pageIndex: number, fontCache?: M
   const fonts = pageFonts(pdf, pageIndex, fontCache);
   const xobjects = pdf.getPage(pageIndex).node.Resources()?.lookupMaybe(N('XObject'), PDFDict);
   const runs: TextRun[] = []; const images: ImagePlacement[] = []; const paths: PathObject[] = [];
-  type State = { ctm: Matrix; fill: string; stroke: string; lineWidth: number; font?: FontCodec; fontKey: string; size: number; tc: number; tw: number; tz: number; tl: number; ts: number; tr: number };
-  let gs: State = { ctm: [...IDENTITY] as Matrix, fill: '#000000', stroke: '#000000', lineWidth: 1, fontKey: '', size: 0, tc: 0, tw: 0, tz: 100, tl: 0, ts: 0, tr: 0 };
+  type State = { ctm: Matrix; fill: string; stroke: string; lineWidth: number; font?: FontCodec; fontKey: string; size: number; tc: number; tw: number; tz: number; tl: number; ts: number; tr: number; fillSpace: string; fillOps: string };
+  let gs: State = { ctm: [...IDENTITY] as Matrix, fill: '#000000', stroke: '#000000', lineWidth: 1, fontKey: '', size: 0, tc: 0, tw: 0, tz: 100, tl: 0, ts: 0, tr: 0, fillSpace: '', fillOps: '0 g' };
   const stack: State[] = [];
   let tm: Matrix = [...IDENTITY] as Matrix, tlm: Matrix = [...IDENTITY] as Matrix, btIndex = -1;
   let pathStart = -1; let pathPoints: [number, number][] = []; let pathCtm: Matrix = [...IDENTITY] as Matrix;
@@ -144,7 +146,7 @@ export function readPageModel(pdf: PDFDocument, pageIndex: number, fontCache?: M
     const descent = -0.25 * gs.size, ascent = 0.85 * gs.size;
     const corners = [apply(textToPage, 0, descent + gs.ts), apply(textToPage, advance, descent + gs.ts), apply(textToPage, 0, ascent + gs.ts), apply(textToPage, advance, ascent + gs.ts)];
     runs.push({ id: runs.length, opIndex, btIndex, fontKey: gs.fontKey, font, size: gs.size, text, display, codes, unmapped, start, advance, box: boxOf(corners),
-      charSpacing: gs.tc, wordSpacing: gs.tw, horizontalScale: gs.tz, leading: gs.tl, fill: gs.fill, render: gs.tr, ctm: [...gs.ctm] as Matrix });
+      charSpacing: gs.tc, wordSpacing: gs.tw, horizontalScale: gs.tz, leading: gs.tl, fill: gs.fill, fillOps: gs.fillOps, render: gs.tr, ctm: [...gs.ctm] as Matrix });
     tm = multiply([1, 0, 0, 1, advance, 0], tm);
   };
   const nextLine = (tx: number, ty: number) => { tlm = multiply([1, 0, 0, 1, tx, ty], tlm); tm = [...tlm] as Matrix; };
@@ -156,7 +158,17 @@ export function readPageModel(pdf: PDFDocument, pageIndex: number, fontCache?: M
       case 'Q': gs = stack.pop() ?? gs; break;
       case 'cm': gs.ctm = multiply([n(0), n(1), n(2), n(3), n(4), n(5)], gs.ctm); break;
       case 'w': gs.lineWidth = n(0); break;
-      case 'g': case 'rg': case 'k': gs.fill = color(o, op.op); break;
+      case 'g': case 'rg': case 'k': gs.fill = color(o, op.op); gs.fillSpace = ''; gs.fillOps = `${o.map(serializeOperand).join(' ')} ${op.op}`; break;
+      case 'cs': {
+        // A new colour space starts at its initial colour (black for the device spaces).
+        gs.fillSpace = `${o.map(serializeOperand).join(' ')} cs`; gs.fillOps = gs.fillSpace; gs.fill = '#000000'; break;
+      }
+      case 'sc': case 'scn': {
+        gs.fillOps = `${gs.fillSpace} ${o.map(serializeOperand).join(' ')} ${op.op}`.trim();
+        const numbers = o.filter((x) => x.type === 'number');
+        gs.fill = numbers.length === 1 ? color(numbers, 'g') : numbers.length === 3 ? color(numbers, 'rg') : numbers.length === 4 ? color(numbers, 'k') : gs.fill;
+        break;
+      }
       case 'G': case 'RG': case 'K': gs.stroke = color(o, op.op.toLowerCase()); break;
       case 'BT': tm = [...IDENTITY] as Matrix; tlm = [...IDENTITY] as Matrix; btIndex = index; break;
       case 'Tf': gs.fontKey = o[0]?.type === 'name' ? o[0].value : ''; gs.font = fonts.get(gs.fontKey); gs.size = n(1); break;

@@ -17,7 +17,7 @@ import { rewriteContent, serializeOperand } from './contentLexer';
 import { documentModels, invert, type Box, type PageModel, type TextRun } from './contentModel';
 import type { ContentOp } from './contentLexer';
 import { GlyphUnavailableError } from './textEdit';
-import { parseColor, viewerFrame } from '../pdfStamp';
+import { viewerFrame } from '../pdfStamp';
 
 export type ParagraphAlign = 'left' | 'center' | 'right' | 'justify';
 export type ParagraphFont = 'keep' | 'helvetica' | 'helvetica-bold' | 'times' | 'times-bold' | 'courier';
@@ -160,8 +160,8 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
   if (modes.size > 1 || ![0, 3].includes(first.render)) {
     throw new Error('This paragraph is drawn as outlined or clipping text (or mixes text drawing modes), which rewriting it cannot preserve. Edit its text runs one at a time instead.');
   }
-  // The rewritten block is drawn in one colour; a coloured link or highlighted phrase would lose its colour.
-  if (new Set(paragraph.lines.flatMap((l) => l.runs.map((r) => r.fill))).size > 1) {
+  // The rewritten block is drawn in one colour, set with the paragraph's own colour operators; a coloured link or highlighted phrase would lose its colour.
+  if (new Set(paragraph.lines.flatMap((l) => l.runs.map((r) => r.fillOps))).size > 1) {
     throw new Error('This paragraph mixes text colours (for example a coloured link), which rewriting it cannot preserve. Edit its text runs one at a time instead.');
   }
   if (paragraph.lines.some((l) => l.runs.some((r) => r.unmapped || r.font.kind === 'type3'))) throw new Error('This paragraph uses a font that does not say which characters it draws, so it cannot be rewritten.');
@@ -239,10 +239,9 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
   for (const run of runs) edits.set(run.opIndex, silenced(model.ops[run.opIndex], run));
   const last = runs.reduce((a, b) => (b.opIndex > a.opIndex ? b : a));
   const etIndex = model.ops.findIndex((op, k) => k > last.opIndex && op.op === 'ET');
-  const [r, g, b] = parseColor(first.fill);
   const firstBaseline = baseline0;
   const round = (n: number) => Math.round(n * 10000) / 10000;
-  const ops: string[] = ['q', `${invert(last.ctm).map(round).join(' ')} cm`, `${r} ${g} ${b} rg`, 'BT', `${serializeOperand({ type: 'name', value: fontKey })} ${style.size} Tf`,
+  const ops: string[] = ['q', `${invert(last.ctm).map(round).join(' ')} cm`, first.fillOps, 'BT', `${serializeOperand({ type: 'name', value: fontKey })} ${style.size} Tf`,
     `${style.charSpacing} Tc`, '100 Tz', '0 Ts', `${first.render} Tr`];
   laid.forEach((line, i) => {
     const w = measure(line.text);
