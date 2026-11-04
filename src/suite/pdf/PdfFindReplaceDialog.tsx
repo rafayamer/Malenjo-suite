@@ -4,7 +4,7 @@ import { replacePdfText, searchPdfText, type TextMatch } from './content/textEdi
 import { describePdfError } from './pdfUserErrors';
 
 type Operation = (latest: Uint8Array) => Promise<{ bytes: Uint8Array; summary: string }>;
-export interface RevisionInfo { index: number; label: string; current: boolean }
+export interface RevisionInfo { index: number; label: string; current: boolean; /** The document as it was opened (not an edited revision kept after older history was dropped). */ original: boolean }
 interface Props {
   domIdPrefix: string;
   bytes: Uint8Array;
@@ -75,7 +75,7 @@ export default function PdfFindReplaceDialog({ domIdPrefix, bytes, busy, revisio
       <legend>Revision history</legend>
       <ol className="pdf-merge-list static" aria-label="Revisions">
         {revisions.map((r) => <li key={r.index}>
-          <span className="pdf-merge-name">{r.index === 0 ? 'Opened document' : `${r.index}. ${r.label}`}{r.current ? ' (current)' : ''}</span>
+          <span className="pdf-merge-name">{r.original ? 'Opened document' : r.index === 0 ? `Oldest kept revision: ${r.label}` : `${r.index}. ${r.label}`}{r.current ? ' (current)' : ''}</span>
           <button type="button" disabled={busy || r.current} aria-label={`Go back to revision ${r.index}`} onClick={() => onRestore(r.index)}>Restore</button>
           <button type="button" disabled={busy} aria-label={`Save revision ${r.index} as a PDF`} onClick={() => onSaveRevision(r.index)}>Save…</button>
         </li>)}

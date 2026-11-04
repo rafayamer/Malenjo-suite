@@ -64,8 +64,40 @@ export async function listPdfTextRuns(bytes: Uint8Array, pageNumber: number, vie
     shown: shownOf(run.box), id: run.id, text: run.text, fontName: run.font.baseFont.replace(/^[A-Z]{6}\+/, ''), size: Math.round(Math.hypot(run.start[2], run.start[3]) * 100) / 100, box: run.box, ...editability(run) }));
 }
 
+/**
+ * A TJ array with new text: only the string elements that hold the changed characters are
+ * re-encoded (merged into one when the change spans several); every positioning adjustment
+ * outside the change is kept, so kerning and justified spacing of untouched text stay put.
+ */
+function rewrittenTJ(op: ContentOp, run: TextRun, text: string): string | null {
+  const array = op.operands[0];
+  if (op.op !== 'TJ' || array?.type !== 'array') return null;
+  const items = array.items;
+  const pieces = items.map((item) => (item.type === 'string' ? run.font.codes(item.bytes).map((c) => run.font.unicode(c) ?? '\ufffd').join('') : null));
+  const old = pieces.map((t) => t ?? '').join('');
+  if (old !== run.text) return null;
+  let start = 0; while (start < old.length && start < text.length && old[start] === text[start]) start++;
+  let tail = 0; while (tail < old.length - start && tail < text.length - start && old[old.length - 1 - tail] === text[text.length - 1 - tail]) tail++;
+  const end = old.length - tail;
+  // String elements covering [start, end) (or the element at the insertion point).
+  let offset = 0, first = -1, last = -1;
+  pieces.forEach((piece, index) => {
+    if (piece === null) return;
+    const from = offset, to = offset + piece.length; offset = to;
+    const touches = start === end ? (start >= from && start <= to && first < 0) : from < end && to > start;
+    if (touches) { if (first < 0) first = index; last = index; }
+  });
+  if (first < 0) return null;
+  let before = 0; for (let k = 0; k < first; k++) before += pieces[k]?.length ?? 0;
+  const span = pieces.slice(first, last + 1).map((t) => t ?? '').join('');
+  const merged = span.slice(0, start - before) + text.slice(start, text.length - tail) + span.slice(end - before);
+  const next: Operand[] = [...items.slice(0, first), { type: 'string', bytes: encodeOrThrow(run, merged), hex: true }, ...items.slice(last + 1)];
+  return `${serializeOperand({ type: 'array', items: next })} TJ`;
+}
+
 /** Replacement text for one text-showing operation, keeping its operator semantics. */
-function rewrittenOp(op: ContentOp, encoded: Uint8Array): string {
+function rewrittenOp(op: ContentOp, encoded: Uint8Array, run?: TextRun, text?: string): string {
+  if (run && text !== undefined) { const tj = rewrittenTJ(op, run, text); if (tj) return tj; }
   const string: Operand = { type: 'string', bytes: encoded, hex: true };
   if (op.op === '"') return [serializeOperand(op.operands[0]), serializeOperand(op.operands[1]), serializeOperand(string), '"'].join(' ');
   if (op.op === "'") return `${serializeOperand(string)} '`;
@@ -100,7 +132,7 @@ export async function replacePdfTextRun(bytes: Uint8Array, pageNumber: number, r
   if (!run || run.text !== expected) throw new Error('This text changed since it was selected. Select it again.');
   const { editable, reason } = editability(run);
   if (!editable) throw new Error(`This text cannot be edited in place because it is ${reason}.`);
-  writePage(pdf, pageNumber - 1, model, new Map([[run.opIndex, rewrittenOp(model.ops[run.opIndex], encodeOrThrow(run, text))]]));
+  writePage(pdf, pageNumber - 1, model, new Map([[run.opIndex, rewrittenOp(model.ops[run.opIndex], encodeOrThrow(run, text), run, text)]]));
   return save(pdf);
 }
 
@@ -145,7 +177,7 @@ export async function replacePdfText(bytes: Uint8Array, query: string, replaceme
       const next = run.text.replace(pattern, () => replacement);
       const encoded = run.font.encode(next);
       if ('missing' in encoded) { refused.push({ pageNumber: pageIndex + 1, text: run.text, reason: `its font has no glyph for ${encoded.missing.join(' ')}` }); continue; }
-      edits.set(run.opIndex, rewrittenOp(model.ops[run.opIndex], encoded.bytes));
+      edits.set(run.opIndex, rewrittenOp(model.ops[run.opIndex], encoded.bytes, run, next));
       replaced += count; runs++;
     }
     if (edits.size) writePage(pdf, pageIndex, model, edits);

@@ -13,6 +13,15 @@ import {
 const bytes = (...values:number[]) => new Uint8Array(values);
 
 describe('PDF history',()=>{
+  it('marks when the original document was dropped to stay within the limits',()=>{
+    let history=createPdfHistory(Uint8Array.of(1),1,{maxEntries:3});
+    history=recordPdfHistory(history,Uint8Array.of(2),1,'One');
+    history=recordPdfHistory(history,Uint8Array.of(3),1,'Two');
+    expect(history.baselineEvicted).toBe(false);
+    history=recordPdfHistory(history,Uint8Array.of(4),1,'Three');
+    expect(history.baselineEvicted).toBe(true);
+    expect(history.entries[0].label).toBe('One');
+  });
   it('jumps to any revision and keeps later ones for redo',()=>{
     let history=createPdfHistory(bytes(1),1);
     history=recordPdfHistory(history,bytes(2),1,'A');
