@@ -164,6 +164,11 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
   if (new Set(paragraph.lines.flatMap((l) => l.runs.map((r) => r.fillOps))).size > 1) {
     throw new Error('This paragraph mixes text colours (for example a coloured link), which rewriting it cannot preserve. Edit its text runs one at a time instead.');
   }
+  // The block is drawn in the graphics state at the paragraph's last text object; lines drawn with other
+  // ExtGState settings (transparency, blend modes) would take that one instead.
+  if (new Set(paragraph.lines.flatMap((l) => l.runs.map((r) => r.extGState))).size > 1) {
+    throw new Error('This paragraph mixes transparency or blending settings, which rewriting it cannot preserve. Edit its text runs one at a time instead.');
+  }
   // The block keeps the paragraph's horizontal scaling (Tz); runs drawn at different scales cannot share one.
   if (new Set(paragraph.lines.flatMap((l) => l.runs.map((r) => r.horizontalScale))).size > 1) {
     throw new Error('This paragraph mixes horizontal text scaling, which rewriting it cannot preserve. Edit its text runs one at a time instead.');
@@ -205,7 +210,8 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
     if (unsupported.length) throw new GlyphUnavailableError(unsupported, standard.name);
     fontKey = pdf.getPage(pageNumber - 1).node.newFontDictionary('MalenjoP', standard.ref).decodeText();
     substitution = `“${first.font.baseFont.replace(/^[A-Z]{6}\+/, '')}” was replaced by ${standard.name}.`;
-    measure = (s) => hs * (standard.widthOfTextAtSize(s, style.size) + s.length * style.charSpacing + (s.split(' ').length - 1) * style.wordSpacing);
+    // Tj draws plain advances (no pair kerning), so measure character by character.
+    measure = (s) => hs * ([...s].reduce((sum, ch) => sum + standard.widthOfTextAtSize(ch, style.size), 0) + s.length * style.charSpacing + (s.split(' ').length - 1) * style.wordSpacing);
     encode = (s) => standard.encodeText(s).toString();
   }
 
