@@ -190,4 +190,16 @@ describe('content rewriting details', () => {
     expect((await content(removed)).replace(/\s+/g, ' ')).toMatch(/0 0 100 100 re W n 200 0 100 100 re f/);
     expect((await listPdfPageObjects(removed, 1)).filter((o) => o.kind === 'path')).toHaveLength(1);
   });
+
+  it('moves the crop with an image that was cropped and then replaced', async () => {
+    let bytes = await cropPdfImage(await sample(), 1, 0, { left: 0.1, top: 0.1, right: 0.1, bottom: 0.1 });
+    bytes = await replacePdfImage(bytes, 1, 0, PNG);
+    const [before] = await listPdfPageObjects(bytes, 1);
+    const moved = await transformPdfObject(bytes, 1, 'image', 0, { dx: 50, dy: 0 });
+    expect((await content(moved)).replace(/\s+/g, ' ')).toMatch(/q [\d. -]+ cm q [\d. ]+ re W n q [\d. -]+ cm \/\S+ Do Q Q Q/);
+    const [after] = await listPdfPageObjects(moved, 1);
+    expect(after.box[0] - before.box[0]).toBeCloseTo(50, 0);
+    const removed = await deletePdfObject(moved, 1, 'image', 0);
+    expect(await content(removed)).not.toMatch(/ W n/);
+  });
 });
