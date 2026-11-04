@@ -14,6 +14,12 @@ export const multiply = (m: Matrix, n: Matrix): Matrix => [
   m[0] * n[0] + m[1] * n[2], m[0] * n[1] + m[1] * n[3], m[2] * n[0] + m[3] * n[2], m[2] * n[1] + m[3] * n[3],
   m[4] * n[0] + m[5] * n[2] + n[4], m[4] * n[1] + m[5] * n[3] + n[5],
 ];
+/** Inverse of an affine matrix; refuses a degenerate one. */
+export const invert = (m: Matrix): Matrix => {
+  const det = m[0] * m[3] - m[1] * m[2];
+  if (Math.abs(det) < 1e-12) throw new Error('This object has a degenerate transform and cannot be edited.');
+  return [m[3] / det, -m[1] / det, -m[2] / det, m[0] / det, (m[2] * m[5] - m[3] * m[4]) / det, (m[1] * m[4] - m[0] * m[5]) / det];
+};
 export const apply = (m: Matrix, x: number, y: number): [number, number] => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
 export type Box = [number, number, number, number];
 const boxOf = (points: [number, number][]): Box => [Math.min(...points.map((p) => p[0])), Math.min(...points.map((p) => p[1])), Math.max(...points.map((p) => p[0])), Math.max(...points.map((p) => p[1]))];
@@ -44,6 +50,8 @@ export interface TextRun {
   fill: string;
   /** Text rendering mode (Tr): 0 fill, 1 stroke, 2 both, 3 invisible, 4–7 the same and add to the clip. */
   render: number;
+  /** Current transformation matrix while the run is drawn (fixed for a text object). */
+  ctm: Matrix;
 }
 export interface ImagePlacement { id: number; opIndex: number; name: string; ctm: Matrix; box: Box; ref: string | null }
 export interface PathObject { id: number; startIndex: number; endIndex: number; paint: string; ctm: Matrix; box: Box; stroke: string; fill: string; lineWidth: number }
@@ -108,7 +116,7 @@ export function readPageModel(pdf: PDFDocument, pageIndex: number, fontCache?: M
   let gs: State = { ctm: [...IDENTITY] as Matrix, fill: '#000000', stroke: '#000000', lineWidth: 1, fontKey: '', size: 0, tc: 0, tw: 0, tz: 100, tl: 0, ts: 0, tr: 0 };
   const stack: State[] = [];
   let tm: Matrix = [...IDENTITY] as Matrix, tlm: Matrix = [...IDENTITY] as Matrix, btIndex = -1;
-  let pathStart = -1; let pathPoints: [number, number][] = [];
+  let pathStart = -1; let pathPoints: [number, number][] = []; let pathCtm: Matrix = [...IDENTITY] as Matrix;
 
   const show = (opIndex: number, items: Operand[]) => {
     const font = gs.font;
@@ -136,7 +144,7 @@ export function readPageModel(pdf: PDFDocument, pageIndex: number, fontCache?: M
     const descent = -0.25 * gs.size, ascent = 0.85 * gs.size;
     const corners = [apply(textToPage, 0, descent + gs.ts), apply(textToPage, advance, descent + gs.ts), apply(textToPage, 0, ascent + gs.ts), apply(textToPage, advance, ascent + gs.ts)];
     runs.push({ id: runs.length, opIndex, btIndex, fontKey: gs.fontKey, font, size: gs.size, text, display, codes, unmapped, start, advance, box: boxOf(corners),
-      charSpacing: gs.tc, wordSpacing: gs.tw, horizontalScale: gs.tz, leading: gs.tl, fill: gs.fill, render: gs.tr });
+      charSpacing: gs.tc, wordSpacing: gs.tw, horizontalScale: gs.tz, leading: gs.tl, fill: gs.fill, render: gs.tr, ctm: [...gs.ctm] as Matrix });
     tm = multiply([1, 0, 0, 1, advance, 0], tm);
   };
   const nextLine = (tx: number, ty: number) => { tlm = multiply([1, 0, 0, 1, tx, ty], tlm); tm = [...tlm] as Matrix; };
@@ -177,14 +185,14 @@ export function readPageModel(pdf: PDFDocument, pageIndex: number, fontCache?: M
         break;
       }
       case 'm': case 'l': case 're': case 'c': case 'v': case 'y': case 'h': {
-        if (pathStart < 0) { pathStart = index; pathPoints = []; }
+        if (pathStart < 0) { pathStart = index; pathPoints = []; pathCtm = [...gs.ctm] as Matrix; }
         if (op.op === 're') { const [x, y, w, h] = [n(0), n(1), n(2), n(3)]; pathPoints.push(apply(gs.ctm, x, y), apply(gs.ctm, x + w, y), apply(gs.ctm, x, y + h), apply(gs.ctm, x + w, y + h)); }
         else for (let k = 0; k + 1 < o.length; k += 2) pathPoints.push(apply(gs.ctm, n(k), n(k + 1)));
         break;
       }
       case 'S': case 's': case 'f': case 'F': case 'f*': case 'B': case 'B*': case 'b': case 'b*': case 'n':
         if (pathStart >= 0 && op.op !== 'n' && pathPoints.length) {
-          paths.push({ id: paths.length, startIndex: pathStart, endIndex: index, paint: op.op, ctm: [...gs.ctm] as Matrix, box: boxOf(pathPoints), stroke: gs.stroke, fill: gs.fill, lineWidth: gs.lineWidth });
+          paths.push({ id: paths.length, startIndex: pathStart, endIndex: index, paint: op.op, ctm: pathCtm, box: boxOf(pathPoints), stroke: gs.stroke, fill: gs.fill, lineWidth: gs.lineWidth });
         }
         pathStart = -1; pathPoints = [];
         break;

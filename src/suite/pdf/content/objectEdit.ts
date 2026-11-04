@@ -12,7 +12,7 @@
 import { refuseSignedPdf } from '../pdfSignatureGuard';
 import { PDFDocument, PDFName, PDFRawStream, PDFRef, StandardFonts, degrees, rgb } from 'pdf-lib';
 import { rewriteContent } from './contentLexer';
-import { IDENTITY, apply, documentModels, multiply, type Box, type Matrix, type PageModel } from './contentModel';
+import { IDENTITY, apply, documentModels, invert, multiply, type Box, type Matrix, type PageModel } from './contentModel';
 import { parseColor, viewerFrame } from '../pdfStamp';
 
 export interface ShownBox { x: number; y: number; width: number; height: number }
@@ -27,11 +27,6 @@ export interface ObjectTransform {
 }
 
 const r = (n: number) => Math.round(n * 10000) / 10000;
-const invert = (m: Matrix): Matrix => {
-  const det = m[0] * m[3] - m[1] * m[2];
-  if (Math.abs(det) < 1e-12) throw new Error('This object has a degenerate transform and cannot be edited.');
-  return [m[3] / det, -m[1] / det, -m[2] / det, m[0] / det, (m[2] * m[5] - m[3] * m[4]) / det, (m[1] * m[4] - m[0] * m[5]) / det];
-};
 const cm = (m: Matrix) => `${m.map(r).join(' ')} cm`;
 
 async function load(bytes: Uint8Array): Promise<PDFDocument> {
@@ -126,11 +121,11 @@ function transformFor(pdf: PDFDocument, pageNumber: number, viewRotation: number
 const DRAWING = new Set(['m', 'l', 'c', 'v', 'y', 'h', 're', 'S', 's', 'f', 'F', 'f*', 'B', 'B*', 'b', 'b*', 'n', 'W', 'W*', 'Do']);
 
 /**
- * Wraps ops start..end in `q prefix … Q`. Graphics-state changes made inside the span (a colour or
+ * Wraps ops start..end in `q prefix … [beforePaint] paint Q`. Graphics-state changes made inside the span (a colour or
  * width set between a path's construction and its painting) are repeated after the `Q`, so the
  * content that follows still sees them and only the requested edit is isolated.
  */
-function wrap(model: PageModel, start: number, end: number, prefix: string, inner?: string): Map<number, string> {
+function wrap(model: PageModel, start: number, end: number, prefix: string, inner?: string, beforePaint = ''): Map<number, string> {
   const edits = new Map<number, string>();
   const replay: string[] = [];
   for (let k = start; k <= end; k++) { const op = model.ops[k].op; if (!DRAWING.has(op) && op !== 'q' && op !== 'Q') replay.push(opText(model, k)); }
@@ -138,7 +133,7 @@ function wrap(model: PageModel, start: number, end: number, prefix: string, inne
   if (start === end) edits.set(start, `q ${prefix} ${inner ?? opText(model, start)} Q${after}`);
   else {
     edits.set(start, `q ${prefix} ${opText(model, start)}`);
-    edits.set(end, `${opText(model, end)} Q${after}`);
+    edits.set(end, `${beforePaint ? `${beforePaint} ` : ''}${opText(model, end)} Q${after}`);
   }
   return edits;
 }
@@ -254,7 +249,8 @@ export async function stylePdfPath(bytes: Uint8Array, pageNumber: number, id: nu
     parts.push(`${r(style.lineWidth)} w`);
   }
   if (!parts.length) throw new Error('Choose a colour or line width to change.');
-  writePage(pdf, pageNumber, model, wrap(model, where.start, where.end, parts.join(' ')));
+  // The style goes right before the painting operator, after any colour or width the path set itself.
+  writePage(pdf, pageNumber, model, wrap(model, where.start, where.end, '', undefined, parts.join(' ')));
   return save(pdf);
 }
 

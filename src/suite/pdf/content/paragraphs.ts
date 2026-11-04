@@ -14,7 +14,7 @@
 import { refuseSignedPdf } from '../pdfSignatureGuard';
 import { PDFDocument, PDFName, StandardFonts, type PDFFont } from 'pdf-lib';
 import { rewriteContent, serializeOperand } from './contentLexer';
-import { documentModels, type Box, type PageModel, type TextRun } from './contentModel';
+import { documentModels, invert, type Box, type PageModel, type TextRun } from './contentModel';
 import type { ContentOp } from './contentLexer';
 import { GlyphUnavailableError } from './textEdit';
 import { parseColor, viewerFrame } from '../pdfStamp';
@@ -167,6 +167,8 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
   let substitution: string | null = null;
   let measure: (s: string) => number;
   let encode: (s: string) => string;
+  // Tw only applies to the single-byte code 32, so two-byte fonts get their word spacing from TJ adjustments.
+  let twoByte = false;
   const words = text.replace(/\r/g, '').split('\n').map((p) => p.split(/\s+/).filter(Boolean));
   if (style.font === 'keep') {
     // One font is used for the rewritten text; a paragraph that mixes fonts (a bold phrase) would lose them.
@@ -174,11 +176,13 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
       throw new Error('This paragraph mixes fonts (for example a bold phrase), which keeping the original font cannot preserve. Choose a font to rewrite it in, or edit its text runs one at a time.');
     }
     const font = first.font;
+    twoByte = font.bytesPerCode === 2;
     const encoded = font.encode(words.flat().join(' '));
     if ('missing' in encoded) throw new GlyphUnavailableError(encoded.missing, font.baseFont);
     measure = (s) => {
       const r = font.encode(s); if ('missing' in r) return 0;
-      return font.codes(r.bytes).reduce((sum, code) => sum + (font.width(code) / 1000) * style.size + style.charSpacing + (font.bytesPerCode === 1 && code === 32 ? style.wordSpacing : 0), 0);
+      return font.codes(r.bytes).reduce((sum, code) => sum + (font.width(code) / 1000) * style.size + style.charSpacing + (font.bytesPerCode === 1 && code === 32 ? style.wordSpacing : 0), 0)
+        + (font.bytesPerCode === 2 ? (s.split(' ').length - 1) * style.wordSpacing : 0);
     };
     encode = (s) => { const r = font.encode(s); if ('missing' in r) throw new GlyphUnavailableError(r.missing, font.baseFont); return serializeOperand({ type: 'string', bytes: r.bytes, hex: true }); };
   } else {
@@ -217,23 +221,39 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
   const overflow = laid.length > available;
   if (overflow && !allowGrow) throw new ParagraphOverflowError(laid.length, available);
 
-  // Remove the old runs; write the new block after the page content, in page space.
+  // Remove the old runs and draw the new block where the paragraph was drawn (after the text object
+  // holding its last run), so content painted over the paragraph still covers it. The block is laid
+  // out in page space, so it undoes the CTM in force there.
   const edits = new Map<number, string>();
-  for (const line of paragraph.lines) for (const run of line.runs) edits.set(run.opIndex, silenced(model.ops[run.opIndex], run));
+  const runs = paragraph.lines.flatMap((l) => l.runs);
+  for (const run of runs) edits.set(run.opIndex, silenced(model.ops[run.opIndex], run));
+  const last = runs.reduce((a, b) => (b.opIndex > a.opIndex ? b : a));
+  const etIndex = model.ops.findIndex((op, k) => k > last.opIndex && op.op === 'ET');
   const [r, g, b] = parseColor(first.fill);
   const firstBaseline = paragraph.lines[0].baseline;
-  const ops: string[] = ['q', `${r} ${g} ${b} rg`, 'BT', `${serializeOperand({ type: 'name', value: fontKey })} ${style.size} Tf`, `${style.charSpacing} Tc`, `${first.render} Tr`];
+  const round = (n: number) => Math.round(n * 10000) / 10000;
+  const ops: string[] = ['q', `${invert(last.ctm).map(round).join(' ')} cm`, `${r} ${g} ${b} rg`, 'BT', `${serializeOperand({ type: 'name', value: fontKey })} ${style.size} Tf`,
+    `${style.charSpacing} Tc`, '100 Tz', '0 Ts', `${first.render} Tr`];
   laid.forEach((line, i) => {
     const w = measure(line.text);
     const gaps = line.text.split(' ').length - 1;
     const justify = style.align === 'justify' && !line.last && gaps > 0;
     const x = style.align === 'center' ? paragraph.box[0] + (width - w) / 2 : style.align === 'right' ? paragraph.box[2] - w : paragraph.box[0];
     const tw = style.wordSpacing + (justify ? (width - w) / gaps : 0);
-    ops.push(`${Math.round(tw * 1000) / 1000} Tw`, `1 0 0 1 ${Math.round(x * 100) / 100} ${Math.round((firstBaseline - i * leading) * 100) / 100} Tm`, `${encode(line.text)} Tj`);
+    const position = `1 0 0 1 ${Math.round(x * 100) / 100} ${Math.round((firstBaseline - i * leading) * 100) / 100} Tm`;
+    if (twoByte) {
+      const words = line.text.split(' ');
+      const adjust = round((-tw * 1000) / style.size);
+      const items = words.flatMap((word, k) => (k < words.length - 1 ? [encode(`${word} `), ...(adjust ? [String(adjust)] : [])] : word ? [encode(word)] : []));
+      ops.push('0 Tw', position, `[${items.join(' ')}] TJ`);
+    } else ops.push(`${round(tw)} Tw`, position, `${encode(line.text)} Tj`);
   });
   ops.push('ET', 'Q');
+  const block = ops.join('\n');
+  if (etIndex >= 0) edits.set(etIndex, `ET\n${block}`);
   const rewritten = rewriteContent(model.data, model.ops, edits);
-  const content = new Uint8Array([...new TextEncoder().encode('q\n'), ...rewritten, ...new TextEncoder().encode(`\nQ\n${ops.join('\n')}\n`)]);
+  const content = etIndex >= 0 ? rewritten
+    : new Uint8Array([...new TextEncoder().encode('q\n'), ...rewritten, ...new TextEncoder().encode(`\nQ\n${block}\n`)]);
   pdf.getPage(pageNumber - 1).node.set(PDFName.of('Contents'), pdf.context.obj([pdf.context.register(pdf.context.flateStream(content))]));
   const out = Uint8Array.from(await pdf.save({ useObjectStreams: false, updateFieldAppearances: false }));
   return { bytes: out, lines: laid.length, overflow, substitution };

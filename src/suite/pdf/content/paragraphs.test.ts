@@ -157,5 +157,32 @@ describe('paragraph fonts and spacing', () => {
     const [stroked] = await listPdfParagraphs(outlined, 1);
     await expect(reflowPdfParagraph(outlined, 1, stroked.id, stroked.text, 'Other', { ...base, size: 12 }, true)).rejects.toThrow(/outlined or clipping/);
   });
+
+  it('keeps the paragraph under content drawn over it, and spaces two-byte fonts with TJ', async () => {
+    const { pageContentBytes } = await import('./contentModel');
+    const text = async (bytes: Uint8Array) => new TextDecoder('latin1').decode(pageContentBytes(await PDFDocument.load(bytes), 0));
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([600, 800]);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    page.drawText('Covered words here', { x: 72, y: 700, size: 12, font });
+    page.node.addContentStream(pdf.context.register(pdf.context.stream('1 1 1 rg 60 690 300 30 re f')));
+    const covered = await pdf.save();
+    const [paragraph] = await listPdfParagraphs(covered, 1);
+    const out = await reflowPdfParagraph(covered, 1, paragraph.id, paragraph.text, 'Covered words', { ...base, size: 12 }, true);
+    const content = await text(out.bytes);
+    expect(content.lastIndexOf(' Tm')).toBeLessThan(content.indexOf('60 690 300 30 re'));
+
+    const wide = await PDFDocument.create();
+    const wpage = wide.addPage([600, 800]);
+    const toUnicode = wide.context.stream('/CIDInit /ProcSet findresource begin 3 beginbfchar <0003> <0041> <0004> <0042> <0005> <0020> endbfchar endcmap');
+    const type0 = wide.context.register(wide.context.obj({ Type: 'Font', Subtype: 'Type0', BaseFont: 'GHIJKL+Cyr', Encoding: 'Identity-H', ToUnicode: wide.context.register(toUnicode),
+      DescendantFonts: [wide.context.obj({ Type: 'Font', Subtype: 'CIDFontType2', BaseFont: 'GHIJKL+Cyr', DW: 600, FontDescriptor: wide.context.obj({ FontFile2: wide.context.register(wide.context.stream('x')) }) })] }));
+    wpage.node.set(PDFName.of('Resources'), wide.context.obj({ Font: { C: type0 } }));
+    wpage.node.addContentStream(wide.context.register(wide.context.stream('BT /C 12 Tf 72 700 Td <0003000500040005000300050004000500030005> Tj ET')));
+    const wbytes = await wide.save();
+    const [cid] = await listPdfParagraphs(wbytes, 1);
+    const spaced = await reflowPdfParagraph(wbytes, 1, cid.id, cid.text, 'A B', { ...base, size: 12, wordSpacing: 2 }, true);
+    expect(await text(spaced.bytes)).toMatch(/\[<00030005> -166\.6667 <0004>\] TJ/);
+  });
 });
 

@@ -147,4 +147,17 @@ describe('content rewriting details', () => {
       expect(paths.every((p) => p.fill === '#ff0000')).toBe(true);
     }
   });
+
+  it('moves a path in its construction space and styles it after its own colour', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([400, 400]);
+    page.node.addContentStream(pdf.context.register(pdf.context.stream('0 0 100 100 re 2 0 0 2 0 0 cm f')));
+    const moved = await transformPdfObject(await pdf.save(), 1, 'path', 0, { dx: 10, dy: 0 });
+    expect((await listPdfPageObjects(moved, 1))[0].box[0]).toBeCloseTo(10, 1);
+    const red = await PDFDocument.create();
+    red.addPage([400, 400]).node.addContentStream(red.context.register(red.context.stream('0 0 100 100 re 1 0 0 rg f')));
+    const green = await stylePdfPath(await red.save(), 1, 0, { fill: '#00ff00' });
+    expect((await listPdfPageObjects(green, 1))[0].fill).toBe('#00ff00');
+  });
 });
+
