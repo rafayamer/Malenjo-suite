@@ -106,9 +106,10 @@ try {
     await tools.getByRole('button', { name: 'Apply to paragraph' }).click();
     await notice(/Rewrote the paragraph/);
     bytes = await save();
-    // The second paragraph starts at its original first baseline (560); the first one has grown down to 564.
+    // The second paragraph hangs from the top of its original box: at 16 pt its first baseline is
+    // 560 + 0.85 × 14 − 0.85 × 16 = 558.3. The first paragraph has grown down to about 610.
     body = (await lines(bytes)).filter((l) => l.y <= 560.5);
-    expect(body.length >= 2 && near(body[0].y, 560, 0.6) && near(body[0].y - body[1].y, 24, 0.6), 'style line height ' + body.map((l) => l.y));
+    expect(body.length >= 2 && near(body[0].y, 558.3, 0.6) && near(body[0].y - body[1].y, 24, 0.6), 'style line height ' + body.map((l) => l.y));
   });
 } finally {
   await h.finish();
