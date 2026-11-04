@@ -122,12 +122,23 @@ function transformFor(pdf: PDFDocument, pageNumber: number, viewRotation: number
   return multiply(multiply(ctm, t), invert(ctm));
 }
 
+/** Operators that only build, paint or clip a path or draw an XObject; anything else in a path's span changes graphics state. */
+const DRAWING = new Set(['m', 'l', 'c', 'v', 'y', 'h', 're', 'S', 's', 'f', 'F', 'f*', 'B', 'B*', 'b', 'b*', 'n', 'W', 'W*', 'Do']);
+
+/**
+ * Wraps ops start..end in `q prefix … Q`. Graphics-state changes made inside the span (a colour or
+ * width set between a path's construction and its painting) are repeated after the `Q`, so the
+ * content that follows still sees them and only the requested edit is isolated.
+ */
 function wrap(model: PageModel, start: number, end: number, prefix: string, inner?: string): Map<number, string> {
   const edits = new Map<number, string>();
-  if (start === end) edits.set(start, `q ${prefix} ${inner ?? opText(model, start)} Q`);
+  const replay: string[] = [];
+  for (let k = start; k <= end; k++) { const op = model.ops[k].op; if (!DRAWING.has(op) && op !== 'q' && op !== 'Q') replay.push(opText(model, k)); }
+  const after = replay.length ? ` ${replay.join(' ')}` : '';
+  if (start === end) edits.set(start, `q ${prefix} ${inner ?? opText(model, start)} Q${after}`);
   else {
     edits.set(start, `q ${prefix} ${opText(model, start)}`);
-    edits.set(end, `${opText(model, end)} Q`);
+    edits.set(end, `${opText(model, end)} Q${after}`);
   }
   return edits;
 }
@@ -151,8 +162,7 @@ export async function deletePdfObject(bytes: Uint8Array, pageNumber: number, kin
   const edits = new Map<number, string>();
   // Only the object's own drawing goes: graphics-state changes made between a path's construction
   // and its painting (colours, widths) still apply to the content after it.
-  const drawing = new Set(['m', 'l', 'c', 'v', 'y', 'h', 're', 'S', 's', 'f', 'F', 'f*', 'B', 'B*', 'b', 'b*', 'n', 'W', 'W*', 'Do']);
-  for (let i = where.start; i <= where.end; i++) if (kind === 'image' || drawing.has(model.ops[i].op)) edits.set(i, '');
+  for (let i = where.start; i <= where.end; i++) if (kind === 'image' || DRAWING.has(model.ops[i].op)) edits.set(i, '');
   writePage(pdf, pageNumber, model, edits);
   return save(pdf);
 }

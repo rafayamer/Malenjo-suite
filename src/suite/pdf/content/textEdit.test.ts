@@ -28,6 +28,12 @@ async function sample() {
 }
 
 describe('content lexer', () => {
+  it('skips an unfiltered inline image by its size, even when its pixels read " EI "', () => {
+    // ID, one separator byte, then nine pixel bytes " EI Q Q  ", then the real EI.
+    const ops = tokenizeContent(new TextEncoder().encode('q BI /W 3 /H 1 /CS /RGB /BPC 8 ID ' + ' EI Q Q  ' + ' EI Q'));
+    expect(ops.map((o) => o.op)).toEqual(['q', 'BI', 'Q']);
+  });
+
   it('tokenizes operators, strings, arrays, dictionaries and inline images', () => {
     const ops = tokenizeContent(new TextEncoder().encode('q 1 0 0 1 5 5 cm BT /F1 12 Tf (a\\(b\\)c\\101) Tj [<4142> -20 (C)] TJ ET BI /W 1 /H 1 ID \u0001\u0002 EI Q /P <</MCID 3>> BDC EMC'));
     expect(ops.map((o) => o.op)).toEqual(['q', 'cm', 'BT', 'Tf', 'Tj', 'TJ', 'ET', 'BI', 'Q', 'BDC', 'EMC']);

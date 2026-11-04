@@ -126,4 +126,15 @@ describe('paragraph fonts and spacing', () => {
     const { pageContentBytes } = await import('./contentModel');
     expect(new TextDecoder('latin1').decode(pageContentBytes(await PDFDocument.load(out.bytes), 0))).toContain('/F#231 12 Tf');
   });
+
+  it('keeps two columns apart when one baseline sits slightly higher', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([600, 800]);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    page.drawText('Left column', { x: 72, y: 700, size: 12, font });
+    page.drawText('Right column', { x: 320, y: 701, size: 12, font });
+    const paragraphs = await listPdfParagraphs(await pdf.save(), 1);
+    expect(paragraphs.map((p) => p.text).sort()).toEqual(['Left column', 'Right column']);
+  });
 });
+

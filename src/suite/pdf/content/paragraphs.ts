@@ -48,11 +48,11 @@ const sizeOf = (run: TextRun) => run.start[3];
 /** Groups the page's horizontal text into paragraphs. */
 function paragraphsOf(model: PageModel): Paragraph[] {
   const runs = model.runs.filter((run) => run.text.trim() && horizontal(run));
-  // Lines: runs sharing a baseline and size, in reading order.
+  // Lines: runs sharing a baseline and size, horizontally close on either side, in reading order.
   const lines: Line[] = [];
   for (const run of [...runs].sort((a, b) => b.start[5] - a.start[5] || a.start[4] - b.start[4])) {
     const size = sizeOf(run);
-    const line = lines.find((l) => Math.abs(l.baseline - run.start[5]) < size * 0.2 && Math.abs(l.size - size) < 0.5 && run.box[0] - l.x1 < size * 2);
+    const line = lines.find((l) => Math.abs(l.baseline - run.start[5]) < size * 0.2 && Math.abs(l.size - size) < 0.5 && Math.max(run.box[0] - l.x1, l.x0 - run.box[2]) < size * 2);
     if (line) { line.runs.push(run); line.x1 = Math.max(line.x1, run.box[2]); line.x0 = Math.min(line.x0, run.box[0]); }
     else lines.push({ runs: [run], x0: run.box[0], x1: run.box[2], baseline: run.start[5], size });
   }
