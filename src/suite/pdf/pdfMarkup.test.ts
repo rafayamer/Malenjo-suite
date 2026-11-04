@@ -104,6 +104,25 @@ describe('drawings and notes (MAL-055)', () => {
     expect(await ap(bytes)).toMatch(/\n0 0\.66\d* 0\.26\d* rg [\d.]+ [\d.]+ 20 20 re f 0 0\.23\d* 0\.09\d* RG/);
   });
 
+  it('keeps an imported shape\'s interior colour when its style changes, and refuses signed PDFs', async () => {
+    const pdf = await PDFDocument.load(await doc());
+    const square = pdf.context.obj({ Type: 'Annot', Subtype: 'Square', Rect: [100, 100, 200, 160], C: [0, 0, 1], IC: [1, 1, 0], BS: { W: 2 } });
+    pdf.getPage(0).node.set(PDFName.of('Annots'), pdf.context.obj([pdf.context.register(square)]));
+    let bytes = await pdf.save();
+    const [item] = await listPdfMarkupAnnotations(bytes);
+    bytes = await updatePdfMarkupAnnotation(bytes, item, { opacity: 0.5 });
+    const p2 = await PDFDocument.load(bytes);
+    const annot = p2.getPage(0).node.lookup(PDFName.of('Annots'), PDFArray).lookup(0, PDFDict);
+    const ap = new TextDecoder().decode(decodePDFRawStream(p2.context.lookup(annot.lookup(PDFName.of('AP'), PDFDict).get(PDFName.of('N'))) as PDFRawStream).decode());
+    expect(ap).toMatch(/1 1 0 rg [\d. ]+ re B/);
+    const signed = await PDFDocument.load(bytes);
+    signed.context.register(signed.context.obj({ FT: 'Sig', V: signed.context.obj({ Type: 'Sig', ByteRange: [0, 1, 2, 3] }) }));
+    const signedBytes = await signed.save();
+    await expect(updatePdfMarkupAnnotation(signedBytes, item, { opacity: 1 })).rejects.toThrow(/signed; changing its markup/);
+    await expect(addPdfDrawing(signedBytes, { pageNumber: 1, viewRotation: 0, author: 'A', style, kind: 'Square', rect: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 } })).rejects.toThrow(/signed/);
+    expect(await listPdfMarkupAnnotations(signedBytes)).toHaveLength(1); // reading is still allowed
+  });
+
   it('grows a freehand stroke\'s box when its line gets thicker', async () => {
     let bytes = await addPdfDrawing(await doc(), { pageNumber: 1, viewRotation: 0, author: 'Ada', style: { ...style, width: 2 }, kind: 'Ink', points: [{ x: 0.1, y: 0.5 }, { x: 0.5, y: 0.5 }] });
     const [ink] = await listPdfMarkupAnnotations(bytes);

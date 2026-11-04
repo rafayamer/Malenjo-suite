@@ -49,6 +49,24 @@ function selectionByPage(domIdPrefix: string): PageSelection[] | null {
       if (!part.collapsed) textRects.push(...Array.from(part.getClientRects()));
     }
   }
+  if (!textRects.length) {
+    // Fallback: the range's own rectangles, but only those lying inside a text-layer span's box
+    // (never a canvas or page shell).
+    const spans = Array.from(document.querySelectorAll<HTMLElement>(`[id^="${domIdPrefix}-page-"] .textLayer span`)).map((span) => span.getBoundingClientRect());
+    const inside = (r: DOMRect) => spans.some((b) => r.left >= b.left - 1 && r.right <= b.right + 1 && r.top >= b.top - 1 && r.bottom <= b.bottom + 1);
+    textRects.push(...Array.from(range.getClientRects()).filter(inside));
+  }
+  if (!textRects.length) {
+    // Last resort: the boxes of the text-layer spans the selection touches (still text, never page boxes).
+    for (const span of Array.from(document.querySelectorAll<HTMLElement>(`[id^="${domIdPrefix}-page-"] .textLayer span`))) {
+      if (!span.textContent?.trim() || !selection.containsNode(span, true)) continue;
+      const part = document.createRange(); part.selectNodeContents(span);
+      if (span.contains(range.startContainer)) part.setStart(range.startContainer, range.startOffset);
+      if (span.contains(range.endContainer)) part.setEnd(range.endContainer, range.endOffset);
+      const clipped = Array.from(part.getClientRects()).filter((r) => r.width >= 0.5 && r.height >= 0.5);
+      textRects.push(...(clipped.length ? clipped : [span.getBoundingClientRect()]));
+    }
+  }
   for (const rect of textRects) {
     if (rect.width < 0.5 || rect.height < 0.5) continue;
     const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;

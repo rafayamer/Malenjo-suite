@@ -125,6 +125,19 @@ describe('indirect content arrays', () => {
   });
 });
 
+describe('signed documents', () => {
+  it('refuses to stamp signed or certified PDFs, but allows unsigned signature placeholders', async () => {
+    const mark = { text: 'MARK', style: text, position: 'center' as const, margin: 0, rotation: 0, opacity: 1, layer: 'above' as const, scope: all };
+    const make = async (change: (pdf: PDFDocument) => void) => { const pdf = await PDFDocument.load(await doc(1)); change(pdf); return pdf.save(); };
+    const signed = await make((pdf) => { pdf.context.register(pdf.context.obj({ FT: 'Sig', T: 'S', V: pdf.context.obj({ Type: 'Sig', ByteRange: [0, 1, 2, 3] }) })); });
+    await expect(applyTextWatermark(signed, mark)).rejects.toThrow(/signed; stamping it would invalidate/);
+    const certified = await make((pdf) => { pdf.catalog.set(PDFName.of('Perms'), pdf.context.obj({})); });
+    await expect(applyTextWatermark(certified, mark)).rejects.toThrow(/certified/);
+    const placeholder = await make((pdf) => { pdf.context.register(pdf.context.obj({ FT: 'Sig', T: 'S' })); });
+    await expect(applyTextWatermark(placeholder, mark)).resolves.toBeTruthy();
+  });
+});
+
 describe('applyPageNumbers (MAL-018)', () => {
   it('numbers chosen pages with format, prefix, suffix, start, total, alignment and margins', async () => {
     const result = await applyPageNumbers(await doc(4), {
