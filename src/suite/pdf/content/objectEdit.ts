@@ -86,13 +86,22 @@ function locate(model: PageModel, kind: 'image' | 'path', id: number) {
     if (!image) throw new Error('That image is no longer on this page. Choose it again.');
     // A cropped image is `q <x y w h re> W n <Do> Q`: the clip belongs to the image, so moves,
     // resizes and deletion take the whole wrapper with it.
+    // A replaced image adds its own fitting wrapper `q <cm> Do Q` inside the crop, so look outward
+    // through those wrappers for the crop, and undo their cm to get the CTM where the crop starts.
     const i = image.opIndex, names = (from: number, to: number) => model.ops.slice(from, to).map((o) => o.op).join(' ');
-    if (i >= 4 && names(i - 4, i) === 'q re W n' && model.ops[i + 1]?.op === 'Q') return { start: i - 4, end: i + 1, box: image.box };
-    return { start: i, end: i, box: image.box };
+    let a = i, b = i, ctm = image.ctm;
+    while (a >= 2 && names(a - 2, a) === 'q cm' && model.ops[b + 1]?.op === 'Q') {
+      const m = model.ops[a - 1].operands.map((o) => (o.type === 'number' ? o.value : NaN)) as Matrix;
+      if (m.length !== 6 || m.some((v) => !Number.isFinite(v))) break;
+      ctm = multiply(invert(m), ctm);
+      a -= 2; b += 1;
+    }
+    if (a >= 4 && names(a - 4, a) === 'q re W n' && model.ops[b + 1]?.op === 'Q') return { start: a - 4, end: b + 1, box: image.box, ctm };
+    return { start: i, end: i, box: image.box, ctm: image.ctm };
   }
   const path = model.paths[id];
   if (!path) throw new Error('That shape is no longer on this page. Choose it again.');
-  return { start: path.startIndex, end: path.endIndex, box: path.box };
+  return { start: path.startIndex, end: path.endIndex, box: path.box, ctm: path.ctm };
 }
 
 /** The extra page-space transform for a move/scale/rotate, expressed as a `cm` for the object's current CTM. */
@@ -156,7 +165,7 @@ export async function transformPdfObject(bytes: Uint8Array, pageNumber: number, 
   refuseSignedPdf(pdf, 'editing it');
   const model = pageModel(pdf, pageNumber);
   const where = locate(model, kind, id);
-  const ctm = kind === 'image' ? model.images[id].ctm : model.paths[id].ctm;
+  const ctm = where.ctm ?? model.paths[id].ctm;
   const matrix = transformFor(pdf, pageNumber, viewRotation, where.box, ctm, change);
   writePage(pdf, pageNumber, model, wrap(model, where.start, where.end, cm(matrix)));
   return save(pdf);

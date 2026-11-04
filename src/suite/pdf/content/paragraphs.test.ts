@@ -237,4 +237,22 @@ describe('paragraph fonts and spacing', () => {
     expect(after.map((r) => r.horizontalScale)).toEqual([50]);
     expect(after[0].box[2] - after[0].box[0]).toBeCloseTo(before.box[2] - before.box[0], 0);
   });
+
+  it('refuses text stretched by its matrix but reflows uniformly scaled text', async () => {
+    const make = async (cm: string) => {
+      const pdf = await PDFDocument.create();
+      const page = pdf.addPage([600, 800]);
+      const font = await pdf.embedFont(StandardFonts.Helvetica);
+      page.node.set(PDFName.of('Resources'), pdf.context.obj({ Font: { F1: font.ref } }));
+      page.node.addContentStream(pdf.context.register(pdf.context.stream(`${cm} cm BT /F1 12 Tf 36 300 Td (Some scaled words) Tj ET`)));
+      return pdf.save();
+    };
+    const stretched = await make('2 0 0 1 0 0');
+    const [wide] = await listPdfParagraphs(stretched, 1);
+    await expect(reflowPdfParagraph(stretched, 1, wide.id, wide.text, wide.text, { ...base, size: 12 }, true)).rejects.toThrow(/stretched by its transformation matrix/);
+    const uniform = await make('2 0 0 2 0 0');
+    const [big] = await listPdfParagraphs(uniform, 1);
+    const out = await reflowPdfParagraph(uniform, 1, big.id, big.text, big.text, { ...base, size: 24 }, false);
+    expect(out.lines).toBe(1);
+  });
 });

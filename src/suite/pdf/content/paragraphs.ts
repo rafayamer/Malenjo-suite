@@ -168,6 +168,10 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
   if (new Set(paragraph.lines.flatMap((l) => l.runs.map((r) => r.horizontalScale))).size > 1) {
     throw new Error('This paragraph mixes horizontal text scaling, which rewriting it cannot preserve. Edit its text runs one at a time instead.');
   }
+  // The block is written with an upright, unstretched matrix; text stretched by its Tm or CTM would change shape.
+  if (paragraph.lines.some((l) => l.runs.some((r) => Math.abs(r.start[0] / (r.start[3] * (r.horizontalScale / 100)) - 1) > 0.01))) {
+    throw new Error('This paragraph is stretched by its transformation matrix, which rewriting it cannot preserve. Edit its text runs one at a time instead.');
+  }
   // Tz scales glyph widths, character and word spacing together.
   const hs = first.horizontalScale / 100;
   if (paragraph.lines.some((l) => l.runs.some((r) => r.unmapped || r.font.kind === 'type3'))) throw new Error('This paragraph uses a font that does not say which characters it draws, so it cannot be rewritten.');
