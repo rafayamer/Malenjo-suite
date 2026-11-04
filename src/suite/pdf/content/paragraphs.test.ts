@@ -206,4 +206,19 @@ describe('paragraph fonts and spacing', () => {
     expect((await reflowPdfParagraph(bytes, 1, line.id, line.text, 'Hi', { ...base, size: 48 }, true)).overflow).toBe(true);
     expect((await reflowPdfParagraph(bytes, 1, line.id, line.text, 'Short line', { ...base, size: 12 }, false)).overflow).toBe(false);
   });
+
+  it('keeps a colour set through cs and sc when reflowing', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([600, 800]);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    page.node.set(PDFName.of('Resources'), pdf.context.obj({ Font: { F1: font.ref } }));
+    page.node.addContentStream(pdf.context.register(pdf.context.stream('/DeviceRGB cs 1 0 0 sc BT /F1 12 Tf 72 700 Td (Red words here) Tj ET')));
+    const bytes = await pdf.save();
+    const [red] = await listPdfParagraphs(bytes, 1);
+    const out = await reflowPdfParagraph(bytes, 1, red.id, red.text, 'Red words', { ...base, size: 12, align: 'right' }, true);
+    const { documentModels } = await import('./contentModel');
+    const runs = documentModels(await PDFDocument.load(out.bytes))[0].runs.filter((r) => r.text.trim());
+    expect(runs.map((r) => [r.text, r.fill])).toEqual([['Red words', '#ff0000']]);
+  });
 });
+
