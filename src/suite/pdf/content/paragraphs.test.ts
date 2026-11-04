@@ -220,5 +220,21 @@ describe('paragraph fonts and spacing', () => {
     const runs = documentModels(await PDFDocument.load(out.bytes))[0].runs.filter((r) => r.text.trim());
     expect(runs.map((r) => [r.text, r.fill])).toEqual([['Red words', '#ff0000']]);
   });
-});
 
+  it('keeps horizontal text scaling in measuring and in the rewritten text', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([600, 800]);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    page.node.set(PDFName.of('Resources'), pdf.context.obj({ Font: { F1: font.ref } }));
+    page.node.addContentStream(pdf.context.register(pdf.context.stream('BT /F1 12 Tf 50 Tz 72 700 Td (Condensed words across one long line of text) Tj ET')));
+    const bytes = await pdf.save();
+    const [condensed] = await listPdfParagraphs(bytes, 1);
+    const out = await reflowPdfParagraph(bytes, 1, condensed.id, condensed.text, condensed.text, { ...base, size: 12, align: 'center' }, false);
+    expect(out.lines).toBe(1);
+    const { documentModels } = await import('./contentModel');
+    const [before] = documentModels(await PDFDocument.load(bytes))[0].runs;
+    const after = documentModels(await PDFDocument.load(out.bytes))[0].runs.filter((r) => r.text.trim());
+    expect(after.map((r) => r.horizontalScale)).toEqual([50]);
+    expect(after[0].box[2] - after[0].box[0]).toBeCloseTo(before.box[2] - before.box[0], 0);
+  });
+});

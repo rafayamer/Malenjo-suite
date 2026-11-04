@@ -136,6 +136,9 @@ function wrap(model: PageModel, start: number, end: number, prefix: string, inne
     else if (op === 'Q') {
       if (!scopes.length) throw new Error('This shape\'s drawing changes the graphics state in a way that cannot be edited safely.');
       replay.length = scopes.pop()!;
+    } else if ((op === 'W' || op === 'W*') && !scopes.length) {
+      // A clip set outside any nested scope lasts for the content after the shape; a wrapper would end it.
+      throw new Error('This shape also clips the content after it, so it cannot be moved or restyled without changing that content.');
     } else if (!DRAWING.has(op)) replay.push(opText(model, k));
   }
   if (scopes.length) throw new Error('This shape\'s drawing changes the graphics state in a way that cannot be edited safely.');
@@ -167,7 +170,15 @@ export async function deletePdfObject(bytes: Uint8Array, pageNumber: number, kin
   const edits = new Map<number, string>();
   // Only the object's own drawing goes: graphics-state changes made between a path's construction
   // and its painting (colours, widths) still apply to the content after it.
-  for (let i = where.start; i <= where.end; i++) if (kind === 'image' || DRAWING.has(model.ops[i].op)) edits.set(i, '');
+  // A path that also sets a clip for later content keeps its construction and clip; only its painting
+  // becomes `n` (end the path without painting), so what follows stays clipped as before.
+  let depth = 0, clips = false;
+  for (let i = where.start; i <= where.end; i++) {
+    const op = model.ops[i].op;
+    if (op === 'q') depth++; else if (op === 'Q') depth--; else if ((op === 'W' || op === 'W*') && depth === 0) clips = true;
+  }
+  if (kind === 'path' && clips) edits.set(where.end, 'n');
+  else for (let i = where.start; i <= where.end; i++) if (kind === 'image' || DRAWING.has(model.ops[i].op)) edits.set(i, '');
   writePage(pdf, pageNumber, model, edits);
   return save(pdf);
 }
