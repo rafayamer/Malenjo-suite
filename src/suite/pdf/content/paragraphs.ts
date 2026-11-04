@@ -164,6 +164,12 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
   if (new Set(paragraph.lines.flatMap((l) => l.runs.map((r) => r.fillOps))).size > 1) {
     throw new Error('This paragraph mixes text colours (for example a coloured link), which rewriting it cannot preserve. Edit its text runs one at a time instead.');
   }
+  // The block keeps the paragraph's horizontal scaling (Tz); runs drawn at different scales cannot share one.
+  if (new Set(paragraph.lines.flatMap((l) => l.runs.map((r) => r.horizontalScale))).size > 1) {
+    throw new Error('This paragraph mixes horizontal text scaling, which rewriting it cannot preserve. Edit its text runs one at a time instead.');
+  }
+  // Tz scales glyph widths, character and word spacing together.
+  const hs = first.horizontalScale / 100;
   if (paragraph.lines.some((l) => l.runs.some((r) => r.unmapped || r.font.kind === 'type3'))) throw new Error('This paragraph uses a font that does not say which characters it draws, so it cannot be rewritten.');
 
   // Measuring and encoding, either through the paragraph's own font or a chosen standard font.
@@ -185,8 +191,8 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
     if ('missing' in encoded) throw new GlyphUnavailableError(encoded.missing, font.baseFont);
     measure = (s) => {
       const r = font.encode(s); if ('missing' in r) return 0;
-      return font.codes(r.bytes).reduce((sum, code) => sum + (font.width(code) / 1000) * style.size + style.charSpacing + (font.bytesPerCode === 1 && code === 32 ? style.wordSpacing : 0), 0)
-        + (font.bytesPerCode === 2 ? (s.split(' ').length - 1) * style.wordSpacing : 0);
+      return hs * (font.codes(r.bytes).reduce((sum, code) => sum + (font.width(code) / 1000) * style.size + style.charSpacing + (font.bytesPerCode === 1 && code === 32 ? style.wordSpacing : 0), 0)
+        + (font.bytesPerCode === 2 ? (s.split(' ').length - 1) * style.wordSpacing : 0));
     };
     encode = (s) => { const r = font.encode(s); if ('missing' in r) throw new GlyphUnavailableError(r.missing, font.baseFont); return serializeOperand({ type: 'string', bytes: r.bytes, hex: true }); };
   } else {
@@ -195,7 +201,7 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
     if (unsupported.length) throw new GlyphUnavailableError(unsupported, standard.name);
     fontKey = pdf.getPage(pageNumber - 1).node.newFontDictionary('MalenjoP', standard.ref).decodeText();
     substitution = `“${first.font.baseFont.replace(/^[A-Z]{6}\+/, '')}” was replaced by ${standard.name}.`;
-    measure = (s) => standard.widthOfTextAtSize(s, style.size) + s.length * style.charSpacing + (s.split(' ').length - 1) * style.wordSpacing;
+    measure = (s) => hs * (standard.widthOfTextAtSize(s, style.size) + s.length * style.charSpacing + (s.split(' ').length - 1) * style.wordSpacing);
     encode = (s) => standard.encodeText(s).toString();
   }
 
@@ -242,13 +248,14 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
   const firstBaseline = baseline0;
   const round = (n: number) => Math.round(n * 10000) / 10000;
   const ops: string[] = ['q', `${invert(last.ctm).map(round).join(' ')} cm`, first.fillOps, 'BT', `${serializeOperand({ type: 'name', value: fontKey })} ${style.size} Tf`,
-    `${style.charSpacing} Tc`, '100 Tz', '0 Ts', `${first.render} Tr`];
+    `${style.charSpacing} Tc`, `${round(first.horizontalScale)} Tz`, '0 Ts', `${first.render} Tr`];
   laid.forEach((line, i) => {
     const w = measure(line.text);
     const gaps = line.text.split(' ').length - 1;
     const justify = style.align === 'justify' && !line.last && gaps > 0;
     const x = style.align === 'center' ? paragraph.box[0] + (width - w) / 2 : style.align === 'right' ? paragraph.box[2] - w : paragraph.box[0];
-    const tw = style.wordSpacing + (justify ? (width - w) / gaps : 0);
+    // Tw is in text space, scaled by Tz like everything else on the line.
+    const tw = style.wordSpacing + (justify ? (width - w) / gaps / hs : 0);
     const position = `1 0 0 1 ${Math.round(x * 100) / 100} ${Math.round((firstBaseline - i * leading) * 100) / 100} Tm`;
     if (twoByte) {
       const words = line.text.split(' ');

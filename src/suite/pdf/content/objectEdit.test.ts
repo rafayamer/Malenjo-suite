@@ -179,4 +179,15 @@ describe('content rewriting details', () => {
     await expect(insertPdfContent(await sample(), { ...spec, text: 'First line\nSecond line' })).rejects.toThrow(/does not fit the box/);
     expect(await insertPdfContent(await sample(), { ...spec, text: 'One line' })).toBeInstanceOf(Uint8Array);
   });
+
+  it('refuses to move or restyle a path that clips later content, and keeps the clip when deleting it', async () => {
+    const pdf = await PDFDocument.create();
+    pdf.addPage([400, 400]).node.addContentStream(pdf.context.register(pdf.context.stream('0 0 100 100 re W f 200 0 100 100 re f')));
+    const bytes = await pdf.save();
+    await expect(stylePdfPath(bytes, 1, 0, { fill: '#00ff00' })).rejects.toThrow(/clips the content after it/);
+    await expect(transformPdfObject(bytes, 1, 'path', 0, { dx: 10, dy: 0 })).rejects.toThrow(/clips the content after it/);
+    const removed = await deletePdfObject(bytes, 1, 'path', 0);
+    expect((await content(removed)).replace(/\s+/g, ' ')).toMatch(/0 0 100 100 re W n 200 0 100 100 re f/);
+    expect((await listPdfPageObjects(removed, 1)).filter((o) => o.kind === 'path')).toHaveLength(1);
+  });
 });
