@@ -133,7 +133,16 @@ try {
       const held = await page.evaluate(() => { const t = getSelection()?.toString() ?? ''; return t.includes('End of the first page') && t.includes('Start of the second page'); });
       if (held) break;
     }
-    await tools.getByRole('button', { name: 'Highlight', exact: true }).click();
+    // Set the selection again and press the panel's Highlight button in the same task, so a text-layer
+    // re-render cannot shorten the selection between the two (seen on CI runners).
+    await page.evaluate(() => {
+      const spans = [1, 2].map((n) => document.querySelector(`.document-session-panel.active [id$="-page-${n}"] .textLayer span`));
+      const range = document.createRange();
+      range.setStart(spans[0].firstChild, 0); range.setEnd(spans[1].firstChild, spans[1].textContent.length);
+      getSelection().removeAllRanges(); getSelection().addRange(range);
+      const button = [...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent.trim() === 'Highlight');
+      button.click();
+    });
     // Diagnostics for CI: what the selection covered when the markup was chosen.
     const diag = await page.evaluate(() => {
       const sel = getSelection(); const spans = [...document.querySelectorAll('.document-session-panel.active .textLayer span')];
