@@ -22,9 +22,10 @@ interface Props {
 export default function PdfTextEditPanel({ domIdPrefix, bytes, pageNumber, viewRotation, busy, state, onState, onApply, onClose }: Props) {
   const [text, setText] = useState('');
   const [error, setError] = useState('');
-  const [overlay, setOverlay] = useState<{ run: TextRunInfo; text: string } | null>(null);
+  const [overlay, setOverlay] = useState<{ run: TextRunInfo; text: string; pageNumber: number } | null>(null);
   const panelRef = useRef<HTMLElement>(null);
-  const run = state?.runs.find((item) => item.id === state.selected) ?? null;
+  // A selection belongs to the page it was made on: while the list for a newly shown page loads, nothing is selected.
+  const run = state?.pageNumber === pageNumber ? state.runs.find((item) => item.id === state.selected) ?? null : null;
 
   useEffect(() => {
     let live = true;
@@ -50,12 +51,12 @@ export default function PdfTextEditPanel({ domIdPrefix, bytes, pageNumber, viewR
         summary: `Changed “${chosen.text}” to “${next}” on page ${pageNumber}, in the original font (${chosen.fontName}).`,
       }));
     } catch (reason) {
-      if (reason instanceof GlyphUnavailableError) setOverlay({ run: chosen, text: next });
+      if (reason instanceof GlyphUnavailableError) setOverlay({ run: chosen, text: next, pageNumber });
       setError(describePdfError(reason));
     }
   }
   async function placeOverlay() {
-    if (!overlay) return;
+    if (!overlay || overlay.pageNumber !== pageNumber || state?.pageNumber !== pageNumber) { setOverlay(null); return; }
     const { run: chosen, text: next } = overlay;
     setOverlay(null);
     await onApply('Added an overlay text box.', async (latest) => ({

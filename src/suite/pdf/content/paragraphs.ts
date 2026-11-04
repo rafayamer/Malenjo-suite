@@ -154,6 +154,12 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
   const paragraph = paragraphsOf(model)[id];
   if (!paragraph || paragraph.lines.map(lineText).join('\n') !== expected) throw new Error('This paragraph changed since it was selected. Select it again.');
   const first = paragraph.lines[0].runs[0];
+  // The rewritten block keeps the text rendering mode: invisible OCR text stays invisible. Stroked or
+  // clipping text would also need its stroke and clip state, so those paragraphs are refused.
+  const modes = new Set(paragraph.lines.flatMap((l) => l.runs.map((r) => r.render)));
+  if (modes.size > 1 || ![0, 3].includes(first.render)) {
+    throw new Error('This paragraph is drawn as outlined or clipping text (or mixes text drawing modes), which rewriting it cannot preserve. Edit its text runs one at a time instead.');
+  }
   if (paragraph.lines.some((l) => l.runs.some((r) => r.unmapped || r.font.kind === 'type3'))) throw new Error('This paragraph uses a font that does not say which characters it draws, so it cannot be rewritten.');
 
   // Measuring and encoding, either through the paragraph's own font or a chosen standard font.
@@ -216,7 +222,7 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
   for (const line of paragraph.lines) for (const run of line.runs) edits.set(run.opIndex, silenced(model.ops[run.opIndex], run));
   const [r, g, b] = parseColor(first.fill);
   const firstBaseline = paragraph.lines[0].baseline;
-  const ops: string[] = ['q', `${r} ${g} ${b} rg`, 'BT', `${serializeOperand({ type: 'name', value: fontKey })} ${style.size} Tf`, `${style.charSpacing} Tc`];
+  const ops: string[] = ['q', `${r} ${g} ${b} rg`, 'BT', `${serializeOperand({ type: 'name', value: fontKey })} ${style.size} Tf`, `${style.charSpacing} Tc`, `${first.render} Tr`];
   laid.forEach((line, i) => {
     const w = measure(line.text);
     const gaps = line.text.split(' ').length - 1;
