@@ -7,6 +7,7 @@
  * encoding without it, an unmapped Type3 font), the edit is refused with the
  * exact characters, so the caller can offer an explicitly labelled overlay.
  */
+import { refuseSignedPdf } from '../pdfSignatureGuard';
 import { PDFDocument, PDFName } from 'pdf-lib';
 import { rewriteContent, serializeOperand, type ContentOp, type Operand } from './contentLexer';
 import { documentModels, type PageModel, type TextRun } from './contentModel';
@@ -92,6 +93,7 @@ const save = async (pdf: PDFDocument) => Uint8Array.from(await pdf.save({ useObj
 export async function replacePdfTextRun(bytes: Uint8Array, pageNumber: number, runId: number, expected: string, text: string): Promise<Uint8Array> {
   if (typeof text !== 'string' || text.length > 2000 || /[\u0000-\u001F]/.test(text)) throw new Error('Text must be one line of at most 2,000 characters.');
   const pdf = await load(bytes);
+  refuseSignedPdf(pdf, 'editing it');
   const models = documentModels(pdf);
   const model = models[pageNumber - 1];
   const run = model?.runs[runId];
@@ -128,6 +130,7 @@ export interface ReplaceReport { bytes: Uint8Array; replaced: number; runs: numb
 export async function replacePdfText(bytes: Uint8Array, query: string, replacement: string, matchCase = false): Promise<ReplaceReport> {
   if (typeof replacement !== 'string' || replacement.length > 2000 || /[\u0000-\u001F]/.test(replacement)) throw new Error('The replacement must be one line of at most 2,000 characters.');
   const pdf = await load(bytes);
+  refuseSignedPdf(pdf, 'editing it');
   const pattern = finder(query, matchCase);
   const models = documentModels(pdf);
   let replaced = 0, runs = 0;
