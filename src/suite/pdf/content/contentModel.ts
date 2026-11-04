@@ -42,6 +42,8 @@ export interface TextRun {
   horizontalScale: number;
   leading: number;
   fill: string;
+  /** Text rendering mode (Tr): 0 fill, 1 stroke, 2 both, 3 invisible, 4–7 the same and add to the clip. */
+  render: number;
 }
 export interface ImagePlacement { id: number; opIndex: number; name: string; ctm: Matrix; box: Box; ref: string | null }
 export interface PathObject { id: number; startIndex: number; endIndex: number; paint: string; ctm: Matrix; box: Box; stroke: string; fill: string; lineWidth: number }
@@ -102,8 +104,8 @@ export function readPageModel(pdf: PDFDocument, pageIndex: number, fontCache?: M
   const fonts = pageFonts(pdf, pageIndex, fontCache);
   const xobjects = pdf.getPage(pageIndex).node.Resources()?.lookupMaybe(N('XObject'), PDFDict);
   const runs: TextRun[] = []; const images: ImagePlacement[] = []; const paths: PathObject[] = [];
-  type State = { ctm: Matrix; fill: string; stroke: string; lineWidth: number; font?: FontCodec; fontKey: string; size: number; tc: number; tw: number; tz: number; tl: number; ts: number };
-  let gs: State = { ctm: [...IDENTITY] as Matrix, fill: '#000000', stroke: '#000000', lineWidth: 1, fontKey: '', size: 0, tc: 0, tw: 0, tz: 100, tl: 0, ts: 0 };
+  type State = { ctm: Matrix; fill: string; stroke: string; lineWidth: number; font?: FontCodec; fontKey: string; size: number; tc: number; tw: number; tz: number; tl: number; ts: number; tr: number };
+  let gs: State = { ctm: [...IDENTITY] as Matrix, fill: '#000000', stroke: '#000000', lineWidth: 1, fontKey: '', size: 0, tc: 0, tw: 0, tz: 100, tl: 0, ts: 0, tr: 0 };
   const stack: State[] = [];
   let tm: Matrix = [...IDENTITY] as Matrix, tlm: Matrix = [...IDENTITY] as Matrix, btIndex = -1;
   let pathStart = -1; let pathPoints: [number, number][] = [];
@@ -134,7 +136,7 @@ export function readPageModel(pdf: PDFDocument, pageIndex: number, fontCache?: M
     const descent = -0.25 * gs.size, ascent = 0.85 * gs.size;
     const corners = [apply(textToPage, 0, descent + gs.ts), apply(textToPage, advance, descent + gs.ts), apply(textToPage, 0, ascent + gs.ts), apply(textToPage, advance, ascent + gs.ts)];
     runs.push({ id: runs.length, opIndex, btIndex, fontKey: gs.fontKey, font, size: gs.size, text, display, codes, unmapped, start, advance, box: boxOf(corners),
-      charSpacing: gs.tc, wordSpacing: gs.tw, horizontalScale: gs.tz, leading: gs.tl, fill: gs.fill });
+      charSpacing: gs.tc, wordSpacing: gs.tw, horizontalScale: gs.tz, leading: gs.tl, fill: gs.fill, render: gs.tr });
     tm = multiply([1, 0, 0, 1, advance, 0], tm);
   };
   const nextLine = (tx: number, ty: number) => { tlm = multiply([1, 0, 0, 1, tx, ty], tlm); tm = [...tlm] as Matrix; };
@@ -154,6 +156,7 @@ export function readPageModel(pdf: PDFDocument, pageIndex: number, fontCache?: M
       case 'Tw': gs.tw = n(0); break;
       case 'Tz': gs.tz = n(0); break;
       case 'TL': gs.tl = n(0); break;
+      case 'Tr': gs.tr = n(0); break;
       case 'Ts': gs.ts = n(0); break;
       case 'Td': nextLine(n(0), n(1)); break;
       case 'TD': gs.tl = -n(1); nextLine(n(0), n(1)); break;

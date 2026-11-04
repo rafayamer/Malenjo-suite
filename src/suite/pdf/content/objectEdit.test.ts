@@ -135,4 +135,16 @@ describe('content rewriting details', () => {
     expect(await content(moved)).not.toMatch(/qq|cmq/);
     expect((await listPdfPageObjects(moved, 1))[0].box[0]).toBeCloseTo(20, 0);
   });
+
+  it('keeps state set inside a moved or restyled path for the content after it', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([400, 400]);
+    page.node.addContentStream(pdf.context.register(pdf.context.stream('0 0 100 100 re 1 0 0 rg f 200 0 100 100 re f')));
+    const bytes = await pdf.save();
+    for (const edited of [await transformPdfObject(bytes, 1, 'path', 0, { dx: 10, dy: 0 }), await stylePdfPath(bytes, 1, 0, { lineWidth: 3 })]) {
+      const paths = (await listPdfPageObjects(edited, 1)).filter((o) => o.kind === 'path');
+      expect(paths).toHaveLength(2);
+      expect(paths.every((p) => p.fill === '#ff0000')).toBe(true);
+    }
+  });
 });

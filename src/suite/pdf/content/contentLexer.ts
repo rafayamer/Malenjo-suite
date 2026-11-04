@@ -116,14 +116,32 @@ export function tokenizeContent(data: Uint8Array): ContentOp[] {
     const token = object();
     if (typeof token !== 'string') { operands.push(token); continue; }
     if (token === 'BI') {
-      // Inline image: skip to whitespace-delimited EI after ID.
-      const id = indexOfWord(data, 'ID', i);
-      let end = id + 2;
+      // Inline image: read the dictionary up to ID, then skip the payload. When the
+      // payload's length is known (/L, or unfiltered pixel data whose size follows from
+      // the dictionary), EI is only looked for after it, so pixel bytes that happen to
+      // read " EI " cannot end the image early.
+      const dict = new Map<string, Operand>();
       for (;;) {
-        end = indexOfWord(data, 'EI', end + 1);
-        if (end < 0) throw new ContentSyntaxError('Unterminated inline image.');
-        if (WHITE.has(data[end - 1]) && (end + 2 >= data.length || WHITE.has(data[end + 2]))) break;
+        skipSpace();
+        if (i >= data.length) throw new ContentSyntaxError('Unterminated inline image.');
+        const key = object();
+        if (key === 'ID') break;
+        if (typeof key === 'string' || key.type !== 'name') throw new ContentSyntaxError('Bad inline image dictionary.');
+        const value = object();
+        if (typeof value === 'string') throw new ContentSyntaxError('Bad inline image dictionary.');
+        dict.set(key.value, value);
       }
+      const payload = i + 1; // one white-space byte follows ID
+      const known = inlineImageLength(dict);
+      const findEI = (from: number) => {
+        for (let at = from; ;) {
+          at = indexOfWord(data, 'EI', at + 1);
+          if (at < 0 || (WHITE.has(data[at - 1]) && (at + 2 >= data.length || WHITE.has(data[at + 2])))) return at;
+        }
+      };
+      let end = known === null ? -1 : findEI(payload + known - 1);
+      if (end < 0) end = findEI(i); // dictionary sizes that do not match the data: fall back to the first EI
+      if (end < 0) throw new ContentSyntaxError('Unterminated inline image.');
       i = end + 2;
       ops.push({ op: 'BI', operands: [], start: opStart, end: i });
     } else {
@@ -132,6 +150,29 @@ export function tokenizeContent(data: Uint8Array): ContentOp[] {
     operands = []; opStart = -1;
   }
   return ops;
+}
+
+/** Bytes of an inline image's payload, or null when it cannot be told from the dictionary. */
+function inlineImageLength(dict: Map<string, Operand>): number | null {
+  const get = (...keys: string[]) => keys.map((k) => dict.get(k)).find((v) => v !== undefined);
+  const int = (v: Operand | undefined) => (v?.type === 'number' && Number.isSafeInteger(v.value) && v.value >= 0 ? v.value : null);
+  const length = int(get('L', 'Length'));
+  if (length !== null) return length;
+  const filter = get('F', 'Filter');
+  if (filter && !(filter.type === 'array' && filter.items.length === 0)) return null;
+  const width = int(get('W', 'Width')), height = int(get('H', 'Height'));
+  if (width === null || height === null) return null;
+  const mask = get('IM', 'ImageMask');
+  let components: number | null, bits: number | null;
+  if (mask?.type === 'bool' && mask.value) { components = 1; bits = 1; } else {
+    bits = int(get('BPC', 'BitsPerComponent'));
+    const cs = get('CS', 'ColorSpace');
+    const name = cs?.type === 'name' ? cs.value : cs?.type === 'array' && cs.items[0]?.type === 'name' ? cs.items[0].value : null;
+    components = name === 'G' || name === 'DeviceGray' || name === 'I' || name === 'Indexed' ? 1
+      : name === 'RGB' || name === 'DeviceRGB' ? 3 : name === 'CMYK' || name === 'DeviceCMYK' ? 4 : null;
+  }
+  if (components === null || bits === null || ![1, 2, 4, 8, 16].includes(bits)) return null;
+  return Math.ceil((width * components * bits) / 8) * height;
 }
 
 function indexOfWord(data: Uint8Array, word: string, from: number): number {

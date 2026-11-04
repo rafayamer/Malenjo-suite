@@ -35,7 +35,8 @@ export default function PdfParagraphPanel({ domIdPrefix, bytes, pageNumber, view
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const panelRef = useRef<HTMLElement>(null);
-  const paragraph = state?.paragraphs.find((p) => p.id === state.selected) ?? null;
+  // A selection belongs to the page it was made on: while the list for a newly shown page loads, nothing is selected.
+  const paragraph = state?.pageNumber === pageNumber ? state.paragraphs.find((p) => p.id === state.selected) ?? null : null;
 
   useEffect(() => {
     let live = true;

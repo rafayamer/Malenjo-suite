@@ -126,4 +126,36 @@ describe('paragraph fonts and spacing', () => {
     const { pageContentBytes } = await import('./contentModel');
     expect(new TextDecoder('latin1').decode(pageContentBytes(await PDFDocument.load(out.bytes), 0))).toContain('/F#231 12 Tf');
   });
+
+  it('keeps two columns apart when one baseline sits slightly higher', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([600, 800]);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    page.drawText('Left column', { x: 72, y: 700, size: 12, font });
+    page.drawText('Right column', { x: 320, y: 701, size: 12, font });
+    const paragraphs = await listPdfParagraphs(await pdf.save(), 1);
+    expect(paragraphs.map((p) => p.text).sort()).toEqual(['Left column', 'Right column']);
+  });
+
+  it('keeps invisible OCR text invisible and refuses outlined text', async () => {
+    const make = async (mode: number) => {
+      const pdf = await PDFDocument.create();
+      const page = pdf.addPage([600, 800]);
+      const font = await pdf.embedFont(StandardFonts.Helvetica);
+      page.node.set(PDFName.of('Resources'), pdf.context.obj({ Font: { F1: font.ref } }));
+      page.node.addContentStream(pdf.context.register(pdf.context.stream(`BT /F1 12 Tf ${mode} Tr 72 700 Td (Scanned words here) Tj ET`)));
+      return pdf.save();
+    };
+    const hidden = await make(3);
+    const [ocr] = await listPdfParagraphs(hidden, 1);
+    const out = await reflowPdfParagraph(hidden, 1, ocr.id, ocr.text, 'Scanned words', { ...base, size: 12 }, true);
+    const { pageContentBytes, documentModels } = await import('./contentModel');
+    expect(new TextDecoder('latin1').decode(pageContentBytes(await PDFDocument.load(out.bytes), 0))).toMatch(/3 Tr/);
+    const runs = documentModels(await PDFDocument.load(out.bytes))[0].runs.filter((r) => r.text.trim());
+    expect(runs.every((r) => r.render === 3)).toBe(true);
+    const outlined = await make(1);
+    const [stroked] = await listPdfParagraphs(outlined, 1);
+    await expect(reflowPdfParagraph(outlined, 1, stroked.id, stroked.text, 'Other', { ...base, size: 12 }, true)).rejects.toThrow(/outlined or clipping/);
+  });
 });
+
