@@ -221,7 +221,13 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
     laid.push({ text: line, last: true });
   }
   const leading = style.lineHeight * style.size;
-  const available = Math.max(1, Math.floor((paragraph.box[3] - paragraph.box[1] - style.size) / leading + 1.0001));
+  // The block hangs from the top of the original box (at the original size this is the original first
+  // baseline). It fits when every line's ascent and descent stay inside the box, measured the way the box
+  // itself was: 0.85 × size above and 0.25 × size below a baseline.
+  const tolerance = 0.5;
+  const baseline0 = Math.min(paragraph.lines[0].baseline, paragraph.box[3] - 0.85 * style.size);
+  const fitsTop = 1.1 * style.size <= paragraph.box[3] - paragraph.box[1] + tolerance;
+  const available = fitsTop ? Math.max(0, Math.floor((baseline0 - 0.25 * style.size - paragraph.box[1] + tolerance) / leading) + 1) : 0;
   const overflow = laid.length > available;
   if (overflow && !allowGrow) throw new ParagraphOverflowError(laid.length, available);
 
@@ -234,7 +240,7 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
   const last = runs.reduce((a, b) => (b.opIndex > a.opIndex ? b : a));
   const etIndex = model.ops.findIndex((op, k) => k > last.opIndex && op.op === 'ET');
   const [r, g, b] = parseColor(first.fill);
-  const firstBaseline = paragraph.lines[0].baseline;
+  const firstBaseline = baseline0;
   const round = (n: number) => Math.round(n * 10000) / 10000;
   const ops: string[] = ['q', `${invert(last.ctm).map(round).join(' ')} cm`, `${r} ${g} ${b} rg`, 'BT', `${serializeOperand({ type: 'name', value: fontKey })} ${style.size} Tf`,
     `${style.charSpacing} Tc`, '100 Tz', '0 Ts', `${first.render} Tr`];
