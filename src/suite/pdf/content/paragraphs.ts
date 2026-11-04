@@ -90,8 +90,8 @@ const lineText = (line: Line) => {
   let text = '';
   runs.forEach((run, i) => {
     const gap = i ? run.box[0] - runs[i - 1].box[2] : 0;
-    if (i && gap > line.size * 0.15 && !/\s$/.test(text) && !/^\s/.test(run.text)) text += ' ';
-    text += run.text;
+    if (i && gap > line.size * 0.15 && !/\s$/.test(text) && !/^\s/.test(run.display)) text += ' ';
+    text += run.display;
   });
   return text.replace(/\s+/g, ' ').trim();
 };
@@ -163,6 +163,10 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
   let encode: (s: string) => string;
   const words = text.replace(/\r/g, '').split('\n').map((p) => p.split(/\s+/).filter(Boolean));
   if (style.font === 'keep') {
+    // One font is used for the rewritten text; a paragraph that mixes fonts (a bold phrase) would lose them.
+    if (new Set(paragraph.lines.flatMap((l) => l.runs.map((r) => r.font.baseFont))).size > 1) {
+      throw new Error('This paragraph mixes fonts (for example a bold phrase), which keeping the original font cannot preserve. Choose a font to rewrite it in, or edit its text runs one at a time.');
+    }
     const font = first.font;
     const encoded = font.encode(words.flat().join(' '));
     if ('missing' in encoded) throw new GlyphUnavailableError(encoded.missing, font.baseFont);
@@ -212,7 +216,7 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
   for (const line of paragraph.lines) for (const run of line.runs) edits.set(run.opIndex, silenced(model.ops[run.opIndex], run));
   const [r, g, b] = parseColor(first.fill);
   const firstBaseline = paragraph.lines[0].baseline;
-  const ops: string[] = ['q', `${r} ${g} ${b} rg`, 'BT', `/${fontKey.replace(/[^\x21-\x7e]|[/()<>[\]{}%#]/g, '')} ${style.size} Tf`, `${style.charSpacing} Tc`];
+  const ops: string[] = ['q', `${r} ${g} ${b} rg`, 'BT', `${serializeOperand({ type: 'name', value: fontKey })} ${style.size} Tf`, `${style.charSpacing} Tc`];
   laid.forEach((line, i) => {
     const w = measure(line.text);
     const gaps = line.text.split(' ').length - 1;

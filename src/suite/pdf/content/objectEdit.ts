@@ -149,7 +149,10 @@ export async function deletePdfObject(bytes: Uint8Array, pageNumber: number, kin
   const model = pageModel(pdf, pageNumber);
   const where = locate(model, kind, id);
   const edits = new Map<number, string>();
-  for (let i = where.start; i <= where.end; i++) edits.set(i, '');
+  // Only the object's own drawing goes: graphics-state changes made between a path's construction
+  // and its painting (colours, widths) still apply to the content after it.
+  const drawing = new Set(['m', 'l', 'c', 'v', 'y', 'h', 're', 'S', 's', 'f', 'F', 'f*', 'B', 'B*', 'b', 'b*', 'n', 'W', 'W*', 'Do']);
+  for (let i = where.start; i <= where.end; i++) if (kind === 'image' || drawing.has(model.ops[i].op)) edits.set(i, '');
   writePage(pdf, pageNumber, model, edits);
   return save(pdf);
 }

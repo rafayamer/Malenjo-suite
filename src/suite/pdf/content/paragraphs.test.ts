@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { PDFDict, PDFDocument, PDFName, StandardFonts } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { listPdfParagraphs, reflowPdfParagraph, ParagraphOverflowError, type ParagraphStyle } from './paragraphs';
 import { GlyphUnavailableError } from './textEdit';
@@ -104,5 +104,26 @@ describe('paragraph edge cases', () => {
     const pieces = (await shownText(grown.bytes)).filter((i) => i.str.startsWith('Super') || /^[a-z]+$/.test(i.str));
     expect(grown.lines).toBeGreaterThan(1);
     expect(pieces.every((i) => i.w <= width + 1)).toBe(true);
+  });
+});
+
+describe('paragraph fonts and spacing', () => {
+  it('refuses to flatten mixed fonts, keeps TJ word gaps, and escapes font names', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([600, 800]);
+    const [regular, bold] = [await pdf.embedFont(StandardFonts.Helvetica), await pdf.embedFont(StandardFonts.HelveticaBold)];
+    const fonts = pdf.context.obj({}) as PDFDict;
+    fonts.set(PDFName.of('F#1'), regular.ref); fonts.set(PDFName.of('B'), bold.ref);
+    page.node.set(PDFName.of('Resources'), pdf.context.obj({ Font: fonts }));
+    page.node.addContentStream(pdf.context.register(pdf.context.stream(
+      'BT /F#231 12 Tf 72 700 Td [(Hello) -300 (world)] TJ ET BT /F#231 12 Tf 72 600 Td (Plain ) Tj /B 12 Tf (bold) Tj ET')));
+    const bytes = await pdf.save();
+    const [spaced, mixed] = await listPdfParagraphs(bytes, 1);
+    expect(spaced.text).toBe('Hello world');
+    await expect(reflowPdfParagraph(bytes, 1, mixed.id, mixed.text, mixed.text, { ...base, size: 12 }, true)).rejects.toThrow(/mixes fonts/);
+    const out = await reflowPdfParagraph(bytes, 1, spaced.id, spaced.text, 'Hello there world', { ...base, size: 12, align: 'center' }, true);
+    expect((await shownText(out.bytes)).map((i) => i.str).join(' ')).toContain('Hello there world');
+    const { pageContentBytes } = await import('./contentModel');
+    expect(new TextDecoder('latin1').decode(pageContentBytes(await PDFDocument.load(out.bytes), 0))).toContain('/F#231 12 Tf');
   });
 });

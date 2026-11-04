@@ -174,7 +174,9 @@ export function rewriteContent(data: Uint8Array, ops: ContentOp[], replace: Map<
   ops.forEach((op, index) => {
     if (!replace.has(index)) return;
     parts.push(data.subarray(cursor, op.start));
-    parts.push(encoder.encode(replace.get(index)!));
+    // Whitespace on both sides keeps compact streams (`q/Im0 Do Q`) from merging operators.
+    const text = replace.get(index)!;
+    parts.push(encoder.encode(text ? ` ${text} ` : ' '));
     cursor = op.end;
   });
   parts.push(data.subarray(cursor));
