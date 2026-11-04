@@ -120,7 +120,15 @@ async function action(tabName,label){
     if(await more.count()&&!(await more.evaluate(node=>node.open).catch(()=>true)))await more.locator('summary').click();
     await button.waitFor({state:'visible',timeout:3000}).catch(()=>{});
   }
-  await button.click({timeout:15000});
+  // Retry the click a few times in case the menu was re-laid out between opening and clicking.
+  for(let attempt=0;;attempt++){
+    try{await button.click({timeout:4000});return;}
+    catch(error){
+      if(attempt>=4)throw error;
+      const more=panel().locator('.pdf-task-overflow').first();
+      if(await more.count()&&!(await more.evaluate(node=>node.open).catch(()=>true)))await more.locator('summary').click().catch(()=>{});
+    }
+  }
 }
 async function notice(pattern,timeout=20000){
   await page.waitForFunction(source=>[...document.querySelectorAll('.pdf-notice,[role="alert"],[role="status"]')]
@@ -294,7 +302,7 @@ async function main(){
     await openModule('Home');
     await page.getByRole('button',{name:'More PDF tools'}).click();
     const catalog=page.locator('#malenjo-complete-feature-catalog');
-    for(const id of ['MAL-001','MAL-002','MAL-003','MAL-004','MAL-005','MAL-006','MAL-007','MAL-008']){
+    for(const id of ['MAL-001','MAL-002','MAL-003','MAL-004','MAL-005','MAL-006','MAL-007','MAL-008','MAL-009','MAL-010','MAL-017','MAL-018','MAL-019','MAL-020','MAL-021','MAL-022','MAL-024','MAL-025','MAL-054','MAL-055']){
       expect(await catalog.locator(`[data-mal-command="${id}"]`).getAttribute('data-mal-status')==='RELEASE_READY',id+' not verified in catalog');
     }
     expect(await catalog.locator('[data-mal-command="MAL-011"] button').isDisabled(),'unverified MAL-011 is clickable');

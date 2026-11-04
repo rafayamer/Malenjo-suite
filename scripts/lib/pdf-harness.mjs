@@ -71,13 +71,16 @@ export async function startHarness(prefix) {
   async function action(tabName, label) {
     await tab(tabName);
     const button = panel().locator(`.pdf-task-toolbar button[aria-label="${label}"]`).first();
-    // Open More only when closed, and retry while the toolbar settles after a document loads.
-    for (let attempt = 0; attempt < 4 && !(await button.isVisible().catch(() => false)); attempt++) {
-      const more = panel().locator('.pdf-task-overflow').first();
-      if (await more.count() && !(await more.evaluate((node) => node.open).catch(() => true))) await more.locator('summary').click();
-      await button.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {});
+    // Open More only when closed, and retry while the toolbar settles after a document loads
+    // (the menu can close again between opening it and clicking, so the click is retried too).
+    for (let round = 0; ; round++) {
+      for (let attempt = 0; attempt < 4 && !(await button.isVisible().catch(() => false)); attempt++) {
+        const more = panel().locator('.pdf-task-overflow').first();
+        if (await more.count() && !(await more.evaluate((node) => node.open).catch(() => true))) await more.locator('summary').click().catch(() => {});
+        await button.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {});
+      }
+      try { await button.click({ timeout: 5000 }); return; } catch (error) { if (round >= 2) throw error; }
     }
-    await button.click({ timeout: 10000 });
   }
   async function notice(pattern, timeout = 30000) {
     await page.waitForFunction((source) => [...document.querySelectorAll('.pdf-notice,[role="alert"],[role="status"]')]
@@ -111,6 +114,22 @@ export const pageTexts = (bytes) => withPdfJs(bytes, async (doc) => {
   for (let i = 1; i <= doc.numPages; i++) {
     const t = await (await doc.getPage(i)).getTextContent();
     out.push(t.items.map((x) => x.str).join(' ').replace(/\s+/g, ' ').trim());
+  }
+  return out;
+});
+/** Per page: its size and every text item with its origin (page space and as shown), to check placement. */
+export const pageTextItems = (bytes) => withPdfJs(bytes, async (doc) => {
+  const out = [];
+  for (let i = 1; i <= doc.numPages; i++) {
+    const p = await doc.getPage(i);
+    const { width, height } = p.getViewport({ scale: 1 });
+    const viewport = p.getViewport({ scale: 1 });
+    const items = (await p.getTextContent()).items.filter((x) => x.str.trim()).map((x) => {
+      // vx/vy: position on the page as shown (origin top-left), after /Rotate and the crop box.
+      const [vx, vy] = viewport.convertToViewportPoint(x.transform[4], x.transform[5]);
+      return { str: x.str.trim(), x: x.transform[4], y: x.transform[5], vx, vy, fontName: x.fontName };
+    });
+    out.push({ width, height, items });
   }
   return out;
 });

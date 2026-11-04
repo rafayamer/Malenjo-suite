@@ -25,7 +25,7 @@ import {
 import type { DocumentSession } from '../files/session';
 import type { RegisterDocumentCommands } from '../commands/types';
 import { isDesktopRuntime } from '../files/api';
-import { exportPdfBytes, exportPdfPlainText, exportPdfEmbeddedAttachment, exportPdfPageImagesZip, readPdfDocumentBytes } from './api';
+import { exportPdfBytes, exportPdfPlainText, exportPdfEmbeddedAttachment, exportPdfPageImagesZip, pdfSaveLimit, readPdfDocumentBytes } from './api';
 import { exportPdfPagesAsJpegZip, exportPdfPagesAsPngZip } from './pageImageExport';
 import {finishPdfInstallCommit} from './pdfInstallCommit';
 import {
@@ -122,6 +122,14 @@ import {extractPdfPageSearchText,findPdfTextMatches} from './pdfTextHighlights';
 import PdfThumbnail from './PdfThumbnail';
 import PdfMergeDialog from './PdfMergeDialog';
 import PdfSplitDialog from './PdfSplitDialog';
+import PdfNupDialog from './PdfNupDialog';
+import PdfBatchDialog from './PdfBatchDialog';
+import PdfStampDialog, { type StampDialogKind } from './PdfStampDialogs';
+import PdfPropertiesDialog from './PdfPropertiesDialog';
+import PdfNavigationDialog from './PdfNavigationDialog';
+import PdfCompressDialog from './PdfCompressDialog';
+import PdfMarkupPanel, { MARKUP_AUTHOR, type MarkupSettings } from './PdfMarkupPanel';
+import { addPdfDrawing } from './pdfMarkup';
 import PdfProviderToolsPanel from './PdfProviderToolsPanel';
 import { defaultPdfToolProvider } from './defaultProvider';
 import { ensurePdfProviderRunning } from './providerLifecycle';
@@ -394,16 +402,24 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [inspectorHidden, setInspectorHidden] = useState(true);
   const [taskCategory, setTaskCategory] = useState<PdfTaskCategory>('home');
   const [masterTab, setMasterTab] = useState<PdfMasterTab>('home');
+  // The toolbar's More menu keeps its open state here, so a re-layout that remounts it (for
+  // example when a scrollbar appears while a page loads) does not close it under the pointer.
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  useEffect(() => { setOverflowOpen(false); }, [masterTab]);
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
-  // MAL-001 / MAL-002 dialogs; focus returns to the control that opened them.
-  const [toolDialog, setToolDialog] = useState<null|'merge'|'split'>(null);
+  // MAL-001 / 002 / 009 / 010 dialogs; focus returns to the control that opened them.
+  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup';
+  const [toolDialog, setToolDialog] = useState<null|ToolDialog>(null);
   const toolDialogOpenerRef = useRef<HTMLElement|null>(null);
-  const openToolDialog=(kind:'merge'|'split')=>{
+  // MAL-054/055 markup tools: the active drawing tool and its style live here so every page can draw.
+  const [markupSettings,setMarkupSettings]=useState<MarkupSettings>({tool:null,style:{color:'#e0b000',opacity:0.6,width:2},text:''});
+  const openToolDialog=(kind:ToolDialog)=>{
     toolDialogOpenerRef.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
     setFeatureGalleryOpen(false);setToolDialog(kind);
   };
   const closeToolDialog=()=>{
     setToolDialog(null);
+    setMarkupSettings(current=>({...current,tool:null}));
     const opener=toolDialogOpenerRef.current;toolDialogOpenerRef.current=null;
     window.requestAnimationFrame(()=>{if(opener?.isConnected)opener.focus();});
   };
@@ -905,6 +921,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setActionNotice('Applying PDF edit to the live document…');
     try{
       const result=await operation(Uint8Array.from(sourceBytes));
+      // Never apply an edit whose result Save PDF copy could not write.
+      const saveLimit=pdfSaveLimit();
+      if(result.length>saveLimit){
+        throw new Error(`This edit would make the PDF ${(result.length/(1024*1024)).toFixed(1)} MB, more than the ${Math.round(saveLimit/(1024*1024))} MB that can be saved here. Nothing was changed.`);
+      }
       if(currentPdfBytesRef.current!==sourceBytes||
         requestIdRef.current!==sourceRevision||replacementPendingRef.current){
         throw new Error('This PDF changed or began loading another version while the tool was running. The older result was not applied.');
@@ -2603,6 +2624,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'place-text',label:'Place text',enabled:!!sourceBytes&&!mutating&&!!textOverlay.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!textOverlay.text.trim()?'Enter text in the Properties inspector first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction('Added permanent text to the PDF.',bytes=>addPdfTextOverlay(bytes,{pageNumber:currentPage,...textOverlay}),currentPage)},
       {id:'rectangle',label:shapeOverlay.mode==='highlight'?'Highlight rectangle':'Outline rectangle',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Added ${shapeOverlay.mode} rectangle.`,bytes=>addPdfRectangleOverlay(bytes,{pageNumber:currentPage,...shapeOverlay}),currentPage)},
       {id:'configure-edit',label:'Edit settings',enabled:true,run:configureProperties},
+      {id:'stamp-header-footer',label:'Header & footer…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('header-footer')},
+      {id:'stamp-page-numbers',label:'Page numbers…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('page-numbers')},
+      {id:'stamp-text-watermark',label:'Text watermark…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('text-watermark')},
+      {id:'stamp-image-watermark',label:'Image watermark…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('image-watermark')},
+      {id:'document-properties',label:'Document properties…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('properties')},
+      {id:'navigation',label:'Navigation…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('navigation')},
       {id:'open-page-numbers',label:'Page numbers settings',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'Open a PDF before adding page numbers.':mutating?'Wait for the current PDF edit.':undefined,run:configureProperties},
       providerAction,
     ],
@@ -2631,6 +2658,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'split',label:'Split here',enabled:!!sourceBytes&&!mutating&&currentPage<pageCount,disabledReason:!sourceBytes?'No PDF is loaded.':currentPage>=pageCount?'Move before the final page to split the PDF.':mutating?'Wait for the current PDF edit to finish.':undefined,run:splitCurrent},
       {id:'merge-pdfs',label:'Merge PDFs…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password before merging.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('merge')},
       {id:'split-modes',label:'Split…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('split')},
+      {id:'nup',label:'Pages per sheet…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password before arranging pages.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('nup')},
+      {id:'batch',label:'Batch organize…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('batch')},
       {id:'insert',label:'Insert PDF…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>insertInputRef.current?.click()},
       {id:'append',label:'Append PDF…',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>appendInputRef.current?.click()},
       {id:'blank',label:'Blank after',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:()=>mutateAction(`Inserted a blank page after page ${currentPage}.`,bytes=>insertBlankPdfPage(bytes,currentPage),currentPage+1)},
@@ -2640,6 +2669,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       providerAction,
     ],
     comment:[
+      {id:'markup-tools',label:'Markup tools…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('markup')},
       {id:'comments-panel',label:'Comments panel',enabled:true,run:()=>openLeftPanel('comments')},
       {id:'add-comment',label:'Add comment',enabled:!!sourceBytes&&!mutating&&!!commentDraft.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!commentDraft.text.trim()?'Enter comment text in the Comments panel first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addComment},
       {id:'markup-region',label:'Add '+markupDraft.kind+' region',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addReviewMarkup},
@@ -2664,7 +2694,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       providerAction,
     ],
     ai:[navigateAction('Open CAD viewer','cad'),navigateAction('Open DICOM viewer','dicom'),providerAction],
-    scan:[navigateAction('Open Scanner','scanner'),providerAction],
+    scan:[
+      {id:'compress',label:'Compress…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('compress')},
+      navigateAction('Open Scanner','scanner'),providerAction],
     automate:[navigateAction('Open Automation Studio','automation'),providerAction],
   };
   const directoryVisible=USER_PDF_TOOLS.filter(tool=>
@@ -2847,7 +2879,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             {action.planned&&<span className="pdf-feature-planned-dot" aria-hidden="true"/>}
           </span>)}
           {!activeTaskActions.length&&<span className="pdf-task-empty">No operational {PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label.toLowerCase()} commands are available in this build yet. Use Ctrl+K to discover available document actions.</span>}
-          {overflowTaskActions.length>0&&<details className="pdf-task-overflow">
+          {overflowTaskActions.length>0&&<details className="pdf-task-overflow" open={overflowOpen}
+            onToggle={event=>{const open=event.currentTarget.open;setOverflowOpen(current=>current===open?current:open);}}>
             <summary aria-label={`More ${PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label} tools`}>More</summary>
             <div>
               {overflowTaskActions.map((action)=><button
@@ -2855,7 +2888,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                 disabled={!action.enabled}
                 title={taskActionTitle(action)}
                 aria-label={taskActionTitle(action)}
-                onClick={()=>{void action.run();}}
+                onClick={()=>{setOverflowOpen(false);void action.run();}}
               >{action.label}</button>)}
             </div>
           </details>}
@@ -2873,6 +2906,37 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         }}/>}
       {toolDialog==='split'&&sourceBytes&&<PdfSplitDialog domIdPrefix={domIdPrefix} sourceName={sourceName} pageCount={pageCount}
         busy={mutating} getBytes={()=>currentPdfBytesRef.current} onDone={setActionNotice} onClose={closeToolDialog}/>}
+      {toolDialog==='nup'&&sourceBytes&&<PdfNupDialog domIdPrefix={domIdPrefix} busy={mutating} onClose={closeToolDialog}
+        onApply={async operation=>{
+          let summary='';
+          const applied=await mutate('Arranged pages per sheet.',async latest=>{const arranged=await operation(latest);summary=arranged.summary;return arranged.bytes;},1);
+          if(applied)setActionNotice(summary);
+          return applied;
+        }}/>}
+      {(toolDialog==='header-footer'||toolDialog==='page-numbers'||toolDialog==='text-watermark'||toolDialog==='image-watermark')&&sourceBytes&&
+        <PdfStampDialog key={toolDialog} kind={toolDialog} domIdPrefix={domIdPrefix} sourceName={sourceName||'document.pdf'} busy={mutating} onClose={closeToolDialog}
+          onApply={async (label,operation)=>{
+            let summary='';
+            const applied=await mutate(label,async latest=>{const stamped=await operation(latest);summary=stamped.summary;return stamped.bytes;},currentPage);
+            if(applied)setActionNotice(summary);
+            return applied;
+          }}/>}
+      {(toolDialog==='properties'||toolDialog==='navigation'||toolDialog==='compress'||toolDialog==='markup')&&sourceBytes&&(()=>{
+        const apply=async (label:string,operation:(latest:Uint8Array)=>Promise<{bytes:Uint8Array;summary:string}>)=>{
+          let summary='';
+          const applied=await mutate(label,async latest=>{const edited=await operation(latest);summary=edited.summary;return edited.bytes;},currentPage);
+          if(applied)setActionNotice(summary);
+          return applied;
+        };
+        if(toolDialog==='markup')return <PdfMarkupPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} viewRotation={rotation} busy={mutating}
+          settings={markupSettings} onSettings={setMarkupSettings} onApply={apply} onClose={closeToolDialog}/>;
+        if(toolDialog==='compress')return <PdfCompressDialog domIdPrefix={domIdPrefix} busy={mutating} onApply={apply} onClose={closeToolDialog}/>;
+        return toolDialog==='properties'
+          ? <PdfPropertiesDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} busy={mutating} onApply={apply} onClose={closeToolDialog}/>
+          : <PdfNavigationDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} pageCount={pageCount} currentPage={currentPage} busy={mutating} onApply={apply} onClose={closeToolDialog}/>;
+      })()}
+      {toolDialog==='batch'&&sourceBytes&&<PdfBatchDialog domIdPrefix={domIdPrefix} currentName={sourceName||'Open document.pdf'}
+        currentSize={sourceBytes.length} busy={mutating} getBytes={()=>currentPdfBytesRef.current} onDone={setActionNotice} onClose={closeToolDialog}/>}
       {featureGalleryOpen&&<section id={`${domIdPrefix}-feature-gallery`}
         className="pdf-feature-gallery"
         aria-label={`${PDF_MASTER_TABS.find(item=>item.id===masterTab)!.label} PDF features`}
@@ -3410,6 +3474,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               onReplacePage={()=>beginReplacePage(page)}
               onCropPage={()=>startCropOnPage(page)}
               editingBusy={mutating||loading}
+              drawTool={toolDialog==='markup'&&markupSettings.tool?{kind:markupSettings.tool,color:markupSettings.style.color,busy:mutating,onShape:shape=>{
+                const kind=markupSettings.tool!;
+                void mutate(`Added ${kind==='Ink'?'a freehand drawing':kind==='Note'?'a sticky note':'a drawing'}.`,
+                  latest=>addPdfDrawing(latest,{...shape,pageNumber:page,viewRotation:rotation,kind,author:MARKUP_AUTHOR,style:markupSettings.style,text:markupSettings.text}),page);
+              }}:null}
             />;
           })}
         </div>

@@ -2382,13 +2382,13 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 }
 .app-shell-top-only .pdf-left-panel .pdf-thumb-canvas{max-width:100%}
 
-/* MAL-001/002 merge and split dialogs */
+/* MAL-001/002/009/010 merge, split, N-up and batch dialogs */
 .pdf-tool-dialog{position:fixed;z-index:60;top:12vh;left:50%;transform:translateX(-50%);width:min(560px,calc(100vw - 32px));max-height:76vh;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:16px 18px;border:1px solid var(--ml-border);border-radius:12px;background:var(--ml-surface);color:var(--ml-text);box-shadow:0 18px 50px rgba(0,0,0,.35)}
 .pdf-tool-dialog header{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .pdf-tool-dialog h2{margin:0;font-size:17px}
 .pdf-tool-dialog p,.pdf-tool-dialog small{margin:0;color:var(--ml-muted);font-size:12px;line-height:1.5}
 .pdf-tool-dialog label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ml-text)}
-.pdf-tool-dialog input:not([type=radio]),.pdf-tool-dialog select{border:1px solid var(--ml-border);background:var(--ml-field);color:var(--ml-text);border-radius:7px;padding:7px 9px;font:inherit}
+.pdf-tool-dialog input:not([type=radio]):not([type=checkbox]),.pdf-tool-dialog select{border:1px solid var(--ml-border);background:var(--ml-field);color:var(--ml-text);border-radius:7px;padding:7px 9px;font:inherit}
 .pdf-tool-dialog button{display:inline-flex;align-items:center;gap:6px;justify-content:center;border:1px solid var(--ml-border);background:var(--ml-control);color:var(--ml-text);border-radius:7px;padding:6px 10px;cursor:pointer}
 .pdf-tool-dialog button:disabled{opacity:.45;cursor:not-allowed}
 .pdf-tool-dialog button.primary-action{background:#1269cc;border-color:#3d9fff;color:#fff}
@@ -2398,4 +2398,29 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 .pdf-tool-dialog-error{color:var(--ml-error-fg)!important;background:var(--ml-error-bg);border-radius:6px;padding:6px 8px}
 .pdf-merge-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .pdf-merge-list li{display:flex;align-items:center;gap:6px;border:1px solid var(--ml-border);background:var(--ml-card);border-radius:8px;padding:6px 8px;cursor:grab}
+.pdf-merge-list.static li{cursor:default}
+.pdf-tool-dialog-actions{display:flex;flex-wrap:wrap;gap:6px}
+.pdf-markup-panel{position:fixed;z-index:55;top:150px;right:16px;width:min(320px,calc(100vw - 32px));max-height:calc(100vh - 180px);overflow:auto;display:flex;flex-direction:column;gap:8px;padding:12px 14px;border:1px solid var(--ml-border);border-radius:12px;background:var(--ml-surface);color:var(--ml-text);box-shadow:0 14px 40px rgba(0,0,0,.35)}
+.pdf-markup-panel header{display:flex;align-items:center;justify-content:space-between}
+.pdf-markup-panel h2{margin:0;font-size:16px}
+.pdf-markup-panel fieldset{border:1px solid var(--ml-border);border-radius:8px;padding:6px 8px;display:flex;flex-wrap:wrap;gap:6px}
+.pdf-markup-panel legend{font-size:12px;color:var(--ml-muted);padding:0 4px}
+.pdf-markup-panel label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ml-text)}
+.pdf-markup-panel p{margin:0;font-size:12px;color:var(--ml-muted)}
+.pdf-markup-panel button{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--ml-border);background:var(--ml-control);color:var(--ml-text);border-radius:7px;padding:5px 9px;cursor:pointer;font-size:12px}
+.pdf-markup-panel button[aria-pressed=true]{background:#1269cc;border-color:#3d9fff;color:#fff}
+.pdf-markup-panel button:disabled{opacity:.45;cursor:not-allowed}
+.pdf-markup-panel input:not([type=radio]):not([type=color]),.pdf-markup-panel textarea{border:1px solid var(--ml-border);background:var(--ml-field);color:var(--ml-text);border-radius:6px;padding:5px 7px;font:inherit}
+.pdf-markup-panel .pdf-tool-dialog-choice{flex-direction:row;align-items:center}
+.pdf-markup-swatch{display:inline-block;width:10px;height:10px;border-radius:2px;border:1px solid var(--ml-border);margin-right:4px}
+.pdf-markup-panel .pdf-tool-dialog-error{color:var(--ml-error-fg);background:var(--ml-error-bg);border-radius:6px;padding:6px 8px}
+.pdf-tool-dialog-tabs{display:flex;gap:4px;border-bottom:1px solid var(--ml-border)}
+.pdf-tool-dialog .pdf-tool-dialog-tabs button{border-radius:7px 7px 0 0;border-bottom:0}
+.pdf-tool-dialog .pdf-tool-dialog-tabs button[aria-selected=true]{background:var(--ml-card);font-weight:600;box-shadow:inset 0 -2px 0 #3d9fff}
+.pdf-tool-dialog [role=tabpanel]{display:flex;flex-direction:column;gap:10px}
+.pdf-properties-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr) auto;gap:6px;width:100%}
+.pdf-properties-xmp{max-height:180px;overflow:auto;font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--ml-field);color:var(--ml-text);padding:6px;border-radius:6px}
+.pdf-batch-results{border-collapse:collapse;font-size:12px;width:100%}
+.pdf-batch-results th,.pdf-batch-results td{border:1px solid var(--ml-border);padding:4px 6px;text-align:left;vertical-align:top;overflow-wrap:anywhere}
+.pdf-batch-results th{background:var(--ml-card);color:var(--ml-text)}
 .pdf-merge-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
