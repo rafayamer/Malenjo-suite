@@ -159,5 +159,18 @@ describe('content rewriting details', () => {
     const green = await stylePdfPath(await red.save(), 1, 0, { fill: '#00ff00' });
     expect((await listPdfPageObjects(green, 1))[0].fill).toBe('#00ff00');
   });
-});
 
+  it('replays only path state that outlives nested scopes, and wraps words wider than an inserted box', async () => {
+    const pdf = await PDFDocument.create();
+    pdf.addPage([400, 400]).node.addContentStream(pdf.context.register(pdf.context.stream('0 0 100 100 re q 1 0 0 rg Q f 200 0 100 100 re f')));
+    const moved = await transformPdfObject(await pdf.save(), 1, 'path', 0, { dx: 10, dy: 0 });
+    const paths = (await listPdfPageObjects(moved, 1)).filter((o) => o.kind === 'path');
+    expect(paths.map((p) => p.fill)).toEqual(['#000000', '#000000']);
+    const url = 'https://example.com/a/very/long/path/that/does/not/fit';
+    const out = await insertPdfContent(await sample(), { pageNumber: 1, viewRotation: 0, kind: 'text', rect: { x: 0.1, y: 0.05, width: 0.2, height: 0.3 }, text: url, fontSize: 12, stroke: '#000000', lineWidth: 1 });
+    const runs = (await listPdfTextRuns(out, 1)).filter((r) => r.text !== 'Caption');
+    expect(runs.length).toBeGreaterThan(1);
+    expect(runs.map((r) => r.text).join('')).toBe(url);
+    expect(runs.every((r) => r.box[2] - r.box[0] <= 0.2 * 600 + 0.5)).toBe(true);
+  });
+});

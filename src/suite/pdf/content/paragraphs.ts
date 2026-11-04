@@ -160,6 +160,10 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
   if (modes.size > 1 || ![0, 3].includes(first.render)) {
     throw new Error('This paragraph is drawn as outlined or clipping text (or mixes text drawing modes), which rewriting it cannot preserve. Edit its text runs one at a time instead.');
   }
+  // The rewritten block is drawn in one colour; a coloured link or highlighted phrase would lose its colour.
+  if (new Set(paragraph.lines.flatMap((l) => l.runs.map((r) => r.fill))).size > 1) {
+    throw new Error('This paragraph mixes text colours (for example a coloured link), which rewriting it cannot preserve. Edit its text runs one at a time instead.');
+  }
   if (paragraph.lines.some((l) => l.runs.some((r) => r.unmapped || r.font.kind === 'type3'))) throw new Error('This paragraph uses a font that does not say which characters it draws, so it cannot be rewritten.');
 
   // Measuring and encoding, either through the paragraph's own font or a chosen standard font.

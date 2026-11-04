@@ -184,5 +184,15 @@ describe('paragraph fonts and spacing', () => {
     const spaced = await reflowPdfParagraph(wbytes, 1, cid.id, cid.text, 'A B', { ...base, size: 12, wordSpacing: 2 }, true);
     expect(await text(spaced.bytes)).toMatch(/\[<00030005> -166\.6667 <0004>\] TJ/);
   });
-});
 
+  it('refuses a paragraph that mixes text colours', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([600, 800]);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    page.node.set(PDFName.of('Resources'), pdf.context.obj({ Font: { F1: font.ref } }));
+    page.node.addContentStream(pdf.context.register(pdf.context.stream('BT /F1 12 Tf 72 700 Td (Read the ) Tj 1 0 0 rg (linked page) Tj ET')));
+    const bytes = await pdf.save();
+    const [mixed] = await listPdfParagraphs(bytes, 1);
+    await expect(reflowPdfParagraph(bytes, 1, mixed.id, mixed.text, mixed.text, { ...base, size: 12 }, true)).rejects.toThrow(/mixes text colours/);
+  });
+});

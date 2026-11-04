@@ -248,8 +248,23 @@ export async function addPdfTextMarkup(bytes: Uint8Array, spec: TextMarkupSpec):
   return save(pdf);
 }
 
+/**
+ * Characters a text box or callout cannot show: their appearance is drawn in the built-in Helvetica
+ * (WinAnsi), so anything outside it is refused rather than drawn as “?”.
+ */
+export async function overlayUnsupported(text: string): Promise<string[]> {
+  const probe = await PDFDocument.create();
+  const font = await probe.embedFont(StandardFonts.Helvetica);
+  return [...new Set([...text.replace(/[\r\n]/g, '')])].filter((ch) => { try { font.encodeText(ch); return false; } catch { return true; } });
+}
+async function refuseUnshowable(text: string): Promise<void> {
+  const missing = await overlayUnsupported(text);
+  if (missing.length) throw new Error(`A text box cannot show ${missing.map((c) => `“${c}”`).join(', ')}: its built-in font has no glyph for ${missing.length === 1 ? 'it' : 'them'}.`);
+}
+
 export async function addPdfDrawing(bytes: Uint8Array, spec: DrawingSpec): Promise<Uint8Array> {
   checkStyle(spec.style);
+  if (spec.kind === 'FreeText' || spec.kind === 'Callout') await refuseUnshowable(spec.text ?? '');
   const pdf = await load(bytes);
   refuseSignedPdf(pdf, 'changing its markup');
   pageFor(pdf, spec.pageNumber);
@@ -363,7 +378,10 @@ export async function updatePdfMarkupAnnotation(bytes: Uint8Array, target: Marku
       if (points.length === 2) dict.set(N('Rect'), pdf.context.obj(bounds(points, change.width * 4 + 6).map(r2)));
     }
   }
-  if (change.contents !== undefined) dict.set(N('Contents'), PDFHexString.fromText(checkText(change.contents, 'Text', 4000)));
+  if (change.contents !== undefined) {
+    if (dict.get(N('Subtype'))?.toString() === '/FreeText') await refuseUnshowable(change.contents);
+    dict.set(N('Contents'), PDFHexString.fromText(checkText(change.contents, 'Text', 4000)));
+  }
   dict.set(N('M'), PDFString.fromDate(new Date()));
   await buildAppearance(pdf, target.pageNumber, dict, dict.lookupMaybe(N('MALENJO_ViewRotation'), PDFNumber)?.asNumber() ?? 0);
   return save(pdf);

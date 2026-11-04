@@ -18,6 +18,19 @@ async function invoice() {
   p.drawText('Thank you for your order', { x: 72, y: 620, size: 20, font });
   return pdf.save();
 }
+/** The same invoice drawn with an embedded subset font: only the characters already used can be drawn natively. */
+async function subsetInvoice() {
+  const pdf = await PDFDocument.load(await invoice());
+  const fontDicts = pdf.getPage(0).node.Resources().lookup(PDFName.of('Font'), PDFDict);
+  for (const key of fontDicts.keys()) {
+    const font = fontDicts.lookup(key, PDFDict);
+    font.set(PDFName.of('BaseFont'), PDFName.of('ABCDEF+Helvetica'));
+    font.set(PDFName.of('FontDescriptor'), pdf.context.obj({ Type: 'FontDescriptor', FontName: 'ABCDEF+Helvetica', Flags: 32,
+      FontBBox: [-166, -225, 1000, 931], ItalicAngle: 0, Ascent: 718, Descent: -207, CapHeight: 718, StemV: 88,
+      FontFile2: pdf.context.register(pdf.context.stream('not a font program')) }));
+  }
+  return pdf.save();
+}
 const fonts = (pdf) => pdf.getPage(0).node.Resources().lookup(PDFName.of('Font'), PDFDict).keys().length;
 
 async function openTextEdit() {
@@ -49,11 +62,21 @@ try {
   });
 
   await check('MAL-011 characters missing from the font are refused, and an overlay is offered and labelled', async () => {
-    const tools = page.getByRole('dialog', { name: 'Edit text' });
+    let tools = page.getByRole('dialog', { name: 'Edit text' });
+    // Cyrillic: neither the PDF's font nor an overlay's built-in font can draw it, so no overlay is offered.
     await panel().getByRole('button', { name: 'Edit text: Shipping: 15 EUR' }).click();
     await tools.getByLabel('New text').fill('Доставка: 15 EUR');
     await tools.getByRole('button', { name: 'Replace text' }).click();
-    await tools.getByRole('alert').filter({ hasText: /has no glyph for/ }).waitFor();
+    await tools.getByRole('alert').filter({ hasText: /has no glyph for.*An overlay cannot show these characters either/ }).waitFor();
+    expect(await tools.getByRole('button', { name: 'Use an overlay text box instead (labelled)' }).count() === 0, 'an overlay was offered for text it would show as ?');
+    await tools.getByRole('button', { name: 'Close edit text' }).click();
+    // A subset font without "D": native editing is refused, and the labelled overlay can show the text.
+    await openPdf(await subsetInvoice(), 'invoice-subset.pdf');
+    tools = await openTextEdit();
+    await panel().getByRole('button', { name: 'Edit text: Shipping: 15 EUR' }).click();
+    await tools.getByLabel('New text').fill('Shipping: 15 USD');
+    await tools.getByRole('button', { name: 'Replace text' }).click();
+    await tools.getByRole('alert').filter({ hasText: /has no glyph for “D”/ }).waitFor();
     await tools.getByRole('button', { name: 'Use an overlay text box instead (labelled)' }).click();
     await notice(/This is an overlay annotation: the original text is still in the file/);
     const bytes = await save();
