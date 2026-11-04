@@ -194,10 +194,11 @@ async function main(){
   await page.keyboard.press('Control+k');
   const commandSearch=page.getByRole('combobox',{name:'Search MALENJO actions, documents and settings'});
   await commandSearch.waitFor({timeout:15000});
-  await commandSearch.fill('Convert to Word');
-  await page.getByRole('option',{name:/Convert to Word/}).waitFor({timeout:15000});
-  requireEvidence(await page.getByRole('option',{name:/Convert to Word/}).isDisabled(),
-    'Unverified PDF-to-Word command was executable in the global palette');
+  // PDF to Word is verified (MAL-037); PostScript to PDF (MAL-035) is not.
+  await commandSearch.fill('PostScript to PDF');
+  await page.getByRole('option',{name:/PostScript to PDF/}).first().waitFor({timeout:15000});
+  requireEvidence(await page.getByRole('option').evaluateAll((nodes)=>nodes.length>0&&nodes.every((n)=>n.getAttribute('aria-disabled')==='true'||n.hasAttribute('disabled'))),
+    'Unverified PostScript-to-PDF command was executable in the global palette');
   await page.keyboard.press('ArrowDown');
   requireEvidence(await commandSearch.getAttribute('aria-activedescendant')===null,
     'Disabled-only palette results incorrectly received keyboard selection');
