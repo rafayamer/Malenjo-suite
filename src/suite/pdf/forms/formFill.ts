@@ -6,7 +6,7 @@
  */
 import { PDFArray, PDFBool, PDFCheckBox, PDFDict, PDFDropdown, PDFName, PDFNumber, PDFOptionList, PDFRadioGroup, PDFRef, PDFSignature, PDFStream, PDFTextField, type PDFDocument, type PDFField, type PDFForm, type PDFPage } from 'pdf-lib';
 import { fillPdfFormFields, type PdfFormFieldUpdate } from '../editor';
-import { choiceOptions, loadForm, readScripts, refreshFieldAppearances, saveForm } from './formDesign';
+import { choiceOptions, loadForm, readScripts, refreshFieldAppearances, refuseSigned, saveForm } from './formDesign';
 import { evaluateForm, logicDependencies, parseLogic, type FieldLogic, type FormEvaluation, type LogicField } from './formLogic';
 
 const N = PDFName.of;
@@ -76,6 +76,7 @@ function setHidden(dict: PDFDict, hidden: boolean): void {
  */
 export async function fillFormWithLogic(bytes: Uint8Array, values: Record<string, string>): Promise<{ bytes: Uint8Array; evaluation: FormEvaluation }> {
   const before = await loadForm(bytes);
+  refuseSigned(before);
   const fields = fieldsOf(before);
   const evaluation = evaluateFill(fields, values);
   const problems = Object.values(evaluation.errors);
@@ -127,6 +128,7 @@ function widgetPage(pdf: PDFDocument, widget: PDFDict, ref: PDFRef | null): PDFP
  */
 export async function flattenFormFields(bytes: Uint8Array, names: string[] | null): Promise<{ bytes: Uint8Array; flattened: string[] }> {
   const pdf = await loadForm(bytes);
+  refuseSigned(pdf);
   const form: PDFForm = pdf.getForm();
   if (form.acroForm.dict.lookupMaybe(N('NeedAppearances'), PDFBool)?.asBoolean()) {
     throw new Error('Some field appearances are left for the reader to draw; save the form in a PDF reader that redraws them before flattening.');

@@ -112,6 +112,9 @@ describe('form designer (MAL-046 – MAL-049)', () => {
     pdf.getForm().getField('Approval').acroField.dict.set(PDFName.of('V'), pdf.context.obj({ Type: 'Sig' }));
     bytes = await pdf.save();
     await expect(addFormField(bytes, field('text', 'Late'))).rejects.toThrow(/signed/);
+    await expect(fillFormWithLogic(bytes, { Customer: 'X' })).rejects.toThrow(/signed; changing its form/);
+    await expect(flattenFormFields(bytes, null)).rejects.toThrow(/signed/);
+    expect((await readFillForm(bytes)).length).toBeGreaterThan(0); // reading is still allowed
   });
 });
 

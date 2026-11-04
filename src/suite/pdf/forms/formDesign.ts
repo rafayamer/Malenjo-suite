@@ -11,6 +11,7 @@ import {
   rgb, type PDFField, type PDFFont, type PDFForm, type PDFPage,
 } from 'pdf-lib';
 import { frameOf } from '../content/objectEdit';
+import { refuseSignedPdf } from '../pdfSignatureGuard';
 import type { ShownRect } from '../pdfMarkup';
 import { calculationOrder, displayValue, logicScripts, parseLogic, renameInLogic, logicDependencies, type FieldFormat, type FieldLogic, type FieldScripts } from './formLogic';
 
@@ -47,12 +48,8 @@ export async function loadForm(bytes: Uint8Array): Promise<PDFDocument> {
   if (pdf.catalog.lookupMaybe(N('AcroForm'), PDFDict)?.has(N('XFA'))) throw new Error('XFA forms are not supported: changing them would discard the XFA form data.');
   return pdf;
 }
-function refuseSigned(pdf: PDFDocument): void {
-  if (pdf.catalog.has(N('Perms'))) throw new Error('This PDF is certified; changing its form would invalidate the certification.');
-  for (const field of pdf.getForm().getFields()) {
-    if (field instanceof PDFSignature && field.acroField.dict.has(N('V'))) throw new Error('This PDF is signed; changing its form would invalidate the signature.');
-  }
-}
+/** Form changes rewrite the file, which would invalidate a signature or certification. */
+export function refuseSigned(pdf: PDFDocument): void { refuseSignedPdf(pdf, 'changing its form'); }
 export const saveForm = async (pdf: PDFDocument) => Uint8Array.from(await pdf.save({ useObjectStreams: false, updateFieldAppearances: false }));
 
 function checkName(form: PDFForm, name: string, except?: string): string {
