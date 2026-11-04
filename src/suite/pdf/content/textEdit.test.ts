@@ -118,3 +118,36 @@ describe('signed documents', () => {
     await expect(deletePdfObject(signed, 1, 'path', 0)).rejects.toThrow(/signed/);
   });
 });
+
+describe('font base encodings', () => {
+  it('reads MacRoman and Standard encodings, and refuses unknown built-in encodings', async () => {
+    const pdf = await PDFDocument.create();
+    const mac = pdf.context.obj({ Type: 'Font', Subtype: 'Type1', BaseFont: 'Helvetica', Encoding: 'MacRomanEncoding' }) as PDFDict;
+    const codec = fontCodec(pdf, 'M', mac);
+    expect(codec.unicode(0x80)).toBe('Ä');
+    expect(codec.encode('Ä')).toEqual({ bytes: Uint8Array.of(0x80) });
+    expect(codec.encode('€')).toEqual({ missing: ['€'] });
+    const viaBase = fontCodec(pdf, 'B', pdf.context.obj({ Type: 'Font', Subtype: 'Type1', BaseFont: 'Helvetica', Encoding: { BaseEncoding: 'MacRomanEncoding', Differences: [65, 'B'] } }) as PDFDict);
+    expect([viaBase.unicode(0x41), viaBase.unicode(0x8a)]).toEqual(['B', 'ä']);
+    const standard = fontCodec(pdf, 'S', pdf.context.obj({ Type: 'Font', Subtype: 'Type1', BaseFont: 'Times-Roman' }) as PDFDict);
+    expect([standard.unicode(0x27), standard.unicode(0xe8)]).toEqual(['’', 'Ł']);
+    const embedded = fontCodec(pdf, 'E', pdf.context.obj({ Type: 'Font', Subtype: 'TrueType', BaseFont: 'Custom', FirstChar: 65, Widths: [600], FontDescriptor: { FontFile2: pdf.context.register(pdf.context.stream('x')) } }) as PDFDict);
+    expect(embedded.unicode(0x41)).toBeNull();
+    expect('missing' in embedded.encode('A')).toBe(true);
+  });
+});
+
+describe('kerned runs', () => {
+  it('keeps the spacing adjustments of untouched text when a TJ run is edited', async () => {
+    const { pageContentBytes } = await import('./contentModel');
+    const bytes = await sample();
+    const run = (await listPdfTextRuns(bytes, 1)).find((r) => r.text === 'Kerned line')!;
+    const edited = await replacePdfTextRun(bytes, 1, run.id, 'Kerned line', 'Kerned row');
+    const content = new TextDecoder('latin1').decode(pageContentBytes(await PDFDocument.load(edited), 0));
+    // "Ke" and its -40 adjustment are untouched; only the edited element is re-encoded.
+    expect(content).toMatch(/\[<4b65> -40 <726e656420726f77>\] TJ/i);
+    expect((await texts(edited)).join(' ')).toContain('Kerned row');
+    const replaced = await replacePdfText(bytes, 'Ke', 'Ca');
+    expect(new TextDecoder('latin1').decode(pageContentBytes(await PDFDocument.load(replaced.bytes), 0))).toMatch(/\[<4361> -40 <726e6564206c696e65>\] TJ/i);
+  });
+});

@@ -34,8 +34,43 @@ for (const cp of Encodings.WinAnsi.supportedCodePoints) {
   // Several code points can share a glyph name (space / no-break space): keep the lowest.
   if (!NAME_TO_UNICODE.has(name)) NAME_TO_UNICODE.set(name, String.fromCodePoint(cp));
 }
+// Glyph names used by MacRoman and Standard encodings that WinAnsi does not cover.
+const EXTRA_NAMES: Record<string, string> = {
+  notequal: '≠', infinity: '∞', lessequal: '≤', greaterequal: '≥', partialdiff: '∂', summation: '∑', product: '∏', pi: 'π', integral: '∫', Omega: 'Ω',
+  radical: '√', approxequal: '≈', Delta: '∆', lozenge: '◊', fraction: '⁄', fi: 'ﬁ', fl: 'ﬂ', dotlessi: 'ı', breve: '˘', dotaccent: '˙', ring: '˚',
+  hungarumlaut: '˝', ogonek: '˛', caron: 'ˇ', Lslash: 'Ł', lslash: 'ł',
+};
+const MAC_ROMAN_HIGH = ('Adieresis Aring Ccedilla Eacute Ntilde Odieresis Udieresis aacute agrave acircumflex adieresis atilde aring ccedilla eacute egrave '
+  + 'ecircumflex edieresis iacute igrave icircumflex idieresis ntilde oacute ograve ocircumflex odieresis otilde uacute ugrave ucircumflex udieresis '
+  + 'dagger degree cent sterling section bullet paragraph germandbls registered copyright trademark acute dieresis notequal AE Oslash '
+  + 'infinity plusminus lessequal greaterequal yen mu partialdiff summation product pi integral ordfeminine ordmasculine Omega ae oslash '
+  + 'questiondown exclamdown logicalnot radical florin approxequal Delta guillemotleft guillemotright ellipsis space Agrave Atilde Otilde OE oe '
+  + 'endash emdash quotedblleft quotedblright quoteleft quoteright divide lozenge ydieresis Ydieresis fraction currency guilsinglleft guilsinglright fi fl '
+  + 'daggerdbl periodcentered quotesinglbase quotedblbase perthousand Acircumflex Ecircumflex Aacute Edieresis Egrave Iacute Icircumflex Idieresis Igrave Oacute Ocircumflex '
+  + 'apple Ograve Uacute Ucircumflex Ugrave dotlessi circumflex tilde macron breve dotaccent ring cedilla hungarumlaut ogonek caron').split(' ');
+const STANDARD_HIGH: Record<number, string> = {
+  0xa1: 'exclamdown', 0xa2: 'cent', 0xa3: 'sterling', 0xa4: 'fraction', 0xa5: 'yen', 0xa6: 'florin', 0xa7: 'section', 0xa8: 'currency', 0xa9: 'quotesingle',
+  0xaa: 'quotedblleft', 0xab: 'guillemotleft', 0xac: 'guilsinglleft', 0xad: 'guilsinglright', 0xae: 'fi', 0xaf: 'fl', 0xb1: 'endash', 0xb2: 'dagger',
+  0xb3: 'daggerdbl', 0xb4: 'periodcentered', 0xb6: 'paragraph', 0xb7: 'bullet', 0xb8: 'quotesinglbase', 0xb9: 'quotedblbase', 0xba: 'quotedblright',
+  0xbb: 'guillemotright', 0xbc: 'ellipsis', 0xbd: 'perthousand', 0xbf: 'questiondown', 0xc1: 'grave', 0xc2: 'acute', 0xc3: 'circumflex', 0xc4: 'tilde',
+  0xc5: 'macron', 0xc6: 'breve', 0xc7: 'dotaccent', 0xc8: 'dieresis', 0xca: 'ring', 0xcb: 'cedilla', 0xcd: 'hungarumlaut', 0xce: 'ogonek', 0xcf: 'caron',
+  0xd0: 'emdash', 0xe1: 'AE', 0xe3: 'ordfeminine', 0xe8: 'Lslash', 0xe9: 'Oslash', 0xea: 'OE', 0xeb: 'ordmasculine', 0xf1: 'ae', 0xf5: 'dotlessi',
+  0xf8: 'lslash', 0xf9: 'oslash', 0xfa: 'oe', 0xfb: 'germandbls',
+};
+/** Code -> glyph name for a named base encoding; null when the encoding is not one MALENJO knows. */
+export function baseEncodingNames(name: string): Map<number, string> | null {
+  const out = new Map<number, string>();
+  if (name === 'WinAnsiEncoding') { WIN_ANSI.forEach(([, glyph], code) => out.set(code, glyph)); return out; }
+  if (name !== 'MacRomanEncoding' && name !== 'StandardEncoding') return null;
+  // The printable ASCII range matches WinAnsi in both (Standard differs at 0x27 and 0x60).
+  for (let code = 0x20; code < 0x7f; code++) { const entry = WIN_ANSI.get(code); if (entry) out.set(code, entry[1]); }
+  if (name === 'MacRomanEncoding') MAC_ROMAN_HIGH.forEach((glyph, i) => out.set(0x80 + i, glyph));
+  else { out.set(0x27, 'quoteright'); out.set(0x60, 'quoteleft'); Object.entries(STANDARD_HIGH).forEach(([code, glyph]) => out.set(Number(code), glyph)); }
+  return out;
+}
 function glyphToUnicode(name: string): string | null {
   if (NAME_TO_UNICODE.has(name)) return NAME_TO_UNICODE.get(name)!;
+  if (EXTRA_NAMES[name]) return EXTRA_NAMES[name];
   const uni = /^uni([0-9A-F]{4})$/i.exec(name) ?? /^u([0-9A-F]{4,6})$/i.exec(name);
   if (uni) return String.fromCodePoint(parseInt(uni[1], 16));
   return name.length === 1 ? name : null;
@@ -133,9 +168,13 @@ export function fontCodec(pdf: PDFDocument, key: string, dict: PDFDict): FontCod
   const standardName = ALIASES[plainName] ?? plainName;
   const standard = !embedded && STANDARD.has(standardName) ? Font.load(standardName as IFontNames) : null;
   const symbolic = standardName === 'Symbol' || standardName === 'ZapfDingbats';
-  const glyphNames = new Map<number, string>();
-  WIN_ANSI.forEach(([, name], code) => glyphNames.set(code, name));
+  // Base encoding: the /Encoding name, or the dictionary's /BaseEncoding; with neither, a
+  // non-embedded standard font uses StandardEncoding and an embedded one its own built-in
+  // encoding, which MALENJO cannot read (only /Differences and ToUnicode are then trusted).
   const encodingDict = get(pdf, dict, 'Encoding', PDFDict);
+  const encodingName = get(pdf, dict, 'Encoding', PDFName)?.decodeText() ?? get(pdf, encodingDict, 'BaseEncoding', PDFName)?.decodeText()
+    ?? (!embedded && STANDARD.has(standardName) && !symbolic ? 'StandardEncoding' : undefined);
+  const glyphNames = (encodingName ? baseEncodingNames(encodingName) : null) ?? new Map<number, string>();
   const differences = get(pdf, encodingDict, 'Differences', PDFArray)?.asArray() ?? [];
   let cursor = 0;
   for (const item of differences) {

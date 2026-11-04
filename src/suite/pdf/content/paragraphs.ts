@@ -15,6 +15,7 @@ import { refuseSignedPdf } from '../pdfSignatureGuard';
 import { PDFDocument, PDFName, StandardFonts, type PDFFont } from 'pdf-lib';
 import { rewriteContent, serializeOperand } from './contentLexer';
 import { documentModels, type Box, type PageModel, type TextRun } from './contentModel';
+import type { ContentOp } from './contentLexer';
 import { GlyphUnavailableError } from './textEdit';
 import { parseColor, viewerFrame } from '../pdfStamp';
 
@@ -29,8 +30,8 @@ export interface ParagraphInfo {
 export interface ParagraphStyle { align: ParagraphAlign; size: number; lineHeight: number; charSpacing: number; wordSpacing: number; font: ParagraphFont }
 export interface ReflowReport { bytes: Uint8Array; lines: number; overflow: boolean; substitution: string | null }
 export class ParagraphOverflowError extends Error {
-  constructor(readonly needed: number, readonly available: number) {
-    super(`The text needs ${needed} lines but the paragraph has room for ${available}. Shorten it, make it smaller, or allow it to grow.`);
+  constructor(readonly needed: number, readonly available: number, message?: string) {
+    super(message ?? `The text needs ${needed} lines but the paragraph has room for ${available}. Shorten it, make it smaller, or allow it to grow.`);
   }
 }
 
@@ -83,7 +84,31 @@ function paragraphsOf(model: PageModel): Paragraph[] {
   return paragraphs;
 }
 
-const lineText = (line: Line) => line.runs.sort((a, b) => a.start[4] - b.start[4]).map((r) => r.text).join(' ').replace(/\s+/g, ' ').trim();
+/** A line's text: runs in order, with a space only where their gap shows one (a word drawn in pieces stays whole). */
+const lineText = (line: Line) => {
+  const runs = line.runs.sort((a, b) => a.start[4] - b.start[4]);
+  let text = '';
+  runs.forEach((run, i) => {
+    const gap = i ? run.box[0] - runs[i - 1].box[2] : 0;
+    if (i && gap > line.size * 0.15 && !/\s$/.test(text) && !/^\s/.test(run.text)) text += ' ';
+    text += run.text;
+  });
+  return text.replace(/\s+/g, ' ').trim();
+};
+/**
+ * What a removed text-showing operation leaves behind: its effect on the text state without
+ * drawing anything. ' and " still move to the next line (and " still sets word and character
+ * spacing), and the horizontal advance is kept with a glyph-free TJ, so the rest of the text
+ * object stays where it was.
+ */
+function silenced(op: ContentOp, run: TextRun): string {
+  const th = run.horizontalScale / 100;
+  const shift = run.size && th ? Math.round((-run.advance * 1000) / (run.size * th) * 1000) / 1000 : 0;
+  const advance = shift ? `[${shift}] TJ` : '';
+  if (op.op === "'") return `T* ${advance}`.trim();
+  if (op.op === '"') return `${serializeOperand(op.operands[0])} Tw ${serializeOperand(op.operands[1])} Tc T* ${advance}`.trim();
+  return advance;
+}
 
 async function load(bytes: Uint8Array): Promise<PDFDocument> {
   if (!(bytes instanceof Uint8Array) || bytes.length < 5 || bytes.length > 256 * 1024 * 1024) throw new Error('Paragraph editing accepts PDFs up to 256 MB.');
@@ -161,9 +186,19 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
   const laid: { text: string; last: boolean }[] = [];
   for (const paragraphWords of words) {
     let line = '';
-    for (const word of paragraphWords) {
+    for (const whole of paragraphWords) {
+      // A word wider than the paragraph is refused, or broken by characters when growing is allowed.
+      const pieces: string[] = [];
+      if (measure(whole) > width + 0.5) {
+        if (!allowGrow) throw new ParagraphOverflowError(Infinity, 0, `“${whole.slice(0, 40)}” is wider than the paragraph. Shorten it, make the text smaller, or allow the text to grow.`);
+        let chunk = '';
+        for (const ch of whole) { if (chunk && measure(chunk + ch) > width + 0.5) { pieces.push(chunk); chunk = ''; } chunk += ch; }
+        if (chunk) pieces.push(chunk);
+      } else pieces.push(whole);
+      for (const word of pieces) {
       const next = line ? `${line} ${word}` : word;
       if (line && measure(next) > width + 0.5) { laid.push({ text: line, last: false }); line = word; } else line = next;
+      }
     }
     laid.push({ text: line, last: true });
   }
@@ -174,7 +209,7 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
 
   // Remove the old runs; write the new block after the page content, in page space.
   const edits = new Map<number, string>();
-  for (const line of paragraph.lines) for (const run of line.runs) edits.set(run.opIndex, '');
+  for (const line of paragraph.lines) for (const run of line.runs) edits.set(run.opIndex, silenced(model.ops[run.opIndex], run));
   const [r, g, b] = parseColor(first.fill);
   const firstBaseline = paragraph.lines[0].baseline;
   const ops: string[] = ['q', `${r} ${g} ${b} rg`, 'BT', `/${fontKey.replace(/[^\x21-\x7e]|[/()<>[\]{}%#]/g, '')} ${style.size} Tf`, `${style.charSpacing} Tc`];

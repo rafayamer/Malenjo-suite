@@ -73,3 +73,36 @@ describe('paragraphs (MAL-012, MAL-013)', () => {
     await expect(reflowPdfParagraph(source, 1, body.id, 'stale text', 'x', base, false)).rejects.toThrow(/changed since/);
   });
 });
+
+describe('paragraph edge cases', () => {
+  async function shared() {
+    const pdf = await PDFDocument.create();
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const page = pdf.addPage([600, 800]);
+    const key = page.node.newFontDictionary('H', font.ref).decodeText();
+    // Paragraph A: a word drawn in two pieces, then a second line moved with ' ; paragraph B after a relative Td.
+    page.node.addContentStream(pdf.context.register(pdf.context.stream(
+      `BT /${key} 12 Tf 14 TL 72 700 Td (Hel) Tj (lo world) Tj (second line here) ' 0 -40 Td (Other paragraph) Tj ET`)));
+    return pdf.save();
+  }
+  it('keeps words drawn in pieces whole, and leaves the rest of the text object in place', async () => {
+    const bytes = await shared();
+    const [a] = await listPdfParagraphs(bytes, 1);
+    expect(a.text).toBe('Hello world\nsecond line here');
+    const before = (await shownText(bytes)).find((i) => i.str === 'Other paragraph')!;
+    const result = await reflowPdfParagraph(bytes, 1, a.id, a.text, 'Hi there', { ...base, size: 12, lineHeight: 14 / 12 }, true);
+    const after = (await shownText(result.bytes)).find((i) => i.str === 'Other paragraph')!;
+    expect([after.x, after.y]).toEqual([before.x, before.y]);
+  });
+  it('refuses a word wider than the paragraph unless growing is allowed', async () => {
+    const bytes = await sample();
+    const p = (await listPdfParagraphs(bytes, 1)).find((x) => x.text.startsWith('Revenue'))!;
+    const long = 'Supercalifragilisticexpialidocious'.repeat(4);
+    await expect(reflowPdfParagraph(bytes, 1, p.id, p.text, long, base, false)).rejects.toThrow(/wider than the paragraph/);
+    const grown = await reflowPdfParagraph(bytes, 1, p.id, p.text, long, base, true);
+    const width = p.box[2] - p.box[0];
+    const pieces = (await shownText(grown.bytes)).filter((i) => i.str.startsWith('Super') || /^[a-z]+$/.test(i.str));
+    expect(grown.lines).toBeGreaterThan(1);
+    expect(pieces.every((i) => i.w <= width + 1)).toBe(true);
+  });
+});

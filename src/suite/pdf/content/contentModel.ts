@@ -168,7 +168,7 @@ export function readPageModel(pdf: PDFDocument, pageIndex: number, fontCache?: M
       }
       case 'm': case 'l': case 're': case 'c': case 'v': case 'y': case 'h': {
         if (pathStart < 0) { pathStart = index; pathPoints = []; }
-        if (op.op === 're') { const [x, y, w, h] = [n(0), n(1), n(2), n(3)]; pathPoints.push(apply(gs.ctm, x, y), apply(gs.ctm, x + w, y + h)); }
+        if (op.op === 're') { const [x, y, w, h] = [n(0), n(1), n(2), n(3)]; pathPoints.push(apply(gs.ctm, x, y), apply(gs.ctm, x + w, y), apply(gs.ctm, x, y + h), apply(gs.ctm, x + w, y + h)); }
         else for (let k = 0; k + 1 < o.length; k += 2) pathPoints.push(apply(gs.ctm, n(k), n(k + 1)));
         break;
       }

@@ -11,6 +11,8 @@ export interface PdfHistory {
   totalBytes: number;
   maxEntries: number;
   maxBytes: number;
+  /** True once the original document was dropped to stay within the limits: entry 0 is then an edited revision. */
+  baselineEvicted?: boolean;
 }
 
 export interface PdfHistoryTransition {
@@ -90,6 +92,7 @@ export function recordPdfHistory(
 
   let cursor = retained.length - 1;
   let retainedBytes = total(retained);
+  let evicted = history.baselineEvicted ?? false;
 
   while (
     retained.length > 2
@@ -97,6 +100,7 @@ export function recordPdfHistory(
   ) {
     retainedBytes -= retained[0].bytes.byteLength;
     retained.shift();
+    evicted = true;
     cursor -= 1;
   }
 
@@ -105,6 +109,7 @@ export function recordPdfHistory(
     entries: retained,
     cursor: Math.max(0, cursor),
     totalBytes: retainedBytes,
+    baselineEvicted: evicted,
   };
 }
 

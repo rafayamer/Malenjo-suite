@@ -89,7 +89,11 @@ function locate(model: PageModel, kind: 'image' | 'path', id: number) {
   if (kind === 'image') {
     const image = model.images[id];
     if (!image) throw new Error('That image is no longer on this page. Choose it again.');
-    return { start: image.opIndex, end: image.opIndex, box: image.box };
+    // A cropped image is `q <x y w h re> W n <Do> Q`: the clip belongs to the image, so moves,
+    // resizes and deletion take the whole wrapper with it.
+    const i = image.opIndex, names = (from: number, to: number) => model.ops.slice(from, to).map((o) => o.op).join(' ');
+    if (i >= 4 && names(i - 4, i) === 'q re W n' && model.ops[i + 1]?.op === 'Q') return { start: i - 4, end: i + 1, box: image.box };
+    return { start: i, end: i, box: image.box };
   }
   const path = model.paths[id];
   if (!path) throw new Error('That shape is no longer on this page. Choose it again.');

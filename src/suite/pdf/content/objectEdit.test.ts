@@ -96,3 +96,22 @@ describe('inserting content (MAL-016)', () => {
     expect(note.shown.x).toBeCloseTo(0.1, 2);
   });
 });
+
+describe('cropped images and rotated shapes', () => {
+  it('moves the crop with the image, deletes both, and bounds rotated rectangles by all corners', async () => {
+    let bytes = await cropPdfImage(await sample(), 1, 0, { left: 0.25, top: 0, right: 0.25, bottom: 0 });
+    bytes = await transformPdfObject(bytes, 1, 'image', 0, { dx: 50, dy: 0 });
+    // The move wraps the clip and the image together: q <cm> q <re W n> Do Q Q.
+    expect(await content(bytes)).toMatch(/q [-\d. ]+ cm q 0\.25 0 0\.5 1 re W n \/\S+ Do Q Q/);
+    const [moved] = await listPdfPageObjects(bytes, 1);
+    expect(moved.box[0]).toBeCloseTo(150, 0);
+    bytes = await deletePdfObject(bytes, 1, 'image', 0);
+    expect(await content(bytes)).not.toMatch(/re W n/);
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([400, 400]);
+    page.node.addContentStream(pdf.context.register(pdf.context.stream('q 0.7071 0.7071 -0.7071 0.7071 200 200 cm 0 0 1 rg -50 -50 100 100 re f Q')));
+    const [square] = await listPdfPageObjects(await pdf.save(), 1);
+    expect(square.box[2] - square.box[0]).toBeCloseTo(141.4, 0);
+    expect(square.box[3] - square.box[1]).toBeCloseTo(141.4, 0);
+  });
+});

@@ -1119,7 +1119,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         selectionAnchorRef.current=transition.entry.page;
         setDirty(transition.entry.dirty);
         onDirtyChange?.(transition.entry.dirty);
-        setActionNotice(index===0?'Restored the document as it was opened.':`Restored revision ${index}: ${transition.entry.label}`);
+        setActionNotice(index===0&&!history.baselineEvicted?'Restored the document as it was opened.':index===0?`Restored the oldest kept revision: ${transition.entry.label}`:`Restored revision ${index}: ${transition.entry.label}`);
       });
     }catch(reason){
       setError(describePdfError(reason));
@@ -3009,7 +3009,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           state={objectState} onState={setObjectState} insert={insertSettings} onInsert={setInsertSettings} onApply={apply}
           onClose={()=>{setObjectState(null);setInsertSettings(current=>({...current,tool:null}));closeToolDialog();}}/>;
         if(toolDialog==='find')return <PdfFindReplaceDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} busy={mutating}
-          revisions={(historyRef.current?.entries??[]).map((entry,index)=>({index,label:entry.label,current:index===historyRef.current!.cursor}))}
+          revisions={(historyRef.current?.entries??[]).map((entry,index)=>({index,label:entry.label,current:index===historyRef.current!.cursor,original:index===0&&!historyRef.current!.baselineEvicted}))}
           onApply={apply} onRestore={index=>void restoreRevision(index)} onSaveRevision={index=>void saveRevision(index)}
           onGoToPage={page=>goToPage(page)} onClose={closeToolDialog}/>;
         if(toolDialog==='markup')return <PdfMarkupPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} viewRotation={rotation} busy={mutating}
