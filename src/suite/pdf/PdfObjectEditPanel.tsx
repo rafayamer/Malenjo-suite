@@ -60,7 +60,8 @@ export default function PdfObjectEditPanel({ domIdPrefix, bytes, pageNumber, vie
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLElement>(null);
-  const selected = state?.objects.find((o) => objectKey(o) === state.selected) ?? null;
+  // A selection belongs to the page it was made on: while the list for a newly shown page loads, nothing is selected.
+  const selected = state?.pageNumber === pageNumber ? state.objects.find((o) => objectKey(o) === state.selected) ?? null : null;
 
   useEffect(() => {
     let live = true;

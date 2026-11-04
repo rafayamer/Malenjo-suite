@@ -27,6 +27,8 @@ export interface TextRun {
   font: FontCodec;
   size: number;
   text: string;
+  /** The text with a space where a TJ adjustment leaves a word-sized gap (spaces drawn by positioning). */
+  display: string;
   codes: number[];
   /** True when some code had no Unicode mapping (text shown as �). */
   unmapped: boolean;
@@ -111,22 +113,27 @@ export function readPageModel(pdf: PDFDocument, pageIndex: number, fontCache?: M
     if (!font) return;
     const th = gs.tz / 100;
     const start = multiply(multiply([gs.size * th, 0, 0, gs.size, 0, gs.ts], tm), gs.ctm);
-    let advance = 0; const codes: number[] = []; let text = ''; let unmapped = false;
+    let advance = 0; const codes: number[] = []; let text = ''; let display = ''; let unmapped = false;
     for (const item of items) {
-      if (item.type === 'number') { advance -= (item.value / 1000) * gs.size * th; continue; }
+      if (item.type === 'number') {
+        advance -= (item.value / 1000) * gs.size * th;
+        // A gap of a quarter em or more reads as a word space; smaller adjustments are kerning.
+        if (item.value <= -250 && display && !display.endsWith(' ')) display += ' ';
+        continue;
+      }
       if (item.type !== 'string') continue;
       for (const code of font.codes(item.bytes)) {
         codes.push(code); font.used.add(code);
         const u = font.unicode(code);
         if (u === null) unmapped = true;
-        text += u ?? '�';
+        text += u ?? '�'; display += u ?? '�';
         advance += ((font.width(code) / 1000) * gs.size + gs.tc + (font.bytesPerCode === 1 && code === 32 ? gs.tw : 0)) * th;
       }
     }
     const textToPage = multiply(tm, gs.ctm);
     const descent = -0.25 * gs.size, ascent = 0.85 * gs.size;
     const corners = [apply(textToPage, 0, descent + gs.ts), apply(textToPage, advance, descent + gs.ts), apply(textToPage, 0, ascent + gs.ts), apply(textToPage, advance, ascent + gs.ts)];
-    runs.push({ id: runs.length, opIndex, btIndex, fontKey: gs.fontKey, font, size: gs.size, text, codes, unmapped, start, advance, box: boxOf(corners),
+    runs.push({ id: runs.length, opIndex, btIndex, fontKey: gs.fontKey, font, size: gs.size, text, display, codes, unmapped, start, advance, box: boxOf(corners),
       charSpacing: gs.tc, wordSpacing: gs.tw, horizontalScale: gs.tz, leading: gs.tl, fill: gs.fill });
     tm = multiply([1, 0, 0, 1, advance, 0], tm);
   };

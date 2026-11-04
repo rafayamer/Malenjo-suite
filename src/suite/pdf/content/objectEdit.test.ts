@@ -102,7 +102,7 @@ describe('cropped images and rotated shapes', () => {
     let bytes = await cropPdfImage(await sample(), 1, 0, { left: 0.25, top: 0, right: 0.25, bottom: 0 });
     bytes = await transformPdfObject(bytes, 1, 'image', 0, { dx: 50, dy: 0 });
     // The move wraps the clip and the image together: q <cm> q <re W n> Do Q Q.
-    expect(await content(bytes)).toMatch(/q [-\d. ]+ cm q 0\.25 0 0\.5 1 re W n \/\S+ Do Q Q/);
+    expect((await content(bytes)).replace(/\s+/g, ' ')).toMatch(/q [-\d. ]+ cm q 0\.25 0 0\.5 1 re W n \/\S+ Do Q Q/);
     const [moved] = await listPdfPageObjects(bytes, 1);
     expect(moved.box[0]).toBeCloseTo(150, 0);
     bytes = await deletePdfObject(bytes, 1, 'image', 0);
@@ -113,5 +113,26 @@ describe('cropped images and rotated shapes', () => {
     const [square] = await listPdfPageObjects(await pdf.save(), 1);
     expect(square.box[2] - square.box[0]).toBeCloseTo(141.4, 0);
     expect(square.box[3] - square.box[1]).toBeCloseTo(141.4, 0);
+  });
+});
+
+describe('content rewriting details', () => {
+  it('keeps colours set between a deleted path and its painting, and separates compact operators', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([400, 400]);
+    page.node.addContentStream(pdf.context.register(pdf.context.stream('0 0 100 100 re 1 0 0 rg f 200 0 100 100 re f')));
+    let bytes = await pdf.save();
+    bytes = await deletePdfObject(bytes, 1, 'path', 0);
+    const text = (await content(bytes)).replace(/\s+/g, ' ');
+    expect(text).toMatch(/1 0 0 rg 200 0 100 100 re f/);
+    expect((await listPdfPageObjects(bytes, 1)).find((o) => o.kind === 'path')?.fill).toBe('#ff0000');
+    const compact = await PDFDocument.create();
+    const cp = compact.addPage([400, 400]);
+    const image = await compact.embedPng(PNG);
+    const name = cp.node.newXObject('Im', image.ref).decodeText();
+    cp.node.addContentStream(compact.context.register(compact.context.stream(`q 100 0 0 50 10 10 cm/${name} Do Q`)));
+    const moved = await transformPdfObject(await compact.save(), 1, 'image', 0, { dx: 10, dy: 0 });
+    expect(await content(moved)).not.toMatch(/qq|cmq/);
+    expect((await listPdfPageObjects(moved, 1))[0].box[0]).toBeCloseTo(20, 0);
   });
 });
