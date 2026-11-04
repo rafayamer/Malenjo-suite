@@ -150,4 +150,13 @@ describe('drawings and notes (MAL-055)', () => {
     await expect(updatePdfMarkupAnnotation(bytes, item, { color: '#000000' })).rejects.toThrow(/changed or was removed/);
     await expect(addPdfDrawing(bytes, { pageNumber: 1, viewRotation: 0, author: '', style, kind: 'FreeText', rect: { x: 0.1, y: 0.1, width: 0.1, height: 0.1 }, text: '' })).rejects.toThrow(/Enter the text/);
   });
+
+  it('refuses text box characters its built-in font cannot show instead of drawing question marks', async () => {
+    const bytes = await doc();
+    const box = { pageNumber: 1, viewRotation: 0, author: '', style: { color: '#000000', opacity: 1, width: 1 }, kind: 'FreeText' as const, rect: { x: 0.1, y: 0.1, width: 0.3, height: 0.1 } };
+    await expect(addPdfDrawing(bytes, { ...box, text: 'Доставка' })).rejects.toThrow(/cannot show/);
+    const latin = await addPdfDrawing(bytes, { ...box, text: 'Delivery' });
+    const [item] = await listPdfMarkupAnnotations(latin);
+    await expect(updatePdfMarkupAnnotation(latin, item, { contents: 'Доставка' })).rejects.toThrow(/cannot show/);
+  });
 });

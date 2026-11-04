@@ -127,8 +127,18 @@ const DRAWING = new Set(['m', 'l', 'c', 'v', 'y', 'h', 're', 'S', 's', 'f', 'F',
  */
 function wrap(model: PageModel, start: number, end: number, prefix: string, inner?: string, beforePaint = ''): Map<number, string> {
   const edits = new Map<number, string>();
+  // State set inside a balanced q … Q in the span ended there, so it is not repeated.
   const replay: string[] = [];
-  for (let k = start; k <= end; k++) { const op = model.ops[k].op; if (!DRAWING.has(op) && op !== 'q' && op !== 'Q') replay.push(opText(model, k)); }
+  const scopes: number[] = [];
+  for (let k = start; k <= end; k++) {
+    const op = model.ops[k].op;
+    if (op === 'q') scopes.push(replay.length);
+    else if (op === 'Q') {
+      if (!scopes.length) throw new Error('This shape\'s drawing changes the graphics state in a way that cannot be edited safely.');
+      replay.length = scopes.pop()!;
+    } else if (!DRAWING.has(op)) replay.push(opText(model, k));
+  }
+  if (scopes.length) throw new Error('This shape\'s drawing changes the graphics state in a way that cannot be edited safely.');
   const after = replay.length ? ` ${replay.join(' ')}` : '';
   if (start === end) edits.set(start, `q ${prefix} ${inner ?? opText(model, start)} Q${after}`);
   else {
@@ -285,10 +295,21 @@ export async function insertPdfContent(bytes: Uint8Array, spec: InsertSpec): Pro
     const lines: string[] = [];
     for (const paragraph of text.split('\n')) {
       let line = '';
-      for (const word of paragraph.split(/\s+/)) {
-        const next = line ? `${line} ${word}` : word;
-        try { font.encodeText(next); } catch { throw new Error(`“${word}” has characters the built-in font cannot show.`); }
-        if (line && font.widthOfTextAtSize(next, size) > w) { lines.push(line); line = word; } else line = next;
+      for (const whole of paragraph.split(/\s+/)) {
+        try { font.encodeText(whole); } catch { throw new Error(`“${whole}” has characters the built-in font cannot show.`); }
+        // A word wider than the box (a long URL) is broken by characters so every line fits.
+        const pieces: string[] = [];
+        if (font.widthOfTextAtSize(whole, size) > w) {
+          let chunk = '';
+          for (const ch of whole) {
+            if (chunk && font.widthOfTextAtSize(chunk + ch, size) > w) { pieces.push(chunk); chunk = ch; } else chunk += ch;
+          }
+          if (chunk) pieces.push(chunk);
+        } else pieces.push(whole);
+        for (const word of pieces) {
+          const next = line ? `${line} ${word}` : word;
+          if (line && font.widthOfTextAtSize(next, size) > w) { lines.push(line); line = word; } else line = next;
+        }
       }
       lines.push(line);
     }

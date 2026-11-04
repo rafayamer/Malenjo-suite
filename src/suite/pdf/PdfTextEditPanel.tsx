@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { GlyphUnavailableError, listPdfTextRuns, replacePdfTextRun, type TextRunInfo } from './content/textEdit';
-import { addPdfDrawing } from './pdfMarkup';
+import { addPdfDrawing, overlayUnsupported } from './pdfMarkup';
 import { describePdfError } from './pdfUserErrors';
 
 type Operation = (latest: Uint8Array) => Promise<{ bytes: Uint8Array; summary: string }>;
@@ -51,7 +51,13 @@ export default function PdfTextEditPanel({ domIdPrefix, bytes, pageNumber, viewR
         summary: `Changed “${chosen.text}” to “${next}” on page ${pageNumber}, in the original font (${chosen.fontName}).`,
       }));
     } catch (reason) {
-      if (reason instanceof GlyphUnavailableError) setOverlay({ run: chosen, text: next, pageNumber });
+      if (reason instanceof GlyphUnavailableError) {
+        // An overlay is only offered when its own font can draw the new text; otherwise it would show “?”.
+        const unshowable = await overlayUnsupported(next);
+        if (!unshowable.length) setOverlay({ run: chosen, text: next, pageNumber });
+        setError(`${describePdfError(reason)}${unshowable.length ? ' An overlay cannot show these characters either.' : ''}`);
+        return;
+      }
       setError(describePdfError(reason));
     }
   }
