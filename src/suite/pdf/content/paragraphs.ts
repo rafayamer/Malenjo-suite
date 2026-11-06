@@ -25,6 +25,8 @@ export interface ParagraphInfo {
   id: number; text: string; lines: number; box: Box;
   shown: { x: number; y: number; width: number; height: number };
   fontName: string; embedded: boolean; subset: boolean; size: number; lineHeight: number; align: ParagraphAlign;
+  /** Letter and word spacing as drawn (points on the page), so the panel starts from the paragraph's own typography. */
+  charSpacing: number; wordSpacing: number;
   editable: boolean; reason: string;
 }
 export interface ParagraphStyle { align: ParagraphAlign; size: number; lineHeight: number; charSpacing: number; wordSpacing: number; font: ParagraphFont }
@@ -44,6 +46,13 @@ interface Paragraph { lines: Line[]; box: Box; size: number; lineHeight: number;
 
 const horizontal = (run: TextRun) => Math.abs(run.start[1]) < 1e-3 && Math.abs(run.start[2]) < 1e-3 && run.start[0] > 0 && run.start[3] > 0;
 const sizeOf = (run: TextRun) => run.start[3];
+
+/** Tc and Tw of a run in page points (they are text-space values, scaled like the font size). */
+const runSpacing = (run: TextRun) => {
+  const k = run.size ? sizeOf(run) / run.size : 1;
+  return { charSpacing: Math.round(run.charSpacing * k * 100) / 100, wordSpacing: Math.round(run.wordSpacing * k * 100) / 100 };
+};
+const spacingOf = (p: Paragraph) => runSpacing(p.lines[0].runs[0]);
 
 /** Groups the page's horizontal text into paragraphs. */
 function paragraphsOf(model: PageModel): Paragraph[] {
@@ -135,6 +144,7 @@ export async function listPdfParagraphs(bytes: Uint8Array, pageNumber: number, v
       shown: { x: Math.min(pts[0][0], pts[1][0]), y: Math.min(pts[0][1], pts[1][1]), width: Math.abs(pts[1][0] - pts[0][0]), height: Math.abs(pts[1][1] - pts[0][1]) },
       fontName: font.baseFont.replace(/^[A-Z]{6}\+/, ''), embedded: font.embedded, subset: font.subset, size: Math.round(p.size * 100) / 100,
       lineHeight: Math.round((p.lines.length > 1 ? p.lineHeight / p.size : 1.2) * 100) / 100, align: p.align,
+      ...spacingOf(p),
       editable: !blocked, reason: blocked ? 'its font does not say which characters it draws' : '',
     };
   });
@@ -168,6 +178,10 @@ export async function reflowPdfParagraph(bytes: Uint8Array, pageNumber: number, 
   // ExtGState settings (transparency, blend modes) would take that one instead.
   if (new Set(paragraph.lines.flatMap((l) => l.runs.map((r) => r.extGState))).size > 1) {
     throw new Error('This paragraph mixes transparency or blending settings, which rewriting it cannot preserve. Edit its text runs one at a time instead.');
+  }
+  // One letter and word spacing is written for the block; runs with different spacing would lose theirs.
+  if (new Set(paragraph.lines.flatMap((l) => l.runs.map((r) => JSON.stringify(runSpacing(r))))).size > 1) {
+    throw new Error('This paragraph mixes letter or word spacing, which rewriting it cannot preserve. Edit its text runs one at a time instead.');
   }
   // The block keeps the paragraph's horizontal scaling (Tz); runs drawn at different scales cannot share one.
   if (new Set(paragraph.lines.flatMap((l) => l.runs.map((r) => r.horizontalScale))).size > 1) {

@@ -89,14 +89,20 @@ function locate(model: PageModel, kind: 'image' | 'path', id: number) {
     // A replaced image adds its own fitting wrapper `q <cm> Do Q` inside the crop, so look outward
     // through those wrappers for the crop, and undo their cm to get the CTM where the crop starts.
     const i = image.opIndex, names = (from: number, to: number) => model.ops.slice(from, to).map((o) => o.op).join(' ');
-    let a = i, b = i, ctm = image.ctm;
-    while (a >= 2 && names(a - 2, a) === 'q cm' && model.ops[b + 1]?.op === 'Q') {
-      const m = model.ops[a - 1].operands.map((o) => (o.type === 'number' ? o.value : NaN)) as Matrix;
-      if (m.length !== 6 || m.some((v) => !Number.isFinite(v))) break;
-      ctm = multiply(invert(m), ctm);
-      a -= 2; b += 1;
+    // Cropping more than once nests crops, so keep walking outward through both kinds of wrapper.
+    let a = i, b = i, ctm = image.ctm, crop: { start: number; end: number; ctm: Matrix } | null = null;
+    for (;;) {
+      if (a >= 2 && names(a - 2, a) === 'q cm' && model.ops[b + 1]?.op === 'Q') {
+        const m = model.ops[a - 1].operands.map((o) => (o.type === 'number' ? o.value : NaN)) as Matrix;
+        if (m.length !== 6 || m.some((v) => !Number.isFinite(v))) break;
+        ctm = multiply(invert(m), ctm);
+        a -= 2; b += 1;
+      } else if (a >= 4 && names(a - 4, a) === 'q re W n' && model.ops[b + 1]?.op === 'Q') {
+        a -= 4; b += 1;
+        crop = { start: a, end: b, ctm };
+      } else break;
     }
-    if (a >= 4 && names(a - 4, a) === 'q re W n' && model.ops[b + 1]?.op === 'Q') return { start: a - 4, end: b + 1, box: image.box, ctm };
+    if (crop) return { ...crop, box: image.box };
     return { start: i, end: i, box: image.box, ctm: image.ctm };
   }
   const path = model.paths[id];

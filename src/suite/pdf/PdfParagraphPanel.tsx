@@ -48,7 +48,7 @@ export default function PdfParagraphPanel({ domIdPrefix, bytes, pageNumber, view
   useEffect(() => {
     if (!paragraph) return;
     setText(paragraph.text.replace(/\n/g, ' '));
-    setStyle({ align: paragraph.align, size: paragraph.size, lineHeight: paragraph.lineHeight, charSpacing: 0, wordSpacing: 0, font: 'keep' });
+    setStyle({ align: paragraph.align, size: paragraph.size, lineHeight: paragraph.lineHeight, charSpacing: paragraph.charSpacing, wordSpacing: paragraph.wordSpacing, font: 'keep' });
     setError(''); setNote('');
   }, [paragraph?.id, paragraph?.text]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { panelRef.current?.querySelector<HTMLElement>('select')?.focus(); }, []);

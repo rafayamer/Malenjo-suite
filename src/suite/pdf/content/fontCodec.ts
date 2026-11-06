@@ -142,8 +142,9 @@ export function fontCodec(pdf: PDFDocument, key: string, dict: PDFDict): FontCod
       if (next instanceof PDFArray) { next.asArray().forEach((v, j) => widths.set(first + j, (pdf.context.lookup(v) as PDFNumber).asNumber())); k += 2; }
       else { const last = (next as PDFNumber).asNumber(); const width = (w[k + 2] as PDFNumber).asNumber(); for (let c = first; c <= last && c - first < 65536; c++) widths.set(c, width); k += 3; }
     }
-    const reverse = new Map<string, number>();
-    toUnicode.forEach((text, code) => { if (!reverse.has(text)) reverse.set(text, code); });
+    // Several codes can map to the same character; keep them all so a subset can use one it already draws.
+    const reverse = new Map<string, number[]>();
+    toUnicode.forEach((text, code) => { const list = reverse.get(text); if (list) list.push(code); else reverse.set(text, [code]); });
     const identity = dict.get(N('Encoding'))?.toString() === '/Identity-H';
     return {
       key, baseFont, kind: 'type0', subset, embedded, bytesPerCode: 2, used,
@@ -154,8 +155,8 @@ export function fontCodec(pdf: PDFDocument, key: string, dict: PDFDict): FontCod
         if (!identity) return { missing: [...new Set([...text])] };
         const out: number[] = []; const missing: string[] = [];
         for (const ch of text) {
-          const code = reverse.get(ch);
-          if (code === undefined || (subset && !used.has(code))) missing.push(ch); else out.push(code >> 8, code & 255);
+          const code = reverse.get(ch)?.find((c) => !subset || used.has(c));
+          if (code === undefined) missing.push(ch); else out.push(code >> 8, code & 255);
         }
         return missing.length ? { missing: [...new Set(missing)] } : { bytes: Uint8Array.from(out) };
       },
@@ -202,8 +203,8 @@ export function fontCodec(pdf: PDFDocument, key: string, dict: PDFDict): FontCod
     if (standard) { const name = glyphNames.get(code); return !!name && typeof standard.getWidthOfGlyph(name) === 'number'; }
     return widthOf(code) > 0 || used.has(code);
   };
-  const reverse = new Map<string, number>();
-  for (let code = 0; code < 256; code++) { const u = unicodeOf(code); if (u && !reverse.has(u)) reverse.set(u, code); }
+  const reverse = new Map<string, number[]>();
+  for (let code = 0; code < 256; code++) { const u = unicodeOf(code); if (u) { const list = reverse.get(u); if (list) list.push(code); else reverse.set(u, [code]); } }
   return {
     key, baseFont, kind: subtype === 'Type3' ? 'type3' : 'simple', subset, embedded, bytesPerCode: 1, used,
     codes: (bytes) => Array.from(bytes),
@@ -212,8 +213,8 @@ export function fontCodec(pdf: PDFDocument, key: string, dict: PDFDict): FontCod
     encode(text) {
       const out: number[] = []; const missing: string[] = [];
       for (const ch of text) {
-        const code = reverse.get(ch);
-        if (code === undefined || !drawable(code)) missing.push(ch); else out.push(code);
+        const code = reverse.get(ch)?.find(drawable);
+        if (code === undefined) missing.push(ch); else out.push(code);
       }
       return missing.length ? { missing: [...new Set(missing)] } : { bytes: Uint8Array.from(out) };
     },

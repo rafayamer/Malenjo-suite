@@ -88,6 +88,12 @@ describe('native text editing (MAL-011)', () => {
     expect([cid.unicode(3), cid.unicode(0x11)]).toEqual(['A', 'б']);
     expect(Array.from((cid.encode('Bав') as { bytes: Uint8Array }).bytes)).toEqual([0, 4, 0, 0x10, 0, 0x12]);
     expect(cid.encode('Z')).toEqual({ missing: ['Z'] });
+    // Two codes for the same character: a subset uses the one it already draws.
+    const twoSpaces = pdf.context.stream('/CIDInit /ProcSet findresource begin 2 beginbfchar <0001> <0020> <0002> <0020> endbfchar endcmap');
+    const alt = fontCodec(pdf, 'D', pdf.context.obj({ Type: 'Font', Subtype: 'Type0', BaseFont: 'MNOPQR+Alt', Encoding: 'Identity-H', ToUnicode: pdf.context.register(twoSpaces),
+      DescendantFonts: [pdf.context.obj({ Type: 'Font', Subtype: 'CIDFontType2', BaseFont: 'MNOPQR+Alt', FontDescriptor: pdf.context.obj({ FontFile2: pdf.context.register(pdf.context.stream('x')) }) })] }) as never);
+    alt.used.add(2);
+    expect(Array.from((alt.encode(' ') as { bytes: Uint8Array }).bytes)).toEqual([0, 2]);
   });
 });
 
