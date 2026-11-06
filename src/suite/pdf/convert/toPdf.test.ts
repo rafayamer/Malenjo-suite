@@ -211,4 +211,30 @@ describe('conversion edge cases, round 2', () => {
     expect(result.notes.join(' ')).toMatch(/1 table row\(s\) taller than a page/);
   });
 });
+
+describe('conversion edge cases, round 3', () => {
+  it('leaves hidden HTML table rows and cells out', async () => {
+    const html = '<table><tr><td>Shown</td><td style="display:none">Hidden cell</td></tr><tr hidden><td>Hidden row</td></tr><tbody style="display:none"><tr><td>Hidden group</td></tr></tbody></table>';
+    const [page] = await read((await htmlToPdf(html, { pageSize: 'a4', landscape: false, margin: 36 })).bytes);
+    expect(page.text).toBe('Shown');
+  });
+
+  it('reads dates in the 1904 date system', async () => {
+    const S = 'xmlns="m" xmlns:r="r"';
+    const xlsx = zipSync({
+      'xl/workbook.xml': strToU8(`<workbook ${S}><workbookPr date1904="1"/><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>`),
+      'xl/_rels/workbook.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>'),
+      'xl/styles.xml': strToU8('<styleSheet><fonts><font><sz val="11"/></font></fonts><fills><fill/></fills><cellXfs><xf numFmtId="0" fontId="0"/><xf numFmtId="14" fontId="0"/></cellXfs></styleSheet>'),
+      'xl/worksheets/sheet1.xml': strToU8(`<worksheet ${S}><cols><col min="1" max="1" width="20"/></cols><sheetData><row r="1"><c r="A1" s="1"><v>1</v></c></row></sheetData></worksheet>`),
+    });
+    const [page] = await read((await xlsxToPdf(xlsx, { pageSize: 'letter', orientation: 'sheet', gridlines: 'sheet', sheets: 'all' })).bytes);
+    expect(page.text).toBe('1904-01-02');
+  });
+
+  it('gives outputs with the same name distinct names', async () => {
+    const { uniqueNames } = await import('./imagesToPdf');
+    const name = uniqueNames();
+    expect([name('report.pdf'), name('report.pdf'), name('Report.pdf'), name('other.pdf')]).toEqual(['report.pdf', 'report (2).pdf', 'Report (3).pdf', 'other.pdf']);
+  });
+});
 });

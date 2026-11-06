@@ -172,10 +172,12 @@ function parseXfdf(text: string): Raw {
   const map: Raw = new Map();
   // Nested <field> elements build dotted names; <value> elements belong to the innermost open field.
   const stack: string[] = [];
-  const tag = /<(\/?)(field|value)(?:\s+name="([^"]*)")?\s*(\/?)>|<\/value>/g;
+  // Attributes may use either quote style (name="x" or name='x').
+  const tag = /<(\/?)(field|value)(?:\s+name=(?:"([^"]*)"|'([^']*)'))?\s*(\/?)>|<\/value>/g;
   let match: RegExpExecArray | null, valueStart = -1;
   while ((match = tag.exec(body))) {
-    const [all, close, element, name, selfClosing] = match;
+    const [all, close, element, doubleQuoted, singleQuoted, selfClosing] = match;
+    const name = doubleQuoted ?? singleQuoted;
     if (element === 'field' && !close) { stack.push(unxml(name ?? '')); if (selfClosing) stack.pop(); }
     else if (element === 'field' && close) stack.pop();
     else if (element === 'value' && !close) { if (selfClosing) add(map, stack.filter(Boolean).join('.'), ''); else valueStart = match.index + all.length; }

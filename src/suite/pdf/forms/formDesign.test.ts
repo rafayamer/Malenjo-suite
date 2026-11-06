@@ -213,7 +213,7 @@ describe('fill, flatten and data exchange (MAL-050, MAL-052, MAL-053)', () => {
 
   it('round-trips a check box whose on-value is "No", reads indirect FDF fields, and marks password fields', async () => {
     const box = { name: 'Consent', kind: 'checkbox' as const, value: 'Off', onValue: 'No', options: [], multiselect: false, required: false, readOnly: false,
-      maxLength: null, logic: { unsupported: [] }, calculated: false, password: false };
+      maxLength: null, logic: { unsupported: [] }, calculated: false, password: false, multiline: false, concealedValue: false };
     expect(importFormData([box], '{"Consent":"No"}', 'json').values).toEqual({ Consent: 'No' });
     const text = { ...box, name: 'Customer', kind: 'text' as const, onValue: null, value: '' };
     const fdf = '%FDF-1.2\n1 0 obj << /FDF << /Fields [2 0 R] >> >> endobj\n2 0 obj << /T (Customer) /V (Ada) >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF';
@@ -224,5 +224,24 @@ describe('fill, flatten and data exchange (MAL-050, MAL-052, MAL-053)', () => {
     secret.addToPage(pdf.getPage(0), { x: 60, y: 600, width: 150, height: 20 });
     const fields = await readFillForm(await pdf.save());
     expect(fields.find((f) => f.name === 'PIN')!.password).toBe(true);
+  });
+
+  it('keeps an untouched concealed required value valid, reads XFDF with single quotes, and marks multiline fields', async () => {
+    const pdf = await PDFDocument.load(await blank());
+    const form = pdf.getForm();
+    const pin = form.createTextField('PIN'); pin.enablePassword(); pin.setText('1234'); pin.enableRequired();
+    pin.addToPage(pdf.getPage(0), { x: 60, y: 600, width: 150, height: 20 });
+    const note = form.createTextField('Note'); note.enableMultiline();
+    note.addToPage(pdf.getPage(0), { x: 60, y: 500, width: 200, height: 60 });
+    const bytes = await pdf.save();
+    const fields = await readFillForm(bytes);
+    expect(fields.find((f) => f.name === 'PIN')!.value).toBe('');
+    expect(evaluateFill(fields, { Note: 'Line one\nLine two' }).errors).toEqual({});
+    const { bytes: filled } = await fillFormWithLogic(bytes, { Note: 'Line one\nLine two' });
+    expect((await PDFDocument.load(filled)).getForm().getTextField('Note').getText()).toBe('Line one\nLine two');
+    expect(fields.find((f) => f.name === 'Note')!.multiline).toBe(true);
+    const customer = { name: 'Customer', kind: 'text' as const, value: '', onValue: null, options: [], multiselect: false, required: false, readOnly: false,
+      maxLength: null, logic: { unsupported: [] }, calculated: false, password: false, multiline: false, concealedValue: false };
+    expect(importFormData([customer], "<xfdf><fields><field name='Customer'><value>Alice</value></field></fields></xfdf>", 'xfdf').values).toEqual({ Customer: 'Alice' });
   });
 });

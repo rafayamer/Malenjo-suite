@@ -34,9 +34,10 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 /** Formats a date/time serial with an Excel pattern; m/mm are minutes next to hours or seconds. */
-function formatDateTime(n: number, pattern: string): string {
+function formatDateTime(n: number, pattern: string, date1904 = false): string {
   const ms = Math.round(n * 86400000);
-  const d = new Date(Date.UTC(1899, 11, 30) + ms);
+  // Serial 0 is 1899-12-30 in the 1900 date system and 1904-01-01 in the 1904 system (older Mac workbooks).
+  const d = new Date((date1904 ? Date.UTC(1904, 0, 1) : Date.UTC(1899, 11, 30)) + ms);
   const pad = (v: number, w = 2) => String(v).padStart(w, '0');
   const ampm = /AM\/PM|A\/P/i.test(pattern);
   const tokens = pattern.match(/"[^"]*"|\\.|\[h+\]|\[m+\]|\[s+\]|AM\/PM|A\/P|y+|m+|d+|h+|s+(?:\.0+)?|./gi) ?? [];
@@ -72,7 +73,7 @@ function formatDateTime(n: number, pattern: string): string {
   }).join('');
 }
 
-function formatValue(raw: string, fmt: string, id: number): string {
+function formatValue(raw: string, fmt: string, id: number, date1904 = false): string {
   const n = Number(raw);
   if (raw === '' || !Number.isFinite(n)) return raw;
   const fixed = (d: number, group: boolean) => { const s = Math.abs(n).toFixed(d); const [w, f] = s.split('.'); return `${n < 0 ? '-' : ''}${group ? w.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : w}${f ? '.' + f : ''}`; };
@@ -80,7 +81,7 @@ function formatValue(raw: string, fmt: string, id: number): string {
   if (builtIn[id]) return builtIn[id]();
   const pattern = fmt || BUILTIN_DATES[id] || '';
   const isDate = Boolean(BUILTIN_DATES[id]) || /[dmyhs]/i.test(pattern.replace(/"[^"]*"|\[[^\]]*\]|\\./g, ''));
-  if (isDate && n >= 0 && n < 2958466) return formatDateTime(n, pattern.split(';')[0]);
+  if (isDate && n >= 0 && n < 2958466) return formatDateTime(n, pattern.split(';')[0], date1904);
   if (fmt) {
     const decimals = (fmt.split(';')[0].match(/\.(0+)/)?.[1].length) ?? 0;
     const text = fixed(fmt.includes('%') ? decimals : decimals, fmt.includes(','));
@@ -96,6 +97,8 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
   const book = xml(files, 'xl/workbook.xml');
   if (!book) throw new Error('This is not an Excel (XLSX) workbook.');
   const rels = relationships(files, 'xl/workbook.xml');
+  const pr = all(book, 'workbookPr')[0]?.attrs.date1904;
+  const date1904 = pr === '1' || pr === 'true';
   const shared = (() => { const s = xml(files, 'xl/sharedStrings.xml'); return s ? kids(all(s, 'sst')[0] ?? s, 'si').map((si) => all(si, 't').map(textOf).join('')) : []; })();
   const styles = xml(files, 'xl/styles.xml');
   const numFmts = new Map<number, string>(styles ? all(styles, 'numFmt').map((n) => [Number(n.attrs.numFmtId), n.attrs.formatCode ?? '']) : []);
@@ -136,7 +139,7 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
       if (child(c, 'f') && !child(c, 'v')) counts.formulas++;
       const type = c.attrs.t ?? 'n';
       const st = styleOf(s);
-      const text = type === 's' ? shared[Number(v)] ?? '' : type === 'inlineStr' ? all(c, 't').map(textOf).join('') : type === 'b' ? (v === '1' ? 'TRUE' : 'FALSE') : type === 'str' || type === 'e' ? v : formatValue(v, numFmts.get(st.numFmtId) ?? '', st.numFmtId);
+      const text = type === 's' ? shared[Number(v)] ?? '' : type === 'inlineStr' ? all(c, 't').map(textOf).join('') : type === 'b' ? (v === '1' ? 'TRUE' : 'FALSE') : type === 'str' || type === 'e' ? v : formatValue(v, numFmts.get(st.numFmtId) ?? '', st.numFmtId, date1904);
       if (!text) continue;
       cells.set(`${r},${col}`, { text, style: s, numeric: type === 'n' && v !== '' });
       maxR = Math.max(maxR, r); maxC = Math.max(maxC, col);

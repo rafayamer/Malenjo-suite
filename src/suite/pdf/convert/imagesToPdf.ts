@@ -12,6 +12,22 @@ export const PAGE_SIZES: Record<Exclude<PageSizeName, 'image'>, [number, number]
 export interface ImagePageOptions { pageSize: PageSizeName; orientation: 'auto' | 'portrait' | 'landscape'; margin: number; fit: 'fit' | 'actual' }
 export interface ImageInput { name: string; bytes: Uint8Array }
 
+/**
+ * Returns a namer that gives every output its own file name: a second "report.pdf" becomes
+ * "report (2).pdf", so outputs packaged together never overwrite each other. Case is ignored.
+ */
+export function uniqueNames(): (name: string) => string {
+  const used = new Set<string>();
+  return (name) => {
+    const dot = name.lastIndexOf('.');
+    const [stem, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ''];
+    let candidate = name;
+    for (let k = 2; used.has(candidate.toLowerCase()); k++) candidate = `${stem} (${k})${ext}`;
+    used.add(candidate.toLowerCase());
+    return candidate;
+  };
+}
+
 const isTiff = (b: Uint8Array) => (b[0] === 0x49 && b[1] === 0x49 && b[2] === 42) || (b[0] === 0x4d && b[1] === 0x4d && b[3] === 42);
 
 export async function imagesToPdf(images: ImageInput[], options: ImagePageOptions): Promise<{ bytes: Uint8Array; pages: number; notes: string[] }> {

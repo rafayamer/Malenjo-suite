@@ -4,7 +4,7 @@ import { strToU8, zipSync } from 'fflate';
 import { exportConversionFile, exportPdfBytes } from './api';
 import { docxToPdf } from './convert/docxToPdf';
 import { htmlToPdf } from './convert/htmlToPdf';
-import { imagesToPdf, type PageSizeName } from './convert/imagesToPdf';
+import { imagesToPdf, uniqueNames, type PageSizeName } from './convert/imagesToPdf';
 import { pptxToPdf } from './convert/pptxToPdf';
 import { xlsxToPdf } from './convert/xlsxToPdf';
 import { describePdfError } from './pdfUserErrors';
@@ -59,7 +59,9 @@ export default function PdfCreateDialog({ domIdPrefix, onOpenPdfs, onNotice, onC
     setError(''); setResults([]);
     if (!files.length) { setError('Add at least one file.'); return; }
     const out: Result[] = [];
-    const pdfFile = (bytes: Uint8Array, name: string) => new File([bytes.slice().buffer as ArrayBuffer], name, { type: 'application/pdf' });
+    // Two sources can lead to the same name (report.html and report.htm): each result gets its own.
+    const uniqueName = uniqueNames();
+    const pdfFile = (bytes: Uint8Array, name: string) => new File([bytes.slice().buffer as ArrayBuffer], uniqueName(name), { type: 'application/pdf' });
     try {
       if (mode === 'images') {
         setRunning('Reading images…');

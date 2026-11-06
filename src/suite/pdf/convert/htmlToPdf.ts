@@ -121,8 +121,15 @@ export async function htmlToPdf(source: string, options: HtmlPdfOptions): Promis
     blocks.push({ kind: 'image', bytes, format: info.format, width: w, height: h, align: ctx.align, spaceAfter: 6 });
   };
   const table = (n: XNode, ctx: Ctx) => {
-    const rows = all(n, 'tr').map((tr, r) => ({ header: r === 0 && tr.children.some((c) => c.name === 'th'), cells: tr.children.filter((c) => c.name === 'td' || c.name === 'th').map((cell): TableCell => {
-      const cctx = derive(cell, { ...ctx, indent: 0 }) ?? ctx;
+    // Rows come from the table itself and its row groups; hidden rows, groups and cells (display:none or the
+    // hidden attribute) are left out, as they are for any other element.
+    const visibleRows = (node: XNode): XNode[] => node.children.flatMap((c) => {
+      if (c.name === 'tr') return derive(c, ctx) ? [c] : [];
+      if (c.name === 'thead' || c.name === 'tbody' || c.name === 'tfoot') return derive(c, ctx) ? visibleRows(c) : [];
+      return [];
+    });
+    const rows = visibleRows(n).map((tr, r) => ({ header: r === 0 && tr.children.some((c) => c.name === 'th'), cells: tr.children.filter((c) => (c.name === 'td' || c.name === 'th') && derive(c, { ...ctx, indent: 0 })).map((cell): TableCell => {
+      const cctx = derive(cell, { ...ctx, indent: 0 })!;
       const saved = blocks.length; const savedRuns = runs; runs = [];
       inline(cell, cctx); flush(cctx, { spaceAfter: 0, indent: 0 });
       const paras = blocks.splice(saved).filter((b): b is Paragraph => b.kind === 'para'); runs = savedRuns;

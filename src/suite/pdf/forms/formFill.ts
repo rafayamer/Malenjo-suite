@@ -18,6 +18,10 @@ export interface FillField {
   required: boolean; readOnly: boolean; maxLength: number | null; logic: FieldLogic; calculated: boolean;
   /** A password text field: its value is masked on screen. */
   password: boolean;
+  /** A multiline text field: edited in a multiline box so its line breaks survive. */
+  multiline: boolean;
+  /** The field's existing value is not shown (password or rich text) but it is not empty. */
+  concealedValue: boolean;
 }
 
 function kindOf(field: PDFField): FillField['kind'] {
@@ -47,7 +51,8 @@ function fieldsOf(pdf: PDFDocument): FillField[] {
       name: field.getName(), kind: kindOf(field), value: valueOf(field),
       onValue: field instanceof PDFCheckBox ? field.acroField.getOnValue()?.decodeText() ?? 'Yes' : null,
       options: choiceOptions(pdf, field), multiselect: (field instanceof PDFDropdown || field instanceof PDFOptionList) && field.isMultiselect(),
-      required: field.isRequired(), readOnly: field.isReadOnly(), password: field instanceof PDFTextField && field.isPassword(), maxLength: field instanceof PDFTextField ? field.getMaxLength() ?? null : null,
+      required: field.isRequired(), readOnly: field.isReadOnly(), password: field instanceof PDFTextField && field.isPassword(), multiline: field instanceof PDFTextField && field.isMultiline(),
+      concealedValue: field instanceof PDFTextField && (field.isPassword() || field.isRichFormatted()) && Boolean(field.getText()), maxLength: field instanceof PDFTextField ? field.getMaxLength() ?? null : null,
       logic, calculated: Boolean(logic.calculate),
     };
   });
@@ -61,7 +66,9 @@ export async function readFillForm(bytes: Uint8Array): Promise<FillField[]> {
 /** Calculations, visibility and validation for proposed values (field name → value). */
 export function evaluateFill(fields: FillField[], values: Record<string, string>): FormEvaluation {
   return evaluateForm(fields.filter((f) => f.kind !== 'button' && f.kind !== 'signature').map((f): LogicField => ({
-    name: f.name, value: values[f.name] ?? f.value, logic: f.logic, required: f.required, maxLength: f.maxLength ?? undefined,
+    name: f.name, value: values[f.name] ?? f.value, logic: f.logic, maxLength: f.maxLength ?? undefined,
+    // A concealed value the user leaves untouched is still there, so it satisfies "required".
+    required: f.required && !(f.concealedValue && !(values[f.name] ?? '')),
   })));
 }
 
