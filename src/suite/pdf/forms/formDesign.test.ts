@@ -71,9 +71,10 @@ describe('form designer (MAL-046 – MAL-049)', () => {
     expect(actions('Subtotal').Format[0]).toBe('AFNumber_Format(2, 0, 0, 0, "$", true);');
     expect(actions('Delivery').Keystroke[0]).toBe('AFDate_KeystrokeEx("dd/mm/yyyy");');
     expect(actions('Total').Calculate[0]).toBe('AFSimple_Calculate("SUM", new Array("Subtotal", "Tax"));');
-    // Calculation order: the visibility rule, then Tax before Total.
+    // Calculation order: every scripted field after the fields it reads (Tax before Total). The visibility
+    // rule reads a plain field, so its position only has to be after that field's (unscripted) value.
     const ids = Object.fromEntries(Object.entries(objects).map(([name, list]) => [list[0].id, name]));
-    expect(order!.map((id) => ids[id])).toEqual(['VAT number', 'Tax', 'Total']);
+    expect(order!.map((id) => ids[id])).toEqual(['Tax', 'Total', 'VAT number']);
     // The signature lock is stored as a SigFieldLock.
     const pdf = await PDFDocument.load(bytes);
     const sig = pdf.getForm().getField('Approval').acroField.dict;
@@ -260,5 +261,31 @@ describe('fill, flatten and data exchange (MAL-050, MAL-052, MAL-053)', () => {
       maxLength: null, logic: { unsupported: [] }, calculated: false, password: false, multiline: false, concealedValue: false };
     const fdf = '%FDF-1.2\n1 0 obj << /FDF << /Fields [<< /T (Size) /V /Off >>] >> >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF';
     expect(importFormData([radio], fdf, 'fdf').values).toEqual({ Size: '' });
+  });
+
+  it('orders a visibility rule after the calculation it reads, and draws a custom editable dropdown value', async () => {
+    let bytes = await addFormField(await blank(), field('number', 'Input', at(0.1, 0.1)));
+    bytes = await addFormField(bytes, field('number', 'Total', at(0.1, 0.2)));
+    bytes = await addFormField(bytes, field('text', 'Details', at(0.1, 0.3)));
+    bytes = await updateFormField(bytes, 'Details', { logic: { showWhen: { field: 'Total', value: '10' } } });
+    bytes = await updateFormField(bytes, 'Total', { logic: { calculate: { op: 'SUM', fields: ['Input'] } } });
+    const { objects, order } = await pdfjs(bytes);
+    const ids = Object.fromEntries(Object.entries(objects).map(([name, list]) => [list[0].id, name]));
+    expect(order!.map((id) => ids[id])).toEqual(['Total', 'Details']);
+
+    const pdf = await PDFDocument.load(await blank());
+    const city = pdf.getForm().createDropdown('City');
+    city.addOptions(['Paris', 'Rome']); city.enableEditing();
+    city.addToPage(pdf.getPage(0), { x: 60, y: 600, width: 150, height: 20 });
+    const { PDFString, PDFStream } = await import('pdf-lib');
+    city.acroField.dict.set(PDFName.of('V'), PDFString.of('Lyon'));
+    const customer = pdf.getForm().createTextField('Customer'); customer.addToPage(pdf.getPage(0), { x: 60, y: 500, width: 150, height: 20 });
+    const { bytes: filled } = await fillFormWithLogic(await pdf.save(), { Customer: 'Ada' });
+    const out = await PDFDocument.load(filled);
+    const widget = out.getForm().getDropdown('City').acroField.getWidgets()[0];
+    const ap = widget.getAppearances()!.normal;
+    const { decodePDFRawStream, PDFRawStream } = await import('pdf-lib');
+    const text = ap instanceof PDFRawStream ? new TextDecoder('latin1').decode(decodePDFRawStream(ap).decode()) : ap instanceof PDFStream ? '' : '';
+    expect(text.toUpperCase()).toContain('4C796F6E'); // "Lyon"
   });
 });

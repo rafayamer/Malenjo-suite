@@ -81,7 +81,9 @@ function writeLogic(pdf: PDFDocument, fieldDict: PDFDict, logic: FieldLogic): vo
   const scripts = logicScripts(logic);
   for (const kept of logic.unsupported) {
     const trigger = kept.slice(0, 1) as keyof FieldScripts;
-    scripts[trigger] = [scripts[trigger], kept.slice(3)].filter(Boolean).join('\n');
+    // A script MALENJO does not understand is kept exactly; a supported rule cannot be merged into it.
+    if (scripts[trigger]) throw new Error('This field already has its own script for that setting, which MALENJO keeps unchanged and cannot add to.');
+    scripts[trigger] = kept.slice(3);
   }
   const aa = fieldDict.lookupMaybe(N('AA'), PDFDict) ?? pdf.context.obj({});
   for (const trigger of ['K', 'F', 'V', 'C'] as const) {
@@ -95,7 +97,18 @@ function writeCalculationOrder(pdf: PDFDocument): void {
   const form = pdf.getForm();
   const fields = form.getFields().map((field) => ({ name: field.getName(), field, logic: parseLogic(readScripts(pdf, field.acroField.dict)) }));
   const withScripts = fields.filter((f) => f.logic.calculate || f.logic.showWhen || f.logic.unsupported.some((u) => u.startsWith('C:')));
-  const ordered = [...withScripts.filter((f) => !f.logic.calculate), ...calculationOrder(withScripts)];
+  calculationOrder(withScripts); // refuses calculation cycles
+  // Every scripted field runs after the fields it reads, so a visibility rule that reads a calculated
+  // field sees its new value in other readers too. Visibility-only loops are simply broken.
+  const byName = new Map(withScripts.map((f) => [f.name, f]));
+  const ordered: typeof withScripts = [], state = new Map<string, 'visiting' | 'done'>();
+  const visit = (f: (typeof withScripts)[number]) => {
+    if (state.has(f.name)) return;
+    state.set(f.name, 'visiting');
+    for (const name of logicDependencies(f.logic)) { const dep = byName.get(name); if (dep && dep !== f) visit(dep); }
+    state.set(f.name, 'done'); ordered.push(f);
+  };
+  withScripts.forEach(visit);
   if (ordered.length) form.acroForm.dict.set(N('CO'), pdf.context.obj(ordered.map((f) => f.field.ref)));
   else form.acroForm.dict.delete(N('CO'));
 }
@@ -165,7 +178,11 @@ function choiceAppearance(pdf: PDFDocument, field: PDFDropdown | PDFOptionList, 
     .map((value) => options.find((o) => o.value === value)?.label ?? value);
   const known = labels.filter((label) => field.getOptions().includes(label));
   try {
-    if (known.length) field.select(field.isMultiselect() ? known : known[0]); else field.clear();
+    // An editable dropdown may hold a value typed by the user that is not one of its options: draw it as is.
+    const custom = field instanceof PDFDropdown && field.isEditable() ? labels.filter((label) => label && !field.getOptions().includes(label)) : [];
+    if (known.length) field.select(field.isMultiselect() ? known : known[0]);
+    else if (custom.length) field.select(custom[0]);
+    else field.clear();
     field.defaultUpdateAppearances(font);
   } finally {
     if (v) dict.set(N('V'), v); else dict.delete(N('V'));

@@ -102,11 +102,13 @@ export function parseLogic(scripts: FieldScripts): FieldLogic {
   const logic: FieldLogic = { unsupported: [] };
   for (const [trigger, script] of Object.entries(scripts) as [keyof FieldScripts, string][]) {
     if (!script?.trim()) continue;
-    for (const statement of script.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)) {
-      const rule = RULES.find(([pattern]) => pattern.test(statement));
-      if (rule) rule[1](statement.match(rule[0])!, logic);
-      else logic.unsupported.push(`${trigger}: ${statement}`);
-    }
+    // Rules are read only when every statement of the script is one MALENJO recognises. Anything else
+    // (conditions, functions, comments) keeps the whole script as unsupported, so nothing nested inside
+    // control flow is ever promoted to an unconditional rule.
+    const statements = script.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    const matched = statements.map((statement) => RULES.find(([pattern]) => pattern.test(statement)));
+    if (matched.every(Boolean)) statements.forEach((statement, i) => matched[i]![1](statement.match(matched[i]![0])!, logic));
+    else logic.unsupported.push(`${trigger}: ${script}`);
   }
   return logic;
 }

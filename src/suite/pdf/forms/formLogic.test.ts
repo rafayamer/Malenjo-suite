@@ -103,4 +103,11 @@ describe('form evaluation', () => {
     ]);
     expect(result.errors).toEqual({ Qty: 'Qty must be a number.', Agree: 'Agree is required.' });
   });
+
+  it('keeps a script with control flow whole instead of extracting rules from inside it', () => {
+    const script = 'if (false) {\nAFSimple_Calculate("SUM", new Array("A", "B"));\n}';
+    const parsed = parseLogic({ C: script });
+    expect(parsed.calculate).toBeUndefined();
+    expect(parsed.unsupported).toEqual([`C: ${script}`]);
+  });
 });

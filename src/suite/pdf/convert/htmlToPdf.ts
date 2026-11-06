@@ -18,7 +18,7 @@ const SKIP = new Set(['script', 'style', 'head', 'template', 'noscript', 'iframe
 const SUPPORTED = new Set(['color', 'background-color', 'background', 'font-size', 'font-weight', 'font-style', 'font-family', 'text-align', 'text-decoration', 'margin-top', 'margin-bottom', 'margin-left', 'padding-left', 'line-height', 'display', 'page-break-before', 'break-before', 'margin']);
 const NAMED_COLORS: Record<string, string> = { black: '000000', white: 'ffffff', red: 'ff0000', green: '008000', blue: '0000ff', gray: '808080', grey: '808080', navy: '000080', maroon: '800000', purple: '800080', teal: '008080', orange: 'ffa500', yellow: 'ffff00', silver: 'c0c0c0', lime: '00ff00', aqua: '00ffff', fuchsia: 'ff00ff', olive: '808000' };
 type Css = Record<string, string>;
-interface Ctx { run: RunStyle; align: Align; indent: number; css: Css; list?: { ordered: boolean; n: number }; pre: boolean }
+interface Ctx { run: RunStyle; align: Align; indent: number; css: Css; list?: { ordered: boolean; n: number }; pre: boolean; /** Background of the nearest block that sets one (painted behind its lines). */ background?: [number, number, number] }
 
 function color(value: string | undefined): [number, number, number] | undefined {
   if (!value) return undefined;
@@ -76,7 +76,7 @@ export async function htmlToPdf(source: string, options: HtmlPdfOptions): Promis
     const before = length(ctx.css['margin-top'], ctx.run.size) ?? 0, after = length(ctx.css['margin-bottom'], ctx.run.size) ?? ctx.run.size * 0.6;
     const lh = ctx.css['line-height'] ? (Number(ctx.css['line-height']) || (length(ctx.css['line-height'], ctx.run.size) ?? ctx.run.size * 1.2) / ctx.run.size) : 1.2;
     const trimmed = ctx.pre ? runs : runs.map((r, i) => ({ ...r, text: i === 0 ? r.text.replace(/^\s+/, '') : r.text }));
-    blocks.push({ kind: 'para', runs: trimmed, align: ctx.align, indent: ctx.indent, spaceBefore: before, spaceAfter: after, lineHeight: lh, pageBreakBefore: pendingBreak, pre: ctx.pre || undefined, ...extra });
+    blocks.push({ kind: 'para', runs: trimmed, align: ctx.align, indent: ctx.indent, spaceBefore: before, spaceAfter: after, lineHeight: lh, pageBreakBefore: pendingBreak, pre: ctx.pre || undefined, background: ctx.background, ...extra });
     pendingBreak = false; runs = [];
   };
   const derive = (n: XNode, parent: Ctx): Ctx | null => {
@@ -97,7 +97,7 @@ export async function htmlToPdf(source: string, options: HtmlPdfOptions): Promis
     const align = (['left', 'center', 'right', 'justify'].includes(css['text-align']) ? css['text-align'] : n.name === 'th' ? 'left' : parent.align) as Align;
     const indent = parent.indent + (length(css['margin-left'] ?? css['padding-left'], run.size) ?? (['ul', 'ol', 'blockquote', 'dd'].includes(n.name) ? 24 : 0));
     if (css['page-break-before'] === 'always' || css['break-before'] === 'page') pendingBreak = true;
-    return { run, align, indent, css: n.name in HEADING ? { 'margin-top': '0.6em', 'margin-bottom': '0.4em', ...css } : n.name === 'p' ? { 'margin-bottom': '0.8em', ...css } : css, list: parent.list, pre: parent.pre || n.name === 'pre' };
+    return { run, align, indent, css: n.name in HEADING ? { 'margin-top': '0.6em', 'margin-bottom': '0.4em', ...css } : n.name === 'p' ? { 'margin-bottom': '0.8em', ...css } : css, list: parent.list, pre: parent.pre || n.name === 'pre', background: (BLOCK.has(n.name) ? bg : undefined) ?? parent.background };
   };
   const inline = (n: XNode, ctx: Ctx) => {
     for (const c of n.children) {

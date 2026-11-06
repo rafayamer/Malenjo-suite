@@ -117,7 +117,7 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
     return { run, fill: pattern?.attrs.patternType === 'solid' ? color(child(pattern, 'fgColor')) : undefined, numFmtId: Number(xf?.attrs.numFmtId ?? 0), align: child(xf, 'alignment')?.attrs.horizontal };
   };
   const printAreas = new Map<number, string>();
-  for (const d of all(book, 'definedName')) if (d.attrs.name === '_xlnm.Print_Area' && d.attrs.localSheetId !== undefined) printAreas.set(Number(d.attrs.localSheetId), textOf(d).split('!').pop()!.split(',')[0]);
+  for (const d of all(book, 'definedName')) if (d.attrs.name === '_xlnm.Print_Area' && d.attrs.localSheetId !== undefined) printAreas.set(Number(d.attrs.localSheetId), textOf(d));
   const counts = { charts: 0, conditional: 0, comments: 0, formulas: 0, hidden: 0 };
   const writer = await FlowWriter.create({ width: 612, height: 792, margin: { top: 36, right: 36, bottom: 36, left: 36 } }, false);
   const margin = 36;
@@ -148,8 +148,10 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
       cells.set(`${r},${col}`, { text, style: s, numeric: type === 'n' && v !== '' });
       maxR = Math.max(maxR, r); maxC = Math.max(maxC, col);
     }
-    const area = printAreas.has(sheetIndex) ? rangeOf(printAreas.get(sheetIndex)!, { maxC, maxR }) : { c1: 0, r1: 0, c2: maxC, r2: maxR };
-    if (printAreas.has(sheetIndex)) areas.push(`${sheet.attrs.name} (${printAreas.get(sheetIndex)})`);
+    // A print area may list several ranges (Sheet1!$A$1:$B$9,Sheet1!$D$1:$E$9): each prints in turn, on its own pages.
+    const areaRefs = printAreas.has(sheetIndex) ? printAreas.get(sheetIndex)!.split(',').map((part) => part.split('!').pop()!.trim()).filter(Boolean) : [];
+    const areaList = areaRefs.length ? areaRefs.map((ref) => rangeOf(ref, { maxC, maxR })) : [{ c1: 0, r1: 0, c2: maxC, r2: maxR }];
+    if (areaRefs.length) areas.push(`${sheet.attrs.name} (${areaRefs.join(', ')})`);
     if (!cells.size && !printAreas.has(sheetIndex)) continue;
     rendered++;
     const widths = new Map<number, number>(); const heights = new Map<number, number>();
@@ -168,6 +170,7 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
     let [pw, ph] = PAGE_SIZES[options.pageSize];
     if (landscape !== pw > ph) [pw, ph] = [ph, pw];
     const grid = options.gridlines === 'on' || (options.gridlines === 'sheet' && all(ws, 'printOptions')[0]?.attrs.gridLines === '1');
+    for (const area of areaList) {
     // Column bands that fit across the page, then rows down each band.
     const bands: number[][] = [];
     let band: number[] = [], used = 0;
@@ -215,6 +218,7 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
         }
         y -= h;
       }
+    }
     }
   }
   if (!rendered) throw new Error('This workbook has no cells to print.');

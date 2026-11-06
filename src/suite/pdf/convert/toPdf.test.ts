@@ -289,4 +289,26 @@ describe('conversion edge cases, round 5', () => {
     expect(page.text).toBe('1900-01-01 1900-02-28 1900-03-01');
   });
 });
+
+describe('conversion edge cases, round 6', () => {
+  it('paints a block background behind its text', async () => {
+    const result = await htmlToPdf('<p style="color:white;background-color:black">Visible on black</p>', { pageSize: 'a4', landscape: false, margin: 36 });
+    const { PDFDocument } = await import('pdf-lib');
+    const { pageContentBytes } = await import('../content/contentModel');
+    const content = new TextDecoder('latin1').decode(pageContentBytes(await PDFDocument.load(result.bytes), 0));
+    // The black fill is painted first, then the white text over it.
+    expect(content).toMatch(/0 0 0 rg[\s\S]*?\nf\n[\s\S]*?BT\n1 1 1 rg/);
+  });
+
+  it('prints every range of a multi-range print area', async () => {
+    const S = 'xmlns="m" xmlns:r="r"';
+    const xlsx = zipSync({
+      'xl/workbook.xml': strToU8(`<workbook ${S}><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm.Print_Area" localSheetId="0">S!$A$1:$A$1,S!$C$1:$C$1</definedName></definedNames></workbook>`),
+      'xl/_rels/workbook.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>'),
+      'xl/worksheets/sheet1.xml': strToU8(`<worksheet ${S}><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>First</t></is></c><c r="B1" t="inlineStr"><is><t>Between</t></is></c><c r="C1" t="inlineStr"><is><t>Last</t></is></c></row></sheetData></worksheet>`),
+    });
+    const result = await xlsxToPdf(xlsx, { pageSize: 'letter', orientation: 'sheet', gridlines: 'sheet', sheets: 'all' });
+    expect((await read(result.bytes)).map((p) => p.text)).toEqual(['First', 'Last']);
+  });
+});
 });

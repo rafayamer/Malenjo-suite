@@ -129,6 +129,8 @@ export class FlowWriter {
       const stretch = p.align === 'justify' && !line.hard && gaps ? extra / gaps : 0;
       const baseline = y - line.height * 0.85;
       const draw = !box || box.draw;
+      // A block background is painted across the paragraph's width, behind each of its lines.
+      if (draw && p.background) this.page.drawRectangle({ x: left, y: y - height, width, height, color: rgb(...p.background) });
       if (draw && index === 0 && p.marker) {
         const font = await this.font(p.runs[0]?.style ?? DEFAULT_STYLE);
         const size = p.runs[0]?.style.size ?? DEFAULT_STYLE.size;

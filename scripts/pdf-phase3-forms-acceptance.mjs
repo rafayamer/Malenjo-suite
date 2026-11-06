@@ -193,7 +193,7 @@ try {
     expect(out.actions('Total').Calculate?.[0] === 'AFSimple_Calculate("SUM", new Array("Net amount", "Tax"));', 'Total calc ' + JSON.stringify(out.actions('Total')));
     expect(out.actions('Tax').Calculate?.[0] === 'AFSimple_Calculate("PRD", new Array("Net amount", "Rate"));', 'Tax calc');
     expect(/display\.hidden/.test(out.actions('VAT number').Calculate?.[0] ?? '') && /new RegExp/.test(out.actions('VAT number').Validate?.[0] ?? ''), 'visibility/pattern');
-    expect(JSON.stringify(out.order) === '["VAT number","Tax","Total"]', 'calculation order ' + JSON.stringify(out.order));
+    expect(JSON.stringify(out.order) === '["Tax","Total","VAT number"]', 'calculation order ' + JSON.stringify(out.order));
     const lock = await lockOf(blankForm);
     expect(JSON.stringify(lock.fields) === '["Total","Client"]', 'lock not renamed ' + JSON.stringify(lock));
     await designer().getByRole('button', { name: 'Close form designer' }).click();
