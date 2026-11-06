@@ -65,6 +65,44 @@ export async function exportPdfPlainText(name:string,text:string):Promise<boolea
   return invoke<boolean>('write_pdf_tool_output',{destination,bytes:Array.from(bytes)});
 }
 
+const CONVERSION_TYPES:Record<string,string>={png:'PNG image',jpg:'JPEG image',tif:'TIFF image',md:'Markdown',html:'HTML',svg:'SVG',txt:'Plain text',zip:'ZIP archive'};
+/** Save a conversion result (image, text format or ZIP of several files). */
+export async function exportConversionFile(name:string,bytes:Uint8Array,mime:string):Promise<boolean>{
+  const extension=name.split('.').pop()?.toLowerCase()??'';
+  if(!CONVERSION_TYPES[extension])throw new Error('This export type is not supported.');
+  if(!bytes.byteLength)throw new Error('The export is empty.');
+  if(!isTauri()){
+    const url=URL.createObjectURL(new Blob([bytes.slice().buffer as ArrayBuffer],{type:mime}));
+    const anchor=document.createElement('a');
+    anchor.href=url;anchor.download=name;anchor.click();
+    window.setTimeout(()=>URL.revokeObjectURL(url),60_000);
+    return true;
+  }
+  const destination=await save({title:'Export PDF',defaultPath:name,filters:[{name:CONVERSION_TYPES[extension],extensions:[extension]}]});
+  if(!destination)return false;
+  if(!destination.toLowerCase().endsWith('.'+extension))throw new Error(`The export must be saved as a .${extension} file.`);
+  return invoke<boolean>('write_pdf_tool_output',{destination,bytes:Array.from(bytes)});
+}
+
+/** Save exported form data (CSV, JSON, FDF or XFDF). FDF is written byte for byte (Latin-1); the others as UTF-8. */
+export async function exportPdfFormData(name:string,text:string,format:'csv'|'json'|'fdf'|'xfdf',mime:string):Promise<boolean>{
+  if(!new RegExp(`\\.${format}$`,'i').test(name))throw new Error(`Form data exports require a .${format} filename.`);
+  const bytes=format==='fdf'?Uint8Array.from(text,(c)=>c.charCodeAt(0)&0xff):new TextEncoder().encode(text);
+  if(!isTauri()){
+    const url=URL.createObjectURL(new Blob([bytes.buffer as ArrayBuffer],{type:mime}));
+    const anchor=document.createElement('a');
+    anchor.href=url;
+    anchor.download=name;
+    anchor.click();
+    window.setTimeout(()=>URL.revokeObjectURL(url),60_000);
+    return true;
+  }
+  const destination=await save({title:'Export form data',defaultPath:name,filters:[{name:format.toUpperCase(),extensions:[format]}]});
+  if(!destination)return false;
+  if(!new RegExp(`\\.${format}$`,'i').test(destination))throw new Error(`Form data exports require a .${format} destination.`);
+  return invoke<boolean>('write_pdf_tool_output',{destination,bytes:Array.from(bytes)});
+}
+
 /**
  * Save an embedded PDF file as an untrusted local artifact. Never auto-open or
  * preview attachment contents. Unknown/executable extensions become .bin.

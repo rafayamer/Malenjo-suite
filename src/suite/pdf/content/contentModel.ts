@@ -48,6 +48,8 @@ export interface TextRun {
   horizontalScale: number;
   leading: number;
   fill: string;
+  /** Stroking colour, used by the stroke text rendering modes. */
+  stroke: string;
   /** Operators that reproduce the nonstroking colour exactly (rg/g/k, or cs with sc/scn). */
   fillOps: string;
   /** The ExtGState resources applied (gs) in the scope the run is drawn in: transparency, blend mode and the like. */
@@ -148,7 +150,7 @@ export function readPageModel(pdf: PDFDocument, pageIndex: number, fontCache?: M
     const descent = -0.25 * gs.size, ascent = 0.85 * gs.size;
     const corners = [apply(textToPage, 0, descent + gs.ts), apply(textToPage, advance, descent + gs.ts), apply(textToPage, 0, ascent + gs.ts), apply(textToPage, advance, ascent + gs.ts)];
     runs.push({ id: runs.length, opIndex, btIndex, fontKey: gs.fontKey, font, size: gs.size, text, display, codes, unmapped, start, advance, box: boxOf(corners),
-      charSpacing: gs.tc, wordSpacing: gs.tw, horizontalScale: gs.tz, leading: gs.tl, fill: gs.fill, fillOps: gs.fillOps, extGState: gs.ext, render: gs.tr, ctm: [...gs.ctm] as Matrix });
+      charSpacing: gs.tc, wordSpacing: gs.tw, horizontalScale: gs.tz, leading: gs.tl, fill: gs.fill, stroke: gs.stroke, fillOps: gs.fillOps, extGState: gs.ext, render: gs.tr, ctm: [...gs.ctm] as Matrix });
     tm = multiply([1, 0, 0, 1, advance, 0], tm);
   };
   const nextLine = (tx: number, ty: number) => { tlm = multiply([1, 0, 0, 1, tx, ty], tlm); tm = [...tlm] as Matrix; };

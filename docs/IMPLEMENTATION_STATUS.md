@@ -26,7 +26,9 @@ Do not mark a module complete until its acceptance criteria and traceability ent
 | Milestone | Status | Record |
 |---|---|---|
 | Phase 1 — Application Foundation | **COMPLETED** 2 Nov 2026. The Windows gates are carried over to the final release phase by owner decision. | `docs/audits/PHASE1_ACCEPTANCE_2026-11-02.md` (merged as `f853e42`) |
-| Phases 2–7 | NOT COMPLETED | Master Spec v2 |
+| Phase 2 — Core PDF Manipulation | **All bindable requirements Verified** (MAL-001 – 025, 054, 055) with CI acceptance evidence. MAL-027 (multilingual OCR) and MAL-028 (scanner hardware) stay unbound with documented gaps; **completion needs the owner's decision on those two**. MAL-026 (Repair PDF) is not in the Milestone 2 scope table and remains unbound until it is assigned to a milestone. | `docs/audits/PHASE2_PLAN_2026-11-02.md` |
+| Phase 3 — Conversion & Forms | **All bindable requirements Verified** (MAL-029 – 034, 036 – 039, 041 – 050, 052, 053) with CI acceptance evidence. MAL-035 (PostScript), MAL-040 (PDF/A with independent validation) and MAL-051 (AI form detection) stay unbound with documented gaps; **completion needs the owner's decision on those three**. | `docs/audits/PHASE3_PLAN_2026-11-03.md` |
+| Phases 4–7 | NOT COMPLETED | Master Spec v2 |
 
 The historical sections below use the earlier phase numbering.
 

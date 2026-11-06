@@ -201,7 +201,7 @@ pub fn write_pdf_copy(destination: String, bytes: Vec<u8>) -> Result<bool, Strin
 const MAX_PDF_TOOL_OUTPUT_BYTES: usize = 32 * 1024 * 1024;
 const PDF_TOOL_OUTPUT_EXTENSIONS: &[&str] = &[
     "pdf", "zip", "png", "jpg", "jpeg", "webp", "tif", "tiff", "bmp",
-    "txt", "csv", "json", "xml", "html", "md",
+    "txt", "csv", "json", "xml", "html", "md", "fdf", "xfdf",
     "doc", "docx", "odt", "rtf",
     "xls", "xlsx", "ods",
     "ppt", "pptx", "odp", "epub", "cbz", "cbr", "svg", "bin",

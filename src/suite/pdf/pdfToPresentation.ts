@@ -32,14 +32,14 @@ function pngDimensions(bytes:Uint8Array):{width:number;height:number}{
   }
   return {width,height};
 }
-const spTree='<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>'+
+export const spTree='<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>'+
   '<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/>'+
   '<a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>';
-const ns='xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '+
+export const ns='xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '+
   'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '+
   'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
-const relsNS='http://schemas.openxmlformats.org/package/2006/relationships';
-const officeRel='http://schemas.openxmlformats.org/officeDocument/2006/relationships/';
+export const relsNS='http://schemas.openxmlformats.org/package/2006/relationships';
+export const officeRel='http://schemas.openxmlformats.org/officeDocument/2006/relationships/';
 
 function imageSlide(index:number,width:number,height:number):string{
   const fraction=Math.min(CX/width,CY/height);
@@ -83,18 +83,18 @@ function presentationRels(count:number):string{
   }
   return '<Relationships xmlns="'+relsNS+'">'+records+'</Relationships>';
 }
-const master='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+export const master='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
   '<p:sldMaster '+ns+'><p:cSld name="MALENJO Raster Master"><p:spTree>'+spTree+
   '</p:spTree></p:cSld><p:clrMap accent1="accent1" accent2="accent2" accent3="accent3" '+
   'accent4="accent4" accent5="accent5" accent6="accent6" bg1="lt1" bg2="lt2" '+
   'folHlink="folHlink" hlink="hlink" tx1="dk1" tx2="dk2"/>'+
   '<p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst>'+
   '<p:txStyles><p:titleStyle/><p:bodyStyle/><p:otherStyle/></p:txStyles></p:sldMaster>';
-const layout='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+export const layout='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
   '<p:sldLayout '+ns+' type="blank" preserve="1"><p:cSld name="Blank">'+
   '<p:spTree>'+spTree+'</p:spTree></p:cSld>'+
   '<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>';
-const theme='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+export const theme='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
   '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="MALENJO">'+
   '<a:themeElements><a:clrScheme name="Neutral">'+
   '<a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>'+
