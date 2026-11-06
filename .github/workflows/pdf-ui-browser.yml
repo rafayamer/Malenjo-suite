@@ -49,6 +49,12 @@ jobs:
         run: node scripts/pdf-phase2-optimize-acceptance.mjs
       - name: Phase 2 markup acceptance (text markup, drawings, notes) with independent output reopen
         run: node scripts/pdf-phase2-markup-acceptance.mjs
+      - name: Phase 2 text editing acceptance (native text edit, find and replace, revisions) with independent output reopen
+        run: node scripts/pdf-phase2-textedit-acceptance.mjs
+      - name: Phase 2 object editing acceptance (images, shapes, inserted content) with independent output reopen
+        run: node scripts/pdf-phase2-objects-acceptance.mjs
+      - name: Phase 2 paragraph acceptance (reflow, typography, styles) with independent output reopen
+        run: node scripts/pdf-phase2-paragraph-acceptance.mjs
       - name: Publish Phase 3 light/dark visual review screenshots
         if: success()
         uses: actions/upload-artifact@v4

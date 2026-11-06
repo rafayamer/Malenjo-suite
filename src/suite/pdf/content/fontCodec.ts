@@ -1,0 +1,222 @@
+/**
+ * Font decoding and re-encoding for native text editing (MAL-011).
+ *
+ * Decoding (bytes -> Unicode) uses the font's ToUnicode CMap when present,
+ * otherwise its /Encoding (base encoding plus /Differences glyph names).
+ * Encoding (Unicode -> bytes) only produces codes the font can draw:
+ *  - standard 14 fonts that are not embedded: every code with a glyph;
+ *  - embedded subset fonts: only codes already used with this font in the
+ *    document (a subset contains just those glyphs);
+ *  - other embedded fonts: codes with a width in /Widths (or /W).
+ * Anything else is reported as missing, never silently drawn wrong.
+ */
+import { Encodings, Font, type IFontNames } from '@pdf-lib/standard-fonts';
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFNumber, PDFRawStream, PDFStream, decodePDFRawStream } from 'pdf-lib';
+
+const N = (name: string) => PDFName.of(name);
+/** Typed lookup that returns undefined (instead of throwing) when the value has another type. */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+function get<T>(pdf: PDFDocument, dict: PDFDict | undefined, key: string, type: Function & { prototype: T }): T | undefined {
+  const value = dict?.get(N(key));
+  const resolved = value === undefined ? undefined : pdf.context.lookup(value);
+  return resolved instanceof type ? resolved as T : undefined;
+}
+const STANDARD = new Set(['Courier', 'Courier-Bold', 'Courier-Oblique', 'Courier-BoldOblique', 'Helvetica', 'Helvetica-Bold', 'Helvetica-Oblique',
+  'Helvetica-BoldOblique', 'Times-Roman', 'Times-Bold', 'Times-Italic', 'Times-BoldItalic', 'Symbol', 'ZapfDingbats']);
+const ALIASES: Record<string, string> = { Arial: 'Helvetica', 'Arial,Bold': 'Helvetica-Bold', TimesNewRoman: 'Times-Roman', 'TimesNewRoman,Bold': 'Times-Bold', CourierNew: 'Courier' };
+
+/** WinAnsi code -> [unicode, glyph name], and glyph name -> unicode, from pdf-lib's tables. */
+const WIN_ANSI = new Map<number, [string, string]>();
+const NAME_TO_UNICODE = new Map<string, string>();
+for (const cp of Encodings.WinAnsi.supportedCodePoints) {
+  const { code, name } = Encodings.WinAnsi.encodeUnicodeCodePoint(cp);
+  WIN_ANSI.set(code, [String.fromCodePoint(cp), name]);
+  // Several code points can share a glyph name (space / no-break space): keep the lowest.
+  if (!NAME_TO_UNICODE.has(name)) NAME_TO_UNICODE.set(name, String.fromCodePoint(cp));
+}
+// Glyph names used by MacRoman and Standard encodings that WinAnsi does not cover.
+const EXTRA_NAMES: Record<string, string> = {
+  notequal: '≠', infinity: '∞', lessequal: '≤', greaterequal: '≥', partialdiff: '∂', summation: '∑', product: '∏', pi: 'π', integral: '∫', Omega: 'Ω',
+  radical: '√', approxequal: '≈', Delta: '∆', lozenge: '◊', fraction: '⁄', fi: 'ﬁ', fl: 'ﬂ', dotlessi: 'ı', breve: '˘', dotaccent: '˙', ring: '˚',
+  hungarumlaut: '˝', ogonek: '˛', caron: 'ˇ', Lslash: 'Ł', lslash: 'ł',
+};
+const MAC_ROMAN_HIGH = ('Adieresis Aring Ccedilla Eacute Ntilde Odieresis Udieresis aacute agrave acircumflex adieresis atilde aring ccedilla eacute egrave '
+  + 'ecircumflex edieresis iacute igrave icircumflex idieresis ntilde oacute ograve ocircumflex odieresis otilde uacute ugrave ucircumflex udieresis '
+  + 'dagger degree cent sterling section bullet paragraph germandbls registered copyright trademark acute dieresis notequal AE Oslash '
+  + 'infinity plusminus lessequal greaterequal yen mu partialdiff summation product pi integral ordfeminine ordmasculine Omega ae oslash '
+  + 'questiondown exclamdown logicalnot radical florin approxequal Delta guillemotleft guillemotright ellipsis space Agrave Atilde Otilde OE oe '
+  + 'endash emdash quotedblleft quotedblright quoteleft quoteright divide lozenge ydieresis Ydieresis fraction currency guilsinglleft guilsinglright fi fl '
+  + 'daggerdbl periodcentered quotesinglbase quotedblbase perthousand Acircumflex Ecircumflex Aacute Edieresis Egrave Iacute Icircumflex Idieresis Igrave Oacute Ocircumflex '
+  + 'apple Ograve Uacute Ucircumflex Ugrave dotlessi circumflex tilde macron breve dotaccent ring cedilla hungarumlaut ogonek caron').split(' ');
+const STANDARD_HIGH: Record<number, string> = {
+  0xa1: 'exclamdown', 0xa2: 'cent', 0xa3: 'sterling', 0xa4: 'fraction', 0xa5: 'yen', 0xa6: 'florin', 0xa7: 'section', 0xa8: 'currency', 0xa9: 'quotesingle',
+  0xaa: 'quotedblleft', 0xab: 'guillemotleft', 0xac: 'guilsinglleft', 0xad: 'guilsinglright', 0xae: 'fi', 0xaf: 'fl', 0xb1: 'endash', 0xb2: 'dagger',
+  0xb3: 'daggerdbl', 0xb4: 'periodcentered', 0xb6: 'paragraph', 0xb7: 'bullet', 0xb8: 'quotesinglbase', 0xb9: 'quotedblbase', 0xba: 'quotedblright',
+  0xbb: 'guillemotright', 0xbc: 'ellipsis', 0xbd: 'perthousand', 0xbf: 'questiondown', 0xc1: 'grave', 0xc2: 'acute', 0xc3: 'circumflex', 0xc4: 'tilde',
+  0xc5: 'macron', 0xc6: 'breve', 0xc7: 'dotaccent', 0xc8: 'dieresis', 0xca: 'ring', 0xcb: 'cedilla', 0xcd: 'hungarumlaut', 0xce: 'ogonek', 0xcf: 'caron',
+  0xd0: 'emdash', 0xe1: 'AE', 0xe3: 'ordfeminine', 0xe8: 'Lslash', 0xe9: 'Oslash', 0xea: 'OE', 0xeb: 'ordmasculine', 0xf1: 'ae', 0xf5: 'dotlessi',
+  0xf8: 'lslash', 0xf9: 'oslash', 0xfa: 'oe', 0xfb: 'germandbls',
+};
+/** Code -> glyph name for a named base encoding; null when the encoding is not one MALENJO knows. */
+export function baseEncodingNames(name: string): Map<number, string> | null {
+  const out = new Map<number, string>();
+  if (name === 'WinAnsiEncoding') { WIN_ANSI.forEach(([, glyph], code) => out.set(code, glyph)); return out; }
+  if (name !== 'MacRomanEncoding' && name !== 'StandardEncoding') return null;
+  // The printable ASCII range matches WinAnsi in both (Standard differs at 0x27 and 0x60).
+  for (let code = 0x20; code < 0x7f; code++) { const entry = WIN_ANSI.get(code); if (entry) out.set(code, entry[1]); }
+  if (name === 'MacRomanEncoding') MAC_ROMAN_HIGH.forEach((glyph, i) => out.set(0x80 + i, glyph));
+  else { out.set(0x27, 'quoteright'); out.set(0x60, 'quoteleft'); Object.entries(STANDARD_HIGH).forEach(([code, glyph]) => out.set(Number(code), glyph)); }
+  return out;
+}
+function glyphToUnicode(name: string): string | null {
+  if (NAME_TO_UNICODE.has(name)) return NAME_TO_UNICODE.get(name)!;
+  if (EXTRA_NAMES[name]) return EXTRA_NAMES[name];
+  const uni = /^uni([0-9A-F]{4})$/i.exec(name) ?? /^u([0-9A-F]{4,6})$/i.exec(name);
+  if (uni) return String.fromCodePoint(parseInt(uni[1], 16));
+  return name.length === 1 ? name : null;
+}
+
+export interface FontCodec {
+  key: string;
+  baseFont: string;
+  kind: 'simple' | 'type0' | 'type3';
+  subset: boolean;
+  embedded: boolean;
+  bytesPerCode: 1 | 2;
+  /** Splits bytes into codes. */
+  codes(bytes: Uint8Array): number[];
+  /** Unicode for a code, or null when the font gives no mapping. */
+  unicode(code: number): string | null;
+  /** Advance width in thousandths of the font size. */
+  width(code: number): number;
+  /** Codes seen with this font anywhere in the document (filled by the caller). */
+  used: Set<number>;
+  /** Encodes text, or lists the characters this font cannot draw. */
+  encode(text: string): { bytes: Uint8Array } | { missing: string[] };
+}
+
+function parseToUnicode(stream: PDFStream | undefined): Map<number, string> {
+  const map = new Map<number, string>();
+  if (!stream) return map;
+  const raw = stream instanceof PDFRawStream ? decodePDFRawStream(stream).decode() : stream.getContents();
+  const text = new TextDecoder('latin1').decode(raw);
+  const hexText = (hex: string) => { let s = ''; for (let i = 0; i + 3 < hex.length; i += 4) s += String.fromCharCode(parseInt(hex.slice(i, i + 4), 16)); return s; };
+  for (const block of text.matchAll(/beginbfchar([\s\S]*?)endbfchar/g)) {
+    for (const m of block[1].matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]*)>/g)) map.set(parseInt(m[1], 16), hexText(m[2]));
+  }
+  for (const block of text.matchAll(/beginbfrange([\s\S]*?)endbfrange/g)) {
+    for (const m of block[1].matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*(<[0-9a-fA-F]*>|\[[^\]]*\])/g)) {
+      const lo = parseInt(m[1], 16), hi = parseInt(m[2], 16);
+      if (hi - lo > 65535) continue;
+      if (m[3].startsWith('[')) {
+        [...m[3].matchAll(/<([0-9a-fA-F]*)>/g)].forEach((d, k) => { if (lo + k <= hi) map.set(lo + k, hexText(d[1])); });
+      } else {
+        const base = m[3].slice(1, -1);
+        const last = parseInt(base.slice(-4), 16);
+        for (let c = lo; c <= hi; c++) map.set(c, hexText(base.slice(0, -4)) + String.fromCharCode(last + c - lo));
+      }
+    }
+  }
+  return map;
+}
+
+export function fontCodec(pdf: PDFDocument, key: string, dict: PDFDict): FontCodec {
+  const subtype = dict.get(N('Subtype'))?.toString().slice(1) ?? '';
+  const baseFont = (dict.get(N('BaseFont'))?.toString().slice(1) ?? key).replace(/#20/g, ' ');
+  const subset = /^[A-Z]{6}\+/.test(baseFont);
+  const plainName = baseFont.replace(/^[A-Z]{6}\+/, '');
+  const toUnicode = parseToUnicode(get(pdf, dict, 'ToUnicode', PDFStream));
+  const used = new Set<number>();
+
+  if (subtype === 'Type0') {
+    const descendantRef = get(pdf, dict, 'DescendantFonts', PDFArray)?.get(0);
+    const descendant = descendantRef ? (pdf.context.lookup(descendantRef) instanceof PDFDict ? pdf.context.lookup(descendantRef) as PDFDict : undefined) : undefined;
+    const descriptor = get(pdf, descendant, 'FontDescriptor', PDFDict);
+    const embedded = !!descriptor && ['FontFile', 'FontFile2', 'FontFile3'].some((k) => descriptor.has(N(k)));
+    const defaultWidth = get(pdf, descendant, 'DW', PDFNumber)?.asNumber() ?? 1000;
+    const widths = new Map<number, number>();
+    const w = get(pdf, descendant, 'W', PDFArray)?.asArray().map((v) => pdf.context.lookup(v)) ?? [];
+    for (let k = 0; k < w.length;) {
+      const first = (w[k] as PDFNumber).asNumber();
+      const next = w[k + 1];
+      if (next instanceof PDFArray) { next.asArray().forEach((v, j) => widths.set(first + j, (pdf.context.lookup(v) as PDFNumber).asNumber())); k += 2; }
+      else { const last = (next as PDFNumber).asNumber(); const width = (w[k + 2] as PDFNumber).asNumber(); for (let c = first; c <= last && c - first < 65536; c++) widths.set(c, width); k += 3; }
+    }
+    // Several codes can map to the same character; keep them all so a subset can use one it already draws.
+    const reverse = new Map<string, number[]>();
+    toUnicode.forEach((text, code) => { const list = reverse.get(text); if (list) list.push(code); else reverse.set(text, [code]); });
+    const identity = dict.get(N('Encoding'))?.toString() === '/Identity-H';
+    return {
+      key, baseFont, kind: 'type0', subset, embedded, bytesPerCode: 2, used,
+      codes: (bytes) => Array.from({ length: bytes.length >> 1 }, (_, k) => (bytes[2 * k] << 8) | bytes[2 * k + 1]),
+      unicode: (code) => toUnicode.get(code) ?? null,
+      width: (code) => widths.get(code) ?? defaultWidth,
+      encode(text) {
+        if (!identity) return { missing: [...new Set([...text])] };
+        const out: number[] = []; const missing: string[] = [];
+        for (const ch of text) {
+          const code = reverse.get(ch)?.find((c) => !subset || used.has(c));
+          if (code === undefined) missing.push(ch); else out.push(code >> 8, code & 255);
+        }
+        return missing.length ? { missing: [...new Set(missing)] } : { bytes: Uint8Array.from(out) };
+      },
+    };
+  }
+
+  // Simple fonts (Type1, TrueType, MMType1) and Type3.
+  const descriptor = get(pdf, dict, 'FontDescriptor', PDFDict);
+  const embedded = !!descriptor && ['FontFile', 'FontFile2', 'FontFile3'].some((k) => descriptor.has(N(k)));
+  const standardName = ALIASES[plainName] ?? plainName;
+  const standard = !embedded && STANDARD.has(standardName) ? Font.load(standardName as IFontNames) : null;
+  const symbolic = standardName === 'Symbol' || standardName === 'ZapfDingbats';
+  // Base encoding: the /Encoding name, or the dictionary's /BaseEncoding; with neither, a
+  // non-embedded standard font uses StandardEncoding and an embedded one its own built-in
+  // encoding, which MALENJO cannot read (only /Differences and ToUnicode are then trusted).
+  const encodingDict = get(pdf, dict, 'Encoding', PDFDict);
+  const encodingName = get(pdf, dict, 'Encoding', PDFName)?.decodeText() ?? get(pdf, encodingDict, 'BaseEncoding', PDFName)?.decodeText()
+    ?? (!embedded && STANDARD.has(standardName) && !symbolic ? 'StandardEncoding' : undefined);
+  const glyphNames = (encodingName ? baseEncodingNames(encodingName) : null) ?? new Map<number, string>();
+  const differences = get(pdf, encodingDict, 'Differences', PDFArray)?.asArray() ?? [];
+  let cursor = 0;
+  for (const item of differences) {
+    const value = pdf.context.lookup(item);
+    if (value instanceof PDFNumber) cursor = value.asNumber();
+    else if (value instanceof PDFName) glyphNames.set(cursor++, value.decodeText());
+  }
+  const firstChar = get(pdf, dict, 'FirstChar', PDFNumber)?.asNumber() ?? 0;
+  const widthArray = get(pdf, dict, 'Widths', PDFArray)?.asArray().map((v) => { const n = pdf.context.lookup(v); return n instanceof PDFNumber ? n.asNumber() : 0; });
+  const missingWidth = get(pdf, descriptor, 'MissingWidth', PDFNumber)?.asNumber() ?? 0;
+  const unicodeOf = (code: number): string | null => {
+    if (toUnicode.has(code)) return toUnicode.get(code)!;
+    if (symbolic) return null;
+    const name = glyphNames.get(code);
+    return name ? glyphToUnicode(name) : null;
+  };
+  const widthOf = (code: number): number => {
+    if (widthArray && code >= firstChar && code < firstChar + widthArray.length) return widthArray[code - firstChar];
+    if (standard) { const name = glyphNames.get(code); const w = name ? standard.getWidthOfGlyph(name) : undefined; if (typeof w === 'number') return w; }
+    return missingWidth;
+  };
+  const drawable = (code: number): boolean => {
+    if (subtype === 'Type3') return used.has(code);
+    if (subset) return used.has(code);
+    if (standard) { const name = glyphNames.get(code); return !!name && typeof standard.getWidthOfGlyph(name) === 'number'; }
+    return widthOf(code) > 0 || used.has(code);
+  };
+  const reverse = new Map<string, number[]>();
+  for (let code = 0; code < 256; code++) { const u = unicodeOf(code); if (u) { const list = reverse.get(u); if (list) list.push(code); else reverse.set(u, [code]); } }
+  return {
+    key, baseFont, kind: subtype === 'Type3' ? 'type3' : 'simple', subset, embedded, bytesPerCode: 1, used,
+    codes: (bytes) => Array.from(bytes),
+    unicode: unicodeOf,
+    width: widthOf,
+    encode(text) {
+      const out: number[] = []; const missing: string[] = [];
+      for (const ch of text) {
+        const code = reverse.get(ch)?.find(drawable);
+        if (code === undefined) missing.push(ch); else out.push(code);
+      }
+      return missing.length ? { missing: [...new Set(missing)] } : { bytes: Uint8Array.from(out) };
+    },
+  };
+}

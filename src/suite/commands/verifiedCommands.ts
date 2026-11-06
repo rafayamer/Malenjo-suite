@@ -32,6 +32,9 @@ export const VERIFIED_EVIDENCE_SCRIPTS = [
   'scripts/pdf-phase2-navigation-acceptance.mjs',
   'scripts/pdf-phase2-optimize-acceptance.mjs',
   'scripts/pdf-phase2-markup-acceptance.mjs',
+  'scripts/pdf-phase2-textedit-acceptance.mjs',
+  'scripts/pdf-phase2-objects-acceptance.mjs',
+  'scripts/pdf-phase2-paragraph-acceptance.mjs',
 ] as const;
 
 export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Object.freeze([
@@ -146,6 +149,44 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     guidance: 'Choose Markup tools…, pick Pen, Line, Arrow, Rectangle, Ellipse, Text box, Callout or Sticky note, then drag or click on the page. Colour, opacity, line width and text are set in the panel; markup can be edited or deleted from the list.',
     evidence: ['MAL-055 freehand, arrow, rectangle, ellipse, text box, callout and sticky note drawn on the page',
       'MAL-055 shapes on a rotated page land where they were drawn'],
+  },
+  {
+    id: 'MAL-011', workspaceTab: 'Edit',
+    guidance: 'Choose Edit text…, click the text on the page (or pick it in the list), change it and choose Replace text. The PDF\'s own text is rewritten in its original font; characters the font does not contain are refused, with an option to add a clearly labelled overlay instead.',
+    evidence: ['MAL-011 edit existing text in place, in its own font, by clicking it on the page',
+      'MAL-011 characters missing from the font are refused, and an overlay is offered and labelled'],
+  },
+  {
+    id: 'MAL-023', workspaceTab: 'Edit',
+    guidance: 'Choose Find and replace… to find text and replace it in place. Every edit is a revision: undo and redo, restore any earlier revision, or save any revision as its own PDF. Revisions are kept for the editing session.',
+    evidence: ['MAL-023 find and replace in place across the document',
+      'MAL-023 revision history: restore an earlier revision, save any revision, undo and redo'],
+  },
+  {
+    id: 'MAL-014', workspaceTab: 'Edit',
+    guidance: 'Choose Edit objects…, click an image on the page, then move it, resize it, rotate it, crop it, replace it with a PNG or JPEG, adjust brightness, contrast or greyscale, or delete it. The page\'s own drawing changes; Undo restores it.',
+    evidence: ['MAL-014 move, resize and rotate an image', 'MAL-014 crop, adjust, replace and delete an image'],
+  },
+  {
+    id: 'MAL-015', workspaceTab: 'Edit',
+    guidance: 'Choose Edit objects…, click a line or shape on the page, then change its line colour, fill and width, move, resize or rotate it, or delete it.',
+    evidence: ['MAL-015 restyle, move and delete a vector shape'],
+  },
+  {
+    id: 'MAL-016', workspaceTab: 'Edit',
+    guidance: 'Choose Edit objects…, pick Text, Rectangle, Ellipse, Line or Arrow under Insert, set colour, fill, width and text, and drag on the page. Inserted items become part of the page and can be edited again.',
+    evidence: ['MAL-016 insert text and shapes as page content, then edit the inserted text'],
+  },
+  {
+    id: 'MAL-012', workspaceTab: 'Edit',
+    guidance: 'Choose Paragraphs…, click a paragraph on the page, change its text and alignment (left, centre, right, justify), size, line height and spacing, then Apply. Text reflows inside the paragraph\'s width; text that would not fit is refused unless you allow it to grow.',
+    evidence: ['MAL-012 rewrite a paragraph: reflow inside its width, centred, other text untouched',
+      'MAL-012 overflow is detected, and growing is an explicit choice'],
+  },
+  {
+    id: 'MAL-013', workspaceTab: 'Edit',
+    guidance: 'In Paragraphs…, the detected font (and whether it is embedded or a subset) is shown. Change size, weight (font), letter and word spacing and line height; any font substitution is reported. Save settings as a named style and apply it to other paragraphs.',
+    evidence: ['MAL-013 font detection, substitution warning, size, weight, spacing, line height and reusable styles'],
   },
 ]);
 

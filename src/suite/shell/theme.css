@@ -2400,7 +2400,7 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 .pdf-merge-list li{display:flex;align-items:center;gap:6px;border:1px solid var(--ml-border);background:var(--ml-card);border-radius:8px;padding:6px 8px;cursor:grab}
 .pdf-merge-list.static li{cursor:default}
 .pdf-tool-dialog-actions{display:flex;flex-wrap:wrap;gap:6px}
-.pdf-markup-panel{position:fixed;z-index:55;top:150px;right:16px;width:min(320px,calc(100vw - 32px));max-height:calc(100vh - 180px);overflow:auto;display:flex;flex-direction:column;gap:8px;padding:12px 14px;border:1px solid var(--ml-border);border-radius:12px;background:var(--ml-surface);color:var(--ml-text);box-shadow:0 14px 40px rgba(0,0,0,.35)}
+.pdf-markup-panel{position:fixed;z-index:55;top:200px;right:16px;width:min(320px,calc(100vw - 32px));max-height:calc(100vh - 230px);overflow:auto;display:flex;flex-direction:column;gap:8px;padding:12px 14px;border:1px solid var(--ml-border);border-radius:12px;background:var(--ml-surface);color:var(--ml-text);box-shadow:0 14px 40px rgba(0,0,0,.35)}
 .pdf-markup-panel header{display:flex;align-items:center;justify-content:space-between}
 .pdf-markup-panel h2{margin:0;font-size:16px}
 .pdf-markup-panel fieldset{border:1px solid var(--ml-border);border-radius:8px;padding:6px 8px;display:flex;flex-wrap:wrap;gap:6px}
@@ -2412,6 +2412,11 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 .pdf-markup-panel button:disabled{opacity:.45;cursor:not-allowed}
 .pdf-markup-panel input:not([type=radio]):not([type=color]),.pdf-markup-panel textarea{border:1px solid var(--ml-border);background:var(--ml-field);color:var(--ml-text);border-radius:6px;padding:5px 7px;font:inherit}
 .pdf-markup-panel .pdf-tool-dialog-choice{flex-direction:row;align-items:center}
+.pdf-text-run-target{background:transparent;border:1px dashed rgba(61,159,255,.55);border-radius:2px;padding:0;cursor:text}
+.pdf-text-run-target:hover,.pdf-text-run-target:focus-visible{background:rgba(61,159,255,.12);outline:2px solid #3d9fff}
+.pdf-text-run-target.selected{background:rgba(61,159,255,.18);border:2px solid #1269cc}
+.pdf-text-run-target:disabled{border-color:rgba(150,150,150,.4);cursor:not-allowed}
+.pdf-object-row-label{flex-basis:100%;font-size:12px;color:var(--ml-muted)}
 .pdf-markup-swatch{display:inline-block;width:10px;height:10px;border-radius:2px;border:1px solid var(--ml-border);margin-right:4px}
 .pdf-markup-panel .pdf-tool-dialog-error{color:var(--ml-error-fg);background:var(--ml-error-bg);border-radius:6px;padding:6px 8px}
 .pdf-tool-dialog-tabs{display:flex;gap:4px;border-bottom:1px solid var(--ml-border)}
