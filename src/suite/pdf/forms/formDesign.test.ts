@@ -169,4 +169,45 @@ describe('fill, flatten and data exchange (MAL-050, MAL-052, MAL-053)', () => {
     expect(() => importFormData(blankFields, '{"Extras":["boat"]}', 'json')).toThrow(/not an option of Extras/);
     expect(() => importFormData(blankFields, '<!DOCTYPE x><xfdf><fields></fields></xfdf>', 'xfdf')).toThrow(/document type/);
   });
+
+  it('moves a widget dragged onto another page to that page', async () => {
+    const pdf = await PDFDocument.load(await blank());
+    pdf.addPage([600, 800]).setRotation(degrees(90));
+    let bytes = await addFormField(await pdf.save(), field('text', 'Note'));
+    let [note] = await listFormDesign(bytes);
+    bytes = await moveFormWidget(bytes, 'Note', note.widgets[0].ref, 2, 0, at(0.2, 0.3));
+    [note] = await listFormDesign(bytes);
+    expect(note.widgets[0].pageNumber).toBe(2);
+    const moved = await PDFDocument.load(bytes);
+    const annots = (n: number) => moved.getPage(n).node.Annots()?.size() ?? 0;
+    expect([annots(0), annots(1)]).toEqual([0, 1]);
+    const widget = moved.context.lookup(moved.getPage(1).node.Annots()!.get(0)) as import('pdf-lib').PDFDict;
+    expect(widget.get(PDFName.of('P'))?.toString()).toBe(moved.getPage(1).ref.toString());
+    expect((widget.lookup(PDFName.of('MK')) as import('pdf-lib').PDFDict).get(PDFName.of('R'))?.toString()).toBe('90');
+  });
+
+  it('keeps a hidden field without a visibility rule hidden when filling', async () => {
+    let bytes = await addFormField(await blank(), field('text', 'Internal'));
+    bytes = await addFormField(bytes, field('text', 'Customer', at(0.1, 0.3)));
+    const pdf = await PDFDocument.load(bytes);
+    const widget = pdf.getForm().getTextField('Internal').acroField.getWidgets()[0];
+    widget.dict.set(PDFName.of('F'), pdf.context.obj(2 | 4));
+    const { bytes: filled } = await fillFormWithLogic(await pdf.save(), { Customer: 'Ada' });
+    const { annotations } = await pdfjs(filled);
+    expect(annotations.find((a) => a.fieldName === 'Internal')!.hidden).toBe(true);
+  });
+
+  it('still fills a form whose choice labels the standard font cannot draw', async () => {
+    // An imported form (the designer itself only accepts labels Helvetica can draw).
+    const pdf = await PDFDocument.load(await addFormField(await blank(), field('text', 'Customer', at(0.1, 0.3))));
+    const city = pdf.getForm().createDropdown('City');
+    city.addOptions(['msk', 'spb']);
+    city.addToPage(pdf.getPage(0), { x: 60, y: 600, width: 150, height: 20 });
+    const { PDFHexString, PDFString } = await import('pdf-lib');
+    city.acroField.dict.set(PDFName.of('Opt'), pdf.context.obj([[PDFString.of('msk'), PDFHexString.fromText('Москва')], [PDFString.of('spb'), PDFHexString.fromText('Петербург')]]));
+    city.acroField.dict.set(PDFName.of('V'), PDFString.of('msk'));
+    const { bytes: filled } = await fillFormWithLogic(await pdf.save(), { Customer: 'Ada' });
+    const { annotations } = await pdfjs(filled);
+    expect(annotations.find((a) => a.fieldName === 'Customer')!.fieldValue).toBe('Ada');
+  });
 });

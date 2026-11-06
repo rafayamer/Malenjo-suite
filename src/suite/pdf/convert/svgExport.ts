@@ -102,9 +102,13 @@ export async function pdfToSvg(bytes: Uint8Array, pages: number[], title: string
     for (const run of model.runs) {
       if (!run.text.trim()) continue;
       if (run.unmapped) { counts.text++; continue; }
+      // Text rendering modes: 3 and 7 are invisible (an OCR layer), 1 and 5 stroke only, 2 and 6 both.
+      const mode = run.render % 4;
+      if (mode === 3) continue;
+      const paint = `fill="${mode === 1 ? 'none' : run.fill}"${mode === 1 || mode === 2 ? ` stroke="${run.stroke}" stroke-width="${r(0.04)}"` : ''}`;
       const th = run.horizontalScale / 100;
       const length = run.size ? run.advance / (run.size * th) : 0;
-      items.push({ at: run.opIndex, svg: `<text transform="${mat(run.start)} scale(1 -1)" font-size="1" ${family(run.font.baseFont)} fill="${run.fill}"${length > 0 ? ` textLength="${r(length)}" lengthAdjust="spacingAndGlyphs"` : ''} xml:space="preserve">${esc(run.text)}</text>` });
+      items.push({ at: run.opIndex, svg: `<text transform="${mat(run.start)} scale(1 -1)" font-size="1" ${family(run.font.baseFont)} ${paint}${length > 0 ? ` textLength="${r(length)}" lengthAdjust="spacingAndGlyphs"` : ''} xml:space="preserve">${esc(run.text)}</text>` });
     }
     for (const image of model.images) {
       const stream = image.ref ? pdf.context.lookup(xobjects?.get(N(image.name)) as never) : null;

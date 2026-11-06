@@ -105,7 +105,7 @@ export function parseLogic(scripts: FieldScripts): FieldLogic {
     for (const statement of script.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)) {
       const rule = RULES.find(([pattern]) => pattern.test(statement));
       if (rule) rule[1](statement.match(rule[0])!, logic);
-      else logic.unsupported.push(`${trigger}: ${statement.slice(0, 200)}`);
+      else logic.unsupported.push(`${trigger}: ${statement}`);
     }
   }
   return logic;
@@ -214,8 +214,11 @@ export function evaluateForm(fields: LogicField[]): FormEvaluation {
     const inputs = calc.fields.map(numeric);
     const result = calc.op === 'SUM' ? inputs.reduce((a, b) => a + b, 0) : calc.op === 'PRD' ? inputs.reduce((a, b) => a * b, 1)
       : calc.op === 'AVG' ? inputs.reduce((a, b) => a + b, 0) / Math.max(1, inputs.length) : calc.op === 'MIN' ? Math.min(...inputs) : Math.max(...inputs);
-    const rounded = Number(result.toFixed(field.logic.format?.kind === 'number' ? field.logic.format.decimals : 10));
-    values[field.name] = String(rounded);
+    const format = field.logic.format?.kind === 'number' ? field.logic.format : undefined;
+    const rounded = Number(result.toFixed(format ? format.decimals : 10));
+    // Stored with the field's own decimal separator and no grouping, so the field's locale parses it back
+    // to the same amount (a "12.5" in a 1.234,56 field would otherwise read as 125).
+    values[field.name] = format ? String(rounded).replace('.', SEPARATORS[format.separator][1]) : String(rounded);
   }
   const hidden = fields.filter((f) => {
     if (!f.logic.showWhen) return false;

@@ -80,7 +80,7 @@ export function pdfToDocx(pages: PageStructure[], title: string): ConversionResu
         if (breakBefore) body.push(`<w:p>${pPr()}</w:p>`);
         const cols = Math.max(...block.rows.map((r) => r.length));
         const width = Math.round((textWidth * 20) / cols);
-        body.push(`<w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="${width * cols}" w:type="dxa"/></w:tblPr><w:tblGrid>${'<w:gridCol w:w="' + width + '"/>'.repeat(cols)}</w:tblGrid>`
+        body.push(`<w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="${width * cols}" w:type="dxa"/></w:tblPr><w:tblGrid>${`<w:gridCol w:w="${width}"/>`.repeat(cols)}</w:tblGrid>`
           + block.rows.map((row, r) => `<w:tr>${Array.from({ length: cols }, (_, c) => `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/></w:tcPr><w:p>${row[c] ? run(row[c], r === 0 ? '<w:b/>' : '') : ''}</w:p></w:tc>`).join('')}</w:tr>`).join('')
           + '</w:tbl>');
       } else {

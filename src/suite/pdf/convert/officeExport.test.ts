@@ -72,4 +72,10 @@ describe('PDF to Office (MAL-037 – 039)', () => {
     expect(part(files[0].bytes, 'xl/worksheets/sheet1.xml')).toContain('<c r="B2"><v>1000</v></c>');
     expect(notes[1]).toMatch(/No table on page 2/);
   });
+
+  it('declares every table column in the DOCX grid', async () => {
+    const xml = part(pdfToDocx(await structure(await source()), 'report').files[0].bytes, 'word/document.xml');
+    const grid = /<w:tblGrid>([\s\S]*?)<\/w:tblGrid>/.exec(xml)![1];
+    expect(grid).toMatch(/^(<w:gridCol w:w="\d+"\/>){3}$/);
+  });
 });

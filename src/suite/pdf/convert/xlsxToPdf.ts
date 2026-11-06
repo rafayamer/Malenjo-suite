@@ -96,7 +96,11 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
     rendered++;
     const widths = new Map<number, number>(); const heights = new Map<number, number>();
     for (const col of all(ws, 'col')) for (let c = Number(col.attrs.min) - 1; c < Number(col.attrs.max) && c < 500; c++) widths.set(c, col.attrs.hidden === '1' ? 0 : (Number(col.attrs.width ?? 8.43) * 7 + 5) * 0.75);
-    for (const row of all(ws, 'row')) if (row.attrs.ht) heights.set(Number(row.attrs.r) - 1, row.attrs.hidden === '1' ? 0 : Number(row.attrs.ht));
+    // A hidden row needs no custom height to be hidden.
+    for (const row of all(ws, 'row')) {
+      if (row.attrs.hidden === '1') heights.set(Number(row.attrs.r) - 1, 0);
+      else if (row.attrs.ht) heights.set(Number(row.attrs.r) - 1, Number(row.attrs.ht));
+    }
     const colW = (c: number) => widths.get(c) ?? 64 * 0.75 + 0.5, rowH = (r: number) => heights.get(r) ?? 15;
     const merges = all(ws, 'mergeCell').map((m) => rangeOf(m.attrs.ref));
     const covered = new Set<string>();
@@ -138,7 +142,10 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
               const font = await writer.font(st.run);
               let text = writer.drawable(font, cell.text.replace(/\s+/g, ' '));
               const size = Math.min(st.run.size, h * 0.8);
-              while (text && font.widthOfTextAtSize(text, size) > mw - 4) text = cell.numeric ? '#'.repeat(Math.max(1, Math.floor((mw - 4) / font.widthOfTextAtSize('#', size)))) : text.slice(0, -1);
+              if (cell.numeric && font.widthOfTextAtSize(text, size) > mw - 4) {
+                // A number that does not fit shows as #### (as spreadsheets do), or nothing in a sliver of a column.
+                text = '#'.repeat(Math.max(0, Math.floor((mw - 4) / font.widthOfTextAtSize('#', size))));
+              } else while (text && font.widthOfTextAtSize(text, size) > mw - 4) text = text.slice(0, -1);
               const tw = font.widthOfTextAtSize(text, size);
               const align = st.align ?? (cell.numeric ? 'right' : 'left');
               const tx = align === 'right' ? x + mw - 2 - tw : align === 'center' || align === 'centerContinuous' ? x + (mw - tw) / 2 : x + 2;

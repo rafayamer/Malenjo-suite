@@ -214,7 +214,7 @@ export default function PdfFormDesignerPanel({ domIdPrefix, bytes, viewRotation,
           {fields.filter((f) => f.kind !== 'signature').map((f) => <label key={f.name} className="pdf-tool-dialog-choice"><input type="checkbox" checked={props.lockFields.includes(f.name)}
             onChange={(e) => setProps({ ...props, lockFields: toggle(props.lockFields, f.name, e.target.checked) })}/>{f.name}</label>)}</div>}
       </>}
-      {field.logic.unsupported.length > 0 && <p>Scripts MALENJO does not run (kept unchanged): {field.logic.unsupported.join(' · ')}</p>}
+      {field.logic.unsupported.length > 0 && <p>Scripts MALENJO does not run (kept unchanged): {field.logic.unsupported.map((u) => (u.length > 200 ? `${u.slice(0, 200)}…` : u)).join(' · ')}</p>}
       <div className="pdf-tool-dialog-actions">
         <button type="button" disabled={busy || field.signed} onClick={() => void run('Changed a form field.', async (latest) => ({
           bytes: await updateFormField(latest, field.name, {

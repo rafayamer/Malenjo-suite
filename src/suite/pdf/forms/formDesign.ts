@@ -397,6 +397,20 @@ export async function moveFormWidget(bytes: Uint8Array, name: string, widgetRef:
   if (!ref) throw new Error('That part of the field no longer exists.');
   const box = pageRect(pdf, pageNumber, viewRotation, rect);
   const widget = pdf.context.lookup(ref, PDFDict);
+  // Dragged onto another page: the widget moves to that page's annotations and takes its rotation.
+  const from = pageIndexOfAnnots(pdf).get(ref.toString());
+  if (from !== pageNumber) {
+    if (from) {
+      const old = pdf.getPage(from - 1).node.lookupMaybe(N('Annots'), PDFArray);
+      if (old) for (let k = old.size() - 1; k >= 0; k--) if (old.get(k)?.toString() === ref.toString()) old.remove(k);
+    }
+    const page = pdf.getPage(pageNumber - 1);
+    page.node.addAnnot(ref);
+    widget.set(N('P'), page.ref);
+    const mk = widget.lookupMaybe(N('MK'), PDFDict) ?? pdf.context.obj({});
+    mk.set(N('R'), PDFNumber.of(pageRotation(page)));
+    widget.set(N('MK'), mk);
+  }
   const square = field instanceof PDFCheckBox ? Math.min(box.width, box.height) : null;
   widget.set(N('Rect'), pdf.context.obj(square === null ? [box.x, box.y, box.x + box.width, box.y + box.height] : [box.x, box.y + box.height - square, box.x + square, box.y + box.height]));
   await refreshAppearances(pdf, field);

@@ -151,4 +151,28 @@ describe('HTML to PDF (MAL-034)', () => {
     expect(result.notes.join(' ')).toMatch(/1 <script> element\(s\) were not run\..*Left out: 1 <iframe>/);
     expect(result.notes.join(' ')).toMatch(/1 image\(s\) from web addresses were not downloaded/);
   });
+
+describe('conversion edge cases', () => {
+  const S = 'xmlns="m" xmlns:r="r"';
+  const book = (sheet: string) => zipSync({
+    'xl/workbook.xml': strToU8(`<workbook ${S}><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>`),
+    'xl/_rels/workbook.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>'),
+    'xl/worksheets/sheet1.xml': strToU8(`<worksheet ${S}>${sheet}</worksheet>`),
+  });
+  const options = { pageSize: 'letter' as const, orientation: 'sheet' as const, gridlines: 'sheet' as const, sheets: 'all' as const };
+
+  it('finishes a number in a column too narrow for one #, and skips hidden rows without a height', async () => {
+    const narrow = book('<cols><col min="1" max="1" width="0.5"/></cols><sheetData><row r="1"><c r="A1"><v>123456</v></c><c r="B1" t="inlineStr"><is><t>Next</t></is></c></row></sheetData>');
+    const [page] = await read((await xlsxToPdf(narrow, options)).bytes);
+    expect(page.text).toBe('Next');
+    const hidden = book('<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Shown</t></is></c></row><row r="2" hidden="1"><c r="A2" t="inlineStr"><is><t>Secret</t></is></c></row></sheetData>');
+    const [shown] = await read((await xlsxToPdf(hidden, options)).bytes);
+    expect(shown.text).toBe('Shown');
+  });
+
+  it('ignores a > inside a quoted HTML attribute', async () => {
+    const [page] = await read((await htmlToPdf('<p title="a > b">Hello world</p>', { pageSize: 'a4', landscape: false, margin: 36 })).bytes);
+    expect(page.text).toBe('Hello world');
+  });
+});
 });

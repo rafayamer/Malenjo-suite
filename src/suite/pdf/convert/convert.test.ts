@@ -139,4 +139,29 @@ describe('SVG export (MAL-043)', () => {
     expect(svg).toContain('<g transform="matrix(1 0 0 -1 0 792)">');
     expect(result.notes).toEqual(['Every graphic on these pages was converted.']);
   });
+
+  it('leaves invisible text out of the SVG and outlines stroked text', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([300, 300]);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const key = page.node.newFontDictionary('F', font.ref).decodeText();
+    page.node.addContentStream(pdf.context.register(pdf.context.stream(`BT 3 Tr /${key} 12 Tf 20 200 Td (Hidden OCR) Tj ET BT 1 Tr 0 0 1 RG /${key} 12 Tf 20 100 Td (Outlined) Tj ET`)));
+    const svg = text((await pdfToSvg(await pdf.save(), [1], 'modes')).files[0].bytes);
+    expect(svg).not.toContain('Hidden OCR');
+    expect(svg).toMatch(/fill="none" stroke="#0000ff"[^>]*>Outlined</);
+  });
+});
+
+describe('multi-page TIFF budget', () => {
+  it('counts every page kept for a multi-page TIFF against the 400 MB limit', async () => {
+    const { pdfToImages } = await import('./rasterExport');
+    const canvas = () => ({ width: 0, height: 0, getContext: () => ({ fillRect() {}, getImageData: (_x: number, _y: number, w: number, h: number) => ({ data: { length: w * h * 4 } }) }) });
+    const original = globalThis.document;
+    (globalThis as { document?: unknown }).document = { createElement: canvas };
+    try {
+      const doc = { getPage: async () => ({ getViewport: () => ({ width: 6000, height: 6000 }), render: () => ({ promise: Promise.resolve() }), cleanup() {} }) };
+      const options = { format: 'tiff' as const, dpi: 72, quality: 0.9, transparent: false, removeColor: null, region: null, tiffMultipage: true, tiffCompression: 'none' as const };
+      await expect(pdfToImages(doc as never, [1, 2, 3], options as never, 'big')).rejects.toThrow(/exceed 400 MB/);
+    } finally { (globalThis as { document?: unknown }).document = original; }
+  });
 });

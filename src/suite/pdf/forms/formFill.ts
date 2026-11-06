@@ -96,10 +96,14 @@ export async function fillFormWithLogic(bytes: Uint8Array, values: Record<string
     const target = form.getFieldMaybe(field.name);
     if (!target) continue;
     if (field.calculated && target instanceof PDFTextField) target.setText(evaluation.values[field.name]);
-    for (const widget of widgets(target)) setHidden(widget, evaluation.hidden.includes(field.name));
-    // Formatted text appearances, and labelled radio buttons, are redrawn after the values change.
+    // Only a supported visibility rule decides the Hidden flag; other fields keep the document's own flags.
+    if (field.logic.showWhen) for (const widget of widgets(target)) setHidden(widget, evaluation.hidden.includes(field.name));
+    // Formatted text appearances, and labelled radio buttons, are redrawn after the values change. A label the
+    // standard font cannot draw (non-Latin text) is left for the reader, as fillPdfFormFields does.
     if ((target instanceof PDFTextField && (field.logic.format || field.calculated)) || target instanceof PDFRadioGroup
-      || target instanceof PDFDropdown || target instanceof PDFOptionList) await refreshFieldAppearances(pdf, target);
+      || target instanceof PDFDropdown || target instanceof PDFOptionList) {
+      try { await refreshFieldAppearances(pdf, target); } catch { form.acroForm.dict.set(N('NeedAppearances'), PDFBool.True); }
+    }
   }
   // Filling may have left appearances for the reader (choice labels, characters outside the standard font).
   // Draw what can be drawn here; keep the reader flag only for what cannot.

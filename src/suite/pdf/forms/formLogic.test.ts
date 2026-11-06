@@ -79,4 +79,19 @@ describe('form evaluation', () => {
     expect(renameInLogic(logic({ calculate: { op: 'SUM', fields: ['a', 'b'] }, showWhen: { field: 'a', value: '*' } }), 'a', 'z'))
       .toEqual(logic({ calculate: { op: 'SUM', fields: ['z', 'b'] }, showWhen: { field: 'z', value: '*' } }));
   });
+
+  it('keeps calculated amounts right in a 1.234,56 field, and keeps long unsupported scripts whole', () => {
+    const euro = { kind: 'number' as const, decimals: 2, separator: 2 as const, currency: '' };
+    const result = evaluateForm([
+      { name: 'price', value: '12,50', required: false, logic: logic({ format: euro }) },
+      { name: 'sub', value: '', required: false, logic: logic({ format: euro, calculate: { op: 'SUM', fields: ['price'] } }) },
+      { name: 'total', value: '', required: false, logic: logic({ format: euro, calculate: { op: 'SUM', fields: ['sub'] } }) },
+    ]);
+    expect(result.values.sub).toBe('12,5');
+    expect(displayValue(result.values.sub, logic({ format: euro }))).toBe('12,50');
+    expect(result.values.total).toBe('12,5');
+    expect(result.errors).toEqual({});
+    const long = `app.alert("${'x'.repeat(300)}");`;
+    expect(parseLogic({ V: long }).unsupported).toEqual([`V: ${long}`]);
+  });
 });

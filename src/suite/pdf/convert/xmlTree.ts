@@ -27,7 +27,7 @@ export function parseMarkup(source: string, html = false): XNode {
     if (source.startsWith('<!--', lt)) { const end = source.indexOf('-->', lt + 4); i = end < 0 ? source.length : end + 3; continue; }
     if (source.startsWith('<![CDATA[', lt)) { const end = source.indexOf(']]>', lt); top().children.push({ name: '#text', attrs: {}, children: [], text: source.slice(lt + 9, end < 0 ? source.length : end) }); i = end < 0 ? source.length : end + 3; continue; }
     if (source[lt + 1] === '!' || source[lt + 1] === '?') { const end = source.indexOf('>', lt); i = end < 0 ? source.length : end + 1; continue; }
-    const end = source.indexOf('>', lt);
+    const end = tagEnd(source, lt + 1);
     if (end < 0) { text(source.slice(lt)); break; }
     const tag = source.slice(lt + 1, end);
     i = end + 1;
@@ -69,3 +69,14 @@ export function all(node: XNode, name: string): XNode[] {
 export const child = (node: XNode | undefined, name: string) => node?.children.find((c) => c.name === name);
 export const kids = (node: XNode | undefined, name: string) => node?.children.filter((c) => c.name === name) ?? [];
 export const textOf = (node: XNode): string => node.name === '#text' ? node.text : node.children.map(textOf).join('');
+
+/** Index of the `>` that ends a tag, skipping any inside quoted attribute values; -1 if there is none. */
+function tagEnd(source: string, from: number): number {
+  let quote = '';
+  for (let k = from; k < source.length; k++) {
+    const ch = source[k];
+    if (quote) { if (ch === quote) quote = ''; } else if (ch === '"' || ch === "'") quote = ch; else if (ch === '>') return k;
+  }
+  // An unbalanced quote (malformed markup): fall back to the first '>'.
+  return source.indexOf('>', from);
+}

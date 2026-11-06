@@ -67,7 +67,12 @@ export async function pdfToImages(doc: Pick<PDFDocumentProxy, 'getPage'>, pages:
     if (options.region) image = cropRgba(image, options.region);
     if (options.removeColor && options.format !== 'jpeg') image = removeBackground(image, options.removeColor.rgb, options.removeColor.tolerance);
     const suffix = options.region ? `page-${pageNumber}-region` : `page-${pageNumber}`;
-    if (options.format === 'tiff' && options.tiffMultipage) tiffPages.push(image);
+    if (options.format === 'tiff' && options.tiffMultipage) {
+      // Every page is kept until the multi-page TIFF is written, so its pixels count against the budget now.
+      total += image.data.length;
+      if (total > MAX_TOTAL) throw new Error('The images would exceed 400 MB; choose fewer pages or a lower resolution.');
+      tiffPages.push(image);
+    }
     else {
       const bytes = options.format === 'png' ? encodePng(image, options.dpi) : options.format === 'jpeg' ? await jpeg(image, options.quality, options.dpi)
         : encodeTiff([image], { dpi: options.dpi, compression: options.tiffCompression });
@@ -77,7 +82,11 @@ export async function pdfToImages(doc: Pick<PDFDocumentProxy, 'getPage'>, pages:
     if (total > MAX_TOTAL) throw new Error('The images would exceed 400 MB; choose fewer pages or a lower resolution.');
     progress?.(i + 1, list.length);
   }
-  if (tiffPages.length) files.push({ name: `${title}.tif`, bytes: encodeTiff(tiffPages, { dpi: options.dpi, compression: options.tiffCompression }), mime: 'image/tiff' });
+  if (tiffPages.length) {
+    const bytes = encodeTiff(tiffPages, { dpi: options.dpi, compression: options.tiffCompression });
+    if (bytes.length > MAX_TOTAL) throw new Error('The images would exceed 400 MB; choose fewer pages or a lower resolution.');
+    files.push({ name: `${title}.tif`, bytes, mime: 'image/tiff' });
+  }
   const notes = [`Rendered at ${options.dpi} dpi.`];
   if (options.format === 'jpeg') notes.push(`JPEG quality ${Math.round(options.quality * 100)}; JPEG has no transparency, so the background is white.`);
   if (alphaWanted && options.transparent) notes.push('Areas where the PDF draws nothing are transparent; white areas the PDF paints stay white unless background removal is on.');
