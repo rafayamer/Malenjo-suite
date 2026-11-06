@@ -3581,7 +3581,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                 onSelect:id=>setTextEditState(current=>current?{...current,selected:id}:current)}:null}
               drawTool={toolDialog==='export'&&exportPicking?{kind:'Square',color:'#1f5ba0',busy:false,onShape:shape=>{
                 if(!shape.rect)return;
-                setExportRegion({pageNumber:page,...shape.rect});setExportPicking(false);
+                setExportRegion({pageNumber:page,viewRotation:rotation,...shape.rect});setExportPicking(false);
               }}
               :toolDialog==='form-design'&&formDesign?.mode?{kind:'Square',color:'#1f5ba0',busy:mutating,onShape:shape=>{
                 if(!shape.rect)return;

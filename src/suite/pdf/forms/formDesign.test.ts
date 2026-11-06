@@ -254,4 +254,11 @@ describe('fill, flatten and data exchange (MAL-050, MAL-052, MAL-053)', () => {
     const flat = await flattenFormFields(await pdf.save({ updateFieldAppearances: false }), null);
     expect((await pdfjs(flat.bytes)).text).toContain('Ada Lovelace');
   });
+
+  it('imports an unanswered radio group from FDF as no selection', () => {
+    const radio = { name: 'Size', kind: 'radio' as const, value: '', onValue: null, options: [{ value: 'S', label: 'S' }, { value: 'L', label: 'L' }], multiselect: false, required: false, readOnly: false,
+      maxLength: null, logic: { unsupported: [] }, calculated: false, password: false, multiline: false, concealedValue: false };
+    const fdf = '%FDF-1.2\n1 0 obj << /FDF << /Fields [<< /T (Size) /V /Off >>] >> >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF';
+    expect(importFormData([radio], fdf, 'fdf').values).toEqual({ Size: '' });
+  });
 });

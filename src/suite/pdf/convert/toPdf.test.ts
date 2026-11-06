@@ -264,4 +264,29 @@ describe('conversion edge cases, round 4', () => {
     expect(page.text).toBe('1E-12 1.23456789012345');
   });
 });
+
+describe('conversion edge cases, round 5', () => {
+  it('keeps indentation and blank lines in preformatted HTML', async () => {
+    const html = '<pre>def f():\n    return 1\n\nx = 2</pre>';
+    const [page] = await read((await htmlToPdf(html, { pageSize: 'a4', landscape: false, margin: 36 })).bytes);
+    const at = (s: string) => page.items.find((i) => i.str === s)!;
+    const [def, ret, x] = [at('def'), at('return'), at('x')];
+    expect(ret.x - def.x).toBeGreaterThan(20); // four spaces of indentation kept
+    expect(x.x).toBe(def.x);
+    const step = ret.top - def.top;
+    expect(x.top - ret.top).toBeGreaterThan(1.5 * step); // the blank line is kept
+  });
+
+  it('reads 1900-system dates before March 1900 on the right day', async () => {
+    const S = 'xmlns="m" xmlns:r="r"';
+    const xlsx = zipSync({
+      'xl/workbook.xml': strToU8(`<workbook ${S}><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>`),
+      'xl/_rels/workbook.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>'),
+      'xl/styles.xml': strToU8('<styleSheet><fonts><font><sz val="11"/></font></fonts><fills><fill/></fills><cellXfs><xf numFmtId="0" fontId="0"/><xf numFmtId="14" fontId="0"/></cellXfs></styleSheet>'),
+      'xl/worksheets/sheet1.xml': strToU8(`<worksheet ${S}><cols><col min="1" max="3" width="20"/></cols><sheetData><row r="1"><c r="A1" s="1"><v>1</v></c><c r="B1" s="1"><v>59</v></c><c r="C1" s="1"><v>61</v></c></row></sheetData></worksheet>`),
+    });
+    const [page] = await read((await xlsxToPdf(xlsx, { pageSize: 'letter', orientation: 'sheet', gridlines: 'sheet', sheets: 'all' })).bytes);
+    expect(page.text).toBe('1900-01-01 1900-02-28 1900-03-01');
+  });
+});
 });

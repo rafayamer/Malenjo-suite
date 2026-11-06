@@ -13,7 +13,7 @@ import { describePdfError } from './pdfUserErrors';
 export type ExportFormat = 'png' | 'jpeg' | 'tiff' | 'markdown' | 'html' | 'svg' | 'text';
 export const EXPORT_FORMATS: [ExportFormat, string][] = [['png', 'PNG image'], ['jpeg', 'JPG image'], ['tiff', 'TIFF image'], ['markdown', 'Markdown'],
   ['html', 'HTML'], ['svg', 'SVG'], ['text', 'Plain text']];
-export interface ExportRegion { pageNumber: number; x: number; y: number; width: number; height: number }
+export interface ExportRegion { pageNumber: number; x: number; y: number; width: number; height: number; /** View rotation the region was drawn in. */ viewRotation?: number }
 interface Props {
   domIdPrefix: string; bytes: Uint8Array; sourceName: string; pageCount: number; currentPage: number; busy: boolean;
   region: ExportRegion | null; picking: boolean; onPickRegion(on: boolean): void; onClearRegion(): void;

@@ -13,6 +13,8 @@ export type Align = 'left' | 'center' | 'right' | 'justify';
 export interface Paragraph {
   kind: 'para'; runs: Run[]; align: Align; indent: number; firstIndent?: number; spaceBefore: number; spaceAfter: number; lineHeight: number;
   marker?: string; pageBreakBefore?: boolean; background?: [number, number, number]; border?: boolean;
+  /** Preformatted: spaces, indentation and every line break are kept as written. */
+  pre?: boolean;
 }
 export interface TableCell { blocks: (Paragraph | ImageBlock)[]; colSpan: number; background?: [number, number, number] }
 export interface Table { kind: 'table'; rows: { cells: TableCell[]; header?: boolean }[]; colWidths: number[]; borders: boolean; spaceAfter: number }
@@ -62,13 +64,19 @@ export class FlowWriter {
   }
 
   /** Splits runs into words (keeping style) and wraps them to lines of at most `width`. */
-  private async lines(runs: Run[], width: number) {
+  private async lines(runs: Run[], width: number, pre = false) {
     type Piece = { text: string; style: RunStyle; font: PDFFont; width: number; space: boolean };
     const pieces: Piece[] = [];
     for (const run of runs) {
       const font = await this.font(run.style);
-      for (const part of run.text.split(/(\s+|\n)/)) {
+      for (const part of run.text.split(pre ? /(\n)/ : /(\s+|\n)/)) {
         if (!part) continue;
+        if (pre) {
+          // Preformatted text keeps its spaces as drawn characters; only line breaks end a line.
+          if (part === '\n') pieces.push({ text: '\n', style: run.style, font, width: 0, space: false });
+          else { const text = this.drawable(font, part.replace(/\t/g, '    ')); pieces.push({ text, style: run.style, font, width: font.widthOfTextAtSize(text, run.style.size), space: false }); }
+          continue;
+        }
         if (part.includes('\n')) { pieces.push({ text: '\n', style: run.style, font, width: 0, space: false }); continue; }
         const text = /^\s+$/.test(part) ? ' ' : this.drawable(font, part);
         pieces.push({ text, style: run.style, font, width: font.widthOfTextAtSize(text, run.style.size), space: text === ' ' });
@@ -107,7 +115,7 @@ export class FlowWriter {
   async paragraph(p: Paragraph, box?: { x: number; width: number; y: number; draw: boolean }): Promise<number> {
     const left = (box ? box.x : this.setup.margin.left) + p.indent;
     const width = (box ? box.width : this.contentWidth) - p.indent;
-    const lines = await this.lines(p.runs.length ? p.runs : [{ text: '', style: DEFAULT_STYLE }], width - (p.firstIndent ?? 0));
+    const lines = await this.lines(p.runs.length ? p.runs : [{ text: '', style: DEFAULT_STYLE }], width - (p.firstIndent ?? 0), p.pre);
     let y = box ? box.y : this.y;
     if (!box) { if (p.pageBreakBefore && this.y < this.setup.height - this.setup.margin.top - 0.5) this.newPage(); y = this.y - p.spaceBefore; this.y = y; }
     let used = p.spaceBefore;

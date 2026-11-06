@@ -13,15 +13,17 @@ export interface RasterOptions {
   /** PNG/TIFF: make pixels close to this colour transparent. */
   removeColor: { rgb: [number, number, number]; tolerance: number } | null;
   /** Only this part of one page (fractions of the page as shown). */
-  region: { pageNumber: number; x: number; y: number; width: number; height: number } | null;
+  /** The rectangle is in the page as shown, after `viewRotation` (degrees) is added to the page's own rotation. */
+  region: { pageNumber: number; x: number; y: number; width: number; height: number; viewRotation?: number } | null;
   tiffCompression: 'none' | 'deflate';
   tiffMultipage: boolean;
 }
 const MAX_PIXELS = 40_000_000, MAX_TOTAL = 400 * 1024 * 1024;
 
-async function render(doc: Pick<PDFDocumentProxy, 'getPage'>, pageNumber: number, dpi: number, transparent: boolean): Promise<Rgba> {
+async function render(doc: Pick<PDFDocumentProxy, 'getPage'>, pageNumber: number, dpi: number, transparent: boolean, viewRotation = 0): Promise<Rgba> {
   const page = await doc.getPage(pageNumber);
-  const viewport = page.getViewport({ scale: dpi / 72 });
+  // A region is cut from the page as it was shown, so it is rendered with the same view rotation.
+  const viewport = viewRotation ? page.getViewport({ scale: dpi / 72, rotation: ((page.rotate ?? 0) + viewRotation) % 360 }) : page.getViewport({ scale: dpi / 72 });
   const width = Math.ceil(viewport.width), height = Math.ceil(viewport.height);
   if (width * height > MAX_PIXELS) throw new Error(`Page ${pageNumber} at ${dpi} dpi would be ${Math.round(width * height / 1e6)} megapixels; the limit is 40. Choose a lower resolution.`);
   const canvas = document.createElement('canvas');
@@ -63,7 +65,7 @@ export async function pdfToImages(doc: Pick<PDFDocumentProxy, 'getPage'>, pages:
   let total = 0;
   for (const [i, pageNumber] of list.entries()) {
     if (signal?.aborted) throw Object.assign(new Error('The export was cancelled.'), { name: 'AbortError' });
-    let image = await render(doc, pageNumber, options.dpi, alphaWanted && options.transparent);
+    let image = await render(doc, pageNumber, options.dpi, alphaWanted && options.transparent, options.region?.viewRotation ?? 0);
     if (options.region) image = cropRgba(image, options.region);
     if (options.removeColor && options.format !== 'jpeg') image = removeBackground(image, options.removeColor.rgb, options.removeColor.tolerance);
     const suffix = options.region ? `page-${pageNumber}-region` : `page-${pageNumber}`;

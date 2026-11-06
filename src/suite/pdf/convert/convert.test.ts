@@ -164,4 +164,20 @@ describe('multi-page TIFF budget', () => {
       await expect(pdfToImages(doc as never, [1, 2, 3], options as never, 'big')).rejects.toThrow(/exceed 400 MB/);
     } finally { (globalThis as { document?: unknown }).document = original; }
   });
+
+describe('region export rotation', () => {
+  it('renders a region with the view rotation it was drawn in', async () => {
+    const { pdfToImages } = await import('./rasterExport');
+    const seen: unknown[] = [];
+    const canvas = () => ({ width: 0, height: 0, getContext: () => ({ fillRect() {}, getImageData: (_x: number, _y: number, w: number, h: number) => ({ data: new Uint8ClampedArray(w * h * 4) }) }) });
+    const original = globalThis.document;
+    (globalThis as { document?: unknown }).document = { createElement: canvas };
+    try {
+      const doc = { getPage: async () => ({ rotate: 90, getViewport: (o: unknown) => { seen.push(o); return { width: 20, height: 10 }; }, render: () => ({ promise: Promise.resolve() }), cleanup() {} }) };
+      const options = { format: 'png' as const, dpi: 72, quality: 0.9, transparent: false, removeColor: null, region: { pageNumber: 1, x: 0, y: 0, width: 0.5, height: 0.5, viewRotation: 180 }, tiffMultipage: false, tiffCompression: 'none' as const };
+      await pdfToImages(doc as never, [1], options as never, 'r');
+      expect(seen).toEqual([{ scale: 1, rotation: 270 }]);
+    } finally { (globalThis as { document?: unknown }).document = original; }
+  });
+});
 });

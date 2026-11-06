@@ -37,7 +37,10 @@ const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 
 function formatDateTime(n: number, pattern: string, date1904 = false): string {
   const ms = Math.round(n * 86400000);
   // Serial 0 is 1899-12-30 in the 1900 date system and 1904-01-01 in the 1904 system (older Mac workbooks).
-  const d = new Date((date1904 ? Date.UTC(1904, 0, 1) : Date.UTC(1899, 11, 30)) + ms);
+  // Serial 0 is 1904-01-01 in the 1904 system. In the 1900 system Excel counts a 29 February 1900 that never
+  // existed (serial 60), so serials before it start one day later, from 1899-12-31.
+  const epoch = date1904 ? Date.UTC(1904, 0, 1) : n < 60 ? Date.UTC(1899, 11, 31) : Date.UTC(1899, 11, 30);
+  const d = new Date(epoch + ms);
   const pad = (v: number, w = 2) => String(v).padStart(w, '0');
   const ampm = /AM\/PM|A\/P/i.test(pattern);
   const tokens = pattern.match(/"[^"]*"|\\.|\[h+\]|\[m+\]|\[s+\]|AM\/PM|A\/P|y+|m+|d+|h+|s+(?:\.0+)?|./gi) ?? [];

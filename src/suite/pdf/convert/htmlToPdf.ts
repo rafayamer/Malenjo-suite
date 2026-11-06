@@ -76,7 +76,7 @@ export async function htmlToPdf(source: string, options: HtmlPdfOptions): Promis
     const before = length(ctx.css['margin-top'], ctx.run.size) ?? 0, after = length(ctx.css['margin-bottom'], ctx.run.size) ?? ctx.run.size * 0.6;
     const lh = ctx.css['line-height'] ? (Number(ctx.css['line-height']) || (length(ctx.css['line-height'], ctx.run.size) ?? ctx.run.size * 1.2) / ctx.run.size) : 1.2;
     const trimmed = ctx.pre ? runs : runs.map((r, i) => ({ ...r, text: i === 0 ? r.text.replace(/^\s+/, '') : r.text }));
-    blocks.push({ kind: 'para', runs: trimmed, align: ctx.align, indent: ctx.indent, spaceBefore: before, spaceAfter: after, lineHeight: lh, pageBreakBefore: pendingBreak, ...extra });
+    blocks.push({ kind: 'para', runs: trimmed, align: ctx.align, indent: ctx.indent, spaceBefore: before, spaceAfter: after, lineHeight: lh, pageBreakBefore: pendingBreak, pre: ctx.pre || undefined, ...extra });
     pendingBreak = false; runs = [];
   };
   const derive = (n: XNode, parent: Ctx): Ctx | null => {

@@ -62,7 +62,8 @@ export function importFormData(fields: FillField[], text: string, format: FormDa
     else {
       const allowed = new Set(field.options.map((o) => o.value));
       // A label is accepted in place of its export value.
-      const mapped = list.filter(Boolean).map((v) => (allowed.has(v) ? v : field.options.find((o) => o.label === v)?.value ?? v));
+      // An unanswered radio group is exported as /Off: it means nothing is selected.
+      const mapped = list.filter((v) => Boolean(v) && !(field.kind === 'radio' && v === 'Off')).map((v) => (allowed.has(v) ? v : field.options.find((o) => o.label === v)?.value ?? v));
       const bad = mapped.find((v) => !allowed.has(v) && !(field.kind === 'dropdown' && !field.multiselect));
       if (bad !== undefined) throw new Error(`“${bad}” is not an option of ${name}.`);
       if (mapped.length > 1 && !field.multiselect) throw new Error(`${name} takes one value.`);
