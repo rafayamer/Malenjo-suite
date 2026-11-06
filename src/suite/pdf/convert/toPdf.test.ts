@@ -311,4 +311,31 @@ describe('conversion edge cases, round 6', () => {
     expect((await read(result.bytes)).map((p) => p.text)).toEqual(['First', 'Last']);
   });
 });
+
+describe('conversion edge cases, round 7', () => {
+  it('draws a data image inside an HTML table cell', async () => {
+    const img = `data:image/png;base64,${btoa(String.fromCharCode(...encodePng(rgba(8, 4, [255, 0, 0, 255]))))}`;
+    const result = await htmlToPdf(`<table><tr><td><img src="${img}" width="40"></td></tr></table>`, { pageSize: 'a4', landscape: false, margin: 36 });
+    const { PDFDocument, PDFName, PDFDict } = await import('pdf-lib');
+    const pdf = await PDFDocument.load(result.bytes);
+    expect(pdf.getPage(0).node.Resources()?.lookupMaybe(PDFName.of('XObject'), PDFDict)?.keys().length ?? 0).toBe(1);
+  });
+
+  it('prints a merged heading across its whole range', async () => {
+    const S = 'xmlns="m" xmlns:r="r"';
+    const xlsx = zipSync({
+      'xl/workbook.xml': strToU8(`<workbook ${S}><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>`),
+      'xl/_rels/workbook.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>'),
+      'xl/worksheets/sheet1.xml': strToU8(`<worksheet ${S}><cols><col min="1" max="3" width="6"/></cols><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Quarterly heading</t></is></c></row></sheetData><mergeCells><mergeCell ref="A1:C1"/></mergeCells></worksheet>`),
+    });
+    const [page] = await read((await xlsxToPdf(xlsx, { pageSize: 'letter', orientation: 'sheet', gridlines: 'sheet', sheets: 'all' })).bytes);
+    expect(page.text).toBe('Quarterly heading');
+  });
+
+  it('refuses a TIFF with more pages than it decodes', () => {
+    const tiny = { width: 1, height: 1, data: new Uint8ClampedArray([0, 0, 0, 255]) };
+    const many = encodeTiff(Array.from({ length: 501 }, () => tiny), { dpi: 72, compression: 'none' });
+    expect(() => decodeTiff(many)).toThrow(/more than 500 pages/);
+  });
+});
 });

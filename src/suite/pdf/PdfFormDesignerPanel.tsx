@@ -14,7 +14,7 @@ export interface DesignDraft {
   decimals: string; separator: NumberSeparator; currency: string; datePattern: string;
   optionsText: string; selectedText: string; multiselect: boolean; lockAction: SignatureLock['action']; lockFields: string[];
 }
-export interface FormDesignState { fields: DesignField[]; selected: string | null; mode: 'place' | 'move' | null; draft: DesignDraft }
+export interface FormDesignState { fields: DesignField[]; selected: string | null; /** The widget picked on the page, for fields with several (radio buttons). */ selectedWidget?: string | null; mode: 'place' | 'move' | null; draft: DesignDraft }
 export const NEW_DESIGN_DRAFT: DesignDraft = {
   kind: 'text', name: '', tooltip: '', required: false, readOnly: false, maxLength: '', comb: false, multiline: false, defaultValue: '',
   decimals: '2', separator: 0, currency: '', datePattern: 'yyyy-mm-dd', optionsText: '', selectedText: '', multiselect: false, lockAction: 'none', lockFields: [],

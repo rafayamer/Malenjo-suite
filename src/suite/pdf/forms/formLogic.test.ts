@@ -110,4 +110,17 @@ describe('form evaluation', () => {
     expect(parsed.calculate).toBeUndefined();
     expect(parsed.unsupported).toEqual([`C: ${script}`]);
   });
+
+  it('runs only validation patterns that cannot backtrack catastrophically', async () => {
+    const { safePattern } = await import('./formLogic');
+    expect(['^[A-Z]{2}\\d{9}$', '^\\d{5}(-\\d{4})?$', '^[a-z]+@[a-z]+\\.[a-z]{2,}$'].map(safePattern)).toEqual([true, true, true]);
+    expect(['^(a+)+$', '(a|a)*', '(x*)*y', '(\\w+)\\1', '^(?=a)'].map(safePattern)).toEqual([false, false, false, false, false]);
+    const evil = 'if (event.value !== "" && !new RegExp("^(a+)+$").test(event.value)) { app.alert("No"); event.rc = false; }';
+    const parsed = parseLogic({ V: evil });
+    expect(parsed.pattern).toBeUndefined();
+    const started = Date.now();
+    const result = evaluateForm([{ name: 'Code', value: `${'a'.repeat(32)}!`, required: false, logic: parsed }]);
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(result.errors).toEqual({});
+  });
 });

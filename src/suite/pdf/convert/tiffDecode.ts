@@ -54,7 +54,9 @@ export function decodeTiff(bytes: Uint8Array): Rgba[] {
   if (u16(2) !== 42) throw new Error('BigTIFF and other TIFF variants are not supported.');
   const pages: Rgba[] = [];
   const seen = new Set<number>();
-  for (let ifd = u32(4); ifd && pages.length < 500; ) {
+  for (let ifd = u32(4); ifd; ) {
+    // A safety limit, but never a silent one: more pages than that refuses the file.
+    if (pages.length >= 500) throw new Error('This TIFF has more than 500 pages; split it before converting.');
     if (seen.has(ifd) || ifd + 2 > bytes.length) throw new Error('This TIFF file is damaged.');
     seen.add(ifd);
     const count = u16(ifd);

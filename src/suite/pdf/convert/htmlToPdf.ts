@@ -7,7 +7,7 @@
  * margin-left/padding-left, line-height, display:none and page-break-before/break-before. Other
  * properties and elements are listed in the report.
  */
-import { DEFAULT_STYLE, FlowWriter, imageInfo, type Align, type Block, type Paragraph, type Run, type RunStyle, type TableCell } from './flowLayout';
+import { DEFAULT_STYLE, FlowWriter, imageInfo, type Align, type Block, type ImageBlock, type Paragraph, type Run, type RunStyle, type TableCell } from './flowLayout';
 import { PAGE_SIZES, type PageSizeName } from './imagesToPdf';
 import { familyOf, type DocumentPdf } from './docxToPdf';
 import { all, parseMarkup, textOf, type XNode } from './xmlTree';
@@ -132,7 +132,8 @@ export async function htmlToPdf(source: string, options: HtmlPdfOptions): Promis
       const cctx = derive(cell, { ...ctx, indent: 0 })!;
       const saved = blocks.length; const savedRuns = runs; runs = [];
       inline(cell, cctx); flush(cctx, { spaceAfter: 0, indent: 0 });
-      const paras = blocks.splice(saved).filter((b): b is Paragraph => b.kind === 'para'); runs = savedRuns;
+      // Text and pictures both belong in the cell; the shared table layout draws images too.
+      const paras = blocks.splice(saved).filter((b): b is Paragraph | ImageBlock => b.kind === 'para' || b.kind === 'image'); runs = savedRuns;
       return { blocks: paras.length ? paras : [{ kind: 'para', runs: [], align: 'left', indent: 0, spaceBefore: 0, spaceAfter: 0, lineHeight: 1.2 }], colSpan: Number(cell.attrs.colspan ?? 1) || 1, background: color(cssOf(cell)['background-color'] ?? cssOf(cell).background) };
     }) }));
     const cols = Math.max(1, ...rows.map((r) => r.cells.reduce((s, c) => s + c.colSpan, 0)));

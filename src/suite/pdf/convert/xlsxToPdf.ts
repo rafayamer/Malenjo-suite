@@ -148,6 +148,10 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
       cells.set(`${r},${col}`, { text, style: s, numeric: type === 'n' && v !== '' });
       maxR = Math.max(maxR, r); maxC = Math.max(maxC, col);
     }
+    // A merged cell whose anchor is the last used cell still spans its whole range when printed.
+    for (const m of all(ws, 'mergeCell').map((cell) => rangeOf(cell.attrs.ref))) {
+      if (cells.has(`${m.r1},${m.c1}`)) { maxR = Math.max(maxR, m.r2); maxC = Math.max(maxC, m.c2); }
+    }
     // A print area may list several ranges (Sheet1!$A$1:$B$9,Sheet1!$D$1:$E$9): each prints in turn, on its own pages.
     const areaRefs = printAreas.has(sheetIndex) ? printAreas.get(sheetIndex)!.split(',').map((part) => part.split('!').pop()!.trim()).filter(Boolean) : [];
     const areaList = areaRefs.length ? areaRefs.map((ref) => rangeOf(ref, { maxC, maxR })) : [{ c1: 0, r1: 0, c2: maxC, r2: maxR }];

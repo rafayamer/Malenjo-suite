@@ -3565,10 +3565,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               onCropPage={()=>startCropOnPage(page)}
               editingBusy={mutating||loading}
               textRuns={toolDialog==='form-design'&&formDesign&&!formDesign.mode?(()=>{
-                const widgets=formDesign.fields.flatMap(f=>f.widgets.filter(w=>w.pageNumber===page).map(w=>({name:f.name,shown:w.shown})));
+                const widgets=formDesign.fields.flatMap(f=>f.widgets.filter(w=>w.pageNumber===page).map(w=>({name:f.name,ref:w.ref,shown:w.shown})));
                 return {labelPrefix:'Select field',targets:widgets.map((w,index)=>({id:index,text:w.name,editable:true,shown:w.shown})),
-                  selected:widgets.findIndex(w=>w.name===formDesign.selected),
-                  onSelect:(index:number)=>setFormDesign(current=>current?{...current,selected:widgets[index]?.name??null}:current)};
+                  selected:widgets.findIndex(w=>w.name===formDesign.selected&&(!formDesign.selectedWidget||w.ref===formDesign.selectedWidget)),
+                  onSelect:(index:number)=>setFormDesign(current=>current?{...current,selected:widgets[index]?.name??null,selectedWidget:widgets[index]?.ref??null}:current)};
               })()
               :toolDialog==='paragraphs'&&paragraphState&&paragraphState.pageNumber===page?{labelPrefix:'Edit paragraph',
                 targets:paragraphState.paragraphs.map(p=>({id:p.id,text:p.text.replace(/\n/g,' '),editable:p.editable,shown:p.shown})),
@@ -3594,7 +3594,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                   void mutate(`Added the ${spec.kind} field ${spec.name}.`,latest=>addDesignedFormField(latest,spec),page);
                 }else{
                   const target=formDesign.fields.find(f=>f.name===formDesign.selected);
-                  const widget=target?.widgets.find(w=>w.pageNumber===page)??target?.widgets[0];
+                  // The widget picked on the page moves (one radio button of a group), else the field's widget on this page.
+                  const widget=target?.widgets.find(w=>w.ref===formDesign.selectedWidget)??target?.widgets.find(w=>w.pageNumber===page)??target?.widgets[0];
                   if(!target||!widget)return;
                   setFormDesign(current=>current?{...current,mode:null}:current);
                   void mutate(`Moved the field ${target.name}.`,latest=>moveFormWidget(latest,target.name,widget.ref,page,rotation,rect),page);

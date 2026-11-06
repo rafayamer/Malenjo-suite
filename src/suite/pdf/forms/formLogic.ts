@@ -59,6 +59,7 @@ export function logicScripts(logic: Omit<FieldLogic, 'unsupported'>): FieldScrip
   }
   if (logic.pattern) {
     try { new RegExp(logic.pattern.regex); } catch { throw new Error('The pattern is not a valid regular expression.'); }
+    if (!safePattern(logic.pattern.regex)) throw new Error('Use a simpler pattern: no back-references, look-arounds, or repeated groups that repeat inside.');
     if (!logic.pattern.regex || logic.pattern.regex.length > 200) throw new Error('Enter a pattern of up to 200 characters.');
     const message = logic.pattern.message.trim() || 'The value does not match the required pattern.';
     validate.push(`if (event.value !== "" && !new RegExp(${lit(logic.pattern.regex)}).test(event.value)) { app.alert(${lit(message)}); event.rc = false; }`);
@@ -97,6 +98,38 @@ const RULES: [RegExp, (m: RegExpMatchArray, logic: FieldLogic) => void][] = [
     (m, l) => { l.showWhen = { field: str(m[1]), value: '*' }; }],
 ];
 
+/**
+ * Whether a validation pattern is safe to run. Patterns come from documents and run on the UI thread, so only
+ * a subset that cannot backtrack catastrophically is evaluated: no backreferences or lookaround, and no
+ * unboundedly repeated group that itself contains a repetition or an alternative (as in (a+)+ or (a|a)*).
+ */
+export function safePattern(regex: string): boolean {
+  if (!regex || regex.length > 200 || /\\[1-9]|\\k<|\(\?[=!<]/.test(regex)) return false;
+  try { new RegExp(regex); } catch { return false; }
+  const groups: { risky: boolean }[] = [];
+  let closedRisky = false, inClass = false;
+  for (let i = 0; i < regex.length; i++) {
+    const ch = regex[i];
+    if (ch === '\\') { i++; closedRisky = false; continue; }
+    if (inClass) { if (ch === ']') inClass = false; continue; }
+    if (ch === '[') { inClass = true; closedRisky = false; continue; }
+    if (ch === '(') { groups.push({ risky: false }); closedRisky = false; continue; }
+    if (ch === ')') { const g = groups.pop(); closedRisky = Boolean(g?.risky); if (g?.risky && groups.length) groups[groups.length - 1].risky = true; continue; }
+    if (ch === '|') { if (groups.length) groups[groups.length - 1].risky = true; continue; }
+    const quantifier = ch === '*' || ch === '+' || (ch === '?' && regex[i - 1] !== '*' && regex[i - 1] !== '+' && regex[i - 1] !== '}' && regex[i - 1] !== '?')
+      || (ch === '{' && /^\{\d+(,\d*)?\}/.test(regex.slice(i)));
+    if (quantifier) {
+      // Only an unbounded repeat (*, +, {n,}) of a risky group can backtrack exponentially; ? and {n} cannot.
+      const unbounded = ch === '*' || ch === '+' || (ch === '{' && /^\{\d+,\}/.test(regex.slice(i)));
+      if (closedRisky && unbounded) return false;
+      if (groups.length) groups[groups.length - 1].risky = true;
+      if (ch === '{') i = regex.indexOf('}', i);
+    }
+    closedRisky = false;
+  }
+  return true;
+}
+
 /** Reads the supported statements back from a field's scripts; anything else is listed as unsupported. */
 export function parseLogic(scripts: FieldScripts): FieldLogic {
   const logic: FieldLogic = { unsupported: [] };
@@ -107,8 +140,11 @@ export function parseLogic(scripts: FieldScripts): FieldLogic {
     // control flow is ever promoted to an unconditional rule.
     const statements = script.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
     const matched = statements.map((statement) => RULES.find(([pattern]) => pattern.test(statement)));
-    if (matched.every(Boolean)) statements.forEach((statement, i) => matched[i]![1](statement.match(matched[i]![0])!, logic));
-    else logic.unsupported.push(`${trigger}: ${script}`);
+    const read: FieldLogic = { unsupported: [] };
+    if (matched.every(Boolean)) statements.forEach((statement, i) => matched[i]![1](statement.match(matched[i]![0])!, read));
+    // A pattern MALENJO cannot run safely is not evaluated: the script stays as the document wrote it.
+    if (!matched.every(Boolean) || (read.pattern && !safePattern(read.pattern.regex))) logic.unsupported.push(`${trigger}: ${script}`);
+    else Object.assign(logic, { ...read, unsupported: logic.unsupported });
   }
   return logic;
 }
@@ -258,7 +294,8 @@ function validate(field: LogicField, value: string): string | null {
       return `${field.name} must be ${min !== undefined && max !== undefined ? `between ${min} and ${max}` : min !== undefined ? `at least ${min}` : `at most ${max}`}.`;
     }
   }
-  if (logic.pattern && !new RegExp(logic.pattern.regex).test(value)) return logic.pattern.message;
+  // Only safe patterns are tested, and never on very long values.
+  if (logic.pattern && safePattern(logic.pattern.regex) && value.length <= 1000 && !new RegExp(logic.pattern.regex).test(value)) return logic.pattern.message;
   return null;
 }
 
