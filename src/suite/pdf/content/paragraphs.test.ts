@@ -271,4 +271,17 @@ describe('paragraph fonts and spacing', () => {
     expect(run.box[2]).toBeCloseTo(kerned.box[2], 0);
     await expect(reflowPdfParagraph(bytes, 1, mixed.id, mixed.text, mixed.text, { ...base, size: 12 }, true)).rejects.toThrow(/transparency/);
   });
+
+  it('lists the letter and word spacing a paragraph is drawn with, and refuses mixed spacing', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([600, 800]);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    page.node.set(PDFName.of('Resources'), pdf.context.obj({ Font: { F1: font.ref } }));
+    page.node.addContentStream(pdf.context.register(pdf.context.stream(
+      'BT /F1 12 Tf 1 Tc 2 Tw 72 700 Td (Spaced out words) Tj ET BT /F1 12 Tf 72 500 Td (Plain words ) Tj 3 Tc (then wide) Tj ET')));
+    const bytes = await pdf.save();
+    const [spaced, mixed] = await listPdfParagraphs(bytes, 1);
+    expect([spaced.charSpacing, spaced.wordSpacing]).toEqual([1, 2]);
+    await expect(reflowPdfParagraph(bytes, 1, mixed.id, mixed.text, mixed.text, { ...base, size: 12 }, true)).rejects.toThrow(/mixes letter or word spacing/);
+  });
 });

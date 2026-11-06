@@ -215,4 +215,14 @@ describe('content rewriting details', () => {
     const objects = await listPdfPageObjects(removed, 1);
     expect(objects.map((o) => o.kind)).toEqual(['image']);
   });
+
+  it('moves every crop with an image that was cropped twice', async () => {
+    let bytes = await cropPdfImage(await sample(), 1, 0, { left: 0.1, top: 0, right: 0.1, bottom: 0 });
+    bytes = await cropPdfImage(bytes, 1, 0, { left: 0.1, top: 0, right: 0.1, bottom: 0 });
+    const [before] = await listPdfPageObjects(bytes, 1);
+    const moved = await transformPdfObject(bytes, 1, 'image', 0, { dx: 50, dy: 0 });
+    expect((await content(moved)).replace(/\s+/g, ' ')).toMatch(/q [\d. -]+ cm q [\d. ]+ re W n q [\d. ]+ re W n \/\S+ Do Q Q Q/);
+    const [after] = await listPdfPageObjects(moved, 1);
+    expect(after.box[0] - before.box[0]).toBeCloseTo(50, 0);
+  });
 });
