@@ -14,7 +14,7 @@ export interface Paragraph {
   kind: 'para'; runs: Run[]; align: Align; indent: number; firstIndent?: number; spaceBefore: number; spaceAfter: number; lineHeight: number;
   marker?: string; pageBreakBefore?: boolean; background?: [number, number, number]; border?: boolean;
 }
-export interface TableCell { blocks: Paragraph[]; colSpan: number; background?: [number, number, number] }
+export interface TableCell { blocks: (Paragraph | ImageBlock)[]; colSpan: number; background?: [number, number, number] }
 export interface Table { kind: 'table'; rows: { cells: TableCell[]; header?: boolean }[]; colWidths: number[]; borders: boolean; spaceAfter: number }
 export interface ImageBlock { kind: 'image'; bytes: Uint8Array; format: 'png' | 'jpeg'; width: number; height: number; align: Align; spaceAfter: number }
 export type Block = Paragraph | Table | ImageBlock | { kind: 'rule' } | { kind: 'pageBreak' };
@@ -158,15 +158,19 @@ export class FlowWriter {
         const width = widths.slice(col, col + cell.colSpan).reduce((a, b) => a + b, 0) || widths[widths.length - 1] || 50;
         spans.push({ x, width, cell }); x += width; col += cell.colSpan;
       }
+      // A picture in a cell is scaled down to the cell's width.
+      const fitted = (b: ImageBlock, width: number) => { const k = Math.min(1, width / b.width); return { w: b.width * k, h: b.height * k }; };
       const heights = await Promise.all(spans.map(async (s) => {
-        let h = 0; for (const p of s.cell.blocks) h += await this.paragraph(p, { x: s.x + pad, width: s.width - 2 * pad, y: 0, draw: false }); return h + 2 * pad;
+        let h = 0;
+        for (const p of s.cell.blocks) h += p.kind === 'image' ? fitted(p, s.width - 2 * pad).h + p.spaceAfter : await this.paragraph(p, { x: s.x + pad, width: s.width - 2 * pad, y: 0, draw: false });
+        return h + 2 * pad;
       }));
       const height = Math.max(12, ...heights);
       if (height > this.setup.height - this.setup.margin.top - this.setup.margin.bottom) {
         // A row taller than a page cannot be drawn as one box without losing what falls below the page:
         // its cells flow as ordinary paragraphs, one after another, across as many pages as they need.
         this.unrolledRows++;
-        for (const s of spans) for (const p of s.cell.blocks) await this.paragraph(p);
+        for (const s of spans) for (const p of s.cell.blocks) { if (p.kind === 'image') await this.image(p); else await this.paragraph(p); }
         continue;
       }
       this.room(height);
@@ -174,7 +178,15 @@ export class FlowWriter {
       for (const s of spans) {
         if (s.cell.background) this.page.drawRectangle({ x: s.x, y: top - height, width: s.width, height, color: rgb(...s.cell.background) });
         let y = top - pad;
-        for (const p of s.cell.blocks) y -= await this.paragraph(p, { x: s.x + pad, width: s.width - 2 * pad, y, draw: true });
+        for (const p of s.cell.blocks) {
+          if (p.kind === 'image') {
+            const { w, h } = fitted(p, s.width - 2 * pad);
+            const image = p.format === 'png' ? await this.pdf.embedPng(p.bytes) : await this.pdf.embedJpg(p.bytes);
+            const extra = s.width - 2 * pad - w;
+            this.page.drawImage(image, { x: s.x + pad + (p.align === 'center' ? extra / 2 : p.align === 'right' ? extra : 0), y: y - h, width: w, height: h });
+            y -= h + p.spaceAfter;
+          } else y -= await this.paragraph(p, { x: s.x + pad, width: s.width - 2 * pad, y, draw: true });
+        }
         if (t.borders) this.page.drawRectangle({ x: s.x, y: top - height, width: s.width, height, borderColor: rgb(0.5, 0.5, 0.5), borderWidth: 0.6 });
       }
       this.y = top - height;

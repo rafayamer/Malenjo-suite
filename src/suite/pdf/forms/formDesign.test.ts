@@ -244,4 +244,14 @@ describe('fill, flatten and data exchange (MAL-050, MAL-052, MAL-053)', () => {
       maxLength: null, logic: { unsupported: [] }, calculated: false, password: false, multiline: false, concealedValue: false };
     expect(importFormData([customer], "<xfdf><fields><field name='Customer'><value>Alice</value></field></fields></xfdf>", 'xfdf').values).toEqual({ Customer: 'Alice' });
   });
+
+  it('draws a missing appearance before flattening a field that has a value', async () => {
+    const pdf = await PDFDocument.load(await blank());
+    const name = pdf.getForm().createTextField('Customer');
+    name.addToPage(pdf.getPage(0), { x: 60, y: 600, width: 200, height: 20 });
+    name.setText('Ada Lovelace');
+    name.acroField.getWidgets()[0].dict.delete(PDFName.of('AP'));
+    const flat = await flattenFormFields(await pdf.save({ updateFieldAppearances: false }), null);
+    expect((await pdfjs(flat.bytes)).text).toContain('Ada Lovelace');
+  });
 });

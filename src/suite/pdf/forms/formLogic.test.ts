@@ -94,4 +94,13 @@ describe('form evaluation', () => {
     const long = `app.alert("${'x'.repeat(300)}");`;
     expect(parseLogic({ V: long }).unsupported).toEqual([`V: ${long}`]);
   });
+
+  it('treats "Off" as empty only for check boxes and radio buttons', () => {
+    const result = evaluateForm([
+      { name: 'Status', kind: 'text', value: 'Off', required: true, logic: logic() },
+      { name: 'Qty', kind: 'text', value: 'Off', required: false, logic: logic({ format: { kind: 'number', decimals: 0, separator: 1, currency: '' } }) },
+      { name: 'Agree', kind: 'checkbox', value: 'Off', required: true, logic: logic() },
+    ]);
+    expect(result.errors).toEqual({ Qty: 'Qty must be a number.', Agree: 'Agree is required.' });
+  });
 });

@@ -66,7 +66,7 @@ export async function readFillForm(bytes: Uint8Array): Promise<FillField[]> {
 /** Calculations, visibility and validation for proposed values (field name → value). */
 export function evaluateFill(fields: FillField[], values: Record<string, string>): FormEvaluation {
   return evaluateForm(fields.filter((f) => f.kind !== 'button' && f.kind !== 'signature').map((f): LogicField => ({
-    name: f.name, value: values[f.name] ?? f.value, logic: f.logic, maxLength: f.maxLength ?? undefined,
+    name: f.name, kind: f.kind, value: values[f.name] ?? f.value, logic: f.logic, maxLength: f.maxLength ?? undefined,
     // A concealed value the user leaves untouched is still there, so it satisfies "required".
     required: f.required && !(f.concealedValue && !(values[f.name] ?? '')),
   })));
@@ -159,7 +159,23 @@ export async function flattenFormFields(bytes: Uint8Array, names: string[] | nul
     if (field instanceof PDFSignature && field.acroField.dict.has(N('V'))) throw new Error(`${field.getName()} is signed and cannot be flattened.`);
     const kids = field.acroField.dict.lookupMaybe(N('Kids'), PDFArray)?.asArray() ?? [];
     const refs: (PDFRef | null)[] = kids.length ? kids.map((k) => (k instanceof PDFRef ? k : null)) : [field.ref];
-    field.acroField.getWidgets().forEach((widget, index) => {
+    // A field with a value must show it once flattened: draw any missing appearance first, and refuse if one
+    // still cannot be drawn rather than removing the field and its value.
+    const hasValue = (() => { const v = valueOf(field); return Boolean(v) && !(v === 'Off' && (field instanceof PDFCheckBox || field instanceof PDFRadioGroup)); })()
+      || (field instanceof PDFTextField && (field.isPassword() || field.isRichFormatted()) && Boolean(field.getText()));
+    const drawable = (widget: (typeof widgets)[number]) => {
+      const ap = widget.getAppearances()?.normal;
+      if (!ap) return false;
+      if (ap instanceof PDFDict) return ap.get(N(widget.getAppearanceState()?.decodeText() ?? 'Off')) instanceof PDFRef;
+      return true;
+    };
+    const widgets = field.acroField.getWidgets();
+    const visible = (widget: (typeof widgets)[number]) => !((widget.dict.lookupMaybe(N('F'), PDFNumber)?.asNumber() ?? 0) & HIDDEN);
+    if (hasValue && widgets.some((w) => visible(w) && !drawable(w))) {
+      try { await refreshFieldAppearances(pdf, field); } catch { /* checked below */ }
+      if (widgets.some((w) => visible(w) && !drawable(w))) throw new Error(`${field.getName()} has a value but no appearance MALENJO can draw, so flattening it would lose the value.`);
+    }
+    widgets.forEach((widget, index) => {
       const flags = widget.dict.lookupMaybe(N('F'), PDFNumber)?.asNumber() ?? 0;
       if (flags & HIDDEN) return;
       const page = widgetPage(pdf, widget.dict, refs[index] ?? null);

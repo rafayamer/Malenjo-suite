@@ -7,7 +7,7 @@
  * size and margins. Everything else is counted in the fidelity report.
  */
 import { strFromU8, unzipSync } from 'fflate';
-import { DEFAULT_STYLE, FlowWriter, imageInfo, type Align, type Block, type Paragraph, type Run, type RunStyle, type TableCell } from './flowLayout';
+import { DEFAULT_STYLE, FlowWriter, imageInfo, type Align, type Block, type ImageBlock, type Paragraph, type Run, type RunStyle, type TableCell } from './flowLayout';
 import { all, child, kids, parseMarkup, type XNode } from './xmlTree';
 
 export interface DocumentPdf { bytes: Uint8Array; pages: number; notes: string[] }
@@ -182,8 +182,9 @@ export async function docxToPdf(bytes: Uint8Array): Promise<DocumentPdf> {
         const tcPr = child(tc, 'w:tcPr');
         if (all(tc, 'w:tbl').length) counts.nested++;
         // A nested table's paragraphs are listed in the cell, one after another.
+        // Paragraphs and pictures are laid out in the cell; anything else a paragraph can yield is not cell content.
         const paras = tc.children.flatMap((c) => (c.name === 'w:p' ? paragraph(c, true) : c.name === 'w:tbl' ? all(c, 'w:p').flatMap((p) => paragraph(p, true)) : []))
-          .filter((b): b is Paragraph => b.kind === 'para');
+          .filter((b): b is Paragraph | ImageBlock => b.kind === 'para' || b.kind === 'image');
         return { blocks: paras.length ? paras : [{ kind: 'para', runs: [], align: 'left', indent: 0, spaceBefore: 0, spaceAfter: 0, lineHeight: 1.15 }], colSpan: Number(val(child(tcPr, 'w:gridSpan')) ?? 1), background: hexColor(child(tcPr, 'w:shd')?.attrs['w:fill']) };
       }),
     }));

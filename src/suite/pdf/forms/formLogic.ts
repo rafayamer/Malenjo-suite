@@ -201,7 +201,10 @@ export interface LogicField {
   logic: FieldLogic;
   required: boolean;
   maxLength?: number;
+  /** Field type; only check boxes and radio buttons use "Off" to mean nothing is chosen. */
+  kind?: string;
 }
+const isButton = (field: LogicField | undefined) => field?.kind === 'checkbox' || field?.kind === 'radio';
 export interface FormEvaluation { values: Record<string, string>; hidden: string[]; errors: Record<string, string> }
 
 /** Runs calculations (in dependency order), visibility and validation the way a form reader would. */
@@ -223,7 +226,7 @@ export function evaluateForm(fields: LogicField[]): FormEvaluation {
   const hidden = fields.filter((f) => {
     if (!f.logic.showWhen) return false;
     const other = values[f.logic.showWhen.field] ?? '';
-    return f.logic.showWhen.value === '*' ? !other || other === 'Off' : other !== f.logic.showWhen.value;
+    return f.logic.showWhen.value === '*' ? !other || (other === 'Off' && isButton(byName.get(f.logic.showWhen.field))) : other !== f.logic.showWhen.value;
   }).map((f) => f.name);
   const errors: Record<string, string> = {};
   for (const field of fields) {
@@ -237,7 +240,7 @@ export function evaluateForm(fields: LogicField[]): FormEvaluation {
 
 function validate(field: LogicField, value: string): string | null {
   const { logic } = field;
-  if (!value || value === 'Off') return field.required ? `${field.name} is required.` : null;
+  if (!value || (value === 'Off' && isButton(field))) return field.required ? `${field.name} is required.` : null;
   if (field.maxLength && value.length > field.maxLength) return `${field.name} allows at most ${field.maxLength} characters.`;
   let number: number | null = null;
   if (logic.format?.kind === 'number') {

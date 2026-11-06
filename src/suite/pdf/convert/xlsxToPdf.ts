@@ -89,7 +89,8 @@ function formatValue(raw: string, fmt: string, id: number, date1904 = false): st
     const prefix = fmt.match(/^"?([$€£¥])"?/)?.[1] ?? (fmt.includes('[$') ? fmt.match(/\[\$([^\-\]]+)/)?.[1] ?? '' : '');
     return prefix + value;
   }
-  return String(Math.round(n * 1e10) / 1e10);
+  // General: every significant digit a double holds (15), in scientific notation when very small or large.
+  return String(Number(n.toPrecision(15))).replace('e', 'E');
 }
 
 export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Promise<DocumentPdf> {

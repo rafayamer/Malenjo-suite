@@ -237,4 +237,31 @@ describe('conversion edge cases, round 3', () => {
     expect([name('report.pdf'), name('report.pdf'), name('Report.pdf'), name('other.pdf')]).toEqual(['report.pdf', 'report (2).pdf', 'Report (3).pdf', 'other.pdf']);
   });
 });
+
+describe('conversion edge cases, round 4', () => {
+  it('draws a picture placed inside a Word table cell', async () => {
+    const pic = '<w:p><w:r><w:drawing><wp:inline xmlns:wp="wp"><wp:extent cx="1270000" cy="635000"/><a:graphic xmlns:a="a"><a:graphicData><pic:pic xmlns:pic="pic"><pic:blipFill><a:blip r:embed="rId9"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
+    const docx = zipSync({
+      'word/document.xml': strToU8(`<w:document ${W}><w:body><w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc>${pic}</w:tc></w:tr></w:tbl></w:body></w:document>`),
+      'word/_rels/document.xml.rels': strToU8('<Relationships><Relationship Id="rId9" Type="image" Target="media/pic.png"/></Relationships>'),
+      'word/media/pic.png': encodePng(rgba(20, 10, [0, 128, 0, 255])),
+    });
+    const result = await docxToPdf(docx);
+    const { PDFDocument, PDFName, PDFDict } = await import('pdf-lib');
+    const pdf = await PDFDocument.load(result.bytes);
+    const xobjects = pdf.getPage(0).node.Resources()?.lookupMaybe(PDFName.of('XObject'), PDFDict);
+    expect(xobjects?.keys().length ?? 0).toBe(1);
+  });
+
+  it('keeps every significant digit of General-format numbers', async () => {
+    const S = 'xmlns="m" xmlns:r="r"';
+    const xlsx = zipSync({
+      'xl/workbook.xml': strToU8(`<workbook ${S}><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>`),
+      'xl/_rels/workbook.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>'),
+      'xl/worksheets/sheet1.xml': strToU8(`<worksheet ${S}><cols><col min="1" max="2" width="30"/></cols><sheetData><row r="1"><c r="A1"><v>0.000000000001</v></c><c r="B1"><v>1.23456789012345</v></c></row></sheetData></worksheet>`),
+    });
+    const [page] = await read((await xlsxToPdf(xlsx, { pageSize: 'letter', orientation: 'sheet', gridlines: 'sheet', sheets: 'all' })).bytes);
+    expect(page.text).toBe('1E-12 1.23456789012345');
+  });
+});
 });
