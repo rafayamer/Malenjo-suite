@@ -15,7 +15,62 @@ import { all, child, kids, textOf, type XNode } from './xmlTree';
 export interface SheetPdfOptions { pageSize: Exclude<PageSizeName, 'image'>; orientation: 'sheet' | 'portrait' | 'landscape'; gridlines: 'sheet' | 'on' | 'off'; sheets: 'all' | 'visible' }
 const colIndex = (ref: string) => [...(ref.match(/[A-Z]+/)?.[0] ?? 'A')].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0) - 1;
 const rowIndex = (ref: string) => Number(ref.match(/\d+/)?.[0] ?? '1') - 1;
-const rangeOf = (ref: string) => { const [a, b = a] = ref.replace(/\$/g, '').split(':'); return { c1: colIndex(a), r1: rowIndex(a), c2: colIndex(b), r2: rowIndex(b) }; };
+/** A1-style range. Whole columns (A:B) and whole rows (2:4) span the sheet's used extent on the missing axis. */
+const rangeOf = (ref: string, used = { maxC: 0, maxR: 0 }) => {
+  const [a, b = a] = ref.replace(/\$/g, '').split(':');
+  const wholeColumns = /^[A-Z]+$/i.test(a) && /^[A-Z]+$/i.test(b), wholeRows = /^\d+$/.test(a) && /^\d+$/.test(b);
+  return {
+    c1: wholeRows ? 0 : colIndex(a), c2: wholeRows ? used.maxC : colIndex(b),
+    r1: wholeColumns ? 0 : rowIndex(a), r2: wholeColumns ? used.maxR : rowIndex(b),
+  };
+};
+
+/** Built-in date and time formats (ECMA-376 18.8.30) that are not listed in styles.xml. */
+const BUILTIN_DATES: Record<number, string> = {
+  14: 'yyyy-mm-dd', 15: 'd-mmm-yy', 16: 'd-mmm', 17: 'mmm-yy', 18: 'h:mm AM/PM', 19: 'h:mm:ss AM/PM',
+  20: 'h:mm', 21: 'h:mm:ss', 22: 'yyyy-mm-dd h:mm', 45: 'mm:ss', 46: '[h]:mm:ss', 47: 'mm:ss.0',
+};
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** Formats a date/time serial with an Excel pattern; m/mm are minutes next to hours or seconds. */
+function formatDateTime(n: number, pattern: string): string {
+  const ms = Math.round(n * 86400000);
+  const d = new Date(Date.UTC(1899, 11, 30) + ms);
+  const pad = (v: number, w = 2) => String(v).padStart(w, '0');
+  const ampm = /AM\/PM|A\/P/i.test(pattern);
+  const tokens = pattern.match(/"[^"]*"|\\.|\[h+\]|\[m+\]|\[s+\]|AM\/PM|A\/P|y+|m+|d+|h+|s+(?:\.0+)?|./gi) ?? [];
+  const kinds = tokens.map((t) => t.toLowerCase().replace(/\..*/, ''));
+  const isMinute = (i: number) => {
+    for (let k = i - 1; k >= 0; k--) { if (/^\[?h/.test(kinds[k])) return true; if (/^[ydms]/.test(kinds[k])) break; }
+    for (let k = i + 1; k < kinds.length; k++) { if (/^s/.test(kinds[k])) return true; if (/^[ydhm]/.test(kinds[k])) break; }
+    return false;
+  };
+  const hours = d.getUTCHours();
+  return tokens.map((token, i) => {
+    const t = kinds[i];
+    if (token.startsWith('"')) return token.slice(1, -1);
+    if (token.startsWith('\\')) return token.slice(1);
+    if (/^\[h+\]$/.test(t)) return String(Math.floor(ms / 3600000));
+    if (/^\[m+\]$/.test(t)) return String(Math.floor(ms / 60000));
+    if (/^\[s+\]$/.test(t)) return String(Math.floor(ms / 1000));
+    if (t === 'am/pm') return hours < 12 ? 'AM' : 'PM';
+    if (t === 'a/p') return hours < 12 ? 'A' : 'P';
+    if (t.startsWith('y')) return t.length <= 2 ? String(d.getUTCFullYear()).slice(2) : String(d.getUTCFullYear());
+    if (t.startsWith('d')) return t.length === 1 ? String(d.getUTCDate()) : t.length === 2 ? pad(d.getUTCDate()) : t.length === 3 ? DAYS[d.getUTCDay()].slice(0, 3) : DAYS[d.getUTCDay()];
+    if (t.startsWith('h')) { const h = ampm ? (hours % 12 || 12) : hours; return t.length === 1 ? String(h) : pad(h); }
+    if (t.startsWith('s')) {
+      const fraction = token.match(/\.(0+)/)?.[1].length ?? 0;
+      return pad(d.getUTCSeconds()) + (fraction ? (d.getUTCMilliseconds() / 1000).toFixed(fraction).slice(1) : '');
+    }
+    if (t.startsWith('m')) {
+      if (t.length <= 2 && isMinute(i)) return t.length === 1 ? String(d.getUTCMinutes()) : pad(d.getUTCMinutes());
+      const month = d.getUTCMonth();
+      return t.length === 1 ? String(month + 1) : t.length === 2 ? pad(month + 1) : t.length === 3 ? MONTHS[month].slice(0, 3) : t.length === 5 ? MONTHS[month][0] : MONTHS[month];
+    }
+    return /^[\[\]]$/.test(token) ? '' : token;
+  }).join('');
+}
 
 function formatValue(raw: string, fmt: string, id: number): string {
   const n = Number(raw);
@@ -23,13 +78,9 @@ function formatValue(raw: string, fmt: string, id: number): string {
   const fixed = (d: number, group: boolean) => { const s = Math.abs(n).toFixed(d); const [w, f] = s.split('.'); return `${n < 0 ? '-' : ''}${group ? w.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : w}${f ? '.' + f : ''}`; };
   const builtIn: Record<number, () => string> = { 1: () => fixed(0, false), 2: () => fixed(2, false), 3: () => fixed(0, true), 4: () => fixed(2, true), 9: () => `${Math.round(n * 100)}%`, 10: () => `${(n * 100).toFixed(2)}%` };
   if (builtIn[id]) return builtIn[id]();
-  const isDate = (id >= 14 && id <= 22) || /[dmy]/i.test(fmt.replace(/"[^"]*"|\[[^\]]*\]/g, ''));
-  if (isDate && n > 0 && n < 2958466) {
-    const d = new Date(Date.UTC(1899, 11, 30) + Math.round(n * 86400000));
-    const pad = (v: number) => String(v).padStart(2, '0');
-    if (!fmt || id === 14) return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
-    return fmt.replace(/"([^"]*)"/g, '$1').replace(/yyyy/gi, String(d.getUTCFullYear())).replace(/yy/gi, String(d.getUTCFullYear()).slice(2)).replace(/dd/gi, pad(d.getUTCDate())).replace(/mm/g, pad(d.getUTCMonth() + 1)).replace(/(^|[^d])d(?!d)/gi, `$1${d.getUTCDate()}`);
-  }
+  const pattern = fmt || BUILTIN_DATES[id] || '';
+  const isDate = Boolean(BUILTIN_DATES[id]) || /[dmyhs]/i.test(pattern.replace(/"[^"]*"|\[[^\]]*\]|\\./g, ''));
+  if (isDate && n >= 0 && n < 2958466) return formatDateTime(n, pattern.split(';')[0]);
   if (fmt) {
     const decimals = (fmt.split(';')[0].match(/\.(0+)/)?.[1].length) ?? 0;
     const text = fixed(fmt.includes('%') ? decimals : decimals, fmt.includes(','));
@@ -90,7 +141,7 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
       cells.set(`${r},${col}`, { text, style: s, numeric: type === 'n' && v !== '' });
       maxR = Math.max(maxR, r); maxC = Math.max(maxC, col);
     }
-    const area = printAreas.has(sheetIndex) ? rangeOf(printAreas.get(sheetIndex)!) : { c1: 0, r1: 0, c2: maxC, r2: maxR };
+    const area = printAreas.has(sheetIndex) ? rangeOf(printAreas.get(sheetIndex)!, { maxC, maxR }) : { c1: 0, r1: 0, c2: maxC, r2: maxR };
     if (printAreas.has(sheetIndex)) areas.push(`${sheet.attrs.name} (${printAreas.get(sheetIndex)})`);
     if (!cells.size && !printAreas.has(sheetIndex)) continue;
     rendered++;

@@ -78,4 +78,18 @@ describe('PDF to Office (MAL-037 – 039)', () => {
     const grid = /<w:tblGrid>([\s\S]*?)<\/w:tblGrid>/.exec(xml)![1];
     expect(grid).toMatch(/^(<w:gridCol w:w="\d+"\/>){3}$/);
   });
+
+  it('keeps identifiers with leading zeros or too many digits as text in XLSX', async () => {
+    const pdf = await PDFDocument.create();
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const p = pdf.addPage([612, 792]);
+    [['Account', 'Code', 'Qty'], ['1234567890123456789', '001234', '42'], ['9876543210987654321', '000777', '7']]
+      .forEach((row, r) => row.forEach((c, k) => p.drawText(c, { x: 72 + k * 160, y: 700 - r * 16, size: 11, font })));
+    pdf.addPage([612, 792]).drawText('Notes', { x: 72, y: 700, size: 11, font });
+    const { files } = pdfToXlsx(await structure(await pdf.save()), 'ids');
+    const sheet = part(files[0].bytes, 'xl/worksheets/sheet1.xml');
+    expect(sheet).toContain('<t xml:space="preserve">1234567890123456789</t>');
+    expect(sheet).toContain('<t xml:space="preserve">001234</t>');
+    expect(sheet).toMatch(/<c r="C2"><v>42<\/v><\/c>/);
+  });
 });

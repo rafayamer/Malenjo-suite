@@ -169,6 +169,7 @@ export async function htmlToPdf(source: string, options: HtmlPdfOptions): Promis
   if (skipped.size) notes.push(`Left out: ${[...skipped.entries()].map(([t, n]) => `${n} <${t}>`).join(', ')}.`);
   if (externalImages) notes.push(`${externalImages} image(s) from web addresses were not downloaded.`);
   if (otherImages) notes.push(`${otherImages} image(s) not embedded as PNG or JPEG data were left out.`);
+  if (writer.unrolledRows) notes.push(`${writer.unrolledRows} table row(s) taller than a page were laid out as paragraphs, one cell after another.`);
   if (writer.replaced) notes.push(`${writer.replaced} character(s) outside the standard fonts were drawn as “?”.`);
   return { bytes: await writer.save(), pages: writer.pages, notes };
 }

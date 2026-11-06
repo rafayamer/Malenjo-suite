@@ -226,6 +226,18 @@ export async function pdfToPptx(pages: PageStructure[], pdfBytes: Uint8Array | n
 const colName = (i: number) => { let s = ''; for (let v = i + 1; v > 0; v = Math.floor((v - 1) / 26)) s = String.fromCharCode(65 + ((v - 1) % 26)) + s; return s; };
 const NUMBER = /^-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?$/;
 
+/**
+ * A table value is written as a number only when that loses nothing: identifiers with leading zeros
+ * (001234) and numbers with more significant digits than a spreadsheet keeps (about 15, so long account
+ * numbers) stay text.
+ */
+function losslessNumber(value: string): boolean {
+  if (!NUMBER.test(value)) return false;
+  const clean = value.replace(/,/g, '').replace(/^-/, '');
+  if (/^0\d/.test(clean)) return false;
+  return clean.replace('.', '').replace(/^0+/, '').length <= 15;
+}
+
 export function pdfToXlsx(pages: PageStructure[], title: string): ConversionResult {
   const sheets: { name: string; rows: string[][] }[] = [];
   const sizes = documentHeadingSizes(pages);
@@ -247,7 +259,7 @@ export function pdfToXlsx(pages: PageStructure[], title: string): ConversionResu
     const rows = sheet.rows.map((row, r) => `<row r="${r + 1}">${row.map((value, c) => {
       const ref = `${colName(c)}${r + 1}`;
       const style = r === 0 && !fallback.length ? ' s="1"' : '';
-      if (value && NUMBER.test(value) && r > 0) return `<c r="${ref}"${style}><v>${Number(value.replace(/,/g, ''))}</v></c>`;
+      if (value && r > 0 && losslessNumber(value)) return `<c r="${ref}"${style}><v>${Number(value.replace(/,/g, ''))}</v></c>`;
       return value ? `<c r="${ref}" t="inlineStr"${style}><is><t xml:space="preserve">${x(value)}</t></is></c>` : '';
     }).join('')}</row>`).join('');
     files[`xl/worksheets/sheet${i + 1}.xml`] = enc(`${XML}<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${widths.map((w, c) => `<col min="${c + 1}" max="${c + 1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${rows}</sheetData></worksheet>`);

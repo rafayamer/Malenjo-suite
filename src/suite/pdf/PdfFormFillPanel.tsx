@@ -79,7 +79,7 @@ export default function PdfFormFillPanel({ domIdPrefix, bytes, sourceName, busy,
       <option value="">—</option>{f.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>;
     if (f.kind === 'list' || f.kind === 'dropdown') return <select {...common} multiple={f.multiselect} size={Math.min(4, f.options.length)} value={f.multiselect ? value.split('\n').filter(Boolean) : value}
       onChange={(e) => setValue(f.name, Array.from(e.target.selectedOptions, (o) => o.value).join('\n'))}>{f.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>;
-    return <input {...common} value={f.calculated ? displayValue(evaluation.values[f.name] ?? '', f.logic) : value} maxLength={f.maxLength ?? undefined}
+    return <input {...common} {...(f.password ? { type: 'password', autoComplete: 'new-password' } : {})} value={f.calculated ? displayValue(evaluation.values[f.name] ?? '', f.logic) : value} maxLength={f.maxLength ?? undefined}
       placeholder={f.logic.format?.kind === 'date' ? f.logic.format.pattern : undefined} onChange={(e) => setValue(f.name, e.target.value)}/>;
   };
 

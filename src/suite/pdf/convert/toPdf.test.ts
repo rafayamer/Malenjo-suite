@@ -175,4 +175,40 @@ describe('conversion edge cases', () => {
     expect(page.text).toBe('Hello world');
   });
 });
+
+describe('conversion edge cases, round 2', () => {
+  const S = 'xmlns="m" xmlns:r="r"';
+  const options = { pageSize: 'letter' as const, orientation: 'sheet' as const, gridlines: 'sheet' as const, sheets: 'all' as const };
+  const book = (sheet: string, names = '', numFmts = '') => zipSync({
+    'xl/workbook.xml': strToU8(`<workbook ${S}><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets>${names}</workbook>`),
+    'xl/_rels/workbook.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>'),
+    'xl/styles.xml': strToU8(`<styleSheet>${numFmts}<fonts><font><sz val="11"/></font></fonts><fills><fill/></fills><cellXfs><xf numFmtId="0" fontId="0"/><xf numFmtId="20" fontId="0"/><xf numFmtId="164" fontId="0"/></cellXfs></styleSheet>`),
+    'xl/worksheets/sheet1.xml': strToU8(`<worksheet ${S}><cols><col min="1" max="2" width="20"/></cols>${sheet}</worksheet>`),
+  });
+
+  it('keeps times in built-in and custom date-time formats', async () => {
+    const xlsx = book('<sheetData><row r="1"><c r="A1" s="1"><v>0.5</v></c><c r="B1" s="2"><v>45000.75</v></c></row></sheetData>', '',
+      '<numFmts><numFmt numFmtId="164" formatCode="yyyy-mm-dd hh:mm"/></numFmts>');
+    const [page] = await read((await xlsxToPdf(xlsx, options)).bytes);
+    expect(page.text).toBe('12:00 2023-03-15 18:00');
+  });
+
+  it('prints every row of a whole-column print area', async () => {
+    const rows = [1, 2, 3].map((r) => `<row r="${r}"><c r="A${r}" t="inlineStr"><is><t>Row ${r}</t></is></c><c r="C${r}" t="inlineStr"><is><t>Outside ${r}</t></is></c></row>`).join('');
+    const xlsx = book(`<sheetData>${rows}</sheetData>`, '<definedNames><definedName name="_xlnm.Print_Area" localSheetId="0">S!$A:$B</definedName></definedNames>');
+    const [page] = await read((await xlsxToPdf(xlsx, options)).bytes);
+    expect(page.text).toBe('Row 1 Row 2 Row 3');
+  });
+
+  it('flows a table row taller than a page across pages instead of cutting it off', async () => {
+    const lines = Array.from({ length: 100 }, (_, i) => `<p>Line ${i + 1}</p>`).join('');
+    const result = await htmlToPdf(`<table><tr><td>${lines}</td></tr></table>`, { pageSize: 'letter', landscape: false, margin: 72 });
+    const pages = await read(result.bytes);
+    const text = pages.map((p) => p.text).join(' ');
+    expect(pages.length).toBeGreaterThan(1);
+    expect(text).toContain('Line 1 ');
+    expect(text).toContain('Line 100');
+    expect(result.notes.join(' ')).toMatch(/1 table row\(s\) taller than a page/);
+  });
+});
 });

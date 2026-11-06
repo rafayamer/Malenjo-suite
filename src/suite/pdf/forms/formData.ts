@@ -4,7 +4,7 @@
  * boxes). Several selections are separate CSV rows, JSON arrays, FDF arrays and XFDF <value>s.
  * Import never runs scripts; it returns values for fillFormWithLogic, plus names it did not match.
  */
-import { PDFArray, PDFContext, PDFDict, PDFHexString, PDFName, PDFObjectParser, PDFString } from 'pdf-lib';
+import { PDFArray, PDFContext, PDFDict, PDFHexString, PDFName, PDFObjectParser, PDFRef, PDFString } from 'pdf-lib';
 import type { FillField } from './formFill';
 
 export type FormDataFormat = 'csv' | 'json' | 'fdf' | 'xfdf';
@@ -56,7 +56,8 @@ export function importFormData(fields: FillField[], text: string, format: FormDa
     if (field.readOnly || field.calculated) { skipped.push(name); continue; }
     if (field.kind === 'checkbox') {
       const v = list[0] ?? '';
-      values[name] = /^(off|false|no|0|)$/i.test(v) ? 'Off' : field.onValue ?? 'Yes';
+      // The field's own on-value wins over the yes/no shorthands, so a box whose on-value is "No" round-trips.
+      values[name] = field.onValue && v === field.onValue ? field.onValue : /^(off|false|no|0|)$/i.test(v) ? 'Off' : field.onValue ?? 'Yes';
     } else if (field.kind === 'text') values[name] = list.join('\n');
     else {
       const allowed = new Set(field.options.map((o) => o.value));
@@ -121,21 +122,42 @@ function decode(value: unknown): string[] {
 function parseFdf(text: string): Raw {
   const bytes = Uint8Array.from(text, (c) => c.charCodeAt(0) & 0xff);
   if (!text.startsWith('%FDF-')) throw new Error('This is not an FDF file.');
-  const start = text.indexOf('<<');
-  if (start < 0) throw new Error('This FDF file has no form data.');
+  // Field dictionaries may be indirect objects (`/Fields [2 0 R]`): read every `n g obj` into one context
+  // so references, including those in /Kids, resolve.
+  const context = PDFContext.create();
   let root: unknown;
-  try { root = PDFObjectParser.forBytes(bytes.subarray(start), PDFContext.create()).parseObject(); } catch { throw new Error('This FDF file could not be read.'); }
-  const fields = root instanceof PDFDict ? root.get(PDFName.of('FDF')) : undefined;
-  const list = fields instanceof PDFDict ? fields.get(PDFName.of('Fields')) : undefined;
+  try {
+    let count = 0;
+    for (const match of text.matchAll(/(\d+)\s+(\d+)\s+obj\b/g)) {
+      if (++count > 20000) throw new Error('too many objects');
+      const object = PDFObjectParser.forBytes(bytes.subarray(match.index! + match[0].length), context).parseObject();
+      context.assign(PDFRef.of(Number(match[1]), Number(match[2])), object);
+      if (!root && object instanceof PDFDict && object.has(PDFName.of('FDF'))) root = object;
+    }
+    if (!root) {
+      const start = text.indexOf('<<');
+      if (start < 0) throw new Error('This FDF file has no form data.');
+      root = PDFObjectParser.forBytes(bytes.subarray(start), context).parseObject();
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message === 'This FDF file has no form data.') throw error;
+    throw new Error('This FDF file could not be read.');
+  }
+  const resolve = (value: unknown) => (value instanceof PDFRef ? context.lookup(value) : value);
+  const fdf = root instanceof PDFDict ? resolve(root.get(PDFName.of('FDF'))) : undefined;
+  const list = fdf instanceof PDFDict ? resolve(fdf.get(PDFName.of('Fields'))) : undefined;
   if (!(list instanceof PDFArray)) throw new Error('This FDF file has no form fields.');
   const map: Raw = new Map();
-  const walk = (entry: unknown, prefix: string) => {
-    if (!(entry instanceof PDFDict)) return;
+  const seen = new Set<unknown>();
+  const walk = (value: unknown, prefix: string) => {
+    const entry = resolve(value);
+    if (!(entry instanceof PDFDict) || seen.has(entry)) return;
+    seen.add(entry);
     const name = decode(entry.get(PDFName.of('T')))[0] ?? '';
     const full = prefix && name ? `${prefix}.${name}` : prefix || name;
-    const kids = entry.get(PDFName.of('Kids'));
+    const kids = resolve(entry.get(PDFName.of('Kids')));
     if (kids instanceof PDFArray) { kids.asArray().forEach((kid) => walk(kid, full)); return; }
-    if (full) map.set(full, decode(entry.get(PDFName.of('V'))));
+    if (full) map.set(full, decode(resolve(entry.get(PDFName.of('V')))));
   };
   list.asArray().forEach((entry) => walk(entry, ''));
   return map;

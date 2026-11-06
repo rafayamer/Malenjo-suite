@@ -210,4 +210,19 @@ describe('fill, flatten and data exchange (MAL-050, MAL-052, MAL-053)', () => {
     const { annotations } = await pdfjs(filled);
     expect(annotations.find((a) => a.fieldName === 'Customer')!.fieldValue).toBe('Ada');
   });
+
+  it('round-trips a check box whose on-value is "No", reads indirect FDF fields, and marks password fields', async () => {
+    const box = { name: 'Consent', kind: 'checkbox' as const, value: 'Off', onValue: 'No', options: [], multiselect: false, required: false, readOnly: false,
+      maxLength: null, logic: { unsupported: [] }, calculated: false, password: false };
+    expect(importFormData([box], '{"Consent":"No"}', 'json').values).toEqual({ Consent: 'No' });
+    const text = { ...box, name: 'Customer', kind: 'text' as const, onValue: null, value: '' };
+    const fdf = '%FDF-1.2\n1 0 obj << /FDF << /Fields [2 0 R] >> >> endobj\n2 0 obj << /T (Customer) /V (Ada) >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF';
+    expect(importFormData([text], fdf, 'fdf').values).toEqual({ Customer: 'Ada' });
+    const pdf = await PDFDocument.load(await blank());
+    const secret = pdf.getForm().createTextField('PIN');
+    secret.enablePassword();
+    secret.addToPage(pdf.getPage(0), { x: 60, y: 600, width: 150, height: 20 });
+    const fields = await readFillForm(await pdf.save());
+    expect(fields.find((f) => f.name === 'PIN')!.password).toBe(true);
+  });
 });

@@ -33,6 +33,8 @@ export class FlowWriter {
   private page!: PDFPage;
   private y = 0;
   replaced = 0;
+  /** Table rows taller than a printable page, laid out as flowing paragraphs instead of side-by-side cells. */
+  unrolledRows = 0;
   pages = 0;
   constructor(pdf: PDFDocument, private setup: PageSetup) { this.pdf = pdf; }
   static async create(setup: PageSetup, firstPage = true) { const w = new FlowWriter(await PDFDocument.create(), setup); if (firstPage) w.newPage(); return w; }
@@ -160,6 +162,13 @@ export class FlowWriter {
         let h = 0; for (const p of s.cell.blocks) h += await this.paragraph(p, { x: s.x + pad, width: s.width - 2 * pad, y: 0, draw: false }); return h + 2 * pad;
       }));
       const height = Math.max(12, ...heights);
+      if (height > this.setup.height - this.setup.margin.top - this.setup.margin.bottom) {
+        // A row taller than a page cannot be drawn as one box without losing what falls below the page:
+        // its cells flow as ordinary paragraphs, one after another, across as many pages as they need.
+        this.unrolledRows++;
+        for (const s of spans) for (const p of s.cell.blocks) await this.paragraph(p);
+        continue;
+      }
       this.room(height);
       const top = this.y;
       for (const s of spans) {

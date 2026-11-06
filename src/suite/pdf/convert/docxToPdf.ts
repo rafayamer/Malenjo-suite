@@ -210,6 +210,7 @@ export async function docxToPdf(bytes: Uint8Array): Promise<DocumentPdf> {
   const notes = [`Rendered ${blocks.length} block(s) on ${writer.pages} page(s) with the document's page size and margins.`];
   const substituted = [...fonts].filter((f) => !/^(arial|helvetica|times new roman|times|courier new|courier)$/i.test(f));
   if (substituted.length) notes.push(`Fonts drawn with standard PDF fonts: ${substituted.slice(0, 8).join(', ')}${substituted.length > 8 ? '…' : ''}.`);
+  if (writer.unrolledRows) notes.push(`${writer.unrolledRows} table row(s) taller than a page were laid out as paragraphs, one cell after another.`);
   if (writer.replaced) notes.push(`${writer.replaced} character(s) outside the standard fonts were drawn as “?”.`);
   const missing: [number, string][] = [[counts.headers, 'headers and footers'], [counts.footnotes, 'footnote/endnote reference(s)'], [counts.textboxes, 'text box(es)'], [counts.charts, 'chart(s)'],
     [counts.equations, 'equation(s)'], [counts.images, 'picture(s) in formats other than PNG or JPEG']];
