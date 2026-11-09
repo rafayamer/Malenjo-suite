@@ -12,6 +12,7 @@
  * - other: page thumbnails and XFA form data.
  */
 import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber, PDFRef, PDFString, type PDFObject } from 'pdf-lib';
+import { removeUnreachableObjects } from './pdfGarbage';
 import { rewriteContent, tokenizeContent, type ContentOp } from '../content/contentLexer';
 import { pageContentBytes, readPageModel } from '../content/contentModel';
 
@@ -108,6 +109,7 @@ export async function sanitizePdf(bytes: Uint8Array, categories: SanitizeCategor
     throw new Error('This PDF is digitally signed; removing content would invalidate the signatures. Sanitize an unsigned copy instead.');
   }
   const result = await scan(pdf, new Set(categories), true);
+  removeUnreachableObjects(pdf);
   return { bytes: await pdf.save({ useObjectStreams: false, updateFieldAppearances: false }), removed: result.removed.filter((f) => categories.includes(f.category)), kept: result.kept };
 }
 

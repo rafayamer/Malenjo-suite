@@ -64,6 +64,9 @@ describe('Sanitize PDF (MAL-070)', () => {
     expect(after.info.Title).toBeUndefined(); expect(after.info.Author).toBeUndefined(); expect(after.xmp).toBeNull();
     expect(after.attachments).toBeNull(); expect(after.js).toBeNull();
     expect(after.annots).toEqual(['Text:Visible note']);
+    // What was removed is gone from the file itself, not only unreferenced.
+    const raw = new TextDecoder('latin1').decode(bytes);
+    for (const left of ['xmpmeta', '/EmbeddedFile', 'Internal draft', 'app.alert', 'Layer secret', 'OCR secret', 'example.com', 'Hidden note']) expect(raw).not.toContain(left);
     // Only the scripts: metadata and attachments stay.
     const scriptsOnly = await pdfjs((await sanitizePdf(source, ['scripts'])).bytes);
     expect(scriptsOnly.js).toBeNull(); expect(scriptsOnly.info.Title).toBe('Internal draft'); expect(scriptsOnly.attachments).not.toBeNull();

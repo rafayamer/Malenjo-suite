@@ -333,3 +333,19 @@ export async function applyImageWatermark(bytes: Uint8Array, spec: ImageWatermar
   }
   return { bytes: await save(pdf), pages: pages.length };
 }
+
+// ---- MAL-067 Bates numbering (labels are worked out by pdfBates) ----
+/** Stamps one label on each listed page (1-based), above the content, in the page's visible frame. */
+export async function stampPageLabels(bytes: Uint8Array, labels: Map<number, string>, text: StampText, position: StampPosition, marginX: number, marginY: number): Promise<{ bytes: Uint8Array; pages: number }> {
+  checkText(text, 'Label');
+  checkMargins(marginX, marginY);
+  const pdf = await loadForStamp(bytes);
+  const font = await pdf.embedFont(FONTS[text.font]);
+  for (const [page, label] of labels) {
+    if (!Number.isSafeInteger(page) || page < 1 || page > pdf.getPageCount()) throw new Error('A labelled page is not in this PDF.');
+    const stamper = new PageStamper(pdf, page - 1);
+    stamper.text(label, font, text, { position, marginX, marginY, rotation: 0, opacity: 1 });
+    stamper.commit('above');
+  }
+  return { bytes: await save(pdf), pages: labels.size };
+}
