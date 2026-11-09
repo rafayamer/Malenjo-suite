@@ -37,7 +37,7 @@ export default function PdfFormFillPanel({ domIdPrefix, bytes, sourceName, busy,
     }).catch((reason) => { if (live) setError(describePdfError(reason)); });
     return () => { live = false; };
   }, [bytes]);
-  useEffect(() => { panelRef.current?.querySelector<HTMLElement>('input,select,button[data-autofocus]')?.focus(); }, [fields.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { panelRef.current?.querySelector<HTMLElement>('input,select,button[data-autofocus],header button')?.focus(); }, [fields.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const evaluation = useMemo(() => evaluateFill(fields, values), [fields, values]);
   const editable = fields.filter((f) => f.kind !== 'button' && f.kind !== 'signature');

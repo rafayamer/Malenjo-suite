@@ -32,7 +32,7 @@ try {
     expect(await d.getByLabel('Your name').inputValue() === 'Sam Lee', 'name');
     await d.getByLabel('Comment', { exact: true }).fill('Is this total right, @Dana?');
     await d.getByRole('button', { name: 'Place on the page' }).click();
-    const b = await canvasBox(); await page.mouse.click(b.x + 0.3 * b.width, b.y + 0.15 * b.height);
+    const b = await canvasBox(); await page.mouse.click(b.x + 0.12 * b.width, b.y + 0.15 * b.height);
     await notice('Added a comment on page 1.');
     await d.getByRole('article', { name: 'Thread by Sam Lee on page 1' }).getByText('Is this total right, @Dana?').waitFor();
     const fromSam = await save();
@@ -69,7 +69,7 @@ try {
     await action('Review', 'Comment threads…');
     d = page.getByRole('dialog', { name: 'Comment threads' });
     await d.getByRole('region', { name: 'For you' }).getByText(/Dana Reviewer mentioned you/).waitFor();
-    await d.getByRole('article', { name: 'Thread by Sam Lee on page 1' }).getByText('Resolved').waitFor();
+    await d.getByRole('article', { name: 'Thread by Sam Lee on page 1' }).locator('header strong').getByText('Resolved', { exact: true }).waitFor();
     await d.getByRole('button', { name: 'Close comment threads' }).click();
   });
 

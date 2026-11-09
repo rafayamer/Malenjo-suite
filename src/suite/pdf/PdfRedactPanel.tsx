@@ -43,7 +43,7 @@ export default function PdfRedactPanel({ domIdPrefix, bytes, busy, state, onStat
       .catch((reason) => { if (live) setError(describePdfError(reason)); });
     return () => { live = false; };
   }, [bytes]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { ref.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus(); }, []);
+  useEffect(() => { ref.current?.querySelector<HTMLElement>('[data-autofocus]:not(:disabled), input')?.focus(); }, []);
   const marks = state?.marks ?? [];
   const addMarks = (added: RedactMarkItem[]) => onState((current) => current ? { ...current, marks: [...current.marks, ...added] } : current);
   const titleId = `${domIdPrefix}-redact-title`;

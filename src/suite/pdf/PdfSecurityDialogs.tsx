@@ -94,7 +94,7 @@ export function PdfSanitizeDialog({ domIdPrefix, bytes, busy, onApply, onClose }
       .catch((reason) => { if (live) setError(describePdfError(reason)); });
     return () => { live = false; };
   }, [bytes]);
-  useEffect(() => { ref.current?.querySelector<HTMLElement>('input')?.focus(); }, [findings !== null]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { ref.current?.querySelector<HTMLElement>('input, header button')?.focus(); }, [findings !== null]); // eslint-disable-line react-hooks/exhaustive-deps
   const titleId = `${domIdPrefix}-sanitize-title`;
   async function remove() {
     setWorking(true); setError(''); setReport([]);

@@ -47,7 +47,7 @@ export default function PdfDynamicStampPanel({ domIdPrefix, bytes, sourceName, b
       <legend>Stamp library</legend>
       <ul className="pdf-stamp-library" aria-label="Stamp library">
         {library.map((d) => <li key={d.id}><label className="pdf-tool-dialog-choice"><input type="radio" name={`${titleId}-stamp`} checked={selected === d.id} onChange={() => setSelected(d.id)}/>
-          <span style={{ color: d.color, fontWeight: 600 }}>{d.status}</span> {d.name}{d.builtIn ? '' : ' (yours)'}</label>
+          <span className="pdf-stamp-chip" style={{ color: d.color, borderColor: d.color }}>{d.status}</span> {d.name}{d.builtIn ? '' : ' (yours)'}</label>
           {!d.builtIn && <><button type="button" aria-label={`Edit stamp ${d.name}`} onClick={() => setDraft({ ...d })}>Edit</button>
             <button type="button" aria-label={`Delete stamp ${d.name}`} onClick={() => { const next = library.filter((x) => x.id !== d.id); store(next); if (selected === d.id) setSelected(next[0].id); }}>Delete</button></>}
         </li>)}
@@ -63,7 +63,7 @@ export default function PdfDynamicStampPanel({ domIdPrefix, bytes, sourceName, b
       <small>Variables: {STAMP_VARIABLES.map((v) => `{${v}}`).join(' ')}. {'{docid}'} is the document's identifier; {'{status}'} repeats the status line.</small>
       <button type="button" onClick={saveDraft}>Save stamp</button><button type="button" onClick={() => setDraft(null)}>Cancel</button>
     </fieldset>}
-    <p aria-label="Stamp preview" className="pdf-stamp-preview"><strong style={{ color: design.color }}>{preview.status}</strong><br/>{preview.detail}</p>
+    <p aria-label="Stamp preview" className="pdf-stamp-preview" style={{ color: design.color, borderColor: design.color }}><strong>{preview.status}</strong><br/>{preview.detail}</p>
     {notice && <p role="status">{notice}</p>}
     {error && <p role="alert" className="pdf-tool-dialog-error">{error}</p>}
     <button type="button" className="primary-action" aria-pressed={!!placing} disabled={busy}

@@ -23,7 +23,7 @@ export default function PdfSigningRequestPanel({ domIdPrefix, bytes, sourceName,
   const [recipients, setRecipients] = useState<Recipient[]>([{ name: '', email: '' }]);
   const [error, setError] = useState(''); const [working, setWorking] = useState(false);
   const ref = useRef<HTMLElement>(null);
-  useEffect(() => { ref.current?.querySelector<HTMLElement>('input')?.focus(); }, [status === undefined]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { ref.current?.querySelector<HTMLElement>('input, header button')?.focus(); }, [status === undefined]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { let live = true; signingRequestStatus(bytes, loadTrusted()).then((s) => { if (live) setStatus(s); }).catch((reason) => { if (live) { setStatus(null); setError(describePdfError(reason)); } }); return () => { live = false; }; }, [bytes]);
   const titleId = `${domIdPrefix}-requests-title`;
   async function prepare() {
