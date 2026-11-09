@@ -369,4 +369,15 @@ describe('fill, flatten and data exchange (MAL-050, MAL-052, MAL-053)', () => {
     expect(filled.getTextField('Total').getText()).toBe('12');
     expect(filled.getTextField('Amount').getText()).toBe('12');
   });
+
+  it('imports form data for a field named __proto__', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([300, 200]);
+    pdf.getForm().createTextField('__proto__').addToPage(page, { x: 20, y: 100, width: 120, height: 20 });
+    const fields = await readFillForm(await pdf.save());
+    const imported = importFormData(fields, '{"__proto__":"Imported answer"}', 'json');
+    expect(Object.keys(imported.values)).toEqual(['__proto__']);
+    const merged: Record<string, string> = { ...imported.values };
+    expect(Object.getOwnPropertyDescriptor(merged, '__proto__')?.value).toBe('Imported answer');
+  });
 });

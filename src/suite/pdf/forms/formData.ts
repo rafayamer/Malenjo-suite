@@ -49,7 +49,8 @@ export function importFormData(fields: FillField[], text: string, format: FormDa
   if (text.length > MAX_INPUT) throw new Error('Form data files are limited to 5 MB.');
   const raw = format === 'json' ? parseJson(text) : format === 'csv' ? parseCsv(text) : format === 'fdf' ? parseFdf(text) : parseXfdf(text);
   const byName = new Map(dataFields(fields).map((f) => [f.name, f]));
-  const values: Record<string, string> = {}, unknown: string[] = [], skipped: string[] = [];
+  // Prototype-free, so a field named __proto__ (or constructor) is imported like any other.
+  const values = Object.create(null) as Record<string, string>, unknown: string[] = [], skipped: string[] = [];
   for (const [name, list] of raw) {
     const field = byName.get(name);
     if (!field) { unknown.push(name); continue; }
