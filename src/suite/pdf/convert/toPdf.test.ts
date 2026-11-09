@@ -674,3 +674,32 @@ describe('conversion edge cases, round 17', () => {
     expect(result.notes.join(' ')).toMatch(/Not rendered: 2 shape\(s\) inherited from slide layouts or masters/);
   });
 });
+
+describe('conversion edge cases, round 18', () => {
+  it('resolves theme colours from each slide’s own master', async () => {
+    const A = 'xmlns:a="a" xmlns:p="p" xmlns:r="r"';
+    const theme = (accent: string) => strToU8(`<a:theme ${A}><a:themeElements><a:clrScheme name="t"><a:accent1><a:srgbClr val="${accent}"/></a:accent1></a:clrScheme></a:themeElements></a:theme>`);
+    const slide = `<p:sld ${A}><p:cSld><p:spTree><p:sp><p:nvSpPr><p:cNvPr id="2" name="t"/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="6096000" cy="1524000"/></a:xfrm><a:solidFill><a:srgbClr val="000000"/></a:solidFill></p:spPr><p:txBody><a:bodyPr/><a:p><a:r><a:rPr sz="2000"><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:rPr><a:t>Accent text</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>`;
+    const pptx = zipSync({
+      'ppt/presentation.xml': strToU8(`<p:presentation ${A}><p:sldIdLst><p:sldId id="256" r:id="rId1"/><p:sldId id="257" r:id="rId2"/></p:sldIdLst><p:sldSz cx="9144000" cy="5143500"/></p:presentation>`),
+      'ppt/_rels/presentation.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="slides/slide1.xml"/><Relationship Id="rId2" Target="slides/slide2.xml"/></Relationships>'),
+      'ppt/slides/slide1.xml': strToU8(slide), 'ppt/slides/slide2.xml': strToU8(slide),
+      'ppt/slides/_rels/slide1.xml.rels': strToU8('<Relationships><Relationship Id="rL" Target="../slideLayouts/slideLayout1.xml"/></Relationships>'),
+      'ppt/slides/_rels/slide2.xml.rels': strToU8('<Relationships><Relationship Id="rL" Target="../slideLayouts/slideLayout2.xml"/></Relationships>'),
+      'ppt/slideLayouts/slideLayout1.xml': strToU8(`<p:sldLayout ${A}/>`), 'ppt/slideLayouts/slideLayout2.xml': strToU8(`<p:sldLayout ${A}/>`),
+      'ppt/slideLayouts/_rels/slideLayout1.xml.rels': strToU8('<Relationships><Relationship Id="rM" Target="../slideMasters/slideMaster1.xml"/></Relationships>'),
+      'ppt/slideLayouts/_rels/slideLayout2.xml.rels': strToU8('<Relationships><Relationship Id="rM" Target="../slideMasters/slideMaster2.xml"/></Relationships>'),
+      'ppt/slideMasters/slideMaster1.xml': strToU8(`<p:sldMaster ${A}/>`), 'ppt/slideMasters/slideMaster2.xml': strToU8(`<p:sldMaster ${A}/>`),
+      'ppt/slideMasters/_rels/slideMaster1.xml.rels': strToU8('<Relationships><Relationship Id="rT" Target="../theme/theme1.xml"/></Relationships>'),
+      'ppt/slideMasters/_rels/slideMaster2.xml.rels': strToU8('<Relationships><Relationship Id="rT" Target="../theme/theme2.xml"/></Relationships>'),
+      'ppt/theme/theme1.xml': theme('FF0000'), 'ppt/theme/theme2.xml': theme('FFFFFF'),
+    });
+    const result = await pptxToPdf(pptx);
+    const { PDFDocument } = await import('pdf-lib');
+    const { pageContentBytes } = await import('../content/contentModel');
+    const pdf = await PDFDocument.load(result.bytes);
+    const content = (i: number) => new TextDecoder('latin1').decode(pageContentBytes(pdf, i));
+    expect(content(0)).toMatch(/BT\n1 0 0 rg/);
+    expect(content(1)).toMatch(/BT\n1 1 1 rg/);
+  });
+});

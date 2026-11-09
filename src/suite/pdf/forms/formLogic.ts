@@ -73,7 +73,10 @@ export function logicScripts(logic: Omit<FieldLogic, 'unsupported'>): FieldScrip
   }
   if (logic.showWhen) {
     const { field, value } = logic.showWhen;
-    const test = value === '*' ? `this.getField(${lit(field)}).value !== "" && this.getField(${lit(field)}).value !== "Off"` : `this.getField(${lit(field)}).value == ${lit(value)}`;
+    // "Any value": "Off" counts as empty only for check boxes and radio buttons (as in MALENJO's own evaluation),
+    // so a text field holding the word Off still shows the dependent field.
+    const f = `this.getField(${lit(field)})`;
+    const test = value === '*' ? `${f}.value !== "" && !(${f}.value === "Off" && (${f}.type == "checkbox" || ${f}.type == "radiobutton"))` : `${f}.value == ${lit(value)}`;
     calculate.push(`event.target.display = (${test}) ? display.visible : display.hidden;`);
   }
   if (calculate.length) scripts.C = calculate.join('\n');
@@ -98,6 +101,9 @@ const RULES: [RegExp, (m: RegExpMatchArray, logic: FieldLogic) => void][] = [
     (m, l) => { l.calculate = { op: m[1] as CalcOp, fields: (m[2].match(new RegExp(STRING, 'g')) ?? []).map(str) }; }],
   [new RegExp(String.raw`^event\.target\.display = \(this\.getField\((${STRING})\)\.value == (${STRING})\) \? display\.visible : display\.hidden;$`),
     (m, l) => { l.showWhen = { field: str(m[1]), value: str(m[2]) }; }],
+  [new RegExp(String.raw`^event\.target\.display = \(this\.getField\((${STRING})\)\.value !== "" && !\(this\.getField\(\1\)\.value === "Off" && \(this\.getField\(\1\)\.type == "checkbox" \|\| this\.getField\(\1\)\.type == "radiobutton"\)\)\) \? display\.visible : display\.hidden;$`),
+    (m, l) => { l.showWhen = { field: str(m[1]), value: '*' }; }],
+  // The form written by earlier versions, which treated "Off" as empty for every field type.
   [new RegExp(String.raw`^event\.target\.display = \(this\.getField\((${STRING})\)\.value !== "" && this\.getField\(\1\)\.value !== "Off"\) \? display\.visible : display\.hidden;$`),
     (m, l) => { l.showWhen = { field: str(m[1]), value: '*' }; }],
 ];

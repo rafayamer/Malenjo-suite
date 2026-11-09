@@ -27,15 +27,21 @@ export async function pptxToPdf(bytes: Uint8Array): Promise<DocumentPdf> {
   if (!slidePaths.length) throw new Error('This presentation has no slides.');
   const counts = { charts: 0, smartArt: 0, rotated: 0, gradients: 0, images: 0, geometry: 0, media: 0, inherited: 0 };
 
-  // Theme colours (for schemeClr).
-  const masterPath = slidePaths.length ? [...relationships(files, [...relationships(files, slidePaths[0]).values()].find((p) => p.includes('slideLayout')) ?? '').values()].find((p) => p.includes('slideMaster')) : undefined;
-  const themePath = masterPath ? [...relationships(files, masterPath).values()].find((p) => p.includes('theme')) : undefined;
-  const theme = themePath ? xml(files, themePath) : undefined;
-  const scheme = new Map<string, string>();
-  for (const c of theme ? all(theme, 'a:clrScheme')[0]?.children ?? [] : []) {
-    const name = c.name.replace('a:', ''); const v = child(c, 'a:srgbClr')?.attrs.val ?? child(c, 'a:sysClr')?.attrs.lastClr;
-    if (v) scheme.set(name, v);
-  }
+  // Theme colours (for schemeClr), from each slide's own master's theme; schemes are cached by theme path.
+  const schemes = new Map<string, Map<string, string>>();
+  const schemeOf = (themePath: string | undefined) => {
+    if (!themePath) return new Map<string, string>();
+    if (!schemes.has(themePath)) {
+      const theme = xml(files, themePath); const map = new Map<string, string>();
+      for (const c of theme ? all(theme, 'a:clrScheme')[0]?.children ?? [] : []) {
+        const name = c.name.replace('a:', ''); const v = child(c, 'a:srgbClr')?.attrs.val ?? child(c, 'a:sysClr')?.attrs.lastClr;
+        if (v) map.set(name, v);
+      }
+      schemes.set(themePath, map);
+    }
+    return schemes.get(themePath)!;
+  };
+  let scheme = new Map<string, string>();
   const alias: Record<string, string> = { tx1: 'dk1', tx2: 'dk2', bg1: 'lt1', bg2: 'lt2' };
   const colorOf = (node: XNode | undefined): [number, number, number] | undefined => {
     if (!node) return undefined;
@@ -71,6 +77,7 @@ export async function pptxToPdf(bytes: Uint8Array): Promise<DocumentPdf> {
     const layout = layoutPath ? xml(files, layoutPath) : undefined;
     const masterP = layoutPath ? [...relationships(files, layoutPath).values()].find((p) => p.includes('slideMaster')) : undefined;
     const master = masterP ? xml(files, masterP) : undefined;
+    scheme = schemeOf(masterP ? [...relationships(files, masterP).values()].find((p) => p.includes('theme')) : undefined);
     const known = [placeholders(layout), placeholders(master)];
     writer.newPageSized(W, H);
     const page = writer.currentPage;

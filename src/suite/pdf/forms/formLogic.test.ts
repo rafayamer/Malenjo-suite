@@ -177,4 +177,20 @@ describe('form evaluation', () => {
     expect(Object.keys(result.errors)).toEqual(['__proto__']);
     expect(Object.values(result.errors)).toEqual(['__proto__ is required.']);
   });
+
+  it('writes an "any value" visibility rule that treats Off as empty only for check boxes and radio buttons', () => {
+    const script = logicScripts({ showWhen: { field: 'Notes', value: '*' } }).C!;
+    expect(parseLogic({ C: script }).showWhen).toEqual({ field: 'Notes', value: '*' });
+    // Run the script the way a reader would, with a text source and with a check box source.
+    const run = (value: string, type: string) => {
+      const event = { target: { display: 'unset' as unknown } };
+      new Function('event', 'display', script).call({ getField: () => ({ value, type }) }, event, { visible: 'visible', hidden: 'hidden' });
+      return event.target.display;
+    };
+    expect(run('Off', 'text')).toBe('visible');
+    expect(run('Off', 'checkbox')).toBe('hidden');
+    expect(run('', 'text')).toBe('hidden');
+    // Scripts written by earlier versions are still read.
+    expect(parseLogic({ C: 'event.target.display = (this.getField("Notes").value !== "" && this.getField("Notes").value !== "Off") ? display.visible : display.hidden;' }).showWhen).toEqual({ field: 'Notes', value: '*' });
+  });
 });

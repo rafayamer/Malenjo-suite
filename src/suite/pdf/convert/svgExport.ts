@@ -25,12 +25,20 @@ function family(baseFont: string): string {
   return `font-family="${esc(name.split(/[-,]/)[0])}, ${generic}"${/bold|black|heavy/i.test(name) ? ' font-weight="bold"' : ''}${/italic|oblique/i.test(name) ? ' font-style="italic"' : ''}`;
 }
 
+/** True when a stream's /DecodeParms (a dictionary, or an array of them) asks for a predictor. */
+function hasPredictor(pdf: PDFDocument, dict: PDFRawStream['dict']): boolean {
+  const parms = dict.get(N('DecodeParms'));
+  const resolved = parms ? pdf.context.lookup(parms) : undefined;
+  const list = resolved instanceof PDFArray ? resolved.asArray().map((p) => pdf.context.lookup(p)) : [resolved];
+  return list.some((p) => p instanceof PDFDict && (p.lookupMaybe(N('Predictor'), PDFNumber)?.asNumber() ?? 1) > 1);
+}
+
 /** A soft mask's 8-bit alpha samples for a width × height image, or null when they cannot be read. */
 function maskAlpha(pdf: PDFDocument, dict: PDFRawStream['dict'], width: number, height: number): Uint8Array | null {
   const smask = pdf.context.lookup(dict.get(N('SMask')) as never);
   if (!(smask instanceof PDFRawStream)) return null;
   if (smask.dict.lookupMaybe(N('Width'), PDFNumber)?.asNumber() !== width || smask.dict.lookupMaybe(N('Height'), PDFNumber)?.asNumber() !== height) return null;
-  if (smask.dict.lookupMaybe(N('BitsPerComponent'), PDFNumber)?.asNumber() !== 8) return null;
+  if (smask.dict.lookupMaybe(N('BitsPerComponent'), PDFNumber)?.asNumber() !== 8 || hasPredictor(pdf, smask.dict)) return null;
   try { const alpha = decodePDFRawStream(smask).decode(); return alpha.length >= width * height ? alpha : null; } catch { return null; }
 }
 
@@ -47,6 +55,8 @@ function imageUri(pdf: PDFDocument, stream: PDFRawStream): { uri: string; mask?:
   if (components !== 1 && components !== 3) return null;
   // A colour-key or stencil /Mask is not applied here: such a picture is counted as not converted, never drawn opaque.
   if (dict.has(N('Mask'))) return null;
+  // A PNG or TIFF predictor leaves filtered rows, not samples, after decompression: such pictures are reported.
+  if (hasPredictor(pdf, dict)) return null;
   if (filters.length === 1 && filters[0] === '/DCTDecode') {
     const uri = `data:image/jpeg;base64,${base64(stream.contents)}`;
     if (!dict.has(N('SMask'))) return { uri };
