@@ -734,3 +734,20 @@ describe('conversion edge cases, round 19', () => {
     expect(new TextDecoder('latin1').decode(pageContentBytes(await PDFDocument.load(result.bytes), 0))).toMatch(/1 0 0 rg[\s\S]*?\nf\n/);
   });
 });
+
+describe('conversion edge cases, round 20', () => {
+  it('keeps an RGBX TIFF opaque: an unspecified extra sample is not alpha', () => {
+    const entries: [number, number, number, number][] = [[256, 3, 1, 1], [257, 3, 1, 1], [258, 3, 4, 0], [259, 3, 1, 1], [262, 3, 1, 2], [273, 4, 1, 0], [277, 3, 1, 4], [278, 3, 1, 1], [279, 4, 1, 4], [338, 3, 1, 0]];
+    const ifd = 8, bpsAt = ifd + 2 + entries.length * 12 + 4, stripAt = bpsAt + 8;
+    const bytes = new Uint8Array(stripAt + 4); const v = new DataView(bytes.buffer);
+    bytes.set([0x49, 0x49]); v.setUint16(2, 42, true); v.setUint32(4, ifd, true); v.setUint16(ifd, entries.length, true);
+    entries.forEach(([tag, type, count, value], i) => {
+      const e = ifd + 2 + i * 12;
+      v.setUint16(e, tag, true); v.setUint16(e + 2, type, true); v.setUint32(e + 4, count, true);
+      if (tag === 258) v.setUint32(e + 8, bpsAt, true); else if (tag === 273) v.setUint32(e + 8, stripAt, true); else if (type === 3) v.setUint16(e + 8, value, true); else v.setUint32(e + 8, value, true);
+    });
+    for (let k = 0; k < 4; k++) v.setUint16(bpsAt + k * 2, 8, true);
+    bytes.set([255, 0, 0, 0], stripAt);
+    expect([...decodeTiff(bytes)[0].data]).toEqual([255, 0, 0, 255]);
+  });
+});

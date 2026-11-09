@@ -126,6 +126,9 @@ export function decodeTiff(bytes: Uint8Array): Rgba[] {
     const palette = tags.get(320);
     // ExtraSamples 1 is associated (premultiplied) alpha; the decoded pixels are straight alpha, as PNG stores.
     const associated = tags.get(338)?.[0] === 1;
+    // An extra sample is opacity only when ExtraSamples says so (1 associated, 2 unassociated); otherwise it is
+    // unspecified data (as in RGBX) and the pixel stays opaque.
+    const hasAlpha = associated || tags.get(338)?.[0] === 2;
     const out = new Uint8ClampedArray(width * height * 4);
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
       const o = (y * width + x) * 4;
@@ -138,9 +141,9 @@ export function decodeTiff(bytes: Uint8Array): Rgba[] {
         continue;
       }
       const i = y * rowBytes + x * spp;
-      if (photometric === 2) { out[o] = data[i]; out[o + 1] = data[i + 1]; out[o + 2] = data[i + 2]; out[o + 3] = spp >= 4 ? data[i + 3] : 255; if (associated && spp >= 4) unpremultiply(out, o, 3); }
+      if (photometric === 2) { out[o] = data[i]; out[o + 1] = data[i + 1]; out[o + 2] = data[i + 2]; out[o + 3] = spp >= 4 && hasAlpha ? data[i + 3] : 255; if (associated && spp >= 4) unpremultiply(out, o, 3); }
       else if (photometric === 3 && palette) { const k = data[i]; const n = palette.length / 3; out[o] = palette[k] >> 8; out[o + 1] = palette[n + k] >> 8; out[o + 2] = palette[2 * n + k] >> 8; out[o + 3] = 255; }
-      else { const g = photometric === 0 ? 255 - data[i] : data[i]; out[o] = out[o + 1] = out[o + 2] = g; out[o + 3] = spp >= 2 ? data[i + 1] : 255; if (associated && spp >= 2) unpremultiply(out, o, 3); }
+      else { const g = photometric === 0 ? 255 - data[i] : data[i]; out[o] = out[o + 1] = out[o + 2] = g; out[o + 3] = spp >= 2 && hasAlpha ? data[i + 1] : 255; if (associated && spp >= 2) unpremultiply(out, o, 3); }
     }
     pages.push(orient({ width, height, data: out }, tags.get(274)?.[0] ?? 1));
     ifd = u32(ifd + 2 + count * 12);

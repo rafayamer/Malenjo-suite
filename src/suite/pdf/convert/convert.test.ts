@@ -127,6 +127,29 @@ describe('structured text formats (MAL-041, 042, 044)', () => {
     expect(text(pdfToPlainText(pages, 2, { order: 'stored', separator: 'formfeed', template: '', title: 'r' }).files[0].bytes)).toContain('\f');
   });
 
+  it('places a picture drawn inside a form XObject through the form’s matrix', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([612, 792]);
+    const png = await pdf.embedPng(encodePng(image(2, 2, (x, y) => QUAD[y * 2 + x])));
+    const name = page.node.newXObject('Im', png.ref);
+    page.pushOperators(pushGraphicsState(), drawObject(name as PDFName), popGraphicsState());
+    const loading = getDocument({ data: (await pdf.save()).slice(), isOffscreenCanvasSupported: false } as never);
+    const doc = await loading.promise;
+    try {
+      // Wrap the picture in a form whose matrix scales the unit square to 100 × 50 pt at (20, 30).
+      const real = await doc.getPage(1);
+      const list = await real.getOperatorList();
+      const at = list.fnArray.indexOf(OPS.paintImageXObject);
+      const wrapped = {
+        fnArray: [...list.fnArray.slice(0, at), OPS.paintFormXObjectBegin, list.fnArray[at], OPS.paintFormXObjectEnd, ...list.fnArray.slice(at + 1)],
+        argsArray: [...list.argsArray.slice(0, at), [[100, 0, 0, 50, 20, 30], null], list.argsArray[at], [], ...list.argsArray.slice(at + 1)],
+      };
+      const page1 = new Proxy(real, { get: (t, k) => k === 'getOperatorList' ? async () => wrapped : typeof Reflect.get(t, k) === 'function' ? (Reflect.get(t, k) as (...a: unknown[]) => unknown).bind(t) : Reflect.get(t, k) });
+      const [read] = await readPdfStructure({ numPages: 1, getPage: async () => page1 } as never, [1], { images: true, ops: OPS as never });
+      expect(read.images.map((i) => [Math.round(i.x), Math.round(i.y), Math.round(i.width), Math.round(i.height)])).toEqual([[20, 792 - 80, 100, 50]]);
+    } finally { await loading.destroy(); }
+  });
+
   it('extracts every placement of a picture PDF.js folds into one repeat operation', async () => {
     const pdf = await PDFDocument.create();
     const page = pdf.addPage([612, 792]);

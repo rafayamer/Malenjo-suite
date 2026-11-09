@@ -490,6 +490,13 @@ export async function updateFormField(bytes: Uint8Array, name: string, change: F
     }
     const before = parseLogic(readScripts(pdf, field.acroField.dict));
     writeLogic(pdf, field.acroField.dict, { ...change.logic, unsupported: before.unsupported });
+    // Removing a visibility rule shows the field again: the Hidden flag the rule set is cleared; other flags stay.
+    if (before.showWhen && !change.logic.showWhen) {
+      for (const widget of field.acroField.getWidgets()) {
+        const flags = widget.dict.lookupMaybe(N('F'), PDFNumber)?.asNumber() ?? 0;
+        if (flags & 2) widget.dict.set(N('F'), PDFNumber.of(flags & ~2));
+      }
+    }
     writeCalculationOrder(pdf); // also refuses calculation cycles
     if (field instanceof PDFTextField) field.setAlignment(change.logic.format ? TextAlignment.Right : TextAlignment.Left);
   }

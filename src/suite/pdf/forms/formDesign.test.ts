@@ -380,4 +380,16 @@ describe('fill, flatten and data exchange (MAL-050, MAL-052, MAL-053)', () => {
     const merged: Record<string, string> = { ...imported.values };
     expect(Object.getOwnPropertyDescriptor(merged, '__proto__')?.value).toBe('Imported answer');
   });
+
+  it('shows a field again when its visibility rule is removed', async () => {
+    let bytes = await blank();
+    bytes = await addFormField(bytes, field('text', 'Source', at(0.1, 0.1)));
+    bytes = await addFormField(bytes, field('text', 'Detail', at(0.1, 0.2)));
+    bytes = await updateFormField(bytes, 'Detail', { logic: { showWhen: { field: 'Source', value: '*' } } });
+    bytes = (await fillFormWithLogic(bytes, { Source: '' })).bytes; // Source empty: Detail is hidden
+    const flags = async () => (await PDFDocument.load(bytes)).getForm().getField('Detail').acroField.getWidgets().map((w) => w.dict.get(PDFName.of('F'))?.toString());
+    expect(await flags()).toEqual(['6']); // Print + Hidden
+    bytes = await updateFormField(bytes, 'Detail', { logic: {} });
+    expect(await flags()).toEqual(['4']); // Print only: shown again
+  });
 });

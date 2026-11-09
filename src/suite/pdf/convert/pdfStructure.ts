@@ -60,6 +60,9 @@ export async function readPdfStructure(doc: Doc, pages: number[], options: { ima
         if (fn === OPS.save) stack.push(ctm);
         else if (fn === OPS.restore) ctm = stack.pop() ?? ctm;
         else if (fn === OPS.transform) ctm = mul(args as M, ctm);
+        // A form XObject draws in its own graphics state, through its /Matrix.
+        else if (fn === OPS.paintFormXObjectBegin) { stack.push(ctm); const m = args[0] as ArrayLike<number> | null; if (m && m.length === 6) ctm = mul(Array.from(m), ctm); }
+        else if (fn === OPS.paintFormXObjectEnd) ctm = stack.pop() ?? ctm;
         else if (fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject || fn === OPS.paintImageXObjectRepeat) {
           const data = fn === OPS.paintInlineImageXObject ? args[0] : await new Promise((done) => {
             const id = args[0] as string;
