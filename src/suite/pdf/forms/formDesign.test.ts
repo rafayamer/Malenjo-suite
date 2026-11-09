@@ -1,0 +1,412 @@
+import { describe, expect, it } from 'vitest';
+import { PDFDocument, PDFHexString, PDFName, StandardFonts, degrees } from 'pdf-lib';
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { addFormField, deleteFormField, listFormDesign, moveFormWidget, renameFormField, updateFormField, type DesignFieldSpec } from './formDesign';
+import { evaluateFill, fillFormWithLogic, flattenFormFields, readFillForm } from './formFill';
+import { exportFormData, importFormData } from './formData';
+
+async function blank(rotate = 0) {
+  const pdf = await PDFDocument.create();
+  const page = pdf.addPage([600, 800]);
+  page.drawText('Order form', { x: 50, y: 760, size: 18, font: await pdf.embedFont(StandardFonts.Helvetica) });
+  if (rotate) page.setRotation(degrees(rotate));
+  return pdf.save();
+}
+const at = (x: number, y: number, width = 0.3, height = 0.04) => ({ x, y, width, height });
+const field = (kind: DesignFieldSpec['kind'], name: string, rect = at(0.1, 0.1), extra: Partial<DesignFieldSpec> = {}): DesignFieldSpec => ({ kind, name, pageNumber: 1, viewRotation: 0, rect, ...extra });
+
+async function pdfjs(bytes: Uint8Array) {
+  const loading = getDocument({ data: bytes.slice() });
+  const doc = await loading.promise;
+  try {
+    const page = await doc.getPage(1);
+    const found: unknown = await doc.getFieldObjects();
+    const fieldObjects = (found instanceof Map ? Object.fromEntries(found) : found ?? {}) as Record<string, Record<string, any>[]>;
+    return {
+      annotations: (await page.getAnnotations()) as Record<string, any>[],
+      objects: fieldObjects,
+      order: (await doc.getCalculationOrderIds()) as string[] | null,
+      text: ((await page.getTextContent()).items as { str: string }[]).map((i) => i.str).join(' '),
+    };
+  } finally { await loading.destroy(); }
+}
+
+async function orderForm() {
+  let bytes = await blank();
+  bytes = await addFormField(bytes, field('text', 'Customer', at(0.1, 0.1), { tooltip: 'Full name', required: true, maxLength: 40 }));
+  bytes = await addFormField(bytes, field('number', 'Subtotal', at(0.1, 0.2), { format: { kind: 'number', decimals: 2, separator: 0, currency: '$' } }));
+  bytes = await addFormField(bytes, field('number', 'Tax', at(0.1, 0.25)));
+  bytes = await addFormField(bytes, field('number', 'Total', at(0.1, 0.3), { readOnly: true }));
+  bytes = await addFormField(bytes, field('date', 'Delivery', at(0.1, 0.35), { format: { kind: 'date', pattern: 'dd/mm/yyyy' } }));
+  bytes = await addFormField(bytes, field('text', 'Code', at(0.5, 0.1, 0.2, 0.04), { maxLength: 5, comb: true }));
+  bytes = await addFormField(bytes, field('checkbox', 'Company', at(0.5, 0.2, 0.03, 0.03)));
+  bytes = await addFormField(bytes, field('text', 'VAT number', at(0.5, 0.25)));
+  bytes = await addFormField(bytes, field('radio', 'Shipping', at(0.5, 0.4, 0.3, 0.12), { options: [{ value: 'std', label: 'Standard' }, { value: 'exp', label: 'Express' }, { value: 'pick', label: 'Pick up' }], selected: ['std'] }));
+  bytes = await addFormField(bytes, field('dropdown', 'Country', at(0.1, 0.5), { options: [{ value: 'DE', label: 'Germany' }, { value: 'FR', label: 'France' }], selected: ['FR'] }));
+  bytes = await addFormField(bytes, field('list', 'Extras', at(0.1, 0.6, 0.3, 0.1), { multiselect: true, options: [{ value: 'gift', label: 'Gift wrap' }, { value: 'ins', label: 'Insurance' }, { value: 'sig', label: 'Signature on delivery' }] }));
+  bytes = await addFormField(bytes, field('signature', 'Approval', at(0.5, 0.8, 0.35, 0.08), { tooltip: 'Manager signature', required: true, lock: { action: 'include', fields: ['Total', 'Customer'] } }));
+  bytes = await addFormField(bytes, field('number', 'Rate', at(0.1, 0.4), { defaultValue: '0.2' }));
+  bytes = await updateFormField(bytes, 'Rate', { logic: { format: { kind: 'number', decimals: 2, separator: 0, currency: '' }, range: { min: 0, max: 1 } } });
+  bytes = await updateFormField(bytes, 'Tax', { logic: { format: { kind: 'number', decimals: 2, separator: 0, currency: '$' }, calculate: { op: 'PRD', fields: ['Subtotal', 'Rate'] } } });
+  bytes = await updateFormField(bytes, 'Total', { logic: { format: { kind: 'number', decimals: 2, separator: 0, currency: '$' }, calculate: { op: 'SUM', fields: ['Subtotal', 'Tax'] } } });
+  bytes = await updateFormField(bytes, 'VAT number', { required: true, logic: { showWhen: { field: 'Company', value: 'Yes' }, pattern: { regex: '^[A-Z]{2}\\d{6,10}$', message: 'Use a VAT number like DE123456789.' } } });
+  return bytes;
+}
+
+describe('form designer (MAL-046 – MAL-049)', () => {
+  it('creates every field type with its properties, readable by PDF.js', async () => {
+    const bytes = await orderForm();
+    const { annotations, objects, order } = await pdfjs(bytes);
+    const byName = (n: string) => annotations.filter((a) => a.fieldName === n);
+    expect(byName('Customer')[0]).toMatchObject({ fieldType: 'Tx', alternativeText: 'Full name', maxLen: 40 });
+    expect(byName('Customer')[0].fieldFlags & 2).toBe(2); // required
+    expect(byName('Code')[0]).toMatchObject({ comb: true, maxLen: 5 });
+    expect(byName('Shipping').map((a) => a.buttonValue)).toEqual(['std', 'exp', 'pick']);
+    expect(byName('Shipping')[0].fieldValue).toBe('std');
+    expect(byName('Country')[0].options).toEqual([{ exportValue: 'DE', displayValue: 'Germany' }, { exportValue: 'FR', displayValue: 'France' }]);
+    expect(byName('Country')[0].fieldValue).toEqual(['FR']);
+    expect(byName('Extras')[0]).toMatchObject({ multiSelect: true });
+    expect(byName('Approval')[0]).toMatchObject({ fieldType: 'Sig', alternativeText: 'Manager signature' });
+    const actions = (name: string) => Object.assign({}, ...objects[name].map((o) => (o.actions instanceof Map ? Object.fromEntries(o.actions) : o.actions ?? {})));
+    expect(actions('Subtotal').Format[0]).toBe('AFNumber_Format(2, 0, 0, 0, "$", true);');
+    expect(actions('Delivery').Keystroke[0]).toBe('AFDate_KeystrokeEx("dd/mm/yyyy");');
+    expect(actions('Total').Calculate[0]).toBe('AFSimple_Calculate("SUM", new Array("Subtotal", "Tax"));');
+    // Calculation order: every scripted field after the fields it reads (Tax before Total). The visibility
+    // rule reads a plain field, so its position only has to be after that field's (unscripted) value.
+    const ids = Object.fromEntries(Object.entries(objects).map(([name, list]) => [list[0].id, name]));
+    expect(order!.map((id) => ids[id])).toEqual(['Tax', 'Total', 'VAT number']);
+    // The signature lock is stored as a SigFieldLock.
+    const pdf = await PDFDocument.load(bytes);
+    const sig = pdf.getForm().getField('Approval').acroField.dict;
+    expect(String(sig.lookup(PDFName.of('Lock')))).toMatch(/\/Action \/Include[\s\S]*Fields/);
+    const design = await listFormDesign(bytes);
+    expect(design.find((f) => f.name === 'Approval')!.lock).toEqual({ action: 'include', fields: ['Total', 'Customer'] });
+    expect(design.find((f) => f.name === 'Delivery')!.kind).toBe('date');
+    expect(design.find((f) => f.name === 'Shipping')!.options.map((o) => o.label)).toEqual(['Standard', 'Express', 'Pick up']);
+  });
+
+  it('places fields from the shown rectangle on rotated pages, then moves, renames and deletes them', async () => {
+    let bytes = await addFormField(await blank(90), { ...field('text', 'Name', at(0.1, 0.1, 0.4, 0.05)), viewRotation: 0 });
+    let [name] = await listFormDesign(bytes);
+    expect(name.widgets[0].shown.x).toBeCloseTo(0.1, 2);
+    expect(name.widgets[0].shown.width).toBeCloseTo(0.4, 2);
+    bytes = await moveFormWidget(bytes, 'Name', name.widgets[0].ref, 1, 0, at(0.5, 0.6, 0.2, 0.05));
+    [name] = await listFormDesign(bytes);
+    expect(name.widgets[0].shown).toMatchObject({ x: expect.closeTo(0.5, 2), y: expect.closeTo(0.6, 2), width: expect.closeTo(0.2, 2) });
+    bytes = await addFormField(bytes, field('number', 'Sum', at(0.1, 0.8)));
+    bytes = await updateFormField(bytes, 'Sum', { logic: { calculate: { op: 'SUM', fields: ['Name'] } } });
+    await expect(deleteFormField(bytes, 'Name')).rejects.toThrow(/Sum uses this field/);
+    bytes = await renameFormField(bytes, 'Name', 'Amount');
+    const design = await listFormDesign(bytes);
+    expect(design.find((f) => f.name === 'Sum')!.logic.calculate!.fields).toEqual(['Amount']);
+    await expect(renameFormField(bytes, 'Amount', 'Sum')).rejects.toThrow(/already exists/);
+    bytes = await updateFormField(bytes, 'Sum', { logic: {} });
+    bytes = await deleteFormField(bytes, 'Amount');
+    const { annotations } = await pdfjs(bytes);
+    expect(annotations.map((a) => a.fieldName)).toEqual(['Sum']);
+  });
+
+  it('keeps unsupported scripts, refuses cycles and signed documents', async () => {
+    let bytes = await orderForm();
+    await expect(updateFormField(bytes, 'Subtotal', { logic: { calculate: { op: 'SUM', fields: ['Total'] } } })).rejects.toThrow(/depends on itself/);
+    const pdf = await PDFDocument.load(bytes);
+    pdf.getForm().getField('Approval').acroField.dict.set(PDFName.of('V'), pdf.context.obj({ Type: 'Sig' }));
+    bytes = await pdf.save();
+    await expect(addFormField(bytes, field('text', 'Late'))).rejects.toThrow(/signed/);
+    await expect(fillFormWithLogic(bytes, { Customer: 'X' })).rejects.toThrow(/signed; changing its form/);
+    await expect(flattenFormFields(bytes, null)).rejects.toThrow(/signed/);
+    expect((await readFillForm(bytes)).length).toBeGreaterThan(0); // reading is still allowed
+  });
+});
+
+describe('fill, flatten and data exchange (MAL-050, MAL-052, MAL-053)', () => {
+  it('fills with validation, calculation, formatting and visibility', async () => {
+    const bytes = await orderForm();
+    const fields = await readFillForm(bytes);
+    const bad = evaluateFill(fields, { Customer: 'Ada', Subtotal: '100', Company: 'Yes', 'VAT number': 'nope', Delivery: '31/02/2026' });
+    expect(bad.errors).toEqual({ 'VAT number': 'Use a VAT number like DE123456789.', Delivery: 'Delivery must be a date in the form dd/mm/yyyy.' });
+    await expect(fillFormWithLogic(bytes, { Customer: 'Ada', Subtotal: '100', Company: 'Yes', 'VAT number': 'nope' })).rejects.toThrow(/VAT number like/);
+    const { bytes: filled, evaluation } = await fillFormWithLogic(bytes, { Customer: 'Ada', Subtotal: '1250.5', Delivery: '03/11/2026', Shipping: 'exp', Country: 'DE', Extras: 'gift\nins', Code: 'AB12' });
+    expect(evaluation.hidden).toEqual(['VAT number']);
+    const { annotations } = await pdfjs(filled);
+    const get = (n: string) => annotations.find((a) => a.fieldName === n)!;
+    expect(get('Tax').fieldValue).toBe('250.1');
+    expect(get('Total').fieldValue).toBe('1500.6');
+    expect(get('Subtotal').fieldValue).toBe('1250.5');
+    expect(get('VAT number').hidden).toBe(true);
+    expect(get('Country').fieldValue).toEqual(['DE']);
+    expect(annotations.filter((a) => a.fieldName === 'Shipping').map((a) => a.fieldValue)).toEqual(['exp', 'exp', 'exp']);
+    // The formatted value is what the page shows once flattened.
+    const flat = await flattenFormFields(filled, ['Subtotal', 'Rate', 'Tax', 'Total', 'Customer']);
+    const after = await pdfjs(flat.bytes);
+    expect(after.text).toContain('$1,250.50');
+    expect(after.text).toContain('Ada');
+    expect(after.text).toContain('$1,500.60');
+    expect(after.annotations.some((a) => a.fieldName === 'Country')).toBe(true);
+    expect(after.annotations.some((a) => a.fieldName === 'Subtotal')).toBe(false);
+    expect(after.annotations.some((a) => a.fieldName === 'Customer')).toBe(false);
+    await expect(flattenFormFields(filled, ['Tax'])).rejects.toThrow(/Total uses Tax/);
+    const everything = await pdfjs((await flattenFormFields(filled, null)).bytes);
+    expect(everything.annotations.filter((a) => a.fieldName)).toEqual([]);
+    expect(everything.text).toContain('Express');
+  });
+
+  it('exports and imports CSV, JSON, FDF and XFDF', async () => {
+    const { bytes: filled } = await fillFormWithLogic(await orderForm(), { Customer: 'Zoë "Z", Ltd', Subtotal: '10', Company: 'Yes', 'VAT number': 'DE123456789', Extras: 'gift\nsig', Shipping: 'pick', Country: 'DE' });
+    const fields = await readFillForm(filled);
+    const blankFields = await readFillForm(await orderForm());
+    for (const format of ['csv', 'json', 'fdf', 'xfdf'] as const) {
+      const text = exportFormData(fields, format, 'order.pdf');
+      const imported = importFormData(blankFields, text, format);
+      expect(imported.values, format).toMatchObject({ Customer: 'Zoë "Z", Ltd', Subtotal: '10', Company: 'Yes', 'VAT number': 'DE123456789', Extras: 'gift\nsig', Shipping: 'pick', Country: 'DE' });
+      expect(imported.skipped, format).toEqual(expect.arrayContaining(['Tax', 'Total']));
+      const { bytes } = await fillFormWithLogic(await orderForm(), imported.values);
+      const again = await readFillForm(bytes);
+      expect(again.find((f) => f.name === 'Customer')!.value, format).toBe('Zoë "Z", Ltd');
+    }
+    expect(exportFormData(fields, 'fdf')).toMatch(/\/T \(Company\) \/V \/Yes/);
+    expect(importFormData(blankFields, 'name,value\nNope,1\nCountry,Germany\n', 'csv')).toEqual({ values: { Country: 'DE' }, unknown: ['Nope'], skipped: [] });
+    expect(() => importFormData(blankFields, '{"Country":"Spain"}', 'json')).not.toThrow(); // a dropdown may hold a typed value
+    expect(() => importFormData(blankFields, '{"Extras":["boat"]}', 'json')).toThrow(/not an option of Extras/);
+    expect(() => importFormData(blankFields, '<!DOCTYPE x><xfdf><fields></fields></xfdf>', 'xfdf')).toThrow(/document type/);
+  });
+
+  it('moves a widget dragged onto another page to that page', async () => {
+    const pdf = await PDFDocument.load(await blank());
+    pdf.addPage([600, 800]).setRotation(degrees(90));
+    let bytes = await addFormField(await pdf.save(), field('text', 'Note'));
+    let [note] = await listFormDesign(bytes);
+    bytes = await moveFormWidget(bytes, 'Note', note.widgets[0].ref, 2, 0, at(0.2, 0.3));
+    [note] = await listFormDesign(bytes);
+    expect(note.widgets[0].pageNumber).toBe(2);
+    const moved = await PDFDocument.load(bytes);
+    const annots = (n: number) => moved.getPage(n).node.Annots()?.size() ?? 0;
+    expect([annots(0), annots(1)]).toEqual([0, 1]);
+    const widget = moved.context.lookup(moved.getPage(1).node.Annots()!.get(0)) as import('pdf-lib').PDFDict;
+    expect(widget.get(PDFName.of('P'))?.toString()).toBe(moved.getPage(1).ref.toString());
+    expect((widget.lookup(PDFName.of('MK')) as import('pdf-lib').PDFDict).get(PDFName.of('R'))?.toString()).toBe('90');
+  });
+
+  it('keeps a hidden field without a visibility rule hidden when filling', async () => {
+    let bytes = await addFormField(await blank(), field('text', 'Internal'));
+    bytes = await addFormField(bytes, field('text', 'Customer', at(0.1, 0.3)));
+    const pdf = await PDFDocument.load(bytes);
+    const widget = pdf.getForm().getTextField('Internal').acroField.getWidgets()[0];
+    widget.dict.set(PDFName.of('F'), pdf.context.obj(2 | 4));
+    const { bytes: filled } = await fillFormWithLogic(await pdf.save(), { Customer: 'Ada' });
+    const { annotations } = await pdfjs(filled);
+    expect(annotations.find((a) => a.fieldName === 'Internal')!.hidden).toBe(true);
+  });
+
+  it('still fills a form whose choice labels the standard font cannot draw', async () => {
+    // An imported form (the designer itself only accepts labels Helvetica can draw).
+    const pdf = await PDFDocument.load(await addFormField(await blank(), field('text', 'Customer', at(0.1, 0.3))));
+    const city = pdf.getForm().createDropdown('City');
+    city.addOptions(['msk', 'spb']);
+    city.addToPage(pdf.getPage(0), { x: 60, y: 600, width: 150, height: 20 });
+    const { PDFHexString, PDFString } = await import('pdf-lib');
+    city.acroField.dict.set(PDFName.of('Opt'), pdf.context.obj([[PDFString.of('msk'), PDFHexString.fromText('Москва')], [PDFString.of('spb'), PDFHexString.fromText('Петербург')]]));
+    city.acroField.dict.set(PDFName.of('V'), PDFString.of('msk'));
+    const { bytes: filled } = await fillFormWithLogic(await pdf.save(), { Customer: 'Ada' });
+    const { annotations } = await pdfjs(filled);
+    expect(annotations.find((a) => a.fieldName === 'Customer')!.fieldValue).toBe('Ada');
+  });
+
+  it('round-trips a check box whose on-value is "No", reads indirect FDF fields, and marks password fields', async () => {
+    const box = { name: 'Consent', kind: 'checkbox' as const, value: 'Off', onValue: 'No', options: [], multiselect: false, required: false, readOnly: false,
+      maxLength: null, logic: { unsupported: [] }, calculated: false, password: false, multiline: false, concealedValue: false, editable: false };
+    expect(importFormData([box], '{"Consent":"No"}', 'json').values).toEqual({ Consent: 'No' });
+    const text = { ...box, name: 'Customer', kind: 'text' as const, onValue: null, value: '' };
+    const fdf = '%FDF-1.2\n1 0 obj << /FDF << /Fields [2 0 R] >> >> endobj\n2 0 obj << /T (Customer) /V (Ada) >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF';
+    expect(importFormData([text], fdf, 'fdf').values).toEqual({ Customer: 'Ada' });
+    const pdf = await PDFDocument.load(await blank());
+    const secret = pdf.getForm().createTextField('PIN');
+    secret.enablePassword();
+    secret.addToPage(pdf.getPage(0), { x: 60, y: 600, width: 150, height: 20 });
+    const fields = await readFillForm(await pdf.save());
+    expect(fields.find((f) => f.name === 'PIN')!.password).toBe(true);
+  });
+
+  it('keeps an untouched concealed required value valid, reads XFDF with single quotes, and marks multiline fields', async () => {
+    const pdf = await PDFDocument.load(await blank());
+    const form = pdf.getForm();
+    const pin = form.createTextField('PIN'); pin.enablePassword(); pin.setText('1234'); pin.enableRequired();
+    pin.addToPage(pdf.getPage(0), { x: 60, y: 600, width: 150, height: 20 });
+    const note = form.createTextField('Note'); note.enableMultiline();
+    note.addToPage(pdf.getPage(0), { x: 60, y: 500, width: 200, height: 60 });
+    const bytes = await pdf.save();
+    const fields = await readFillForm(bytes);
+    expect(fields.find((f) => f.name === 'PIN')!.value).toBe('');
+    expect(evaluateFill(fields, { Note: 'Line one\nLine two' }).errors).toEqual({});
+    const { bytes: filled } = await fillFormWithLogic(bytes, { Note: 'Line one\nLine two' });
+    expect((await PDFDocument.load(filled)).getForm().getTextField('Note').getText()).toBe('Line one\nLine two');
+    expect(fields.find((f) => f.name === 'Note')!.multiline).toBe(true);
+    const customer = { name: 'Customer', kind: 'text' as const, value: '', onValue: null, options: [], multiselect: false, required: false, readOnly: false,
+      maxLength: null, logic: { unsupported: [] }, calculated: false, password: false, multiline: false, concealedValue: false, editable: false };
+    expect(importFormData([customer], "<xfdf><fields><field name='Customer'><value>Alice</value></field></fields></xfdf>", 'xfdf').values).toEqual({ Customer: 'Alice' });
+  });
+
+  it('draws a missing appearance before flattening a field that has a value', async () => {
+    const pdf = await PDFDocument.load(await blank());
+    const name = pdf.getForm().createTextField('Customer');
+    name.addToPage(pdf.getPage(0), { x: 60, y: 600, width: 200, height: 20 });
+    name.setText('Ada Lovelace');
+    name.acroField.getWidgets()[0].dict.delete(PDFName.of('AP'));
+    const flat = await flattenFormFields(await pdf.save({ updateFieldAppearances: false }), null);
+    expect((await pdfjs(flat.bytes)).text).toContain('Ada Lovelace');
+  });
+
+  it('imports an unanswered radio group from FDF as no selection', () => {
+    const radio = { name: 'Size', kind: 'radio' as const, value: '', onValue: null, options: [{ value: 'S', label: 'S' }, { value: 'L', label: 'L' }], multiselect: false, required: false, readOnly: false,
+      maxLength: null, logic: { unsupported: [] }, calculated: false, password: false, multiline: false, concealedValue: false, editable: false };
+    const fdf = '%FDF-1.2\n1 0 obj << /FDF << /Fields [<< /T (Size) /V /Off >>] >> >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF';
+    expect(importFormData([radio], fdf, 'fdf').values).toEqual({ Size: '' });
+  });
+
+  it('orders a visibility rule after the calculation it reads, and draws a custom editable dropdown value', async () => {
+    let bytes = await addFormField(await blank(), field('number', 'Input', at(0.1, 0.1)));
+    bytes = await addFormField(bytes, field('number', 'Total', at(0.1, 0.2)));
+    bytes = await addFormField(bytes, field('text', 'Details', at(0.1, 0.3)));
+    bytes = await updateFormField(bytes, 'Details', { logic: { showWhen: { field: 'Total', value: '10' } } });
+    bytes = await updateFormField(bytes, 'Total', { logic: { calculate: { op: 'SUM', fields: ['Input'] } } });
+    const { objects, order } = await pdfjs(bytes);
+    const ids = Object.fromEntries(Object.entries(objects).map(([name, list]) => [list[0].id, name]));
+    expect(order!.map((id) => ids[id])).toEqual(['Total', 'Details']);
+
+    const pdf = await PDFDocument.load(await blank());
+    const city = pdf.getForm().createDropdown('City');
+    city.addOptions(['Paris', 'Rome']); city.enableEditing();
+    city.addToPage(pdf.getPage(0), { x: 60, y: 600, width: 150, height: 20 });
+    const { PDFString, PDFStream } = await import('pdf-lib');
+    city.acroField.dict.set(PDFName.of('V'), PDFString.of('Lyon'));
+    const customer = pdf.getForm().createTextField('Customer'); customer.addToPage(pdf.getPage(0), { x: 60, y: 500, width: 150, height: 20 });
+    const { bytes: filled } = await fillFormWithLogic(await pdf.save(), { Customer: 'Ada' });
+    const out = await PDFDocument.load(filled);
+    const widget = out.getForm().getDropdown('City').acroField.getWidgets()[0];
+    const ap = widget.getAppearances()!.normal;
+    const { decodePDFRawStream, PDFRawStream } = await import('pdf-lib');
+    const text = ap instanceof PDFRawStream ? new TextDecoder('latin1').decode(decodePDFRawStream(ap).decode()) : ap instanceof PDFStream ? '' : '';
+    expect(text.toUpperCase()).toContain('4C796F6E'); // "Lyon"
+  });
+
+  it('marks an editable dropdown so the fill panel accepts a typed value', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([300, 200]);
+    const form = pdf.getForm();
+    const city = form.createDropdown('City'); city.setOptions(['Paris', 'Nice']); city.enableEditing(); city.addToPage(page, { x: 20, y: 100, width: 120, height: 20 });
+    const fixed = form.createDropdown('Size'); fixed.setOptions(['S', 'M']); fixed.addToPage(page, { x: 20, y: 60, width: 120, height: 20 });
+    const bytes = await pdf.save();
+    const fields = await readFillForm(bytes);
+    expect(fields.map((f) => [f.name, f.editable])).toEqual([['City', true], ['Size', false]]);
+    const filled = await fillFormWithLogic(bytes, { City: 'Lyon' });
+    expect((await readFillForm(filled.bytes)).find((f) => f.name === 'City')?.value).toBe('Lyon');
+  });
+
+  it('masks a password in a regenerated appearance', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([300, 200]);
+    const field = pdf.getForm().createTextField('PIN'); field.enablePassword(); field.setText('secret'); field.addToPage(page, { x: 20, y: 100, width: 120, height: 20 });
+    const { refreshFieldAppearances } = await import('./formDesign');
+    await refreshFieldAppearances(pdf, field);
+    const { PDFStream, PDFRawStream, decodePDFRawStream, PDFDict } = await import('pdf-lib');
+    const ap = (field.acroField.getWidgets()[0].dict.lookup(PDFName.of('AP'), PDFDict)).lookup(PDFName.of('N'));
+    const content = ap instanceof PDFRawStream ? new TextDecoder('latin1').decode(decodePDFRawStream(ap).decode()) : ap instanceof PDFStream ? new TextDecoder('latin1').decode((ap as unknown as { getUnencodedContents(): Uint8Array }).getUnencodedContents()) : '';
+    expect(content.toUpperCase()).not.toContain('736563726574'); // "secret"
+    expect(content).not.toContain('secret');
+    expect(content.toUpperCase()).toContain('2A2A2A2A2A2A'); // six asterisks
+    expect(field.getText()).toBe('secret');
+  });
+
+  it('fills a form whose calculations depend on each other, without running them', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([300, 200]);
+    const form = pdf.getForm();
+    for (const [name, other, y] of [['A', 'B', 100], ['B', 'A', 60]] as const) {
+      const f = form.createTextField(name); f.addToPage(page, { x: 20, y, width: 120, height: 20 });
+      const action = pdf.context.obj({ S: 'JavaScript', JS: PDFHexString.fromText(`AFSimple_Calculate("SUM", new Array("${other}"));`) });
+      f.acroField.dict.set(PDFName.of('AA'), pdf.context.obj({ C: action }));
+    }
+    const fields = await readFillForm(await pdf.save());
+    expect(fields.map((f) => [f.name, f.calculated])).toEqual([['A', false], ['B', false]]);
+    expect(fields[0].logic.unsupported.join(' ')).toMatch(/depends on itself/);
+    expect(evaluateFill(fields, { A: '1', B: '2' }).values).toMatchObject({ A: '1', B: '2' });
+  });
+
+  it('stores the designer defaults as the reset values', async () => {
+    let bytes = await blank();
+    bytes = await addFormField(bytes, field('text', 'City', at(0.1, 0.1), { defaultValue: 'Paris' }));
+    bytes = await addFormField(bytes, field('checkbox', 'Agree', at(0.1, 0.2), { checked: true }));
+    bytes = await addFormField(bytes, field('dropdown', 'Size', at(0.1, 0.3), { options: [{ value: 'S', label: 'Small' }, { value: 'M', label: 'Medium' }], selected: ['M'] }));
+    bytes = await addFormField(bytes, field('text', 'Note', at(0.1, 0.4)));
+    const form = (await PDFDocument.load(bytes)).getForm();
+    const dv = (name: string) => form.getField(name).acroField.dict.get(PDFName.of('DV'));
+    expect((dv('City') as PDFHexString).decodeText()).toBe('Paris');
+    expect(String(dv('Agree'))).toBe(String(form.getField('Agree').acroField.dict.get(PDFName.of('V'))));
+    expect((dv('Size') as PDFHexString).decodeText()).toBe('M');
+    expect(dv('Note')).toBeUndefined();
+  });
+
+  it('draws a formatted value longer than the maximum length, keeping the limit', async () => {
+    const bytes = await addFormField(await blank(), field('number', 'Amount', at(0.1, 0.1), { maxLength: 4, defaultValue: '1000' }));
+    const amount = (await PDFDocument.load(bytes)).getForm().getTextField('Amount');
+    expect(amount.getText()).toBe('1000');
+    expect(amount.getMaxLength()).toBe(4);
+  });
+
+  it('calculates from a concealed value the user leaves untouched, without showing or rewriting it', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([300, 200]);
+    const form = pdf.getForm();
+    const amount = form.createTextField('Amount'); amount.enablePassword(); amount.setText('12'); amount.addToPage(page, { x: 20, y: 120, width: 120, height: 20 });
+    const total = form.createTextField('Total'); total.addToPage(page, { x: 20, y: 60, width: 120, height: 20 });
+    total.acroField.dict.set(PDFName.of('AA'), pdf.context.obj({ C: pdf.context.obj({ S: 'JavaScript', JS: PDFHexString.fromText('AFSimple_Calculate("SUM", new Array("Amount"));') }) }));
+    const bytes = await pdf.save();
+    const fields = await readFillForm(bytes);
+    const evaluation = evaluateFill(fields, Object.fromEntries(fields.map((f) => [f.name, f.value])));
+    expect(evaluation.values.Total).toBe('12');
+    expect(evaluation.values.Amount).toBe('');
+    const filled = (await PDFDocument.load((await fillFormWithLogic(bytes, {})).bytes)).getForm();
+    expect(filled.getTextField('Total').getText()).toBe('12');
+    expect(filled.getTextField('Amount').getText()).toBe('12');
+  });
+
+  it('imports form data for a field named __proto__', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([300, 200]);
+    pdf.getForm().createTextField('__proto__').addToPage(page, { x: 20, y: 100, width: 120, height: 20 });
+    const fields = await readFillForm(await pdf.save());
+    const imported = importFormData(fields, '{"__proto__":"Imported answer"}', 'json');
+    expect(Object.keys(imported.values)).toEqual(['__proto__']);
+    const merged: Record<string, string> = { ...imported.values };
+    expect(Object.getOwnPropertyDescriptor(merged, '__proto__')?.value).toBe('Imported answer');
+  });
+
+  it('shows a field again when its visibility rule is removed', async () => {
+    let bytes = await blank();
+    bytes = await addFormField(bytes, field('text', 'Source', at(0.1, 0.1)));
+    bytes = await addFormField(bytes, field('text', 'Detail', at(0.1, 0.2)));
+    bytes = await updateFormField(bytes, 'Detail', { logic: { showWhen: { field: 'Source', value: '*' } } });
+    bytes = (await fillFormWithLogic(bytes, { Source: '' })).bytes; // Source empty: Detail is hidden
+    const flags = async () => (await PDFDocument.load(bytes)).getForm().getField('Detail').acroField.getWidgets().map((w) => w.dict.get(PDFName.of('F'))?.toString());
+    expect(await flags()).toEqual(['6']); // Print + Hidden
+    bytes = await updateFormField(bytes, 'Detail', { logic: {} });
+    expect(await flags()).toEqual(['4']); // Print only: shown again
+  });
+
+  it('redraws an imported field whose value is already longer than its maximum length', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([300, 200]);
+    const code = pdf.getForm().createTextField('Code'); code.addToPage(page, { x: 20, y: 100, width: 120, height: 20 });
+    // As some generators write: a value that breaks the field's own limit.
+    code.acroField.dict.set(PDFName.of('V'), PDFHexString.fromText('ABCDEFGH'));
+    code.acroField.setMaxLength(4);
+    const { refreshFieldAppearances } = await import('./formDesign');
+    await refreshFieldAppearances(pdf, code);
+    expect(code.getText()).toBe('ABCDEFGH');
+    expect(code.getMaxLength()).toBe(4);
+    // A password field too: its masked appearance is just as long as the value.
+    code.enablePassword();
+    await refreshFieldAppearances(pdf, code);
+    expect([code.getText(), code.getMaxLength()]).toEqual(['ABCDEFGH', 4]);
+  });
+});

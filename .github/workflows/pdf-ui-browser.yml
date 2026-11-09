@@ -55,6 +55,14 @@ jobs:
         run: node scripts/pdf-phase2-objects-acceptance.mjs
       - name: Phase 2 paragraph acceptance (reflow, typography, styles) with independent output reopen
         run: node scripts/pdf-phase2-paragraph-acceptance.mjs
+      - name: Phase 3 forms acceptance (designer, typed fields, choices, signatures, logic, fill/flatten, data exchange) with independent output reopen
+        run: node scripts/pdf-phase3-forms-acceptance.mjs
+      - name: Phase 3 export acceptance (images, transparent PNG, Markdown, HTML, SVG, plain text) with independent output decoding
+        run: node scripts/pdf-phase3-export-acceptance.mjs
+      - name: Phase 3 Office conversion acceptance (Word, PowerPoint, Excel, batch with result editors) with independent package checks
+        run: node scripts/pdf-phase3-office-acceptance.mjs
+      - name: Phase 3 to-PDF acceptance (images, Word, PowerPoint, Excel, HTML) with independent output reopen
+        run: node scripts/pdf-phase3-topdf-acceptance.mjs
       - name: Publish Phase 3 light/dark visual review screenshots
         if: success()
         uses: actions/upload-artifact@v4

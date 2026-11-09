@@ -133,6 +133,12 @@ import PdfMarkupPanel, { MARKUP_AUTHOR, type MarkupSettings } from './PdfMarkupP
 import PdfTextEditPanel, { type TextEditState } from './PdfTextEditPanel';
 import PdfFindReplaceDialog from './PdfFindReplaceDialog';
 import PdfParagraphPanel, { type ParagraphEditState } from './PdfParagraphPanel';
+import PdfFormDesignerPanel, { NEW_DESIGN_DRAFT, designSpec, type FormDesignState } from './PdfFormDesignerPanel';
+import PdfFormFillPanel from './PdfFormFillPanel';
+import PdfExportDialog, { type ExportRegion } from './PdfExportDialog';
+import PdfOfficeConvertDialog from './PdfOfficeConvertDialog';
+import PdfCreateDialog from './PdfCreateDialog';
+import { addFormField as addDesignedFormField, moveFormWidget } from './forms/formDesign';
 import PdfObjectEditPanel, { objectKey, type InsertSettings, type ObjectEditState } from './PdfObjectEditPanel';
 import { insertPdfContent, type InsertKind } from './content/objectEdit';
 import { addPdfDrawing } from './pdfMarkup';
@@ -173,6 +179,8 @@ interface Props {
   notice: string;
   onBackToFiles(): void;
   onOpenBrowserPdf?(file:File):void;
+  /** Opens DOCX, XLSX or PPTX conversion results as tabs in their result editors. */
+  onOpenConversionOutputs?(files:File[]):void;
   onNavigateModule?(id:ModuleId): void;
   onDirtyChange?(dirty:boolean): void;
   onSavingChange?(saving:boolean): void;
@@ -226,7 +234,7 @@ function PdfMinimalCommandIcon({label}: {label:string}) {
   return <FileText size={18} aria-hidden="true"/>;
 }
 
-export default function PdfWorkspace({ session, active, notice, onBackToFiles, onOpenBrowserPdf, onNavigateModule, onDirtyChange, onSavingChange, onViewStatusChange, registerCommands, initialPage, tabRequest}: Props) {
+export default function PdfWorkspace({ session, active, notice, onBackToFiles, onOpenBrowserPdf, onOpenConversionOutputs, onNavigateModule, onDirtyChange, onSavingChange, onViewStatusChange, registerCommands, initialPage, tabRequest}: Props) {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -414,8 +422,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   useEffect(() => { setOverflowOpen(false); }, [masterTab]);
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
   // MAL-001 / 002 / 009 / 010 dialogs; focus returns to the control that opened them.
-  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup'|'text-edit'|'find'|'objects'|'paragraphs';
+  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup'|'text-edit'|'find'|'objects'|'paragraphs'|'form-design'|'form-fill'|'export'|'office-convert'|'create-pdf';
   const [paragraphState,setParagraphState]=useState<ParagraphEditState|null>(null);
+  const [formDesign,setFormDesign]=useState<FormDesignState|null>(null);
+  const [exportRegion,setExportRegion]=useState<ExportRegion|null>(null);
+  const [exportPicking,setExportPicking]=useState(false);
   // MAL-014/015/016: objects on the page being edited, and the insert tool.
   const [objectState,setObjectState]=useState<ObjectEditState|null>(null);
   const [insertSettings,setInsertSettings]=useState<InsertSettings>({tool:null,stroke:'#1f3a5f',fill:null,lineWidth:2,text:'',fontSize:14});
@@ -2687,6 +2698,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       providerAction,
     ],
     convert:[
+      {id:'create-pdf',label:'Create PDF from files…',enabled:true,run:()=>openToolDialog('create-pdf')},
+      {id:'convert-office',label:'Convert to Office…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('office-convert')},
+      {id:'export-as',label:'Export as…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('export')},
       {id:'export-text',label:exportingText?'Extracting text '+textExportProgress+'%':'PDF to text (.txt)',enabled:!!pdf&&!mutating&&!exportingText,disabledReason:!pdf?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':exportingText?'PDF text export is running.':undefined,run:exportText},
       {id:'export-page-images',label:exportingPageImages?'PNG '+pageImageProgress+'%':'PDF pages to PNG ZIP',enabled:!!pdf&&!mutating&&!loading&&!exportingPageImages,disabledReason:!pdf?'No PDF is loaded.':exportingPageImages?'An image export is in progress.':'Wait for the current PDF operation to finish.',run:exportPageImages},
       {id:'export-page-jpeg',label:exportingPageImages?'JPG '+pageImageProgress+'%':'PDF to JPG',enabled:!!pdf&&!mutating&&!loading&&!exportingPageImages,disabledReason:!pdf?'No PDF is loaded.':exportingPageImages?'An image export is in progress.':'Wait for the current PDF operation to finish.',run:exportJpegPages},
@@ -2740,6 +2754,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       providerAction,
     ],
     forms:[
+      {id:'form-designer',label:'Design form…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('form-design')},
+      {id:'form-fill-panel',label:'Fill form…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('form-fill')},
       {id:'add-form-field',label:`Add ${formDraft.type} field`,enabled:!!sourceBytes&&!mutating&&!!formDraft.name.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!formDraft.name.trim()?'Enter a field name in Form settings first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addFormField},
       {id:'fill-form',label:'Apply field values',enabled:!!sourceBytes&&!mutating&&fillableFormFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!fillableFormFields.length?'No editable AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:fillForm},
       {id:'flatten-form',label:'Flatten fields',enabled:!!sourceBytes&&!mutating&&formFields.length>0,disabledReason:!sourceBytes?'No PDF is loaded.':!formFields.length?'No AcroForm fields are present.':mutating?'Wait for the current PDF edit to finish.':undefined,run:flattenForm},
@@ -2974,7 +2990,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             if(applied)setActionNotice(summary);
             return applied;
           }}/>}
-      {(toolDialog==='properties'||toolDialog==='navigation'||toolDialog==='compress'||toolDialog==='markup'||toolDialog==='text-edit'||toolDialog==='find'||toolDialog==='objects'||toolDialog==='paragraphs')&&sourceBytes&&(()=>{
+      {(toolDialog==='properties'||toolDialog==='navigation'||toolDialog==='compress'||toolDialog==='markup'||toolDialog==='text-edit'||toolDialog==='find'||toolDialog==='objects'||toolDialog==='paragraphs'||toolDialog==='form-design'||toolDialog==='form-fill')&&sourceBytes&&(()=>{
         const apply=async (label:string,operation:(latest:Uint8Array)=>Promise<{bytes:Uint8Array;summary:string}>)=>{
           let summary='';
           const applied=await mutate(label,async latest=>{const edited=await operation(latest);summary=edited.summary;return edited.bytes;},currentPage);
@@ -2983,6 +2999,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         };
         if(toolDialog==='text-edit')return <PdfTextEditPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} pageNumber={currentPage} viewRotation={rotation} busy={mutating}
           state={textEditState} onState={setTextEditState} onApply={apply} onClose={()=>{setTextEditState(null);closeToolDialog();}}/>;
+        if(toolDialog==='form-design')return <PdfFormDesignerPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} viewRotation={rotation} busy={mutating}
+          state={formDesign} onState={setFormDesign} onApply={apply} onClose={()=>{setFormDesign(null);closeToolDialog();}}/>;
+        if(toolDialog==='form-fill')return <PdfFormFillPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} sourceName={sourceName} busy={mutating}
+          onApply={apply} onNotice={setActionNotice} onClose={closeToolDialog}/>;
         if(toolDialog==='paragraphs')return <PdfParagraphPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} pageNumber={currentPage} viewRotation={rotation} busy={mutating}
           state={paragraphState} onState={setParagraphState} onApply={apply} onClose={()=>{setParagraphState(null);closeToolDialog();}}/>;
         if(toolDialog==='objects')return <PdfObjectEditPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} pageNumber={currentPage} viewRotation={rotation} busy={mutating}
@@ -2999,6 +3019,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
           ? <PdfPropertiesDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} busy={mutating} onApply={apply} onClose={closeToolDialog}/>
           : <PdfNavigationDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} pageCount={pageCount} currentPage={currentPage} busy={mutating} onApply={apply} onClose={closeToolDialog}/>;
       })()}
+      {toolDialog==='create-pdf'&&<PdfCreateDialog domIdPrefix={domIdPrefix} onOpenPdfs={onOpenConversionOutputs} onNotice={setActionNotice} onClose={closeToolDialog}/>}
+      {toolDialog==='office-convert'&&sourceBytes&&<PdfOfficeConvertDialog domIdPrefix={domIdPrefix} sourceName={sourceName} getBytes={()=>currentPdfBytesRef.current}
+        busy={mutating} onOpenOutputs={onOpenConversionOutputs} onNotice={setActionNotice} onClose={closeToolDialog}/>}
+      {toolDialog==='export'&&sourceBytes&&<PdfExportDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} sourceName={sourceName} pageCount={pageCount}
+        currentPage={currentPage} busy={mutating} region={exportRegion} picking={exportPicking} onPickRegion={setExportPicking} onClearRegion={()=>setExportRegion(null)}
+        onNotice={setActionNotice} onClose={()=>{setExportPicking(false);setExportRegion(null);closeToolDialog();}}/>}
       {toolDialog==='batch'&&sourceBytes&&<PdfBatchDialog domIdPrefix={domIdPrefix} currentName={sourceName||'Open document.pdf'}
         currentSize={sourceBytes.length} busy={mutating} getBytes={()=>currentPdfBytesRef.current} onDone={setActionNotice} onClose={closeToolDialog}/>}
       {featureGalleryOpen&&<section id={`${domIdPrefix}-feature-gallery`}
@@ -3538,7 +3564,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               onReplacePage={()=>beginReplacePage(page)}
               onCropPage={()=>startCropOnPage(page)}
               editingBusy={mutating||loading}
-              textRuns={toolDialog==='paragraphs'&&paragraphState&&paragraphState.pageNumber===page?{labelPrefix:'Edit paragraph',
+              textRuns={toolDialog==='form-design'&&formDesign&&!formDesign.mode?(()=>{
+                const widgets=formDesign.fields.flatMap(f=>f.widgets.filter(w=>w.pageNumber===page).map(w=>({name:f.name,ref:w.ref,shown:w.shown})));
+                return {labelPrefix:'Select field',targets:widgets.map((w,index)=>({id:index,text:w.name,editable:true,shown:w.shown})),
+                  selected:widgets.findIndex(w=>w.name===formDesign.selected&&(!formDesign.selectedWidget||w.ref===formDesign.selectedWidget)),
+                  onSelect:(index:number)=>setFormDesign(current=>current?{...current,selected:widgets[index]?.name??null,selectedWidget:widgets[index]?.ref??null}:current)};
+              })()
+              :toolDialog==='paragraphs'&&paragraphState&&paragraphState.pageNumber===page?{labelPrefix:'Edit paragraph',
                 targets:paragraphState.paragraphs.map(p=>({id:p.id,text:p.text.replace(/\n/g,' '),editable:p.editable,shown:p.shown})),
                 selected:paragraphState.selected,onSelect:id=>setParagraphState(current=>current?{...current,selected:id}:current)}
               :toolDialog==='objects'&&objectState&&objectState.pageNumber===page&&!insertSettings.tool?{labelPrefix:'Select object',
@@ -3547,7 +3579,29 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
                 onSelect:index=>setObjectState(current=>current?{...current,selected:objectKey(current.objects[index])}:current)}
               :toolDialog==='text-edit'&&textEditState&&textEditState.pageNumber===page?{targets:textEditState.runs,selected:textEditState.selected,
                 onSelect:id=>setTextEditState(current=>current?{...current,selected:id}:current)}:null}
-              drawTool={toolDialog==='objects'&&insertSettings.tool?{kind:({text:'FreeText',rectangle:'Square',ellipse:'Circle',line:'Line',arrow:'Arrow'} as const)[insertSettings.tool],
+              drawTool={toolDialog==='export'&&exportPicking?{kind:'Square',color:'#1f5ba0',busy:false,onShape:shape=>{
+                if(!shape.rect)return;
+                setExportRegion({pageNumber:page,viewRotation:rotation,...shape.rect});setExportPicking(false);
+              }}
+              :toolDialog==='form-design'&&formDesign?.mode?{kind:'Square',color:'#1f5ba0',busy:mutating,onShape:shape=>{
+                if(!shape.rect)return;
+                const rect=shape.rect;
+                if(formDesign.mode==='place'){
+                  const spec={...designSpec(formDesign.draft,formDesign.fields),pageNumber:page,viewRotation:rotation,rect};
+                  // Per-field settings start fresh for the next field; the type and number/date format carry over.
+                  setFormDesign(current=>current?{...current,mode:null,selected:spec.name,draft:{...NEW_DESIGN_DRAFT,kind:current.draft.kind,
+                    decimals:current.draft.decimals,separator:current.draft.separator,currency:current.draft.currency,datePattern:current.draft.datePattern}}:current);
+                  void mutate(`Added the ${spec.kind} field ${spec.name}.`,latest=>addDesignedFormField(latest,spec),page);
+                }else{
+                  const target=formDesign.fields.find(f=>f.name===formDesign.selected);
+                  // The widget picked on the page moves (one radio button of a group), else the field's widget on this page.
+                  const widget=target?.widgets.find(w=>w.ref===formDesign.selectedWidget)??target?.widgets.find(w=>w.pageNumber===page)??target?.widgets[0];
+                  if(!target||!widget)return;
+                  setFormDesign(current=>current?{...current,mode:null}:current);
+                  void mutate(`Moved the field ${target.name}.`,latest=>moveFormWidget(latest,target.name,widget.ref,page,rotation,rect),page);
+                }
+              }}
+              :toolDialog==='objects'&&insertSettings.tool?{kind:({text:'FreeText',rectangle:'Square',ellipse:'Circle',line:'Line',arrow:'Arrow'} as const)[insertSettings.tool],
                 color:insertSettings.stroke,busy:mutating,onShape:shape=>{
                   const kind:InsertKind=insertSettings.tool!;
                   const rect=shape.rect??(shape.points&&shape.points.length===2

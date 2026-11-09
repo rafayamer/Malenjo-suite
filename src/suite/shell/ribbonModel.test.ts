@@ -1,3 +1,4 @@
+import { VERIFIED_COMMAND_BY_ID } from '../commands/verifiedCommands';
 import { describe, expect, it } from 'vitest';
 import { defaultRibbonTab, RIBBON_TABS } from './ribbonModel';
 
@@ -16,13 +17,17 @@ describe('Single-window MALENJO ribbon contracts', () => {
     expect(defaultRibbonTab('home')).toBe('home');
     expect(defaultRibbonTab('ocr')).toBe('optimize');
   });
-  it('never presents unverified PDF-to-Office conversions as executable commands', () => {
+  it('opens verified PDF-to-Office conversions in the PDF workspace, and never presents unverified ones as executable', () => {
     const convert = RIBBON_TABS.find((tab) => tab.id === 'convert')!;
     for(const id of ['MAL-037','MAL-038','MAL-039']){
       const action=convert.actions.find(action=>action.id===id);
-      expect(action?.unavailableReason).toContain(id);
-      expect(action?.destination).toBeUndefined();
-      expect(action?.opensFiles).toBeUndefined();
+      expect(action).toMatchObject({destination:'pdf',workspaceTab:'Convert'});
+      expect(action?.unavailableReason).toBeUndefined();
+    }
+    for(const action of convert.actions.filter(action=>/^MAL-\d+$/.test(action.id)&&!VERIFIED_COMMAND_BY_ID.has(action.id))){
+      expect(action.unavailableReason).toContain(action.id);
+      expect(action.destination).toBeUndefined();
+      expect(action.opensFiles).toBeUndefined();
     }
     expect(convert.actions.some(action=>action.destination==='pdf')).toBe(true);
   });

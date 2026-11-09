@@ -35,6 +35,10 @@ export const VERIFIED_EVIDENCE_SCRIPTS = [
   'scripts/pdf-phase2-textedit-acceptance.mjs',
   'scripts/pdf-phase2-objects-acceptance.mjs',
   'scripts/pdf-phase2-paragraph-acceptance.mjs',
+  'scripts/pdf-phase3-forms-acceptance.mjs',
+  'scripts/pdf-phase3-export-acceptance.mjs',
+  'scripts/pdf-phase3-office-acceptance.mjs',
+  'scripts/pdf-phase3-topdf-acceptance.mjs',
 ] as const;
 
 export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Object.freeze([
@@ -187,6 +191,116 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     id: 'MAL-013', workspaceTab: 'Edit',
     guidance: 'In Paragraphs…, the detected font (and whether it is embedded or a subset) is shown. Change size, weight (font), letter and word spacing and line height; any font substitution is reported. Save settings as a named style and apply it to other paragraphs.',
     evidence: ['MAL-013 font detection, substitution warning, size, weight, spacing, line height and reusable styles'],
+  },
+  {
+    id: 'MAL-046', workspaceTab: 'Forms',
+    guidance: 'Choose Design form…, pick a field type and its settings, choose Place on the page and drag where the field goes. Click a field\'s outline on the page to select it, then move or resize it by dragging, rename it or delete it.',
+    evidence: ['MAL-046 design by dragging fields onto the page, select on the page, move, rename and delete'],
+  },
+  {
+    id: 'MAL-047', workspaceTab: 'Forms',
+    guidance: 'In Design form…, place Text, Number or Date fields with a tooltip, required flag, maximum length, comb boxes, several lines, number decimals, separators and currency, date formats, ranges and patterns. The rules are saved as standard form scripts and checked in Fill form….',
+    evidence: ['MAL-047 text, number and date fields with required, length, comb and format rules'],
+  },
+  {
+    id: 'MAL-048', workspaceTab: 'Forms',
+    guidance: 'In Design form…, place a check box, radio group, dropdown or list box. Options are typed as “export value | label”; choose a default selection and whether several can be selected.',
+    evidence: ['MAL-048 check box, radio group, dropdown and list box with export values and labels'],
+  },
+  {
+    id: 'MAL-049', workspaceTab: 'Forms',
+    guidance: 'In Design form…, place a Signature field: an unsigned placeholder with a tooltip, required flag and the fields that signing locks (all, only some, or all except some). Signing itself happens in a signing tool.',
+    evidence: ['MAL-049 signature placeholder with tooltip, required flag and locked fields'],
+  },
+  {
+    id: 'MAL-050', workspaceTab: 'Forms',
+    guidance: 'Select a field in Design form… to make it a sum, product, average, minimum or maximum of other fields, show it only when another field has a value, and add range or pattern validation. Renaming a field updates the fields that use it. Fill form… applies these rules without running any script from the document; other scripts are listed and kept but never run.',
+    evidence: ['MAL-050 calculations, dependencies, visibility and validation, evaluated without running document scripts'],
+  },
+  {
+    id: 'MAL-052', workspaceTab: 'Forms',
+    guidance: 'Choose Fill form…, enter values (calculated and hidden fields update as you type, problems are shown per field), then Save values. Flatten chosen fields or all fields into the page.',
+    evidence: ['MAL-052 fill and save values, then flatten selected fields and all fields'],
+  },
+  {
+    id: 'MAL-053', workspaceTab: 'Forms',
+    guidance: 'In Fill form…, export the values as CSV, JSON, FDF or XFDF, or import one of those files and Save values. Names not in the form, and read-only or calculated fields, are reported and skipped.',
+    evidence: ['MAL-053 export and import CSV, JSON, FDF and XFDF'],
+  },
+  {
+    id: 'MAL-029', workspaceTab: 'Convert',
+    guidance: 'Choose Export as… → PNG image. Keep “Transparent page background” on to keep alpha where the PDF draws nothing, turn on “Remove a background colour” to make a colour (with a tolerance) transparent, or choose “Drag a region on the page” to export just that part.',
+    evidence: ['MAL-029 transparent PNG of a page and of a dragged region, with background removal'],
+  },
+  {
+    id: 'MAL-036', workspaceTab: 'Convert',
+    guidance: 'Choose Export as… → PNG, JPG or TIFF image, enter the pages (for example 1-3, 5), the resolution in dpi and, for JPG, the quality. TIFF can be one multi-page file or one file per page, with lossless Deflate or no compression. Several files download as a ZIP.',
+    evidence: ['MAL-036 export chosen pages to PNG, JPG and TIFF at a chosen resolution and quality'],
+  },
+  {
+    id: 'MAL-041', workspaceTab: 'Convert',
+    guidance: 'Choose Export as… → Markdown. Headings (from text size and bold lines), paragraphs, bulleted and numbered lists and tables are rebuilt from the layout; images are saved as PNG files referenced from the Markdown. The export report lists what could not be converted.',
+    evidence: ['MAL-041 Markdown with headings, lists, a table and image files'],
+  },
+  {
+    id: 'MAL-042', workspaceTab: 'Convert',
+    guidance: 'Choose Export as… → HTML. “Structured” writes headings, paragraphs, lists, tables and images; “As on the page” places each piece of text and image where it is on the page.',
+    evidence: ['MAL-042 HTML with structure, tables and images, or positioned layout'],
+  },
+  {
+    id: 'MAL-043', workspaceTab: 'Convert',
+    guidance: 'Choose Export as… → SVG. Paths (lines, curves, rectangles) with their fill, stroke and width, text and JPEG or RGB/grey images become SVG elements; the export report names anything left out (for example gradients, clipping or embedded drawings).',
+    evidence: ['MAL-043 SVG keeps vector paths, text and images where they are on the page'],
+  },
+  {
+    id: 'MAL-044', workspaceTab: 'Convert',
+    guidance: 'Choose Export as… → Plain text, pick the reading order (top to bottom, columns, or as stored) and what goes between pages (blank line, nothing, page break or a custom line with {n} and {total}). Text added by OCR is included.',
+    evidence: ['MAL-044 plain text with reading order, page separators and OCR text'],
+  },
+  {
+    id: 'MAL-037', workspaceTab: 'Convert',
+    guidance: 'Choose Convert to Office… with a Word profile. Headings, paragraphs (size, bold, italic), bulleted and numbered lists, tables and images are rebuilt from the page layout; the DOCX opens in the Word result editor for review, correction and Export copy. The fidelity report lists what could not be reconstructed.',
+    evidence: ['MAL-037 PDF to Word: headings, lists, table and image, opened in the Word editor, edited and exported'],
+  },
+  {
+    id: 'MAL-038', workspaceTab: 'Convert',
+    guidance: 'Choose Convert to Office… with the PowerPoint profile. Each page becomes a slide at the page size with editable text boxes where the text is, pictures, and rectangles from the page drawing; the PPTX opens in the presentation result editor.',
+    evidence: ['MAL-038 PDF to PowerPoint: a slide per page with positioned text boxes, picture and shape, edited and exported'],
+  },
+  {
+    id: 'MAL-039', workspaceTab: 'Convert',
+    guidance: 'Choose Convert to Office… with the Excel tables profile. Each table found becomes a sheet with numbers stored as numbers; pages without a table get their lines as rows. The XLSX opens in the spreadsheet result editor.',
+    evidence: ['MAL-039 PDF to Excel: the table as a sheet with numbers, edited and exported'],
+  },
+  {
+    id: 'MAL-045', workspaceTab: 'Convert',
+    guidance: 'In Convert to Office…, pick or save a conversion profile (format, pages, images), add several PDFs and Convert. Every file gets a fidelity report (failures say why); successful DOCX, XLSX and PPTX results open in their result editors, and all results download as a ZIP with a JSON report.',
+    evidence: ['MAL-045 batch conversion with a saved profile, a fidelity report per file and results opened in editors'],
+  },
+  {
+    id: 'MAL-030', workspaceTab: 'Convert',
+    guidance: 'Choose Create PDF from files… → Images, add JPG, PNG, TIFF (every page), WebP or BMP files, put them in order with the arrows, and choose the page size (or the image size), orientation, margins and whether each image fits the page or keeps its actual size.',
+    evidence: ['MAL-030 images to PDF: several images, page size, orientation, margins and order'],
+  },
+  {
+    id: 'MAL-031', workspaceTab: 'Convert',
+    guidance: 'Choose Create PDF from files… → Word. Styles, headings, alignment, spacing, numbered and bulleted lists, tables, pictures and the document\'s page size and margins are drawn with standard PDF fonts; the report lists anything not reproduced (for example headers, footnotes, charts or characters outside the standard fonts).',
+    evidence: ['MAL-031 Word to PDF: styles, lists, table and picture at the document page size'],
+  },
+  {
+    id: 'MAL-032', workspaceTab: 'Convert',
+    guidance: 'Choose Create PDF from files… → PowerPoint. Each slide becomes a page at the slide size with its backgrounds, shapes, text boxes, pictures, groups and simple tables; charts, SmartArt and rotation are reported.',
+    evidence: ['MAL-032 PowerPoint to PDF: a page per slide at the slide size with shapes, text and pictures'],
+  },
+  {
+    id: 'MAL-033', workspaceTab: 'Convert',
+    guidance: 'Choose Create PDF from files… → Excel, pick the page size, orientation, gridlines and sheets. A sheet\'s print area is used when it has one; number formats, fonts, fills, widths, heights and merged cells are kept, and wide sheets continue on following pages.',
+    evidence: ['MAL-033 Excel to PDF: the print area with formats, widths, merges, gridlines and orientation'],
+  },
+  {
+    id: 'MAL-034', workspaceTab: 'Convert',
+    guidance: 'Choose Create PDF from files… → HTML. MALENJO\'s own renderer lays out headings, paragraphs, lists, tables, embedded images and a CSS subset (colours, sizes, weights, alignment, margins, page breaks); it never runs scripts or downloads anything, and reports unsupported CSS and elements.',
+    evidence: ['MAL-034 HTML to PDF through the controlled renderer: supported CSS applied, scripts and remote content blocked'],
   },
 ]);
 

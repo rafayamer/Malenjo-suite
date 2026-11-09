@@ -49,7 +49,7 @@ function writePage(pdf: PDFDocument, pageNumber: number, model: PageModel, repla
 const opText = (model: PageModel, index: number) => new TextDecoder('latin1').decode(model.data.subarray(model.ops[index].start, model.ops[index].end));
 
 /** Shown-frame helpers for a page (shown = fractions of the page as displayed, origin top-left). */
-function frameOf(pdf: PDFDocument, pageNumber: number, viewRotation: number) {
+export function frameOf(pdf: PDFDocument, pageNumber: number, viewRotation: number) {
   const frame = viewerFrame(pdf, pageNumber - 1, viewRotation);
   const inv = invert(frame.matrix);
   return {

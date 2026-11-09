@@ -2412,6 +2412,15 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 .pdf-markup-panel button:disabled{opacity:.45;cursor:not-allowed}
 .pdf-markup-panel input:not([type=radio]):not([type=color]),.pdf-markup-panel textarea{border:1px solid var(--ml-border);background:var(--ml-field);color:var(--ml-text);border-radius:6px;padding:5px 7px;font:inherit}
 .pdf-markup-panel .pdf-tool-dialog-choice{flex-direction:row;align-items:center}
+.pdf-form-panel{width:min(360px,calc(100vw - 32px))}
+.pdf-form-panel select{border:1px solid var(--ml-border);background:var(--ml-field);color:var(--ml-text);border-radius:6px;padding:4px 6px;font:inherit}
+.pdf-form-panel fieldset>label:not(.pdf-tool-dialog-choice),.pdf-form-panel [role=group]{flex-basis:100%}
+.pdf-form-panel [role=group]{display:flex;flex-wrap:wrap;gap:4px 10px}
+.pdf-form-fill-row{display:flex;flex-direction:column;gap:3px;flex-basis:100%;font-size:12px}
+.pdf-form-fill-row[data-hidden]{opacity:.6}
+.pdf-form-fill-row input:not([type=checkbox]),.pdf-form-fill-row select{width:100%}
+.pdf-form-fill-row input[type=checkbox]{align-self:flex-start}
+.pdf-form-fill-hint{font-size:12px;color:var(--ml-muted)}
 .pdf-text-run-target{background:transparent;border:1px dashed rgba(61,159,255,.55);border-radius:2px;padding:0;cursor:text}
 .pdf-text-run-target:hover,.pdf-text-run-target:focus-visible{background:rgba(61,159,255,.12);outline:2px solid #3d9fff}
 .pdf-text-run-target.selected{background:rgba(61,159,255,.18);border:2px solid #1269cc}

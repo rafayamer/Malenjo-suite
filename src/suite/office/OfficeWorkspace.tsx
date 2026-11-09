@@ -326,7 +326,8 @@ function DocxEditor({ model, onChange }: { model: DocxModel; onChange(model: Doc
           value={text}
           onChange={(event) => onChange({
             ...model,
-            paragraphs: event.target.value.split(/\n\s*\n/),
+            // Exactly one blank line separates paragraphs, so empty paragraphs (table cells, spacing) keep their place.
+            paragraphs: event.target.value.split('\n\n'),
             fidelity: 'reflow-warning',
           })}
           spellCheck
