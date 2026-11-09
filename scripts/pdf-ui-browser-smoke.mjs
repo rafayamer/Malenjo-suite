@@ -208,7 +208,7 @@ async function main(){
   // Master Specification v2.0: every MAL-001..MAL-090 is discoverable,
   // but searching it must NEVER make an unverified feature executable.
   for(const [requirement,label] of [['MAL-027','OCR PDF'],
-      ['MAL-040','PDF to PDF/A'],['MAL-063','Permanent PDF Redaction'],
+      ['MAL-040','PDF to PDF/A'],['MAL-069','Managed Document Rights'],
       ['MAL-071','AI Chat with PDF'],['MAL-090','Advanced Print and Prepress']]){
     await commandSearch.fill(requirement);
     const option=page.getByRole('option',{name:new RegExp(label)}).first();
@@ -633,7 +633,7 @@ async function main(){
     .evaluateAll(nodes=>nodes.map(node=>node.getAttribute('class')??''));
   requireEvidence(masterGlyphs.length===90&&new Set(masterGlyphs).size===90,
     'All 90 master PDF requirements must use UNIQUE, purpose-matched pictograms');
-  for(const id of ['MAL-027','MAL-040','MAL-063','MAL-090']){
+  for(const id of ['MAL-027','MAL-040','MAL-069','MAL-090']){
     requireEvidence(await featureGrid.locator('[data-mal-command="'+id+'"] button').isDisabled(),
       'Master v2 unverified command became executable: '+id);
   }

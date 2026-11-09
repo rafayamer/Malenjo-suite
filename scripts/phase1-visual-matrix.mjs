@@ -155,7 +155,15 @@ async function main() {
         ['Document properties…', 'Document properties', '14-properties-dialog', 'Edit'], ['Navigation…', 'Navigation', '15-navigation-dialog', 'Edit'],
         ['Compress…', 'Compress PDF', '16-compress-dialog', 'Optimize'], ['Markup tools…', 'Markup tools', '17-markup-panel', 'Review', '.pdf-markup-panel'],
         ['Edit text…', 'Edit text', '18-edit-text-panel', 'Edit', '.pdf-markup-panel'], ['Find and replace…', 'Find and replace', '19-find-replace-dialog', 'Edit'],
-        ['Edit objects…', 'Edit objects', '20-edit-objects-panel', 'Edit', '.pdf-markup-panel'], ['Paragraphs…', 'Paragraphs', '21-paragraphs-panel', 'Edit', '.pdf-markup-panel']]) {
+        ['Edit objects…', 'Edit objects', '20-edit-objects-panel', 'Edit', '.pdf-markup-panel'], ['Paragraphs…', 'Paragraphs', '21-paragraphs-panel', 'Edit', '.pdf-markup-panel'],
+        // Phase 3 forms and conversion.
+        ['Design form…', 'Form designer', '22-form-designer', 'Forms', '.pdf-markup-panel'], ['Fill form…', 'Fill form', '23-fill-form', 'Forms', '.pdf-markup-panel'],
+        ['Export as…', 'Export as', '24-export-as', 'Convert', '.pdf-markup-panel'], ['Convert to Office…', 'Convert to Office', '25-convert-office', 'Convert', '.pdf-markup-panel'],
+        ['Create PDF from files…', 'Create PDF from files', '26-create-pdf', 'Convert', '.pdf-markup-panel'],
+        // Phase 4 review, security and compliance.
+        ['Stamps…', 'Stamps', '27-stamps', 'Review'], ['Measure…', 'Measure', '28-measure', 'Review'], ['Compare…', 'Compare', '29-compare', 'Review'],
+        ['Protect PDF…', 'Protect PDF', '30-protect', 'Protect'], ['Redact…', 'Redact', '31-redact', 'Protect'], ['Bates numbering across files…', 'Bates numbering', '32-bates', 'Protect'],
+        ['Digital signatures…', 'Digital signatures', '33-signatures', 'Protect'], ['Preflight…', 'Preflight', '34-preflight', 'Protect'], ['Sanitize…', 'Sanitize PDF', '35-sanitize', 'Protect']]) {
         await organizeAction(label, tabName);
         await page.getByRole('dialog', { name: dialogName }).waitFor();
         await capture(shot, scope);

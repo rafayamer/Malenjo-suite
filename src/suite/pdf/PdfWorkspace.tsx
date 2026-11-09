@@ -138,6 +138,9 @@ import PdfMeasurePanel, { NEW_MEASURE_STATE, type MeasureState } from './PdfMeas
 import PdfDynamicStampPanel, { type StampPlacing } from './PdfDynamicStampPanel';
 import { addDynamicStamp } from './pdfDynamicStamp';
 import PdfSignaturePanel, { type SignatureBoxState } from './PdfSignaturePanel';
+import PdfSigningRequestPanel from './PdfSigningRequestPanel';
+import PdfCommentThreadsPanel, { reviewerName, seenComments, type NewCommentState } from './PdfCommentThreadsPanel';
+import { commentNotifications, listCommentThreads } from './pdfComments';
 import { boxToShown, frameOf, pdfPageFrames, shownToBox } from './security/pdfRedact';
 import PdfMarkupPanel, { MARKUP_AUTHOR, type MarkupSettings } from './PdfMarkupPanel';
 import PdfTextEditPanel, { type TextEditState } from './PdfTextEditPanel';
@@ -432,7 +435,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   useEffect(() => { setOverflowOpen(false); }, [masterTab]);
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
   // MAL-001 / 002 / 009 / 010 dialogs; focus returns to the control that opened them.
-  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup'|'text-edit'|'find'|'objects'|'paragraphs'|'form-design'|'form-fill'|'export'|'office-convert'|'create-pdf'|'protect'|'unlock'|'sanitize'|'redact'|'bates-files'|'compare'|'preflight'|'measure'|'stamps'|'signatures';
+  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup'|'text-edit'|'find'|'objects'|'paragraphs'|'form-design'|'form-fill'|'export'|'office-convert'|'create-pdf'|'protect'|'unlock'|'sanitize'|'redact'|'bates-files'|'compare'|'preflight'|'measure'|'stamps'|'signatures'|'threads'|'signing-requests';
   const [paragraphState,setParagraphState]=useState<ParagraphEditState|null>(null);
   const [formDesign,setFormDesign]=useState<FormDesignState|null>(null);
   const [exportRegion,setExportRegion]=useState<ExportRegion|null>(null);
@@ -449,6 +452,19 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [measureState,setMeasureState]=useState<MeasureState>(NEW_MEASURE_STATE);
   const [stampPlacing,setStampPlacing]=useState<StampPlacing|null>(null);
   const [signatureBox,setSignatureBox]=useState<SignatureBoxState>({picking:false});
+  const [signatureTargetField,setSignatureTargetField]=useState<string|undefined>(undefined);
+  const [threadDraft,setThreadDraft]=useState<NewCommentState>(()=>({placing:false,text:'',author:reviewerName(MARKUP_AUTHOR)}));
+  const commentsNotifiedFor=useRef('');
+  // MAL-056: when a PDF opens, tell the reader about new mentions of them and replies to their comments.
+  useEffect(()=>{
+    if(!sourceBytes||commentsNotifiedFor.current===sourceName)return;
+    commentsNotifiedFor.current=sourceName;
+    const name=reviewerName(MARKUP_AUTHOR);
+    void listCommentThreads(sourceBytes).then(threads=>{
+      const fresh=commentNotifications(threads,name,seenComments());
+      if(fresh.length)setActionNotice(`${fresh.length} new comment notification${fresh.length===1?'':'s'} for ${name}: open Review, Comment threads… to read ${fresh.length===1?'it':'them'}.`);
+    }).catch(()=>{ /* an unreadable or protected PDF has no comments to report */ });
+  },[sourceBytes,sourceName]);
   const [signatureFrames,setSignatureFrames]=useState<Awaited<ReturnType<typeof pdfPageFrames>>>([]);
   const [markupSettings,setMarkupSettings]=useState<MarkupSettings>({tool:null,style:{color:'#e0b000',opacity:0.6,width:2},text:''});
   const openToolDialog=(kind:ToolDialog)=>{
@@ -462,6 +478,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setMeasureState(current=>({...current,active:false,points:[],pageNumber:null}));
     setStampPlacing(null);
     setSignatureBox({picking:false});
+    setThreadDraft(current=>({...current,placing:false}));
     const opener=toolDialogOpenerRef.current;toolDialogOpenerRef.current=null;
     window.requestAnimationFrame(()=>{if(opener?.isConnected)opener.focus();});
   };
@@ -2755,6 +2772,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       providerAction,
     ],
     comment:[
+      {id:'comment-threads',label:'Comment threads…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('threads')},
       {id:'markup-tools',label:'Markup tools…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('markup')},
       {id:'stamps',label:'Stamps…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('stamps')},
       {id:'measure',label:'Measure…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('measure')},
@@ -2774,7 +2792,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'unlock-pdf',label:'Remove protection…',enabled:!!sourceBytes&&encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'This PDF is not protected.',run:()=>openToolDialog('unlock')},
       {id:'redact-pdf',label:'Redact…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('redact')},
       {id:'bates-files',label:'Bates numbering across files…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('bates-files')},
-      {id:'digital-signatures',label:'Digital signatures…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>{if(sourceBytes)void pdfPageFrames(sourceBytes).then(setSignatureFrames).catch(()=>setSignatureFrames([]));openToolDialog('signatures');}},
+      {id:'digital-signatures',label:'Digital signatures…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>{if(sourceBytes)void pdfPageFrames(sourceBytes).then(setSignatureFrames).catch(()=>setSignatureFrames([]));setSignatureTargetField(undefined);openToolDialog('signatures');}},
+      {id:'signing-requests',label:'Signing requests…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('signing-requests')},
       {id:'preflight',label:'Preflight…',enabled:!!sourceBytes,disabledReason:'No PDF is loaded.',run:()=>openToolDialog('preflight')},
       {id:'sanitize-pdf',label:'Sanitize…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('sanitize')},
       navigateAction('Open Security Center','security'),
@@ -3019,7 +3038,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             if(applied)setActionNotice(summary);
             return applied;
           }}/>}
-      {(toolDialog==='properties'||toolDialog==='navigation'||toolDialog==='compress'||toolDialog==='sanitize'||toolDialog==='redact'||toolDialog==='measure'||toolDialog==='markup'||toolDialog==='text-edit'||toolDialog==='find'||toolDialog==='objects'||toolDialog==='paragraphs'||toolDialog==='form-design'||toolDialog==='form-fill')&&sourceBytes&&(()=>{
+      {(toolDialog==='properties'||toolDialog==='navigation'||toolDialog==='compress'||toolDialog==='sanitize'||toolDialog==='redact'||toolDialog==='measure'||toolDialog==='threads'||toolDialog==='signing-requests'||toolDialog==='markup'||toolDialog==='text-edit'||toolDialog==='find'||toolDialog==='objects'||toolDialog==='paragraphs'||toolDialog==='form-design'||toolDialog==='form-fill')&&sourceBytes&&(()=>{
         const apply=async (label:string,operation:(latest:Uint8Array)=>Promise<{bytes:Uint8Array;summary:string}>)=>{
           let summary='';
           const applied=await mutate(label,async latest=>{const edited=await operation(latest);summary=edited.summary;return edited.bytes;},currentPage);
@@ -3044,6 +3063,10 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         if(toolDialog==='markup')return <PdfMarkupPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} viewRotation={rotation} busy={mutating}
           settings={markupSettings} onSettings={setMarkupSettings} onApply={apply} onClose={closeToolDialog}/>;
         if(toolDialog==='compress')return <PdfCompressDialog domIdPrefix={domIdPrefix} busy={mutating} onApply={apply} onClose={closeToolDialog}/>;
+        if(toolDialog==='signing-requests')return <PdfSigningRequestPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} sourceName={sourceName||'document.pdf'} busy={mutating} defaultName={reviewerName(MARKUP_AUTHOR)}
+          onApply={apply} onSignField={field=>{setSignatureTargetField(field);setToolDialog('signatures');}} onClose={closeToolDialog}/>;
+        if(toolDialog==='threads')return <PdfCommentThreadsPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} busy={mutating} draft={threadDraft} onDraft={setThreadDraft}
+          onApply={apply} onGoToPage={page=>goToPage(page)} onClose={closeToolDialog}/>;
         if(toolDialog==='measure')return <PdfMeasurePanel domIdPrefix={domIdPrefix} bytes={sourceBytes} viewRotation={rotation} busy={mutating} author={MARKUP_AUTHOR}
           state={measureState} onState={setMeasureState} onApply={apply} onClose={closeToolDialog}/>;
         if(toolDialog==='redact')return <PdfRedactPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} busy={mutating} state={redactState} onState={setRedactState} onApply={apply} onClose={closeToolDialog}/>;
@@ -3060,7 +3083,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         revisions={(historyRef.current?.entries??[]).map((entry,index)=>({index,label:index===0&&!historyRef.current!.baselineEvicted?'Opened document':entry.label,bytes:entry.bytes})).filter(r=>r.index<(historyRef.current?.cursor??0))}
         onClose={closeToolDialog}/>}
       {toolDialog==='signatures'&&sourceBytes&&<PdfSignaturePanel domIdPrefix={domIdPrefix} sourceName={sourceName||'document.pdf'} getBytes={()=>currentPdfBytesRef.current} busy={mutating}
-        box={signatureBox} onBox={setSignatureBox} onOpenPdfs={onOpenConversionOutputs} onNotice={setActionNotice} onClose={closeToolDialog}/>}
+        box={signatureBox} onBox={setSignatureBox} onOpenPdfs={onOpenConversionOutputs} onNotice={setActionNotice} onClose={closeToolDialog} targetField={signatureTargetField}/>}
       {toolDialog==='preflight'&&sourceBytes&&<PdfPreflightDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} sourceName={sourceName||'document.pdf'} onClose={closeToolDialog}/>}
       {toolDialog==='stamps'&&sourceBytes&&<PdfDynamicStampPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} sourceName={sourceName||'document.pdf'} busy={mutating} defaultUser={MARKUP_AUTHOR}
         placing={stampPlacing} onPlacing={setStampPlacing} onClose={closeToolDialog}/>}
@@ -3631,7 +3654,14 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               })()
               :toolDialog==='text-edit'&&textEditState&&textEditState.pageNumber===page?{targets:textEditState.runs,selected:textEditState.selected,
                 onSelect:id=>setTextEditState(current=>current?{...current,selected:id}:current)}:null}
-              drawTool={toolDialog==='signatures'&&signatureBox.picking&&signatureFrames[page-1]?{kind:'Square',color:'#1f5ba0',busy:false,label:'Drag to draw the signature box',onShape:shape=>{
+              drawTool={toolDialog==='threads'&&threadDraft.placing?{kind:'Note',color:'#e0b000',busy:mutating,label:'Click to place the comment',onShape:shape=>{
+                if(!shape.points?.length)return;
+                const draft=threadDraft;
+                setThreadDraft(current=>({...current,placing:false}));
+                void mutate('Added a comment.',latest=>addPdfDrawing(latest,{...shape,pageNumber:page,viewRotation:rotation,kind:'Note',author:draft.author,style:{color:'#e0b000',opacity:1,width:1},text:draft.text}),page)
+                  .then(ok=>{if(ok){setThreadDraft(current=>({...current,text:''}));setActionNotice(`Added a comment on page ${page}.`);}});
+              }}
+              :toolDialog==='signatures'&&signatureBox.picking&&signatureFrames[page-1]?{kind:'Square',color:'#1f5ba0',busy:false,label:'Drag to draw the signature box',onShape:shape=>{
                 if(!shape.rect)return;
                 setSignatureBox({picking:false,pageNumber:page,box:shownToBox(frameOf(signatureFrames[page-1],rotation),shape.rect)});
               }}

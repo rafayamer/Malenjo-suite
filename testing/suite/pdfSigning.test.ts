@@ -73,4 +73,28 @@ describe('Certificate-based PDF signing (MAL-065)', () => {
     const modified = appendUpdate(bb, later, new Map([[page.ref.objectNumber, new TextEncoder().encode(pageBody)], [n, serialize(stream)]]));
     expect((await verifyPdfSignatures(modified, trusted))[0]).toMatchObject({ integrity: true, coverage: 'later-updates', changes: 'modified', status: 'invalid' });
   });
+
+  it.skipIf(!HAS_OPENSSL)('runs a sequential signing request to completion with an audit report (MAL-066)', async () => {
+    const trusted = readCertificateFile(pki('ca.pem'));
+    const { prepareSigningRequest, signingRequestStatus, signingAuditReport } = await import('../../src/suite/pdf/signing/signingRequest');
+    const prepared = await prepareSigningRequest(await doc(true), { title: 'Supply contract', message: 'Please sign in order.', order: 'sequential', preparedBy: 'Owner',
+      recipients: [{ name: 'Dana Signer', email: 'dana@example.com' }, { name: 'Erin EC Signer', email: '' }] });
+    let status = (await signingRequestStatus(prepared.bytes, trusted))!;
+    expect(status.recipients.map((r) => r.state)).toEqual(['ready', 'waiting']);
+    expect(status.next?.recipient.field).toBe('Sign 1 - Dana Signer');
+    const dana = await signPdf(prepared.bytes, await readPkcs12(pki('signer.p12'), 'test-pass'), { profile: 'B-T', tsaUrl: TSA, transport: opensslTransport(), fieldName: 'Sign 1 - Dana Signer' });
+    status = (await signingRequestStatus(dana.bytes, trusted))!;
+    expect(status.recipients.map((r) => r.state)).toEqual(['signed', 'ready']); expect(status.recipients[0].nameMatches).toBe(true);
+    await expect(signPdf(dana.bytes, await readPkcs12(pki('signer.p12'), 'test-pass'), { profile: 'B-B', fieldName: 'Sign 1 - Dana Signer' })).rejects.toThrow('already signed');
+    const erin = await signPdf(dana.bytes, await readPkcs12(pki('signer-ec.p12'), 'test-pass'), { profile: 'B-T', tsaUrl: TSA, transport: opensslTransport(), fieldName: 'Sign 2 - Erin EC Signer' });
+    status = (await signingRequestStatus(erin.bytes, trusted))!;
+    expect(status.complete).toBe(true);
+    expect(status.recipients.map((r) => [r.report?.status, r.report?.changes])).toEqual([['valid', 'signature-maintenance'], ['valid', 'none']]);
+    const report = await signingAuditReport(erin.bytes, trusted, 'contract.pdf');
+    expect(report).toMatch(/COMPLETED — every recipient has signed/); expect(report.match(/<tr><td>[\d,]+ bytes<\/td>/g)).toHaveLength(2);
+    expect(report).toMatch(/Erin EC Signer — valid; PAdES B-T; trusted time/);
+    const checked = pyhankoValidate(erin.bytes, 'B-T');
+    if (checked !== null) expect(checked).toMatch(/The signature is judged VALID/);
+    expect(opensslVerify(erin.bytes, 1)).toBe('OK');
+  });
 });

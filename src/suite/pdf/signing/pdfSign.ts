@@ -25,6 +25,8 @@ export interface SignOptions {
   tsaUrl?: string;
   transport?: Transport;
   now?: Date;
+  /** Sign into this existing, empty signature field (for example one a signing request prepared). */
+  fieldName?: string;
 }
 
 const N = PDFName.of;
@@ -52,8 +54,9 @@ function findFrom(haystack: Uint8Array, needle: string, from: number): number {
 export function nextObjectNumber(original: Uint8Array, pdf: PDFDocument): number {
   const startxref = findLast(original, 'startxref');
   const prev = Number(/startxref\s+(\d+)/.exec(new TextDecoder('latin1').decode(original.subarray(startxref, startxref + 40)))?.[1] ?? 0);
-  const tail = new TextDecoder('latin1').decode(original.subarray(prev, Math.min(original.length, prev + 4096)));
-  const size = Number(/\/Size\s+(\d+)/.exec(tail)?.[1] ?? 0);
+  // The trailer (after a long classic table) or the stream dictionary holds /Size; take the largest after this section.
+  const tail = new TextDecoder('latin1').decode(original.subarray(prev, Math.min(original.length, prev + 8 * 1024 * 1024)));
+  const size = Math.max(0, ...[...tail.matchAll(/\/Size\s+(\d+)/g)].map((m) => Number(m[1])));
   return Math.max(pdf.context.largestObjectNumber + 1, size);
 }
 
@@ -117,8 +120,8 @@ function prepareSignature(bytes: Uint8Array, pdf: PDFDocument, kind: 'signature'
   if (pageIndex < 0 || pageIndex >= pdf.getPageCount()) throw new Error('The signature box is on a page that is not in this PDF.');
   const page = pdf.getPage(pageIndex);
   const box = kind === 'signature' && options.appearance ? options.appearance.box : [0, 0, 0, 0];
-  let ap = '';
-  if (box[2] - box[0] > 1 && box[3] - box[1] > 1) {
+  const appearance = (box: number[]): string => {
+    if (!(box[2] - box[0] > 1 && box[3] - box[1] > 1)) return '';
     const w = box[2] - box[0], h = box[3] - box[1];
     const lines = [`Digitally signed by ${signerName}`, `Date: ${now.toISOString().replace('T', ' ').slice(0, 19)} UTC`, ...(options.reason ? [`Reason: ${options.reason}`] : []), ...(options.location ? [`Location: ${options.location}`] : [])];
     const size = Math.max(5, Math.min(10, (h - 6) / (lines.length * 1.25), ...lines.map((l) => (w - 8) / (l.length * 0.5))));
@@ -126,8 +129,26 @@ function prepareSignature(bytes: Uint8Array, pdf: PDFDocument, kind: 'signature'
     const stream = `0.15 0.35 0.75 RG 1 w 0.5 0.5 ${w - 1} ${h - 1} re S BT /Helv ${size.toFixed(2)} Tf 0.1 0.1 0.15 rg ${lines.map((l, i) => `1 0 0 1 4 ${(h - 4 - size * (i + 1) * 1.2).toFixed(2)} Tm (${esc(l)}) Tj`).join(' ')} ET`;
     const apNumber = next++;
     objects.set(apNumber, concatBytes(enc.encode(`<< /Type /XObject /Subtype /Form /BBox [0 0 ${w} ${h}] /Resources << /Font << /Helv << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> >> >> /Length ${latin1(stream).length} >>\nstream\n`), latin1(stream), enc.encode('\nendstream')));
-    ap = ` /AP << /N ${apNumber} 0 R >>`;
+    return ` /AP << /N ${apNumber} 0 R >>`;
+  };
+  // Signing into a prepared field: it gains the signature value and a signed appearance; nothing else changes.
+  if (options.fieldName && kind === 'signature') {
+    const found = findField(pdf, options.fieldName);
+    if (!found) throw new Error(`This PDF has no signature field named “${options.fieldName}”.`);
+    if (found.dict.has(N('V'))) throw new Error(`The field “${options.fieldName}” is already signed.`);
+    const rect = found.dict.lookupMaybe(N('Rect'), PDFArray)?.asArray().map((n) => (n instanceof PDFNumber ? n.asNumber() : 0)) ?? [0, 0, 0, 0];
+    const ap = appearance(rect);
+    let body = new TextDecoder('latin1').decode(serialize(found.dict)).replace(/\/AP\s*<<[^<>]*(<<[^<>]*>>[^<>]*)*>>/, '');
+    body = body.replace(/>>\s*$/, ` /V ${sigNumber} 0 R${ap} >>`);
+    objects.set(found.ref.objectNumber, latin1(body));
+    if (form) {
+      form.set(N('SigFlags'), PDFNumber.of(3));
+      const formRef = pdf.catalog.get(N('AcroForm'));
+      if (formRef instanceof PDFRef) objects.set(formRef.objectNumber, serialize(form)); else objects.set((ctx.trailerInfo.Root as PDFRef).objectNumber, serialize(pdf.catalog));
+    }
+    return appendUpdate(bytes, pdf, objects);
   }
+  const ap = appearance(box);
   objects.set(widgetNumber, enc.encode(`<< /Type /Annot /Subtype /Widget /FT /Sig /T ${text(`${base}${k}`)} /V ${sigNumber} 0 R /F 132 /Rect [${box.join(' ')}] /P ${page.ref.toString()}${ap} >>`));
   const widgetRef = PDFRef.of(widgetNumber);
   // The page's annotation list and the form's field list gain the widget.
@@ -146,6 +167,24 @@ function prepareSignature(bytes: Uint8Array, pdf: PDFDocument, kind: 'signature'
   extra?.(pdf.catalog);
   if (catalogChanged) objects.set(catalogRef.objectNumber, serialize(pdf.catalog));
   return appendUpdate(bytes, pdf, objects);
+}
+
+/** A terminal signature field by its full name, with its own object number (so it can be rewritten). */
+function findField(pdf: PDFDocument, name: string): { dict: PDFDict; ref: PDFRef } | null {
+  const walk = (refs: PDFArray | undefined, prefix: string, depth: number): { dict: PDFDict; ref: PDFRef } | null => {
+    for (const ref of refs?.asArray() ?? []) {
+      if (!(ref instanceof PDFRef) || depth > 32) continue;
+      const dict = pdf.context.lookup(ref);
+      if (!(dict instanceof PDFDict)) continue;
+      const t = dict.lookup(N('T')); const own = t instanceof PDFString || t instanceof PDFHexString ? t.decodeText() : '';
+      const full = [prefix, own].filter(Boolean).join('.');
+      if (full === name && dict.get(N('FT'))?.toString() === '/Sig') return { dict, ref };
+      const inner = walk(dict.lookupMaybe(N('Kids'), PDFArray), full, depth + 1);
+      if (inner) return inner;
+    }
+    return null;
+  };
+  return walk(pdf.catalog.lookupMaybe(N('AcroForm'), PDFDict)?.lookupMaybe(N('Fields'), PDFArray), '', 0);
 }
 
 /** Fills the byte range and returns the signed bytes' digest location. */

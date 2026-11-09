@@ -12,19 +12,21 @@ interface Props {
   domIdPrefix: string; sourceName: string; getBytes(): Uint8Array | null; busy: boolean;
   box: SignatureBoxState; onBox(next: SignatureBoxState): void;
   onOpenPdfs?(files: File[]): void; onNotice(text: string): void; onClose(): void;
+  /** Sign into this prepared field (a signing request's recipient field). */
+  targetField?: string;
 }
 const TRUST_KEY = 'malenjo.pdf.trusted-certificates.v1';
 const TSA_KEY = 'malenjo.pdf.tsa-url';
 const toBase64 = (b: Uint8Array) => btoa(Array.from(b, (c) => String.fromCharCode(c)).join(''));
 const fromBase64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-function loadTrusted(): Certificate[] {
+export function loadTrusted(): Certificate[] {
   try { return (JSON.parse(globalThis.localStorage?.getItem(TRUST_KEY) ?? '[]') as string[]).flatMap((b) => { try { return [parseCertificate(fromBase64(b))]; } catch { return []; } }); } catch { return []; }
 }
 const day = (d: Date) => d.toISOString().slice(0, 10);
 const when = (d: Date | null | undefined) => (d ? `${d.toISOString().replace('T', ' ').slice(0, 19)} UTC` : 'unknown');
 
 /** MAL-065: certificate-based signing with PAdES profiles and trusted timestamps, and signature validation. */
-export default function PdfSignaturePanel({ domIdPrefix, sourceName, getBytes, busy, box, onBox, onOpenPdfs, onNotice, onClose }: Props) {
+export default function PdfSignaturePanel({ domIdPrefix, sourceName, getBytes, busy, box, onBox, onOpenPdfs, onNotice, onClose, targetField }: Props) {
   const [file, setFile] = useState<{ name: string; bytes: Uint8Array } | null>(null);
   const [password, setPassword] = useState('');
   const [identity, setIdentity] = useState<SigningIdentity | null>(null);
@@ -47,7 +49,7 @@ export default function PdfSignaturePanel({ domIdPrefix, sourceName, getBytes, b
     if (!bytes || !identity) return;
     if (profile !== 'B-B') { try { globalThis.localStorage?.setItem(TSA_KEY, tsaUrl.trim()); } catch { /* not kept */ } }
     const result = await signPdf(bytes, identity, { profile, tsaUrl: tsaUrl.trim(), reason: reason.trim(), location: location.trim(), contactInfo: contact.trim(), transport: signingHttp,
-      appearance: visible && box.box && box.pageNumber ? { pageNumber: box.pageNumber, box: box.box } : null });
+      appearance: !targetField && visible && box.box && box.pageNumber ? { pageNumber: box.pageNumber, box: box.box } : null, fieldName: targetField });
     const name = `${(sourceName || 'document.pdf').replace(/\.pdf$/i, '')}-signed.pdf`;
     const saved = await exportConversionFile(name, result.bytes, 'application/pdf');
     if (onOpenPdfs) onOpenPdfs([new File([result.bytes as BlobPart], name, { type: 'application/pdf' })]);
@@ -74,9 +76,10 @@ export default function PdfSignaturePanel({ domIdPrefix, sourceName, getBytes, b
       <label>Reason<input value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)}/></label>
       <label>Location<input value={location} maxLength={200} onChange={(e) => setLocation(e.target.value)}/></label>
       <label>Contact<input value={contact} maxLength={200} onChange={(e) => setContact(e.target.value)}/></label>
-      <label className="pdf-tool-dialog-choice"><input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)}/>Show a signature box on the page</label>
-      {visible && <button type="button" aria-pressed={box.picking} onClick={() => onBox({ ...box, picking: !box.picking })}>{box.picking ? 'Stop drawing' : box.box ? `Box on page ${box.pageNumber} — draw again` : 'Draw the signature box'}</button>}
-      <button type="button" className="primary-action" disabled={busy || working || !identity || (profile !== 'B-B' && !tsaUrl.trim()) || (visible && !box.box)} onClick={() => void sign()}>{working ? 'Working…' : 'Sign and save a copy'}</button>
+      {targetField ? <p role="note">Signing the field “{targetField}” prepared by the signing request.</p>
+        : <label className="pdf-tool-dialog-choice"><input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)}/>Show a signature box on the page</label>}
+      {visible && !targetField && <button type="button" aria-pressed={box.picking} onClick={() => onBox({ ...box, picking: !box.picking })}>{box.picking ? 'Stop drawing' : box.box ? `Box on page ${box.pageNumber} — draw again` : 'Draw the signature box'}</button>}
+      <button type="button" className="primary-action" disabled={busy || working || !identity || (profile !== 'B-B' && !tsaUrl.trim()) || (visible && !targetField && !box.box)} onClick={() => void sign()}>{working ? 'Working…' : 'Sign and save a copy'}</button>
       <small>The signed copy is saved and opened in a new tab; signing adds to the file without changing what was there. B-T and above ask the timestamp authority for a trusted time; B-LT and B-LTA also download the certificates' revocation lists and embed them. The certificate and its password stay on this device and are forgotten when you close this panel.</small>
     </fieldset>
     <fieldset>

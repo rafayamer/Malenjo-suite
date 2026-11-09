@@ -43,6 +43,7 @@ export const VERIFIED_EVIDENCE_SCRIPTS = [
   'scripts/pdf-phase4-redact-acceptance.mjs',
   'scripts/pdf-phase4-review-acceptance.mjs',
   'scripts/pdf-phase4-signing-acceptance.mjs',
+  'scripts/pdf-phase4-collab-acceptance.mjs',
 ] as const;
 
 export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Object.freeze([
@@ -307,6 +308,11 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     evidence: ['MAL-034 HTML to PDF through the controlled renderer: supported CSS applied, scripts and remote content blocked'],
   },
   {
+    id: 'MAL-056', workspaceTab: 'Review',
+    guidance: 'Choose Comment threads…, set your name, write a comment (mention people with @name or @[First Last]) and place it on the page. Reply to any comment, and set a thread to Accepted, Rejected, Cancelled, Resolved or back to Open. Threads, replies and statuses are saved in the PDF as standard comment replies, so they travel with the file. When you open a PDF, MALENJO tells you about new mentions of you and replies to your comments, and lists them under For you; nothing is sent over a network.',
+    evidence: ['MAL-056 asynchronous comment threads with replies, mentions, resolution and notifications'],
+  },
+  {
     id: 'MAL-057', workspaceTab: 'Review',
     guidance: 'Choose Stamps…, pick a stamp from the library or make your own (status line for the approval state, detail line with {user}, {date}, {time}, {docid}, {file} and {status}, and a colour), then Place on the page and click where it goes. Your stamps and name are kept on this device for next time. Placed stamps are Stamp annotations with the values filled in when placed.',
     evidence: ['MAL-057 reusable stamps with date, time, user, document identifier and approval-state variables'],
@@ -345,6 +351,11 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     id: 'MAL-065', workspaceTab: 'Protect',
     guidance: 'Choose Digital signatures…, pick your signing certificate (.p12 or .pfx) and enter its password, choose PAdES B-B, B-T (trusted timestamp from the RFC 3161 timestamp authority you name), B-LT (plus embedded certificates and revocation lists) or B-LTA (plus an archive timestamp), optionally draw a visible signature box, and Sign and save a copy. Under Validate, add the certificates you trust and Check signatures: each signature shows integrity, signer and chain, trusted time, revocation, changes after signing and its PAdES level. RSA and elliptic-curve keys; certificate files must use AES encryption (current OpenSSL, Windows and macOS exports).',
     evidence: ['MAL-065 certificate-based signing with a trusted timestamp at PAdES B-LTA, validated independently and in the app'],
+  },
+  {
+    id: 'MAL-066', workspaceTab: 'Protect',
+    guidance: 'Choose Signing requests…, give the request a title and message, add the recipients (name, optional email) and whether they sign in order, then Prepare request: each recipient gets a signature box and the request is stored in the PDF. Pass the saved PDF to each recipient (MALENJO sends no email); they choose Sign as … and sign with their certificate. The status table shows who has signed, when and whether each signature is valid, and Save audit report keeps the request, every signature\'s validation evidence and a hash of each signed revision.',
+    evidence: ['MAL-066 signing workflow with recipient assignment, signing status and audit evidence'],
   },
   {
     id: 'MAL-067', workspaceTab: 'Protect',
