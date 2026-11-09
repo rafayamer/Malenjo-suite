@@ -82,7 +82,10 @@ export function logicScripts(logic: Omit<FieldLogic, 'unsupported'>): FieldScrip
 
 const STRING = String.raw`"(?:[^"\\]|\\.)*"`;
 const NUM = String.raw`-?\d+(?:\.\d+)?`;
-const str = (token: string) => JSON.parse(token) as string;
+/** A JavaScript string literal's value, decoded as JavaScript does (an escaped d is just "d"), never throwing on an escape JSON lacks. */
+const ESCAPES: Record<string, string> = { n: '\n', t: '\t', r: '\r', b: '\b', f: '\f', v: '\v', 0: '\0' };
+const str = (token: string) => token.slice(1, -1).replace(/\\(?:x([0-9a-fA-F]{2})|u([0-9a-fA-F]{4})|([\s\S]))/g,
+  (_, x: string, u: string, c: string) => x || u ? String.fromCharCode(parseInt(x || u, 16)) : ESCAPES[c] ?? c);
 const RULES: [RegExp, (m: RegExpMatchArray, logic: FieldLogic) => void][] = [
   [new RegExp(String.raw`^AFNumber_(?:Keystroke|Format)\(\s*(\d)\s*,\s*([0-3])\s*,\s*\d\s*,\s*\d\s*,\s*(${STRING})\s*,\s*true\s*\);?$`),
     (m, l) => { l.format = { kind: 'number', decimals: Number(m[1]), separator: Number(m[2]) as NumberSeparator, currency: str(m[3]) }; }],
@@ -247,17 +250,18 @@ export function evaluateForm(fields: LogicField[]): FormEvaluation {
   const errors: Record<string, string> = {};
   for (const field of fields) {
     if (hidden.includes(field.name)) continue;
-    const value = (values[field.name] ?? '').trim();
-    const error = validate(field, value);
+    // Required, number, date and range checks read the trimmed text; length and pattern checks read the saved value.
+    const error = validate(field, values[field.name] ?? '');
     if (error) errors[field.name] = error;
   }
   return { values, hidden, errors };
 }
 
-function validate(field: LogicField, value: string): string | null {
+function validate(field: LogicField, saved: string): string | null {
   const { logic } = field;
+  const value = saved.trim();
   if (!value || (value === 'Off' && isButton(field))) return field.required ? `${field.name} is required.` : null;
-  if (field.maxLength && value.length > field.maxLength) return `${field.name} allows at most ${field.maxLength} characters.`;
+  if (field.maxLength && saved.length > field.maxLength) return `${field.name} allows at most ${field.maxLength} characters.`;
   let number: number | null = null;
   if (logic.format?.kind === 'number') {
     number = parseNumber(value, logic.format) ?? parseNumber(value);
@@ -274,7 +278,7 @@ function validate(field: LogicField, value: string): string | null {
   }
   // Matched in linear time; a pattern outside the supported subset is never run.
   const matcher = logic.pattern ? compileSafeRegex(logic.pattern.regex) : null;
-  if (logic.pattern && matcher && !matcher.test(value)) return logic.pattern.message;
+  if (logic.pattern && matcher && !matcher.test(saved)) return logic.pattern.message;
   return null;
 }
 

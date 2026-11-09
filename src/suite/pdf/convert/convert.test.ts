@@ -167,6 +167,29 @@ describe('SVG export (MAL-043)', () => {
     expect(result.notes).toEqual(['Every graphic on these pages was converted.']);
   });
 
+  it('keeps a word gap written as a TJ adjustment', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([300, 300]);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const key = page.node.newFontDictionary('F', font.ref).decodeText();
+    page.node.addContentStream(pdf.context.register(pdf.context.stream(`BT /${key} 12 Tf 20 200 Td [(Hello) -500 (World)] TJ ET`)));
+    const svg = text((await pdfToSvg(await pdf.save(), [1], 'gap')).files[0].bytes);
+    expect(svg).toMatch(/>Hello World<\/text>/);
+  });
+
+  it('turns and mirrors a picture’s pixels the way the page shows them', async () => {
+    const { orient } = await import('./pdfStructure');
+    const redBlue = image(2, 1, (x) => (x ? [0, 0, 255, 255] : [255, 0, 0, 255]));
+    // A quarter turn counter-clockwise: the left (red) pixel ends at the bottom, the right (blue) at the top.
+    const turned = orient(redBlue, [0, -40], [-40, 0]);
+    expect([turned.width, turned.height, ...turned.data.slice(0, 3), ...turned.data.slice(4, 7)]).toEqual([1, 2, 0, 0, 255, 255, 0, 0]);
+    // Mirrored left to right.
+    const mirrored = orient(redBlue, [-40, 0], [0, -20]);
+    expect([...mirrored.data.slice(0, 3)]).toEqual([0, 0, 255]);
+    // Upright: unchanged.
+    expect(orient(redBlue, [40, 0], [0, -20])).toBe(redBlue);
+  });
+
   it('leaves invisible text out of the SVG and outlines stroked text', async () => {
     const pdf = await PDFDocument.create();
     const page = pdf.addPage([300, 300]);

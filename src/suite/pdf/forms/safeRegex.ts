@@ -21,7 +21,7 @@ type State =
   | { t: 'bol'; out: number } | { t: 'eol'; out: number } | { t: 'match' };
 
 class Unsupported extends Error {}
-const MAX_STATES = 5000, MAX_REPEAT = 100;
+const MAX_STATES = 5000, MAX_REPEAT = 100, MAX_BUILD_STEPS = 50_000;
 
 const DIGIT: Test = (c) => c >= '0' && c <= '9';
 const WORD: Test = (c) => /[A-Za-z0-9_]/.test(c);
@@ -131,8 +131,11 @@ function parse(source: string): Ast {
 function compile(ast: Ast): State[] {
   const states: State[] = [{ t: 'match' }];
   const add = (s: State) => { if (states.length >= MAX_STATES) throw new Unsupported(); states.push(s); return states.length - 1; };
-  // Builds backwards: returns the start state of `node` followed by `next`.
+  // Builds backwards: returns the start state of `node` followed by `next`. Every call counts toward a budget, so
+  // nested repeats of an empty expression (which emit no states) cannot make compiling itself take forever.
+  let steps = 0;
   const build = (node: Ast, next: number): number => {
+    if (++steps > MAX_BUILD_STEPS) throw new Unsupported();
     switch (node.k) {
       case 'empty': return next;
       case 'set': return add({ t: 'set', test: node.test, out: next });

@@ -141,4 +141,21 @@ describe('form evaluation', () => {
     expect(Date.now() - started).toBeLessThan(500);
     expect(result.errors).toEqual({ Code: 'No' });
   });
+
+  it('stops compiling a pattern that only repeats an empty expression', async () => {
+    const { compileSafeRegex } = await import('./safeRegex');
+    const started = Date.now();
+    expect(compileSafeRegex('(((((a{0}){100}){100}){100}){100}){100}')).toBeNull();
+    expect(Date.now() - started).toBeLessThan(200);
+  });
+
+  it('checks a pattern against the value that is saved, spaces included', () => {
+    const logic = parseLogic({ V: String.raw`if (event.value !== "" && !new RegExp("^\\d{4}$").test(event.value)) { app.alert("Four digits"); event.rc = false; }` });
+    expect(logic.pattern?.regex).toBe('^\\d{4}$');
+    expect(evaluateForm([{ name: 'PIN', value: ' 1234 ', required: true, logic }]).errors).toEqual({ PIN: 'Four digits' });
+    expect(evaluateForm([{ name: 'PIN', value: '1234', required: true, logic }]).errors).toEqual({});
+    expect(evaluateForm([{ name: 'PIN', value: '   ', required: true, logic }]).errors).toEqual({ PIN: 'PIN is required.' });
+    // A JavaScript-only escape ("\d" means "d") is decoded as JavaScript does instead of failing to read the form.
+    expect(parseLogic({ V: String.raw`AFDate_FormatEx("\d\x41");` }).format).toEqual({ kind: 'date', pattern: 'dA' });
+  });
 });

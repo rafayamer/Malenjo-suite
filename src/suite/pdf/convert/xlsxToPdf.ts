@@ -76,6 +76,17 @@ function formatDateTime(n: number, pattern: string, date1904 = false): string {
   }).join('');
 }
 
+/** Splits a defined-name formula on commas that are not inside a quoted sheet name ('A,B'!$A$1). */
+function splitOutsideQuotes(formula: string): string[] {
+  const parts: string[] = []; let quoted = false, start = 0;
+  for (let k = 0; k < formula.length; k++) {
+    if (formula[k] === "'") quoted = !quoted; // a doubled '' toggles twice and stays inside the name
+    else if (formula[k] === ',' && !quoted) { parts.push(formula.slice(start, k)); start = k + 1; }
+  }
+  parts.push(formula.slice(start));
+  return parts;
+}
+
 function formatValue(raw: string, fmt: string, id: number, date1904 = false): string {
   const n = Number(raw);
   if (raw === '' || !Number.isFinite(n)) return raw;
@@ -86,9 +97,13 @@ function formatValue(raw: string, fmt: string, id: number, date1904 = false): st
   const isDate = Boolean(BUILTIN_DATES[id]) || /[dmyhs]/i.test(pattern.replace(/"[^"]*"|\[[^\]]*\]|\\./g, ''));
   if (isDate && n >= 0 && n < 2958466) return formatDateTime(n, pattern.split(';')[0], date1904);
   if (fmt) {
-    const decimals = (fmt.split(';')[0].match(/\.(0+)/)?.[1].length) ?? 0;
-    const text = fixed(fmt.includes('%') ? decimals : decimals, fmt.includes(','));
-    const value = fmt.includes('%') ? `${(n * 100).toFixed(decimals)}%` : text;
+    // Decimal places: mandatory "0" and optional "#" (or "?") placeholders. Round to all of them, then drop
+    // trailing zeros only from the optional ones (0.0# shows 1234.57 and 1234.5).
+    const places = fmt.split(';')[0].replace(/"[^"]*"|\\./g, '').match(/\.([0#?]+)/)?.[1] ?? '';
+    const decimals = places.length, required = places.replace(/[#?]+$/, '').length;
+    const trim = (s: string) => { if (decimals === required) return s; const [w, f = ''] = s.split('.'); const kept = f.replace(/0+$/, '').padEnd(required, '0'); return kept ? `${w}.${kept}` : `${w}.`; };
+    const text = trim(fixed(decimals, fmt.includes(',')));
+    const value = fmt.includes('%') ? `${trim((n * 100).toFixed(decimals))}%` : text;
     const prefix = fmt.match(/^"?([$€£¥])"?/)?.[1] ?? (fmt.includes('[$') ? fmt.match(/\[\$([^\-\]]+)/)?.[1] ?? '' : '');
     return prefix + value;
   }
@@ -153,7 +168,7 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
       if (cells.has(`${m.r1},${m.c1}`)) { maxR = Math.max(maxR, m.r2); maxC = Math.max(maxC, m.c2); }
     }
     // A print area may list several ranges (Sheet1!$A$1:$B$9,Sheet1!$D$1:$E$9): each prints in turn, on its own pages.
-    const areaRefs = printAreas.has(sheetIndex) ? printAreas.get(sheetIndex)!.split(',').map((part) => part.split('!').pop()!.trim()).filter(Boolean) : [];
+    const areaRefs = printAreas.has(sheetIndex) ? splitOutsideQuotes(printAreas.get(sheetIndex)!).map((part) => part.replace(/^\s*(?:'(?:[^']|'')*'|[^'!]*)!/, '').trim()).filter(Boolean) : [];
     const areaList = areaRefs.length ? areaRefs.map((ref) => rangeOf(ref, { maxC, maxR })) : [{ c1: 0, r1: 0, c2: maxC, r2: maxR }];
     if (areaRefs.length) areas.push(`${sheet.attrs.name} (${areaRefs.join(', ')})`);
     if (!cells.size && !printAreas.has(sheetIndex)) continue;

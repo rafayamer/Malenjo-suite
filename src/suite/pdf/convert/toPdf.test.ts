@@ -374,3 +374,27 @@ describe('conversion edge cases, round 8', () => {
     expect(new TextDecoder('latin1').decode(pageContentBytes(await PDFDocument.load(result.bytes), 0))).toMatch(/BT\n1 1 1 rg/);
   });
 });
+
+describe('conversion edge cases, round 9', () => {
+  const S = 'xmlns="m" xmlns:r="r"';
+  const book = (sheetName: string, sheet: string, extra = '', styles = '') => zipSync({
+    'xl/workbook.xml': strToU8(`<workbook ${S}><sheets><sheet name="${sheetName}" sheetId="1" r:id="rId1"/></sheets>${extra}</workbook>`),
+    'xl/_rels/workbook.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>'),
+    'xl/worksheets/sheet1.xml': strToU8(`<worksheet ${S}><sheetData>${sheet}</sheetData></worksheet>`),
+    ...(styles ? { 'xl/styles.xml': strToU8(styles) } : {}),
+  });
+  const options = { pageSize: 'letter', orientation: 'sheet', gridlines: 'sheet', sheets: 'all' } as const;
+
+  it('rounds to optional decimal places and trims only their trailing zeros', async () => {
+    const styles = '<styleSheet><numFmts><numFmt numFmtId="164" formatCode="#,##0.##"/><numFmt numFmtId="165" formatCode="0.0#"/></numFmts><cellXfs><xf numFmtId="0"/><xf numFmtId="164"/><xf numFmtId="165"/></cellXfs></styleSheet>';
+    const row = (r: number, a: string, b: string) => `<row r="${r}"><c r="A${r}" s="1"><v>${a}</v></c><c r="B${r}" s="2"><v>${b}</v></c></row>`;
+    const [page] = await read((await xlsxToPdf(book('S', row(1, '1234.567', '1234.567') + row(2, '1234.5', '1234.5') + row(3, '7', '7'), '', styles), options)).bytes);
+    expect(page.items.map((i) => i.str)).toEqual(['1,234.57', '1234.57', '1,234.5', '1234.5', '7.', '7.0']);
+  });
+
+  it('keeps a quoted sheet name with a comma whole when reading the print area', async () => {
+    const names = `<definedNames><definedName name="_xlnm.Print_Area" localSheetId="0">'A,B'!$C$1:$C$1</definedName></definedNames>`;
+    const result = await xlsxToPdf(book('A,B', '<row r="1"><c r="A1" t="inlineStr"><is><t>Outside</t></is></c><c r="C1" t="inlineStr"><is><t>Inside</t></is></c></row>', names), options);
+    expect((await read(result.bytes)).map((p) => p.text)).toEqual(['Inside']);
+  });
+});

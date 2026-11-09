@@ -108,7 +108,7 @@ export async function pdfToSvg(bytes: Uint8Array, pages: number[], title: string
       const paint = `fill="${mode === 1 ? 'none' : run.fill}"${mode === 1 || mode === 2 ? ` stroke="${run.stroke}" stroke-width="${r(0.04)}"` : ''}`;
       const th = run.horizontalScale / 100;
       const length = run.size ? run.advance / (run.size * th) : 0;
-      items.push({ at: run.opIndex, svg: `<text transform="${mat(run.start)} scale(1 -1)" font-size="1" ${family(run.font.baseFont)} ${paint}${length > 0 ? ` textLength="${r(length)}" lengthAdjust="spacingAndGlyphs"` : ''} xml:space="preserve">${esc(run.text)}</text>` });
+      items.push({ at: run.opIndex, svg: `<text transform="${mat(run.start)} scale(1 -1)" font-size="1" ${family(run.font.baseFont)} ${paint}${length > 0 ? ` textLength="${r(length)}" lengthAdjust="spacingAndGlyphs"` : ''} xml:space="preserve">${esc(run.display || run.text)}</text>` });
     }
     for (const image of model.images) {
       const stream = image.ref ? pdf.context.lookup(xobjects?.get(N(image.name)) as never) : null;

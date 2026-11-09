@@ -78,7 +78,10 @@ export async function readPdfStructure(doc: Doc, pages: number[], options: { ima
           for (const m of placements) {
             const corners = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([u, v]) => viewport.convertToViewportPoint(m[0] * u + m[2] * v + m[4], m[1] * u + m[3] * v + m[5]) as [number, number]);
             const xs = corners.map((c) => c[0]), ys = corners.map((c) => c[1]);
-            images.push({ x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys), image });
+            // The exporters stretch the bitmap into an upright box, so turn or mirror its pixels the way they are shown.
+            const ex: [number, number] = [corners[1][0] - corners[0][0], corners[1][1] - corners[0][1]];
+            const ey: [number, number] = [corners[2][0] - corners[0][0], corners[2][1] - corners[0][1]];
+            images.push({ x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys), image: orient(image, ex, ey) });
           }
         } else if (fn === OPS.paintImageMaskXObject) skipped++;
         // Stencil masks and grouped inline images are not extracted: count every placement as skipped.
@@ -91,6 +94,32 @@ export async function readPdfStructure(doc: Doc, pages: number[], options: { ima
     page.cleanup();
   }
   return out;
+}
+
+/**
+ * The bitmap as it appears on the page, for a placement whose image x axis lands on `ex` and y axis on `ey` in
+ * viewport space (y down). Quarter turns and mirrors are applied to the pixels; an upright placement, or a skewed
+ * or freely rotated one (only its bounding box is kept), returns the bitmap unchanged.
+ */
+export function orient(image: Rgba, ex: [number, number], ey: [number, number]): Rgba {
+  const tiny = (a: number, b: number) => Math.abs(a) <= 1e-6 * Math.max(Math.abs(b), 1e-9);
+  const straight = tiny(ex[1], ex[0]) && tiny(ey[0], ey[1]);
+  const turned = tiny(ex[0], ex[1]) && tiny(ey[1], ey[0]);
+  if (!straight && !turned) return image;
+  if (straight && ex[0] > 0 && ey[1] < 0) return image;
+  const { width: w, height: h, data } = image;
+  const [W, H] = turned ? [h, w] : [w, h];
+  const out = new Uint8ClampedArray(W * H * 4);
+  const minX = Math.min(0, ex[0]) + Math.min(0, ey[0]), minY = Math.min(0, ex[1]) + Math.min(0, ey[1]);
+  const bw = Math.abs(ex[0]) + Math.abs(ey[0]), bh = Math.abs(ex[1]) + Math.abs(ey[1]);
+  for (let sy = 0; sy < h; sy++) for (let sx = 0; sx < w; sx++) {
+    // Pixel rows run top to bottom, while the image's own y axis points up.
+    const u = (sx + 0.5) / w, v = 1 - (sy + 0.5) / h;
+    const px = ex[0] * u + ey[0] * v, py = ex[1] * u + ey[1] * v;
+    const ox = Math.min(W - 1, Math.floor(((px - minX) / bw) * W)), oy = Math.min(H - 1, Math.floor(((py - minY) / bh) * H));
+    out.set(data.subarray((sy * w + sx) * 4, (sy * w + sx) * 4 + 4), (oy * W + ox) * 4);
+  }
+  return { width: W, height: H, data: out };
 }
 
 /** Text lines (top to bottom), each split into cells where a wide gap separates text. */
