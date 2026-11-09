@@ -241,6 +241,19 @@ describe('SVG export (MAL-043)', () => {
     expect(result.notes.join(' ')).toMatch(/1 image\(s\) in formats SVG export does not support/);
   });
 
+  it('applies an inverting Decode on a soft mask', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([300, 300]);
+    const smask = pdf.context.register(pdf.context.flateStream(new Uint8Array([0]), { Type: 'XObject', Subtype: 'Image', Width: 1, Height: 1, ColorSpace: 'DeviceGray', BitsPerComponent: 8, Decode: [1, 0] }));
+    const img = pdf.context.register(pdf.context.flateStream(new Uint8Array([255, 0, 0]), { Type: 'XObject', Subtype: 'Image', Width: 1, Height: 1, ColorSpace: 'DeviceRGB', BitsPerComponent: 8, SMask: smask }));
+    const name = page.node.newXObject('Im', img).decodeText();
+    page.node.addContentStream(pdf.context.register(pdf.context.stream(`q 100 0 0 100 10 10 cm /${name} Do Q`)));
+    const svg = text((await pdfToSvg(await pdf.save(), [1], 'decoded')).files[0].bytes);
+    const png = Uint8Array.from(atob(svg.match(/href="data:image\/png;base64,([^"]+)"/)![1]), (c) => c.charCodeAt(0));
+    // Sample 0 under Decode [1 0] is fully opaque, so the picture is written without an alpha channel.
+    expect(readPng(png).px[0]).toEqual([255, 0, 0]);
+  });
+
   it('leaves invisible text out of the SVG and outlines stroked text', async () => {
     const pdf = await PDFDocument.create();
     const page = pdf.addPage([300, 300]);
@@ -278,6 +291,20 @@ describe('region export rotation', () => {
       const options = { format: 'png' as const, dpi: 72, quality: 0.9, transparent: false, removeColor: null, region: { pageNumber: 1, x: 0, y: 0, width: 0.5, height: 0.5, viewRotation: 180 }, tiffMultipage: false, tiffCompression: 'none' as const };
       await pdfToImages(doc as never, [1], options as never, 'r');
       expect(seen).toEqual([{ scale: 1, rotation: 270 }]);
+    } finally { (globalThis as { document?: unknown }).document = original; }
+  });
+
+  it('honours a cancel that arrives while the last page renders', async () => {
+    const { pdfToImages } = await import('./rasterExport');
+    const canvas = () => ({ width: 0, height: 0, getContext: () => ({ fillRect() {}, getImageData: (_x: number, _y: number, w: number, h: number) => ({ data: new Uint8ClampedArray(w * h * 4) }) }) });
+    const original = globalThis.document;
+    (globalThis as { document?: unknown }).document = { createElement: canvas };
+    const controller = new AbortController();
+    try {
+      // The user cancels during the render of the only page.
+      const doc = { getPage: async () => ({ rotate: 0, getViewport: () => ({ width: 20, height: 10 }), render: () => ({ promise: Promise.resolve().then(() => controller.abort()) }), cleanup() {} }) };
+      const options = { format: 'png' as const, dpi: 72, quality: 0.9, transparent: false, removeColor: null, region: null, tiffMultipage: false, tiffCompression: 'none' as const };
+      await expect(pdfToImages(doc as never, [1], options as never, 'r', undefined, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
     } finally { (globalThis as { document?: unknown }).document = original; }
   });
 });

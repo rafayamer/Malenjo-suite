@@ -703,3 +703,34 @@ describe('conversion edge cases, round 18', () => {
     expect(content(1)).toMatch(/BT\n1 1 1 rg/);
   });
 });
+
+describe('conversion edge cases, round 19', () => {
+  it('starts a Word list where its instance override says', async () => {
+    const docx = zipSync({
+      '[Content_Types].xml': strToU8('<Types/>'),
+      'word/document.xml': strToU8(`<w:document ${W}><w:body><w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="7"/></w:numPr></w:pPr><w:r><w:t>Fifth step</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:body></w:document>`),
+      'word/numbering.xml': strToU8(`<w:numbering ${W}><w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/></w:lvl></w:abstractNum><w:num w:numId="7"><w:abstractNumId w:val="0"/><w:lvlOverride w:ilvl="0"><w:startOverride w:val="5"/></w:lvlOverride></w:num></w:numbering>`),
+    });
+    const [page] = await read((await docxToPdf(docx)).bytes);
+    expect(page.text).toMatch(/^5\.\s*Fifth step$/);
+  });
+
+  it('fills a PowerPoint shape from its style reference', async () => {
+    const A = 'xmlns:a="a" xmlns:p="p" xmlns:r="r"';
+    const pptx = zipSync({
+      'ppt/presentation.xml': strToU8(`<p:presentation ${A}><p:sldIdLst><p:sldId id="256" r:id="rId1"/></p:sldIdLst><p:sldSz cx="9144000" cy="5143500"/></p:presentation>`),
+      'ppt/_rels/presentation.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="slides/slide1.xml"/></Relationships>'),
+      'ppt/slides/slide1.xml': strToU8(`<p:sld ${A}><p:cSld><p:spTree><p:sp><p:nvSpPr><p:cNvPr id="2" name="r"/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1270000" cy="635000"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr><p:style><a:lnRef idx="0"><a:schemeClr val="accent1"/></a:lnRef><a:fillRef idx="1"><a:schemeClr val="accent1"/></a:fillRef></p:style></p:sp></p:spTree></p:cSld></p:sld>`),
+      'ppt/slides/_rels/slide1.xml.rels': strToU8('<Relationships><Relationship Id="rL" Target="../slideLayouts/slideLayout1.xml"/></Relationships>'),
+      'ppt/slideLayouts/slideLayout1.xml': strToU8(`<p:sldLayout ${A}/>`),
+      'ppt/slideLayouts/_rels/slideLayout1.xml.rels': strToU8('<Relationships><Relationship Id="rM" Target="../slideMasters/slideMaster1.xml"/></Relationships>'),
+      'ppt/slideMasters/slideMaster1.xml': strToU8(`<p:sldMaster ${A}/>`),
+      'ppt/slideMasters/_rels/slideMaster1.xml.rels': strToU8('<Relationships><Relationship Id="rT" Target="../theme/theme1.xml"/></Relationships>'),
+      'ppt/theme/theme1.xml': strToU8(`<a:theme ${A}><a:themeElements><a:clrScheme name="t"><a:accent1><a:srgbClr val="FF0000"/></a:accent1></a:clrScheme></a:themeElements></a:theme>`),
+    });
+    const result = await pptxToPdf(pptx);
+    const { PDFDocument } = await import('pdf-lib');
+    const { pageContentBytes } = await import('../content/contentModel');
+    expect(new TextDecoder('latin1').decode(pageContentBytes(await PDFDocument.load(result.bytes), 0))).toMatch(/1 0 0 rg[\s\S]*?\nf\n/);
+  });
+});

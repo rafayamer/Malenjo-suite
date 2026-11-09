@@ -105,15 +105,18 @@ export async function docxToPdf(bytes: Uint8Array): Promise<DocumentPdf> {
   const numbering = xml(files, 'word/numbering.xml');
   const abstract = new Map<string, XNode>();
   for (const a of numbering ? all(numbering, 'w:abstractNum') : []) abstract.set(a.attrs['w:abstractNumId'], a);
-  const nums = new Map<string, XNode | undefined>();
-  for (const n of numbering ? all(numbering, 'w:num') : []) nums.set(n.attrs['w:numId'], abstract.get(val(child(n, 'w:abstractNumId')) ?? ''));
+  const nums = new Map<string, XNode | undefined>(); const instances = new Map<string, XNode>();
+  for (const n of numbering ? all(numbering, 'w:num') : []) { nums.set(n.attrs['w:numId'], abstract.get(val(child(n, 'w:abstractNumId')) ?? '')); instances.set(n.attrs['w:numId'], n); }
   const counters = new Map<string, number[]>();
   const marker = (numId: string, level: number): string | undefined => {
     const abs = nums.get(numId); if (!abs) return undefined;
-    const lvl = kids(abs, 'w:lvl').find((l) => Number(l.attrs['w:ilvl']) === level);
+    // A list instance may override a level: a whole replacement w:lvl, or just its start (w:startOverride).
+    const override = kids(instances.get(numId), 'w:lvlOverride').find((o) => Number(o.attrs['w:ilvl']) === level);
+    const lvl = child(override, 'w:lvl') ?? kids(abs, 'w:lvl').find((l) => Number(l.attrs['w:ilvl']) === level);
+    const start = Number(val(child(override, 'w:startOverride')) ?? val(child(lvl, 'w:start')) ?? 1);
     const fmt = val(child(lvl, 'w:numFmt')) ?? 'decimal';
     const text = val(child(lvl, 'w:lvlText')) ?? '%1.';
-    const c = counters.get(numId) ?? []; c[level] = (c[level] ?? Number(val(child(lvl, 'w:start')) ?? 1) - 1) + 1; c.length = level + 1; counters.set(numId, c);
+    const c = counters.get(numId) ?? []; c[level] = (c[level] ?? start - 1) + 1; c.length = level + 1; counters.set(numId, c);
     if (fmt === 'bullet') return /[-]/.test(text) || !text.trim() ? '•' : text;
     const format = (n: number, f: string) => f === 'lowerLetter' ? String.fromCharCode(96 + ((n - 1) % 26) + 1) : f === 'upperLetter' ? String.fromCharCode(64 + ((n - 1) % 26) + 1)
       : f === 'lowerRoman' || f === 'upperRoman' ? (() => { let r = '', x = n; for (const [v, s] of [[1000, 'm'], [900, 'cm'], [500, 'd'], [400, 'cd'], [100, 'c'], [90, 'xc'], [50, 'l'], [40, 'xl'], [10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']] as [number, string][]) while (x >= v) { r += s; x -= v; } return f === 'upperRoman' ? r.toUpperCase() : r; })() : String(n);

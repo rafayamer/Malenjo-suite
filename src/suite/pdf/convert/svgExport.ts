@@ -39,7 +39,14 @@ function maskAlpha(pdf: PDFDocument, dict: PDFRawStream['dict'], width: number, 
   if (!(smask instanceof PDFRawStream)) return null;
   if (smask.dict.lookupMaybe(N('Width'), PDFNumber)?.asNumber() !== width || smask.dict.lookupMaybe(N('Height'), PDFNumber)?.asNumber() !== height) return null;
   if (smask.dict.lookupMaybe(N('BitsPerComponent'), PDFNumber)?.asNumber() !== 8 || hasPredictor(pdf, smask.dict)) return null;
-  try { const alpha = decodePDFRawStream(smask).decode(); return alpha.length >= width * height ? alpha : null; } catch { return null; }
+  // /Decode [1 0] inverts the samples; any other mapping than [0 1] is not supported here.
+  const decode = smask.dict.lookupMaybe(N('Decode'), PDFArray)?.asArray().map((v) => (v instanceof PDFNumber ? v.asNumber() : NaN));
+  const inverted = decode !== undefined && decode[0] === 1 && decode[1] === 0;
+  if (decode !== undefined && !inverted && !(decode[0] === 0 && decode[1] === 1)) return null;
+  let alpha: Uint8Array;
+  try { alpha = decodePDFRawStream(smask).decode(); } catch { return null; }
+  if (alpha.length < width * height) return null;
+  return inverted ? alpha.map((a) => 255 - a) : alpha;
 }
 
 /**

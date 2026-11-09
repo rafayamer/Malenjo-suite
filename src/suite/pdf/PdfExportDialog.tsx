@@ -88,6 +88,8 @@ export default function PdfExportDialog({ domIdPrefix, bytes, sourceName, pageCo
               : pdfToPlainText(structure, pageCount, { order, separator, template, title });
         }
       }
+      // Cancelled (or closed) while converting: nothing is saved.
+      if (controller.signal.aborted) return;
       // One file downloads as itself; several (pages, or a document with its images) as a ZIP.
       const [file] = result.files;
       const single = result.files.length === 1;

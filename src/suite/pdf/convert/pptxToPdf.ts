@@ -134,9 +134,13 @@ export async function pptxToPdf(bytes: Uint8Array): Promise<DocumentPdf> {
           if (!box) continue;
           const geom = child(spPr, 'a:prstGeom')?.attrs.prst ?? (node.name === 'p:cxnSp' ? 'line' : 'rect');
           if (child(spPr, 'a:custGeom')) counts.geometry++;
-          const fill = fillOf(spPr);
+          // Direct properties win; otherwise the shape's style references (p:style fillRef / lnRef, idx > 0) give the
+          // colour, which the theme's matching fill or line style applies (solid in the default themes).
+          const styleRef = (name: string) => { const ref = child(child(node, 'p:style'), name); return ref && Number(ref.attrs.idx ?? 0) > 0 ? colorOf(ref) : undefined; };
+          const direct = fillOf(spPr);
+          const fill = direct === undefined ? styleRef('a:fillRef') : direct;
           const ln = child(spPr, 'a:ln');
-          const line = ln && !child(ln, 'a:noFill') ? colorOf(child(ln, 'a:solidFill')) ?? (node.name === 'p:cxnSp' ? [0, 0, 0] as [number, number, number] : undefined) : undefined;
+          const line = ln ? (!child(ln, 'a:noFill') ? colorOf(child(ln, 'a:solidFill')) ?? styleRef('a:lnRef') ?? (node.name === 'p:cxnSp' ? [0, 0, 0] as [number, number, number] : undefined) : undefined) : styleRef('a:lnRef');
           const lw = ln?.attrs.w ? Number(ln.attrs.w) / EMU : 0.75;
           const style = { ...(fill ? { color: rgb(...fill) } : {}), ...(line ? { borderColor: rgb(...line), borderWidth: lw } : {}) };
           if (geom === 'line' || geom.includes('Connector')) { if (line) page.drawLine({ start: { x: box.x, y: top(box.y) }, end: { x: box.x + box.w, y: top(box.y + box.h) }, thickness: lw, color: rgb(...line) }); }

@@ -84,11 +84,15 @@ export async function pdfToImages(doc: Pick<PDFDocumentProxy, 'getPage'>, pages:
     if (total > MAX_TOTAL) throw new Error('The images would exceed 400 MB; choose fewer pages or a lower resolution.');
     progress?.(i + 1, list.length);
   }
+  const cancelled = () => { if (signal?.aborted) throw Object.assign(new Error('The export was cancelled.'), { name: 'AbortError' }); };
+  // Cancelling while the last page renders or encodes still cancels: nothing is returned to be saved.
+  cancelled();
   if (tiffPages.length) {
     const bytes = encodeTiff(tiffPages, { dpi: options.dpi, compression: options.tiffCompression });
     if (bytes.length > MAX_TOTAL) throw new Error('The images would exceed 400 MB; choose fewer pages or a lower resolution.');
     files.push({ name: `${title}.tif`, bytes, mime: 'image/tiff' });
   }
+  cancelled();
   const notes = [`Rendered at ${options.dpi} dpi.`];
   if (options.format === 'jpeg') notes.push(`JPEG quality ${Math.round(options.quality * 100)}; JPEG has no transparency, so the background is white.`);
   if (alphaWanted && options.transparent) notes.push('Areas where the PDF draws nothing are transparent; white areas the PDF paints stay white unless background removal is on.');
