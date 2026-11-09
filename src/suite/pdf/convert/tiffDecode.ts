@@ -114,6 +114,8 @@ export function decodeTiff(bytes: Uint8Array): Rgba[] {
         : compression === 8 || compression === 32946 ? unzlibSync(raw) : (() => { throw new Error('This TIFF compression (for example JPEG or CCITT fax) is not supported.'); })();
       data.set(strip.subarray(0, expected), s * rowsPerStrip * rowBytes);
     });
+    // FillOrder 2 stores one-bit samples least significant bit first: put them in the usual order.
+    if (bps === 1 && tags.get(266)?.[0] === 2) for (let k = 0; k < data.length; k++) { let b = data[k], r = 0; for (let j = 0; j < 8; j++) { r = (r << 1) | (b & 1); b >>= 1; } data[k] = r; }
     if (predictor === 2 && bps === 8) for (let y = 0; y < height; y++) for (let x = spp; x < rowBytes; x++) data[y * rowBytes + x] = (data[y * rowBytes + x] + data[y * rowBytes + x - spp]) & 255;
     const palette = tags.get(320);
     // ExtraSamples 1 is associated (premultiplied) alpha; the decoded pixels are straight alpha, as PNG stores.

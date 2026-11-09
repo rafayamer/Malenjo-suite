@@ -35,6 +35,7 @@ function length(value: string | undefined, base: number): number | undefined {
   return m[2] === 'pt' ? n : m[2] === 'em' || m[2] === 'rem' ? n * base : m[2] === '%' ? (n / 100) * base : n * 0.75;
 }
 
+const MAX_SPAN = 1000;
 export async function htmlToPdf(source: string, options: HtmlPdfOptions): Promise<DocumentPdf> {
   const doc = parseMarkup(source, true);
   const unsupportedCss = new Set<string>(); const skipped = new Map<string, number>(); let externalImages = 0, otherImages = 0, complexSelectors = 0;
@@ -71,8 +72,11 @@ export async function htmlToPdf(source: string, options: HtmlPdfOptions): Promis
   const HEADING: Record<string, number> = { h1: 2, h2: 1.5, h3: 1.17, h4: 1, h5: 0.83, h6: 0.67 };
   const blocks: Block[] = [];
   let runs: Run[] = []; let paraCtx: Ctx | null = null; let pendingBreak = false;
+  // A list item's marker waits for the item's first paragraph with text, even one inside a <p> in the item.
+  let pendingMarker: string | undefined;
   const flush = (ctx: Ctx, extra: Partial<Paragraph> = {}) => {
     if (!runs.some((r) => r.text.trim()) && !extra.marker) { runs = []; return; }
+    if (pendingMarker && !extra.marker) { extra = { ...extra, marker: pendingMarker }; pendingMarker = undefined; }
     const before = length(ctx.css['margin-top'], ctx.run.size) ?? 0, after = length(ctx.css['margin-bottom'], ctx.run.size) ?? ctx.run.size * 0.6;
     const lh = ctx.css['line-height'] ? (Number(ctx.css['line-height']) || (length(ctx.css['line-height'], ctx.run.size) ?? ctx.run.size * 1.2) / ctx.run.size) : 1.2;
     const trimmed = ctx.pre ? runs : runs.map((r, i) => ({ ...r, text: i === 0 ? r.text.replace(/^\s+/, '') : r.text }));
@@ -138,9 +142,11 @@ export async function htmlToPdf(source: string, options: HtmlPdfOptions): Promis
       inline(cell, cctx); flush(cctx, { spaceAfter: 0, indent: 0 });
       // Text and pictures both belong in the cell; the shared table layout draws images too.
       const paras = blocks.splice(saved).filter((b): b is Paragraph | ImageBlock => b.kind === 'para' || b.kind === 'image'); runs = savedRuns;
-      return { blocks: paras.length ? paras : [{ kind: 'para', runs: [], align: 'left', indent: 0, spaceBefore: 0, spaceAfter: 0, lineHeight: 1.2 }], colSpan: Number(cell.attrs.colspan ?? 1) || 1, background: fill(cell) ?? rowFill };
+      return { blocks: paras.length ? paras : [{ kind: 'para', runs: [], align: 'left', indent: 0, spaceBefore: 0, spaceAfter: 0, lineHeight: 1.2 }], colSpan: Math.min(MAX_SPAN, Math.max(1, Math.floor(Number(cell.attrs.colspan ?? 1)) || 1)), background: fill(cell) ?? rowFill };
     }) }));
     const cols = Math.max(1, ...rows.map((r) => r.cells.reduce((s, c) => s + c.colSpan, 0)));
+    // As browsers do, a span counts at most 1000 columns; a table wider than that is refused rather than laid out.
+    if (cols > MAX_SPAN) throw new Error(`This HTML has a table more than ${MAX_SPAN} columns wide, which cannot be laid out on a page.`);
     blocks.push({ kind: 'table', rows, colWidths: Array.from({ length: cols }, () => 1000 / cols), borders: n.attrs.border !== '0', spaceAfter: 10 });
   };
   const block = (n: XNode, parent: Ctx) => {
@@ -153,8 +159,11 @@ export async function htmlToPdf(source: string, options: HtmlPdfOptions): Promis
       for (const li of n.children.filter((c) => c.name === 'li')) {
         const lctx = derive(li, { ...ctx, list }); if (!lctx) continue;
         list.n++;
-        runs = []; inline(li, { ...lctx, list: undefined });
-        flush(lctx, { marker: list.ordered ? `${list.n}.` : '•', spaceAfter: 2 });
+        runs = []; pendingMarker = list.ordered ? `${list.n}.` : '•';
+        inline(li, { ...lctx, list: undefined });
+        flush(lctx, { spaceAfter: 2 });
+        // An item with no text still shows its marker.
+        if (pendingMarker) { const marker = pendingMarker; pendingMarker = undefined; flush(lctx, { marker, spaceAfter: 2 }); }
       }
       paraCtx = parent; return;
     }

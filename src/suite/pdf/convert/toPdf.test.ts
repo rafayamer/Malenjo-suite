@@ -487,3 +487,35 @@ describe('conversion edge cases, round 12', () => {
     expect(content).toMatch(/0 0 0 rg[\s\S]*?\nf\n[\s\S]*?BT\n1 1 1 rg/);
   });
 });
+
+describe('conversion edge cases, round 13', () => {
+  it('bounds HTML column spans as browsers do and refuses tables wider than that', async () => {
+    const started = Date.now();
+    const [page] = await read((await htmlToPdf('<table><tr><td colspan="1000000000">Hello</td></tr></table>', { pageSize: 'a4', landscape: false, margin: 36 })).bytes);
+    expect(page.text).toBe('Hello');
+    expect(Date.now() - started).toBeLessThan(5000);
+    await expect(htmlToPdf('<table><tr><td colspan="1000">A</td><td colspan="1000">B</td></tr></table>', { pageSize: 'a4', landscape: false, margin: 36 })).rejects.toThrow(/more than 1000 columns/);
+  }, 20000);
+
+  it('numbers a list item on the same line as the paragraph inside it', async () => {
+    const [page] = await read((await htmlToPdf('<ol><li><p>First</p></li><li><p>Second</p></li></ol>', { pageSize: 'a4', landscape: false, margin: 36 })).bytes);
+    // Each marker is drawn with its item's text, on one line each: no separate marker-only lines.
+    expect(page.items.map((i) => i.str)).toEqual(['1. First', '2. Second']);
+  });
+
+  it('reads one-bit TIFF samples stored least significant bit first', () => {
+    // An 8×1 TIFF, white is one, FillOrder 2: the byte 0x01 is the first pixel white.
+    const entries: [number, number, number][] = [[256, 3, 8], [257, 3, 1], [258, 3, 1], [259, 3, 1], [262, 3, 1], [266, 3, 2], [273, 4, 0], [277, 3, 1], [278, 3, 1], [279, 4, 1]];
+    const ifd = 8, stripAt = ifd + 2 + entries.length * 12 + 4;
+    const bytes = new Uint8Array(stripAt + 1); const v = new DataView(bytes.buffer);
+    bytes.set([0x49, 0x49]); v.setUint16(2, 42, true); v.setUint32(4, ifd, true); v.setUint16(ifd, entries.length, true);
+    entries.forEach(([tag, type, value], i) => {
+      const e = ifd + 2 + i * 12;
+      v.setUint16(e, tag, true); v.setUint16(e + 2, type, true); v.setUint32(e + 4, 1, true);
+      if (tag === 273) v.setUint32(e + 8, stripAt, true); else if (type === 3) v.setUint16(e + 8, value, true); else v.setUint32(e + 8, value, true);
+    });
+    bytes[stripAt] = 0x01;
+    const [page] = decodeTiff(bytes);
+    expect(Array.from({ length: 8 }, (_, k) => page.data[k * 4])).toEqual([255, 0, 0, 0, 0, 0, 0, 0]);
+  });
+});

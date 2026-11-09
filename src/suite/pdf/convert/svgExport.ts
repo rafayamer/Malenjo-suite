@@ -80,7 +80,7 @@ function imageUri(pdf: PDFDocument, stream: PDFRawStream): { uri: string; mask?:
 export async function pdfToSvg(bytes: Uint8Array, pages: number[], title: string): Promise<ConversionResult> {
   let pdf: PDFDocument;
   try { pdf = await PDFDocument.load(bytes, { updateMetadata: false }); } catch { throw new Error('This PDF could not be read because it is encrypted, invalid or damaged.'); }
-  const counts = { forms: 0, shadings: 0, clips: 0, dashes: 0, images: 0, text: 0, colours: 0 };
+  const counts = { forms: 0, shadings: 0, clips: 0, dashes: 0, images: 0, text: 0, colours: 0, transparency: 0 };
   const files = pages.map((pageNumber) => {
     const index = pageNumber - 1;
     const model = readPageModel(pdf, index);
@@ -89,8 +89,18 @@ export async function pdfToSvg(bytes: Uint8Array, pages: number[], title: string
     const toSvg = mul(invert(frame.matrix), [1, 0, 0, -1, 0, frame.height]);
     const parts: string[] = [];
     const xobjects = pdf.getPage(index).node.Resources()?.lookupMaybe(N('XObject'), PDFDict);
+    const states = pdf.getPage(index).node.Resources()?.lookupMaybe(N('ExtGState'), PDFDict);
+    // Graphics states that make what follows translucent, masked or blended (which SVG export draws opaque).
+    const transparent = (name: string) => {
+      const gs = states?.lookupMaybe(N(name), PDFDict);
+      if (!gs) return false;
+      const alpha = (key: string) => gs.lookupMaybe(N(key), PDFNumber)?.asNumber() ?? 1;
+      const smask = gs.get(N('SMask')), blend = gs.get(N('BM'));
+      return alpha('ca') < 1 || alpha('CA') < 1 || (smask !== undefined && String(smask) !== '/None') || (blend !== undefined && !['/Normal', '/Compatible'].includes(String(blend)));
+    };
     model.ops.forEach((op) => {
-      if (op.op === 'sh') counts.shadings++;
+      if (op.op === 'gs' && op.operands[0]?.type === 'name' && transparent(op.operands[0].value)) counts.transparency++;
+      else if (op.op === 'sh') counts.shadings++;
       else if (op.op === 'W' || op.op === 'W*') counts.clips++;
       else if (op.op === 'd' && op.operands[0]?.type === 'array' && op.operands[0].items.length) counts.dashes++;
       else if (op.op === 'scn' || op.op === 'SCN' || op.op === 'sc' || op.op === 'SC' || op.op === 'cs' || op.op === 'CS') counts.colours++;
@@ -148,6 +158,7 @@ export async function pdfToSvg(bytes: Uint8Array, pages: number[], title: string
   });
   const notes: string[] = [];
   if (counts.forms) notes.push(`${counts.forms} embedded drawing(s) (form XObjects) were not converted.`);
+  if (counts.transparency) notes.push(`Transparency set by ${counts.transparency} graphics state change(s) (opacity, soft masks or blend modes) was not applied; that content is drawn opaque.`);
   if (counts.shadings) notes.push(`${counts.shadings} gradient shading(s) were left out.`);
   if (counts.clips) notes.push(`${counts.clips} clipping path(s) were not applied; clipped content may show in full.`);
   if (counts.dashes) notes.push('Dashed lines are drawn solid.');

@@ -201,6 +201,16 @@ describe('SVG export (MAL-043)', () => {
     expect(svg).toMatch(/<mask id="(mask-[^"]+)" maskUnits="userSpaceOnUse"[^>]*><image [^>]*href="data:image\/png;base64,[^"]+"\/><\/mask><image [^>]*mask="url\(#\1\)" href="data:image\/jpeg;base64,/);
   });
 
+  it('reports transparency from a graphics state instead of claiming a full conversion', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([300, 300]);
+    const gs = page.node.newExtGState('GS', pdf.context.obj({ Type: 'ExtGState', ca: 0.25 })).decodeText();
+    page.node.addContentStream(pdf.context.register(pdf.context.stream(`q /${gs} gs 1 0 0 rg 10 10 100 100 re f Q`)));
+    const result = await pdfToSvg(await pdf.save(), [1], 'faint');
+    expect(result.notes.join(' ')).toMatch(/Transparency set by 1 graphics state change/);
+    expect(result.notes).not.toContain('Every graphic on these pages was converted.');
+  });
+
   it('leaves invisible text out of the SVG and outlines stroked text', async () => {
     const pdf = await PDFDocument.create();
     const page = pdf.addPage([300, 300]);

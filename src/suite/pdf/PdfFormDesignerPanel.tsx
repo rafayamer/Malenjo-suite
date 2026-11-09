@@ -77,6 +77,11 @@ function logicOf(d: LogicDraft): Omit<FieldLogic, 'unsupported'> {
 }
 
 /** MAL-046 – MAL-050 form designer: place fields by dragging, select them on the page, edit, move, rename and delete. */
+/** Everything the property and logic drafts are copied from: when any of it changes (an edit, undo or redo), the drafts are refreshed. */
+export function designDraftSource(field: DesignField | null): string {
+  return field ? JSON.stringify([field.name, field.tooltip, field.required, field.readOnly, field.maxLength, field.comb, field.multiline, field.lock, field.logic]) : '';
+}
+
 export default function PdfFormDesignerPanel({ domIdPrefix, bytes, viewRotation, busy, state, onState, onApply, onClose }: Props) {
   const [error, setError] = useState('');
   const [rename, setRename] = useState('');
@@ -104,7 +109,7 @@ export default function PdfFormDesignerPanel({ domIdPrefix, bytes, viewRotation,
     setProps({ tooltip: field.tooltip, required: field.required, readOnly: field.readOnly, maxLength: field.maxLength?.toString() ?? '', comb: field.comb, multiline: field.multiline,
       lockAction: field.lock?.action ?? 'none', lockFields: field.lock?.fields ?? [] });
     setLogic(logicDraft(field));
-  }, [field?.name, field && JSON.stringify(field.logic), field?.tooltip, field?.required, field?.readOnly]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [designDraftSource(field)]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { panelRef.current?.querySelector<HTMLElement>('select')?.focus(); }, []);
 
   const run = async (label: string, operation: Operation): Promise<boolean> => {
