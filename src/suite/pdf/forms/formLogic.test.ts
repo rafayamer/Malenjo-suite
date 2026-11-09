@@ -111,16 +111,34 @@ describe('form evaluation', () => {
     expect(parsed.unsupported).toEqual([`C: ${script}`]);
   });
 
-  it('runs only validation patterns that cannot backtrack catastrophically', async () => {
+  it('matches validation patterns in linear time, never with the backtracking engine', async () => {
     const { safePattern } = await import('./formLogic');
-    expect(['^[A-Z]{2}\\d{9}$', '^\\d{5}(-\\d{4})?$', '^[a-z]+@[a-z]+\\.[a-z]{2,}$'].map(safePattern)).toEqual([true, true, true]);
-    expect(['^(a+)+$', '(a|a)*', '(x*)*y', '(\\w+)\\1', '^(?=a)'].map(safePattern)).toEqual([false, false, false, false, false]);
+    const { compileSafeRegex } = await import('./safeRegex');
+    // Patterns that hang a backtracking engine are supported and finish at once.
+    for (const evil of ['^(a+)+$', '^(a|a)*$', '^(x*)*y', '^(a+){20}$', '^\\d*\\d*\\d*\\d*x$']) {
+      expect(safePattern(evil)).toBe(true);
+      const started = Date.now();
+      expect(compileSafeRegex(evil)!.test(`${'a'.repeat(40)}${'1'.repeat(40)}!`)).toBe(false);
+      expect(Date.now() - started).toBeLessThan(200);
+    }
+    // Outside the subset: not run at all.
+    expect(['(\\w+)\\1', '^(?=a)', '(?<n>a)', '\\bword', '[]a]'].map(safePattern)).toEqual([false, false, false, false, false]);
+    // Same answers as JavaScript on ordinary patterns.
+    const cases: [string, string[]][] = [
+      ['^[A-Z]{2}\\d{9}$', ['DE123456789', 'de123456789', 'DE12345678', 'XDE123456789']],
+      ['^\\d{5}(-\\d{4})?$', ['12345', '12345-6789', '12345-67', '1234']],
+      ['^[a-z.]+@[a-z]+\\.[a-z]{2,}$', ['a.b@site.org', 'ab@site', '@site.org']],
+      ['colou?r|grey', ['color', 'colour', 'gray', 'xgreyx']],
+      ['^[^0-9\\s]+$', ['abc', 'ab c', 'a1']],
+    ];
+    for (const [pattern, values] of cases) for (const value of values) expect(compileSafeRegex(pattern)!.test(value)).toBe(new RegExp(pattern).test(value));
+    // A document's evil pattern is evaluated, quickly, as an ordinary validation.
     const evil = 'if (event.value !== "" && !new RegExp("^(a+)+$").test(event.value)) { app.alert("No"); event.rc = false; }';
     const parsed = parseLogic({ V: evil });
-    expect(parsed.pattern).toBeUndefined();
+    expect(parsed.pattern?.regex).toBe('^(a+)+$');
     const started = Date.now();
-    const result = evaluateForm([{ name: 'Code', value: `${'a'.repeat(32)}!`, required: false, logic: parsed }]);
+    const result = evaluateForm([{ name: 'Code', value: `${'a'.repeat(5000)}!`, required: false, logic: parsed }]);
     expect(Date.now() - started).toBeLessThan(500);
-    expect(result.errors).toEqual({});
+    expect(result.errors).toEqual({ Code: 'No' });
   });
 });

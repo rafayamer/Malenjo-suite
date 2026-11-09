@@ -42,7 +42,8 @@ export function parseMarkup(source: string, html = false): XNode {
     const name = html ? match[1].toLowerCase() : match[1];
     const attrs: Record<string, string> = {};
     for (const a of match[2].matchAll(/([^\s=/]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g)) attrs[html ? a[1].toLowerCase() : a[1]] = decodeEntities(a[2] ?? a[3] ?? a[4] ?? '');
-    if (html) for (const [parent, closers] of Object.entries(AUTO_CLOSE)) if (closers.includes(name) && top().name === parent) stack.pop();
+    // Implied closes repeat: a new <tr> closes the open cell and then its row.
+    if (html) for (let closed = true; closed && stack.length > 1;) closed = !!AUTO_CLOSE[top().name]?.includes(name) && !!stack.pop();
     const node: XNode = { name, attrs, children: [], text: '' };
     if (++nodes > 500_000) throw new Error('The document has too many elements to convert.');
     top().children.push(node);

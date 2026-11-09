@@ -22,6 +22,8 @@ export interface FillField {
   multiline: boolean;
   /** The field's existing value is not shown (password or rich text) but it is not empty. */
   concealedValue: boolean;
+  /** An editable dropdown: besides its options, any typed value is allowed. */
+  editable: boolean;
 }
 
 function kindOf(field: PDFField): FillField['kind'] {
@@ -53,7 +55,7 @@ function fieldsOf(pdf: PDFDocument): FillField[] {
       options: choiceOptions(pdf, field), multiselect: (field instanceof PDFDropdown || field instanceof PDFOptionList) && field.isMultiselect(),
       required: field.isRequired(), readOnly: field.isReadOnly(), password: field instanceof PDFTextField && field.isPassword(), multiline: field instanceof PDFTextField && field.isMultiline(),
       concealedValue: field instanceof PDFTextField && (field.isPassword() || field.isRichFormatted()) && Boolean(field.getText()), maxLength: field instanceof PDFTextField ? field.getMaxLength() ?? null : null,
-      logic, calculated: Boolean(logic.calculate),
+      logic, calculated: Boolean(logic.calculate), editable: field instanceof PDFDropdown && field.isEditable(),
     };
   });
 }

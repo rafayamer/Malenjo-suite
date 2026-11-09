@@ -214,7 +214,7 @@ describe('fill, flatten and data exchange (MAL-050, MAL-052, MAL-053)', () => {
 
   it('round-trips a check box whose on-value is "No", reads indirect FDF fields, and marks password fields', async () => {
     const box = { name: 'Consent', kind: 'checkbox' as const, value: 'Off', onValue: 'No', options: [], multiselect: false, required: false, readOnly: false,
-      maxLength: null, logic: { unsupported: [] }, calculated: false, password: false, multiline: false, concealedValue: false };
+      maxLength: null, logic: { unsupported: [] }, calculated: false, password: false, multiline: false, concealedValue: false, editable: false };
     expect(importFormData([box], '{"Consent":"No"}', 'json').values).toEqual({ Consent: 'No' });
     const text = { ...box, name: 'Customer', kind: 'text' as const, onValue: null, value: '' };
     const fdf = '%FDF-1.2\n1 0 obj << /FDF << /Fields [2 0 R] >> >> endobj\n2 0 obj << /T (Customer) /V (Ada) >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF';
@@ -242,7 +242,7 @@ describe('fill, flatten and data exchange (MAL-050, MAL-052, MAL-053)', () => {
     expect((await PDFDocument.load(filled)).getForm().getTextField('Note').getText()).toBe('Line one\nLine two');
     expect(fields.find((f) => f.name === 'Note')!.multiline).toBe(true);
     const customer = { name: 'Customer', kind: 'text' as const, value: '', onValue: null, options: [], multiselect: false, required: false, readOnly: false,
-      maxLength: null, logic: { unsupported: [] }, calculated: false, password: false, multiline: false, concealedValue: false };
+      maxLength: null, logic: { unsupported: [] }, calculated: false, password: false, multiline: false, concealedValue: false, editable: false };
     expect(importFormData([customer], "<xfdf><fields><field name='Customer'><value>Alice</value></field></fields></xfdf>", 'xfdf').values).toEqual({ Customer: 'Alice' });
   });
 
@@ -258,7 +258,7 @@ describe('fill, flatten and data exchange (MAL-050, MAL-052, MAL-053)', () => {
 
   it('imports an unanswered radio group from FDF as no selection', () => {
     const radio = { name: 'Size', kind: 'radio' as const, value: '', onValue: null, options: [{ value: 'S', label: 'S' }, { value: 'L', label: 'L' }], multiselect: false, required: false, readOnly: false,
-      maxLength: null, logic: { unsupported: [] }, calculated: false, password: false, multiline: false, concealedValue: false };
+      maxLength: null, logic: { unsupported: [] }, calculated: false, password: false, multiline: false, concealedValue: false, editable: false };
     const fdf = '%FDF-1.2\n1 0 obj << /FDF << /Fields [<< /T (Size) /V /Off >>] >> >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF';
     expect(importFormData([radio], fdf, 'fdf').values).toEqual({ Size: '' });
   });
@@ -287,5 +287,18 @@ describe('fill, flatten and data exchange (MAL-050, MAL-052, MAL-053)', () => {
     const { decodePDFRawStream, PDFRawStream } = await import('pdf-lib');
     const text = ap instanceof PDFRawStream ? new TextDecoder('latin1').decode(decodePDFRawStream(ap).decode()) : ap instanceof PDFStream ? '' : '';
     expect(text.toUpperCase()).toContain('4C796F6E'); // "Lyon"
+  });
+
+  it('marks an editable dropdown so the fill panel accepts a typed value', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([300, 200]);
+    const form = pdf.getForm();
+    const city = form.createDropdown('City'); city.setOptions(['Paris', 'Nice']); city.enableEditing(); city.addToPage(page, { x: 20, y: 100, width: 120, height: 20 });
+    const fixed = form.createDropdown('Size'); fixed.setOptions(['S', 'M']); fixed.addToPage(page, { x: 20, y: 60, width: 120, height: 20 });
+    const bytes = await pdf.save();
+    const fields = await readFillForm(bytes);
+    expect(fields.map((f) => [f.name, f.editable])).toEqual([['City', true], ['Size', false]]);
+    const filled = await fillFormWithLogic(bytes, { City: 'Lyon' });
+    expect((await readFillForm(filled.bytes)).find((f) => f.name === 'City')?.value).toBe('Lyon');
   });
 });

@@ -5,6 +5,7 @@
  * runs document JavaScript: this module recognises only those exact statements and evaluates them
  * itself. Anything else is kept in the file but reported as unsupported.
  */
+import { compileSafeRegex } from './safeRegex';
 
 /** Acrobat separator styles: 0 = 1,234.56 · 1 = 1234.56 · 2 = 1.234,56 · 3 = 1234,56. */
 export type NumberSeparator = 0 | 1 | 2 | 3;
@@ -59,7 +60,7 @@ export function logicScripts(logic: Omit<FieldLogic, 'unsupported'>): FieldScrip
   }
   if (logic.pattern) {
     try { new RegExp(logic.pattern.regex); } catch { throw new Error('The pattern is not a valid regular expression.'); }
-    if (!safePattern(logic.pattern.regex)) throw new Error('Use a simpler pattern: no back-references, look-arounds, or repeated groups that repeat inside.');
+    if (!safePattern(logic.pattern.regex)) throw new Error('This pattern uses features MALENJO cannot check safely (back-references, look-arounds, named groups or word boundaries).');
     if (!logic.pattern.regex || logic.pattern.regex.length > 200) throw new Error('Enter a pattern of up to 200 characters.');
     const message = logic.pattern.message.trim() || 'The value does not match the required pattern.';
     validate.push(`if (event.value !== "" && !new RegExp(${lit(logic.pattern.regex)}).test(event.value)) { app.alert(${lit(message)}); event.rc = false; }`);
@@ -99,35 +100,12 @@ const RULES: [RegExp, (m: RegExpMatchArray, logic: FieldLogic) => void][] = [
 ];
 
 /**
- * Whether a validation pattern is safe to run. Patterns come from documents and run on the UI thread, so only
- * a subset that cannot backtrack catastrophically is evaluated: no backreferences or lookaround, and no
- * unboundedly repeated group that itself contains a repetition or an alternative (as in (a+)+ or (a|a)*).
+ * Whether a validation pattern can be run. Patterns come from documents and are matched by MALENJO's own
+ * linear-time matcher (safeRegex.ts), never by the browser's backtracking engine; this is true when the
+ * pattern stays within the subset that matcher supports.
  */
 export function safePattern(regex: string): boolean {
-  if (!regex || regex.length > 200 || /\\[1-9]|\\k<|\(\?[=!<]/.test(regex)) return false;
-  try { new RegExp(regex); } catch { return false; }
-  const groups: { risky: boolean }[] = [];
-  let closedRisky = false, inClass = false;
-  for (let i = 0; i < regex.length; i++) {
-    const ch = regex[i];
-    if (ch === '\\') { i++; closedRisky = false; continue; }
-    if (inClass) { if (ch === ']') inClass = false; continue; }
-    if (ch === '[') { inClass = true; closedRisky = false; continue; }
-    if (ch === '(') { groups.push({ risky: false }); closedRisky = false; continue; }
-    if (ch === ')') { const g = groups.pop(); closedRisky = Boolean(g?.risky); if (g?.risky && groups.length) groups[groups.length - 1].risky = true; continue; }
-    if (ch === '|') { if (groups.length) groups[groups.length - 1].risky = true; continue; }
-    const quantifier = ch === '*' || ch === '+' || (ch === '?' && regex[i - 1] !== '*' && regex[i - 1] !== '+' && regex[i - 1] !== '}' && regex[i - 1] !== '?')
-      || (ch === '{' && /^\{\d+(,\d*)?\}/.test(regex.slice(i)));
-    if (quantifier) {
-      // Only an unbounded repeat (*, +, {n,}) of a risky group can backtrack exponentially; ? and {n} cannot.
-      const unbounded = ch === '*' || ch === '+' || (ch === '{' && /^\{\d+,\}/.test(regex.slice(i)));
-      if (closedRisky && unbounded) return false;
-      if (groups.length) groups[groups.length - 1].risky = true;
-      if (ch === '{') i = regex.indexOf('}', i);
-    }
-    closedRisky = false;
-  }
-  return true;
+  return compileSafeRegex(regex) !== null;
 }
 
 /** Reads the supported statements back from a field's scripts; anything else is listed as unsupported. */
@@ -294,8 +272,9 @@ function validate(field: LogicField, value: string): string | null {
       return `${field.name} must be ${min !== undefined && max !== undefined ? `between ${min} and ${max}` : min !== undefined ? `at least ${min}` : `at most ${max}`}.`;
     }
   }
-  // Only safe patterns are tested, and never on very long values.
-  if (logic.pattern && safePattern(logic.pattern.regex) && value.length <= 1000 && !new RegExp(logic.pattern.regex).test(value)) return logic.pattern.message;
+  // Matched in linear time; a pattern outside the supported subset is never run.
+  const matcher = logic.pattern ? compileSafeRegex(logic.pattern.regex) : null;
+  if (logic.pattern && matcher && !matcher.test(value)) return logic.pattern.message;
   return null;
 }
 

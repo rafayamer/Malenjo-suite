@@ -118,7 +118,7 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
   };
   const printAreas = new Map<number, string>();
   for (const d of all(book, 'definedName')) if (d.attrs.name === '_xlnm.Print_Area' && d.attrs.localSheetId !== undefined) printAreas.set(Number(d.attrs.localSheetId), textOf(d));
-  const counts = { charts: 0, conditional: 0, comments: 0, formulas: 0, hidden: 0 };
+  const counts = { charts: 0, conditional: 0, comments: 0, formulas: 0, hidden: 0, beyond: 0 };
   const writer = await FlowWriter.create({ width: 612, height: 792, margin: { top: 36, right: 36, bottom: 36, left: 36 } }, false);
   const margin = 36;
   let rendered = 0; const areas: string[] = [];
@@ -138,7 +138,7 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
     for (const c of all(ws, 'c')) {
       const ref = c.attrs.r; if (!ref) continue;
       const [r, col] = [rowIndex(ref), colIndex(ref)];
-      if (r > 20000 || col > 500) continue;
+      if (r > 20000 || col > 500) { if (child(c, 'v') || child(c, 'is')) counts.beyond++; continue; }
       const v = child(c, 'v') ? textOf(child(c, 'v')!) : ''; const s = Number(c.attrs.s ?? 0);
       if (child(c, 'f') && !child(c, 'v')) counts.formulas++;
       const type = c.attrs.t ?? 'n';
@@ -229,6 +229,7 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
   const notes = [`Rendered ${rendered} worksheet(s) on ${writer.pages} page(s); wide sheets continue on following pages.`];
   if (areas.length) notes.push(`Print areas used: ${areas.join(', ')}.`);
   if (writer.replaced) notes.push(`${writer.replaced} character(s) outside the standard fonts were drawn as “?”.`);
+  if (counts.beyond) notes.push(`Not printed: ${counts.beyond} cell(s) beyond row 20000 or column 500 (the conversion limit).`);
   if (counts.formulas) notes.push(`${counts.formulas} formula(s) have no saved result and print empty; open and save the workbook in a spreadsheet program to store results.`);
   if (counts.charts) notes.push(`Not rendered: charts or pictures on ${counts.charts} sheet(s).`);
   if (counts.conditional) notes.push(`Not applied: ${counts.conditional} conditional format rule(s).`);

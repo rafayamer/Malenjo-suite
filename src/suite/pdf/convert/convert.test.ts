@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { unzlibSync } from 'fflate';
-import { PDFDocument, StandardFonts, degrees, rgb } from 'pdf-lib';
+import { PDFDocument, PDFName, StandardFonts, concatTransformationMatrix, degrees, drawObject, popGraphicsState, pushGraphicsState, rgb } from 'pdf-lib';
 import { OPS, getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { cropRgba, encodePng, encodeTiff, removeBackground, setJpegDensity, type Rgba } from './imageCodecs';
 import { blocksOf, documentHeadingSizes, pageText, readPdfStructure } from './pdfStructure';
@@ -125,6 +125,33 @@ describe('structured text formats (MAL-041, 042, 044)', () => {
     expect(plain.startsWith('=== Page 1 of 2 ===\nQuarterly Report')).toBe(true);
     expect(plain).toContain('\n=== Page 2 of 2 ===\nLeft one');
     expect(text(pdfToPlainText(pages, 2, { order: 'stored', separator: 'formfeed', template: '', title: 'r' }).files[0].bytes)).toContain('\f');
+  });
+
+  it('extracts every placement of a picture PDF.js folds into one repeat operation', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([612, 792]);
+    const png = await pdf.embedPng(encodePng(image(2, 2, (x, y) => QUAD[y * 2 + x])));
+    const name = page.node.newXObject('Im', png.ref);
+    // The same picture at four places with one scale: PDF.js turns these into paintImageXObjectRepeat.
+    for (const x of [50, 150, 250, 350]) page.pushOperators(pushGraphicsState(), concatTransformationMatrix(40, 0, 0, 40, x, 600), drawObject(name as PDFName), popGraphicsState());
+    const loading = getDocument({ data: (await pdf.save()).slice(), isOffscreenCanvasSupported: false } as never);
+    const doc = await loading.promise;
+    try {
+      // getOperatorList() itself is unoptimised; the rendering pipeline folds the four draws into one repeat. Fold them here.
+      const real = await doc.getPage(1);
+      const list = await real.getOperatorList();
+      const first = list.fnArray.indexOf(OPS.save);
+      const id = list.argsArray[first + 2][0];
+      const folded = {
+        fnArray: [...list.fnArray.slice(0, first), OPS.paintImageXObjectRepeat],
+        argsArray: [...list.argsArray.slice(0, first), [id, 40, 40, new Float32Array([50, 600, 150, 600, 250, 600, 350, 600])]],
+      };
+      const page = new Proxy(real, { get: (t, k) => k === 'getOperatorList' ? async () => folded : typeof Reflect.get(t, k) === 'function' ? (Reflect.get(t, k) as (...a: unknown[]) => unknown).bind(t) : Reflect.get(t, k) });
+      const [read] = await readPdfStructure({ numPages: 1, getPage: async () => page } as never, [1], { images: true, ops: OPS as never });
+      expect(read.images.map((i) => Math.round(i.x))).toEqual([50, 150, 250, 350]);
+      expect(read.images.every((i) => Math.round(i.width) === 40 && Math.round(i.y) === 152)).toBe(true);
+      expect(read.skippedImages).toBe(0);
+    } finally { await loading.destroy(); }
   });
 });
 

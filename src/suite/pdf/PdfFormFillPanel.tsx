@@ -75,6 +75,10 @@ export default function PdfFormFillPanel({ domIdPrefix, bytes, sourceName, busy,
     const err = evaluation.errors[f.name];
     const common = { id: id(f.name), 'aria-invalid': err ? true : undefined, 'aria-describedby': err ? `${id(f.name)}-error` : undefined, disabled: busy || f.readOnly || f.calculated };
     if (f.kind === 'checkbox') return <input type="checkbox" {...common} checked={value !== 'Off' && value !== ''} onChange={(e) => setValue(f.name, e.target.checked ? f.onValue ?? 'Yes' : 'Off')}/>;
+    // An editable dropdown takes any value: a text box that suggests the options.
+    if (f.kind === 'dropdown' && f.editable && !f.multiselect) return <>
+      <input {...common} list={`${id(f.name)}-options`} value={value} onChange={(e) => setValue(f.name, e.target.value)}/>
+      <datalist id={`${id(f.name)}-options`}>{f.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</datalist></>;
     if (f.kind === 'radio' || (f.kind === 'dropdown' && !f.multiselect)) return <select {...common} value={value} onChange={(e) => setValue(f.name, e.target.value)}>
       <option value="">—</option>{f.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>;
     if (f.kind === 'list' || f.kind === 'dropdown') return <select {...common} multiple={f.multiselect} size={Math.min(4, f.options.length)} value={f.multiselect ? value.split('\n').filter(Boolean) : value}

@@ -60,18 +60,31 @@ export async function readPdfStructure(doc: Doc, pages: number[], options: { ima
         if (fn === OPS.save) stack.push(ctm);
         else if (fn === OPS.restore) ctm = stack.pop() ?? ctm;
         else if (fn === OPS.transform) ctm = mul(args as M, ctm);
-        else if (fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject) {
+        else if (fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject || fn === OPS.paintImageXObjectRepeat) {
           const data = fn === OPS.paintInlineImageXObject ? args[0] : await new Promise((done) => {
             const id = args[0] as string;
             const objs = id.startsWith('g_') ? page.commonObjs : page.objs;
             objs.get(id, done);
           });
+          // PDF.js folds one picture drawn at several places into a single repeat operation: expand each placement.
+          const placements: M[] = [];
+          if (fn === OPS.paintImageXObjectRepeat) {
+            const [, sx, sy, positions] = args as [string, number, number, ArrayLike<number>];
+            for (let k = 0; k + 1 < positions.length; k += 2) placements.push(mul([sx, 0, 0, sy, positions[k], positions[k + 1]], ctm));
+          } else placements.push(ctm);
           const img = data as { width: number; height: number; kind?: number; data?: Uint8Array } | null;
-          if (!img?.data || !img.kind || img.width * img.height > MAX_IMAGE_PIXELS) { skipped++; continue; }
-          const corners = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([u, v]) => viewport.convertToViewportPoint(ctm[0] * u + ctm[2] * v + ctm[4], ctm[1] * u + ctm[3] * v + ctm[5]) as [number, number]);
-          const xs = corners.map((c) => c[0]), ys = corners.map((c) => c[1]);
-          images.push({ x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys), image: rgbaFromPdfJs({ width: img.width, height: img.height, kind: img.kind, data: img.data }) });
+          if (!img?.data || !img.kind || img.width * img.height > MAX_IMAGE_PIXELS) { skipped += placements.length; continue; }
+          const image = rgbaFromPdfJs({ width: img.width, height: img.height, kind: img.kind, data: img.data });
+          for (const m of placements) {
+            const corners = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([u, v]) => viewport.convertToViewportPoint(m[0] * u + m[2] * v + m[4], m[1] * u + m[3] * v + m[5]) as [number, number]);
+            const xs = corners.map((c) => c[0]), ys = corners.map((c) => c[1]);
+            images.push({ x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys), image });
+          }
         } else if (fn === OPS.paintImageMaskXObject) skipped++;
+        // Stencil masks and grouped inline images are not extracted: count every placement as skipped.
+        else if (fn === OPS.paintImageMaskXObjectRepeat) skipped += Math.max(1, Math.floor(((args[5] as ArrayLike<number> | undefined)?.length ?? 2) / 2));
+        else if (fn === OPS.paintImageMaskXObjectGroup) skipped += Math.max(1, (args[0] as ArrayLike<unknown> | undefined)?.length ?? 1);
+        else if (fn === OPS.paintInlineImageXObjectGroup) skipped += Math.max(1, (args[1] as ArrayLike<unknown> | undefined)?.length ?? 1);
       }
     }
     out.push({ pageNumber, width: viewport.width, height: viewport.height, items, images, skippedImages: skipped });

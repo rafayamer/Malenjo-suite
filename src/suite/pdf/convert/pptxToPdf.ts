@@ -91,8 +91,12 @@ export async function pptxToPdf(bytes: Uint8Array): Promise<DocumentPdf> {
           if (c.name !== 'a:r' && c.name !== 'a:br' && c.name !== 'a:fld') continue;
           if (c.name === 'a:br') { runs.push({ text: '\n', style: { ...DEFAULT_STYLE } }); continue; }
           const rPr = child(c, 'a:rPr');
-          const style = { ...DEFAULT_STYLE, size: rPr?.attrs.sz ? Number(rPr.attrs.sz) / 100 : isTitle ? 32 : 18, bold: rPr?.attrs.b === '1', italic: rPr?.attrs.i === '1', underline: Boolean(rPr?.attrs.u && rPr.attrs.u !== 'none'),
-            color: colorOf(child(rPr, 'a:solidFill')) ?? [0, 0, 0] as [number, number, number] };
+          // The paragraph's default run properties apply first; the run's own properties override them.
+          const def = child(pPr, 'a:defRPr');
+          const attr = (k: string) => rPr?.attrs[k] ?? def?.attrs[k];
+          const sz = attr('sz'), u = attr('u');
+          const style = { ...DEFAULT_STYLE, size: sz ? Number(sz) / 100 : isTitle ? 32 : 18, bold: attr('b') === '1', italic: attr('i') === '1', underline: Boolean(u && u !== 'none'),
+            color: colorOf(child(rPr, 'a:solidFill')) ?? colorOf(child(def, 'a:solidFill')) ?? [0, 0, 0] as [number, number, number] };
           runs.push({ text: all(c, 'a:t').map((n) => n.children.map((x) => x.text).join('')).join(''), style });
         }
         const bullet = child(pPr, 'a:buChar')?.attrs.char;

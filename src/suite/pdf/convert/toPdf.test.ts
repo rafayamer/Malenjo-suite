@@ -339,3 +339,38 @@ describe('conversion edge cases, round 7', () => {
   });
 });
 });
+
+describe('conversion edge cases, round 8', () => {
+  it('closes both the cell and the row when an HTML row starts without closing tags', async () => {
+    const [page] = await read((await htmlToPdf('<table><tr><td>Alpha<td>Beta<tr><td>Gamma<td>Delta</table>', { pageSize: 'a4', landscape: false, margin: 36 })).bytes);
+    expect(page.text).toBe('Alpha Beta Gamma Delta');
+    const alpha = page.items.find((i) => i.str === 'Alpha')!, gamma = page.items.find((i) => i.str === 'Gamma')!;
+    expect(gamma.x).toBe(alpha.x); expect(gamma.top).toBeGreaterThan(alpha.top);
+  });
+
+  it('reports worksheet cells beyond the conversion limits', async () => {
+    const S = 'xmlns="m" xmlns:r="r"';
+    const xlsx = zipSync({
+      'xl/workbook.xml': strToU8(`<workbook ${S}><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>`),
+      'xl/_rels/workbook.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>'),
+      'xl/worksheets/sheet1.xml': strToU8(`<worksheet ${S}><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Kept</t></is></c></row><row r="20002"><c r="A20002"><v>7</v></c></row></sheetData></worksheet>`),
+    });
+    const result = await xlsxToPdf(xlsx, { pageSize: 'letter', orientation: 'sheet', gridlines: 'sheet', sheets: 'all' });
+    expect(result.notes.join(' ')).toMatch(/Not printed: 1 cell\(s\) beyond row 20000/);
+  });
+
+  it('applies a PowerPoint paragraph’s default run properties', async () => {
+    const A = 'xmlns:a="a" xmlns:p="p" xmlns:r="r"';
+    const pptx = zipSync({
+      'ppt/presentation.xml': strToU8(`<p:presentation ${A}><p:sldIdLst><p:sldId id="256" r:id="rId1"/></p:sldIdLst><p:sldSz cx="9144000" cy="5143500"/></p:presentation>`),
+      'ppt/_rels/presentation.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="slides/slide1.xml"/></Relationships>'),
+      'ppt/slides/slide1.xml': strToU8(`<p:sld ${A}><p:cSld><p:spTree><p:sp><p:nvSpPr><p:cNvPr id="2" name="t"/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="6096000" cy="1524000"/></a:xfrm><a:prstGeom prst="rect"/><a:solidFill><a:srgbClr val="000000"/></a:solidFill></p:spPr><p:txBody><a:bodyPr/><a:p><a:pPr><a:defRPr sz="3000" b="1"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:defRPr></a:pPr><a:r><a:t>White on black</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>`),
+    });
+    const result = await pptxToPdf(pptx);
+    const [page] = await read(result.bytes);
+    expect(page.items[0]).toMatchObject({ str: 'White on black', size: 30 });
+    const { PDFDocument } = await import('pdf-lib');
+    const { pageContentBytes } = await import('../content/contentModel');
+    expect(new TextDecoder('latin1').decode(pageContentBytes(await PDFDocument.load(result.bytes), 0))).toMatch(/BT\n1 1 1 rg/);
+  });
+});
