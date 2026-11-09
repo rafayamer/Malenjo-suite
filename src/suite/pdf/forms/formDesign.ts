@@ -202,8 +202,14 @@ async function refreshAppearances(pdf: PDFDocument, field: PDFField): Promise<vo
     const raw = field.getText() ?? '';
     // A password is never drawn: its appearance shows one asterisk per character, as readers do.
     const shown = field.isPassword() ? '*'.repeat([...raw].length) : displayValue(raw, parseLogic(readScripts(pdf, field.acroField.dict)));
-    if (shown !== raw) field.setText(shown);
-    try { field.defaultUpdateAppearances(font); } finally { if (shown !== raw) field.acroField.dict.set(N('V'), PDFHexString.fromText(raw)); }
+    // The shown text (formatted, or masked) may be longer than the value's maximum length: the limit applies to
+    // what is typed, not to the appearance, so it is lifted while the appearance is drawn and then restored.
+    const maxLength = field.getMaxLength();
+    if (shown !== raw) { if (maxLength !== undefined && shown.length > maxLength) field.acroField.dict.delete(N('MaxLen')); field.setText(shown); }
+    try { field.defaultUpdateAppearances(font); } finally {
+      if (shown !== raw) field.acroField.dict.set(N('V'), PDFHexString.fromText(raw));
+      if (maxLength !== undefined) field.setMaxLength(maxLength);
+    }
   } else if (field instanceof PDFCheckBox || field instanceof PDFRadioGroup) field.defaultUpdateAppearances();
   else if (field instanceof PDFDropdown || field instanceof PDFOptionList) choiceAppearance(pdf, field, font);
   pdf.getForm().markFieldAsClean(field.ref);
@@ -297,6 +303,11 @@ export async function addFormField(bytes: Uint8Array, spec: DesignFieldSpec): Pr
     signatureAppearance(pdf, dict, font);
     field = form.getField(name);
   } else throw new Error('Choose a field type.');
+  // The designer's defaults are also the form's reset values (/DV), so resetting the form in a reader restores them.
+  if (spec.kind !== 'signature' && (spec.defaultValue || spec.checked || spec.selected?.length)) {
+    const value = field.acroField.dict.get(N('V'));
+    if (value) field.acroField.dict.set(N('DV'), value);
+  }
   // Appearances are drawn upright for the page's rotation.
   for (const ref of widgetRefs(field)) {
     const widget = pdf.context.lookup(ref, PDFDict);

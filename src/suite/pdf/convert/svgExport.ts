@@ -25,15 +25,38 @@ function family(baseFont: string): string {
   return `font-family="${esc(name.split(/[-,]/)[0])}, ${generic}"${/bold|black|heavy/i.test(name) ? ' font-weight="bold"' : ''}${/italic|oblique/i.test(name) ? ' font-style="italic"' : ''}`;
 }
 
-/** An image XObject as a data URI, or null when its format is not supported here. */
-function imageUri(pdf: PDFDocument, stream: PDFRawStream): string | null {
+/** A soft mask's 8-bit alpha samples for a width × height image, or null when they cannot be read. */
+function maskAlpha(pdf: PDFDocument, dict: PDFRawStream['dict'], width: number, height: number): Uint8Array | null {
+  const smask = pdf.context.lookup(dict.get(N('SMask')) as never);
+  if (!(smask instanceof PDFRawStream)) return null;
+  if (smask.dict.lookupMaybe(N('Width'), PDFNumber)?.asNumber() !== width || smask.dict.lookupMaybe(N('Height'), PDFNumber)?.asNumber() !== height) return null;
+  if (smask.dict.lookupMaybe(N('BitsPerComponent'), PDFNumber)?.asNumber() !== 8) return null;
+  try { const alpha = decodePDFRawStream(smask).decode(); return alpha.length >= width * height ? alpha : null; } catch { return null; }
+}
+
+/**
+ * An image XObject as a data URI, plus a luminance mask (a grey PNG) when its soft mask cannot be folded into the
+ * picture itself (a JPEG); null when the format, or its transparency, is not supported here.
+ */
+function imageUri(pdf: PDFDocument, stream: PDFRawStream): { uri: string; mask?: string } | null {
   const dict = stream.dict;
   const filters = (() => { const f = dict.get(N('Filter')); return f instanceof PDFArray ? f.asArray().map(String) : f ? [String(f)] : []; })();
   let cs = dict.get(N('ColorSpace')); if (cs && !(cs instanceof PDFName) && !(cs instanceof PDFArray)) cs = pdf.context.lookup(cs as never);
   const components = cs instanceof PDFName ? ({ '/DeviceRGB': 3, '/DeviceGray': 1 } as Record<string, number>)[cs.toString()] ?? 0
     : cs instanceof PDFArray && String(cs.get(0)) === '/ICCBased' ? (pdf.context.lookup(cs.get(1)) as PDFRawStream)?.dict.lookupMaybe(N('N'), PDFNumber)?.asNumber() ?? 0 : 0;
   if (components !== 1 && components !== 3) return null;
-  if (filters.length === 1 && filters[0] === '/DCTDecode') return `data:image/jpeg;base64,${base64(stream.contents)}`;
+  if (filters.length === 1 && filters[0] === '/DCTDecode') {
+    const uri = `data:image/jpeg;base64,${base64(stream.contents)}`;
+    if (!dict.has(N('SMask'))) return { uri };
+    // The JPEG stays as it is; its transparency goes into an SVG mask drawn from the soft mask's samples.
+    const width = dict.lookupMaybe(N('Width'), PDFNumber)?.asNumber() ?? 0, height = dict.lookupMaybe(N('Height'), PDFNumber)?.asNumber() ?? 0;
+    if (!width || !height || width * height > 25_000_000) return null;
+    const alpha = maskAlpha(pdf, dict, width, height);
+    if (!alpha) return null;
+    const grey = new Uint8ClampedArray(width * height * 4);
+    for (let i = 0; i < width * height; i++) { grey[i * 4] = grey[i * 4 + 1] = grey[i * 4 + 2] = alpha[i]; grey[i * 4 + 3] = 255; }
+    return { uri, mask: `data:image/png;base64,${base64(encodePng({ width, height, data: grey }))}` };
+  }
   if (dict.has(N('Decode')) || dict.lookupMaybe(N('BitsPerComponent'), PDFNumber)?.asNumber() !== 8 || filters.some((f) => f !== '/FlateDecode')) return null;
   const width = dict.lookup(N('Width'), PDFNumber).asNumber(), height = dict.lookup(N('Height'), PDFNumber).asNumber();
   if (width * height > 25_000_000) return null;
@@ -45,14 +68,13 @@ function imageUri(pdf: PDFDocument, stream: PDFRawStream): string | null {
     const s = i * components;
     rgba[i * 4] = raw[s]; rgba[i * 4 + 1] = raw[s + (components === 3 ? 1 : 0)]; rgba[i * 4 + 2] = raw[s + (components === 3 ? 2 : 0)]; rgba[i * 4 + 3] = 255;
   }
-  const smask = dict.get(N('SMask')) ? pdf.context.lookup(dict.get(N('SMask')) as never) : null;
-  if (smask instanceof PDFRawStream) {
-    try {
-      const alpha = decodePDFRawStream(smask).decode();
-      if (smask.dict.lookupMaybe(N('Width'), PDFNumber)?.asNumber() === width && alpha.length >= width * height) for (let i = 0; i < width * height; i++) rgba[i * 4 + 3] = alpha[i];
-    } catch { /* keep opaque */ }
+  if (dict.has(N('SMask'))) {
+    // Transparency that cannot be read is reported (the picture is counted as not converted), never made opaque.
+    const alpha = maskAlpha(pdf, dict, width, height);
+    if (!alpha) return null;
+    for (let i = 0; i < width * height; i++) rgba[i * 4 + 3] = alpha[i];
   }
-  return `data:image/png;base64,${base64(encodePng({ width, height, data: rgba }))}`;
+  return { uri: `data:image/png;base64,${base64(encodePng({ width, height, data: rgba }))}` };
 }
 
 export async function pdfToSvg(bytes: Uint8Array, pages: number[], title: string): Promise<ConversionResult> {
@@ -112,9 +134,12 @@ export async function pdfToSvg(bytes: Uint8Array, pages: number[], title: string
     }
     for (const image of model.images) {
       const stream = image.ref ? pdf.context.lookup(xobjects?.get(N(image.name)) as never) : null;
-      const uri = stream instanceof PDFRawStream ? imageUri(pdf, stream) : null;
-      if (!uri) { counts.images++; continue; }
-      items.push({ at: image.opIndex, svg: `<image width="1" height="1" preserveAspectRatio="none" transform="${mat(image.ctm)} matrix(1 0 0 -1 0 1)" href="${uri}"/>` });
+      const found = stream instanceof PDFRawStream ? imageUri(pdf, stream) : null;
+      if (!found) { counts.images++; continue; }
+      // A mask is drawn in the picture's own unit square, so it lines up with the picture under the same transform.
+      const maskId = `mask-${pageNumber}-${image.opIndex}`;
+      const mask = found.mask ? `<mask id="${maskId}" maskUnits="userSpaceOnUse" x="0" y="0" width="1" height="1"><image width="1" height="1" preserveAspectRatio="none" href="${found.mask}"/></mask>` : '';
+      items.push({ at: image.opIndex, svg: `${mask}<image width="1" height="1" preserveAspectRatio="none" transform="${mat(image.ctm)} matrix(1 0 0 -1 0 1)"${found.mask ? ` mask="url(#${maskId})"` : ''} href="${found.uri}"/>` });
     }
     items.sort((a, b) => a.at - b.at);
     parts.push(...items.map((i) => i.svg));

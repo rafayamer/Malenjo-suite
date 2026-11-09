@@ -461,3 +461,29 @@ describe('conversion edge cases, round 11', () => {
     expect([...decodeTiff(bytes)[0].data]).toEqual([255, 0, 0, 128]);
   });
 });
+
+describe('conversion edge cases, round 12', () => {
+  it('turns a TIFF page by its Orientation tag', () => {
+    // A 2×1 grey TIFF (10, 200) with Orientation 6: shown turned a quarter clockwise, 1×2 with 10 on top.
+    const entries: [number, number, number][] = [[256, 3, 2], [257, 3, 1], [258, 3, 8], [259, 3, 1], [262, 3, 1], [273, 4, 0], [274, 3, 6], [277, 3, 1], [278, 3, 1], [279, 4, 2]];
+    const ifd = 8, stripAt = ifd + 2 + entries.length * 12 + 4;
+    const bytes = new Uint8Array(stripAt + 2); const v = new DataView(bytes.buffer);
+    bytes.set([0x49, 0x49]); v.setUint16(2, 42, true); v.setUint32(4, ifd, true); v.setUint16(ifd, entries.length, true);
+    entries.forEach(([tag, type, value], i) => {
+      const e = ifd + 2 + i * 12;
+      v.setUint16(e, tag, true); v.setUint16(e + 2, type, true); v.setUint32(e + 4, 1, true);
+      if (tag === 273) v.setUint32(e + 8, stripAt, true); else if (type === 3) v.setUint16(e + 8, value, true); else v.setUint32(e + 8, value, true);
+    });
+    bytes.set([10, 200], stripAt);
+    const [page] = decodeTiff(bytes);
+    expect([page.width, page.height, page.data[0], page.data[4]]).toEqual([1, 2, 10, 200]);
+  });
+
+  it('carries a table row’s colour and background into its cells', async () => {
+    const result = await htmlToPdf('<table style="color:white"><tr style="background-color:black"><td>Visible on black</td></tr></table>', { pageSize: 'a4', landscape: false, margin: 36 });
+    const { PDFDocument } = await import('pdf-lib');
+    const { pageContentBytes } = await import('../content/contentModel');
+    const content = new TextDecoder('latin1').decode(pageContentBytes(await PDFDocument.load(result.bytes), 0));
+    expect(content).toMatch(/0 0 0 rg[\s\S]*?\nf\n[\s\S]*?BT\n1 1 1 rg/);
+  });
+});

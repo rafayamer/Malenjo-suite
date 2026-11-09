@@ -190,6 +190,17 @@ describe('SVG export (MAL-043)', () => {
     expect(orient(redBlue, [40, 0], [0, -20])).toBe(redBlue);
   });
 
+  it('keeps a JPEG picture’s soft mask as an SVG mask', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([300, 300]);
+    const smask = pdf.context.register(pdf.context.flateStream(new Uint8Array([0, 255]), { Type: 'XObject', Subtype: 'Image', Width: 2, Height: 1, ColorSpace: 'DeviceGray', BitsPerComponent: 8 }));
+    const jpeg = pdf.context.register(pdf.context.stream(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), { Type: 'XObject', Subtype: 'Image', Width: 2, Height: 1, ColorSpace: 'DeviceRGB', BitsPerComponent: 8, Filter: 'DCTDecode', SMask: smask }));
+    const name = page.node.newXObject('Im', jpeg).decodeText();
+    page.node.addContentStream(pdf.context.register(pdf.context.stream(`q 100 0 0 50 10 10 cm /${name} Do Q`)));
+    const svg = text((await pdfToSvg(await pdf.save(), [1], 'masked')).files[0].bytes);
+    expect(svg).toMatch(/<mask id="(mask-[^"]+)" maskUnits="userSpaceOnUse"[^>]*><image [^>]*href="data:image\/png;base64,[^"]+"\/><\/mask><image [^>]*mask="url\(#\1\)" href="data:image\/jpeg;base64,/);
+  });
+
   it('leaves invisible text out of the SVG and outlines stroked text', async () => {
     const pdf = await PDFDocument.create();
     const page = pdf.addPage([300, 300]);

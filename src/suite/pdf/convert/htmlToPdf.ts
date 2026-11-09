@@ -123,18 +123,22 @@ export async function htmlToPdf(source: string, options: HtmlPdfOptions): Promis
   const table = (n: XNode, ctx: Ctx) => {
     // Rows come from the table itself and its row groups; hidden rows, groups and cells (display:none or the
     // hidden attribute) are left out, as they are for any other element.
-    const visibleRows = (node: XNode): XNode[] => node.children.flatMap((c) => {
-      if (c.name === 'tr') return derive(c, ctx) ? [c] : [];
-      if (c.name === 'thead' || c.name === 'tbody' || c.name === 'tfoot') return derive(c, ctx) ? visibleRows(c) : [];
-      return [];
+    // A row group's and a row's own styles (colour, weight, background) carry into their cells.
+    const fill = (node: XNode) => color(cssOf(node)['background-color'] ?? cssOf(node).background);
+    type Row = { tr: XNode; ctx: Ctx; background?: [number, number, number] };
+    const visibleRows = (node: XNode, parent: Ctx, background?: [number, number, number]): Row[] => node.children.flatMap((c): Row[] => {
+      const next = c.name === 'tr' || c.name === 'thead' || c.name === 'tbody' || c.name === 'tfoot' ? derive(c, { ...parent, indent: 0 }) : null;
+      if (!next) return [];
+      if (c.name === 'tr') return [{ tr: c, ctx: next, background: fill(c) ?? background }];
+      return visibleRows(c, next, fill(c) ?? background);
     });
-    const rows = visibleRows(n).map((tr, r) => ({ header: r === 0 && tr.children.some((c) => c.name === 'th'), cells: tr.children.filter((c) => (c.name === 'td' || c.name === 'th') && derive(c, { ...ctx, indent: 0 })).map((cell): TableCell => {
-      const cctx = derive(cell, { ...ctx, indent: 0 })!;
+    const rows = visibleRows(n, ctx).map(({ tr, ctx: rowCtx, background: rowFill }, r) => ({ header: r === 0 && tr.children.some((c) => c.name === 'th'), cells: tr.children.filter((c) => (c.name === 'td' || c.name === 'th') && derive(c, { ...rowCtx, indent: 0 })).map((cell): TableCell => {
+      const cctx = derive(cell, { ...rowCtx, indent: 0 })!;
       const saved = blocks.length; const savedRuns = runs; runs = [];
       inline(cell, cctx); flush(cctx, { spaceAfter: 0, indent: 0 });
       // Text and pictures both belong in the cell; the shared table layout draws images too.
       const paras = blocks.splice(saved).filter((b): b is Paragraph | ImageBlock => b.kind === 'para' || b.kind === 'image'); runs = savedRuns;
-      return { blocks: paras.length ? paras : [{ kind: 'para', runs: [], align: 'left', indent: 0, spaceBefore: 0, spaceAfter: 0, lineHeight: 1.2 }], colSpan: Number(cell.attrs.colspan ?? 1) || 1, background: color(cssOf(cell)['background-color'] ?? cssOf(cell).background) };
+      return { blocks: paras.length ? paras : [{ kind: 'para', runs: [], align: 'left', indent: 0, spaceBefore: 0, spaceAfter: 0, lineHeight: 1.2 }], colSpan: Number(cell.attrs.colspan ?? 1) || 1, background: fill(cell) ?? rowFill };
     }) }));
     const cols = Math.max(1, ...rows.map((r) => r.cells.reduce((s, c) => s + c.colSpan, 0)));
     blocks.push({ kind: 'table', rows, colWidths: Array.from({ length: cols }, () => 1000 / cols), borders: n.attrs.border !== '0', spaceAfter: 10 });

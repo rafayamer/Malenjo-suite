@@ -331,4 +331,25 @@ describe('fill, flatten and data exchange (MAL-050, MAL-052, MAL-053)', () => {
     expect(fields[0].logic.unsupported.join(' ')).toMatch(/depends on itself/);
     expect(evaluateFill(fields, { A: '1', B: '2' }).values).toMatchObject({ A: '1', B: '2' });
   });
+
+  it('stores the designer defaults as the reset values', async () => {
+    let bytes = await blank();
+    bytes = await addFormField(bytes, field('text', 'City', at(0.1, 0.1), { defaultValue: 'Paris' }));
+    bytes = await addFormField(bytes, field('checkbox', 'Agree', at(0.1, 0.2), { checked: true }));
+    bytes = await addFormField(bytes, field('dropdown', 'Size', at(0.1, 0.3), { options: [{ value: 'S', label: 'Small' }, { value: 'M', label: 'Medium' }], selected: ['M'] }));
+    bytes = await addFormField(bytes, field('text', 'Note', at(0.1, 0.4)));
+    const form = (await PDFDocument.load(bytes)).getForm();
+    const dv = (name: string) => form.getField(name).acroField.dict.get(PDFName.of('DV'));
+    expect((dv('City') as PDFHexString).decodeText()).toBe('Paris');
+    expect(String(dv('Agree'))).toBe(String(form.getField('Agree').acroField.dict.get(PDFName.of('V'))));
+    expect((dv('Size') as PDFHexString).decodeText()).toBe('M');
+    expect(dv('Note')).toBeUndefined();
+  });
+
+  it('draws a formatted value longer than the maximum length, keeping the limit', async () => {
+    const bytes = await addFormField(await blank(), field('number', 'Amount', at(0.1, 0.1), { maxLength: 4, defaultValue: '1000' }));
+    const amount = (await PDFDocument.load(bytes)).getForm().getTextField('Amount');
+    expect(amount.getText()).toBe('1000');
+    expect(amount.getMaxLength()).toBe(4);
+  });
 });

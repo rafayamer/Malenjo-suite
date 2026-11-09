@@ -45,6 +45,24 @@ function packBits(input: Uint8Array, expected: number): Uint8Array {
   return out;
 }
 
+/**
+ * The page as it is meant to be seen, for TIFF Orientation (tag 274): 1 is stored as shown; 2–4 mirror or turn
+ * it half way; 5–8 swap its sides (transpose, quarter turn clockwise, transverse, quarter turn anticlockwise).
+ */
+function orient(page: Rgba, orientation: number): Rgba {
+  if (orientation < 2 || orientation > 8) return page;
+  const { width: w, height: h, data } = page;
+  const swap = orientation >= 5;
+  const [W, H] = swap ? [h, w] : [w, h];
+  const out = new Uint8ClampedArray(W * H * 4);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const [ox, oy] = orientation === 2 ? [w - 1 - x, y] : orientation === 3 ? [w - 1 - x, h - 1 - y] : orientation === 4 ? [x, h - 1 - y]
+      : orientation === 5 ? [y, x] : orientation === 6 ? [h - 1 - y, x] : orientation === 7 ? [h - 1 - y, w - 1 - x] : [y, w - 1 - x];
+    out.set(data.subarray((y * w + x) * 4, (y * w + x) * 4 + 4), (oy * W + ox) * 4);
+  }
+  return { width: W, height: H, data: out };
+}
+
 /** Turns premultiplied colour channels at `o` back into straight colour. */
 function unpremultiply(out: Uint8ClampedArray, o: number, channels: number): void {
   const a = out[o + 3];
@@ -116,7 +134,7 @@ export function decodeTiff(bytes: Uint8Array): Rgba[] {
       else if (photometric === 3 && palette) { const k = data[i]; const n = palette.length / 3; out[o] = palette[k] >> 8; out[o + 1] = palette[n + k] >> 8; out[o + 2] = palette[2 * n + k] >> 8; out[o + 3] = 255; }
       else { const g = photometric === 0 ? 255 - data[i] : data[i]; out[o] = out[o + 1] = out[o + 2] = g; out[o + 3] = spp >= 2 ? data[i + 1] : 255; if (associated && spp >= 2) unpremultiply(out, o, 3); }
     }
-    pages.push({ width, height, data: out });
+    pages.push(orient({ width, height, data: out }, tags.get(274)?.[0] ?? 1));
     ifd = u32(ifd + 2 + count * 12);
   }
   if (!pages.length) throw new Error('This TIFF file has no images.');
