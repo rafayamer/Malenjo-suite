@@ -751,3 +751,10 @@ describe('conversion edge cases, round 20', () => {
     expect([...decodeTiff(bytes)[0].data]).toEqual([255, 0, 0, 255]);
   });
 });
+
+describe('conversion edge cases, own review', () => {
+  it('keeps the marker of an item that opens with a nested list', async () => {
+    const [page] = await read((await htmlToPdf('<ol><li><ul><li>Inner</li></ul></li><li>Second</li></ol>', { pageSize: 'a4', landscape: false, margin: 36 })).bytes);
+    expect(page.items.map((i) => i.str)).toEqual(['1.', '• Inner', '2. Second']);
+  });
+});

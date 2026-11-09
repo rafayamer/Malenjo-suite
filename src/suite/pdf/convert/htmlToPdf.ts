@@ -157,6 +157,8 @@ export async function htmlToPdf(source: string, options: HtmlPdfOptions): Promis
     if (n.name === 'hr') { blocks.push({ kind: 'rule' }); return; }
     if (n.name === 'table') { table(n, ctx); return; }
     if (n.name === 'ul' || n.name === 'ol') {
+      // A list that opens an item before any of its text keeps that item's marker, on a line of its own.
+      if (pendingMarker) { const marker = pendingMarker; pendingMarker = undefined; flush(parent, { marker, spaceAfter: 2 }); }
       const list = { ordered: n.name === 'ol', n: Number(n.attrs.start ?? 1) - 1 };
       for (const li of n.children.filter((c) => c.name === 'li')) {
         const lctx = derive(li, { ...ctx, list }); if (!lctx) continue;

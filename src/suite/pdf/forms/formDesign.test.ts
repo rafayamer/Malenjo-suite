@@ -392,4 +392,21 @@ describe('fill, flatten and data exchange (MAL-050, MAL-052, MAL-053)', () => {
     bytes = await updateFormField(bytes, 'Detail', { logic: {} });
     expect(await flags()).toEqual(['4']); // Print only: shown again
   });
+
+  it('redraws an imported field whose value is already longer than its maximum length', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([300, 200]);
+    const code = pdf.getForm().createTextField('Code'); code.addToPage(page, { x: 20, y: 100, width: 120, height: 20 });
+    // As some generators write: a value that breaks the field's own limit.
+    code.acroField.dict.set(PDFName.of('V'), PDFHexString.fromText('ABCDEFGH'));
+    code.acroField.setMaxLength(4);
+    const { refreshFieldAppearances } = await import('./formDesign');
+    await refreshFieldAppearances(pdf, code);
+    expect(code.getText()).toBe('ABCDEFGH');
+    expect(code.getMaxLength()).toBe(4);
+    // A password field too: its masked appearance is just as long as the value.
+    code.enablePassword();
+    await refreshFieldAppearances(pdf, code);
+    expect([code.getText(), code.getMaxLength()]).toEqual(['ABCDEFGH', 4]);
+  });
 });

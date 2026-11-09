@@ -204,11 +204,15 @@ async function refreshAppearances(pdf: PDFDocument, field: PDFField): Promise<vo
     const shown = field.isPassword() ? '*'.repeat([...raw].length) : displayValue(raw, parseLogic(readScripts(pdf, field.acroField.dict)));
     // The shown text (formatted, or masked) may be longer than the value's maximum length: the limit applies to
     // what is typed, not to the appearance, so it is lifted while the appearance is drawn and then restored.
+    // Only a limit that was lifted is put back, directly: a stored value may already be longer than its limit
+    // (an imported form), and pdf-lib's setMaxLength would refuse that.
     const maxLength = field.getMaxLength();
-    if (shown !== raw) { if (maxLength !== undefined && shown.length > maxLength) field.acroField.dict.delete(N('MaxLen')); field.setText(shown); }
+    const lifted = shown !== raw && maxLength !== undefined && shown.length > maxLength;
+    if (lifted) field.acroField.dict.delete(N('MaxLen'));
+    if (shown !== raw) field.setText(shown);
     try { field.defaultUpdateAppearances(font); } finally {
       if (shown !== raw) field.acroField.dict.set(N('V'), PDFHexString.fromText(raw));
-      if (maxLength !== undefined) field.setMaxLength(maxLength);
+      if (lifted) field.acroField.setMaxLength(maxLength!);
     }
   } else if (field instanceof PDFCheckBox || field instanceof PDFRadioGroup) field.defaultUpdateAppearances();
   else if (field instanceof PDFDropdown || field instanceof PDFOptionList) choiceAppearance(pdf, field, font);

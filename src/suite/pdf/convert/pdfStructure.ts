@@ -110,11 +110,12 @@ export function orient(image: Rgba, ex: [number, number], ey: [number, number]):
   const turned = tiny(ex[0], ex[1]) && tiny(ey[1], ey[0]);
   if (!straight && !turned) return image;
   if (straight && ex[0] > 0 && ey[1] < 0) return image;
+  const bw = Math.abs(ex[0]) + Math.abs(ey[0]), bh = Math.abs(ex[1]) + Math.abs(ey[1]);
+  if (!(bw > 0 && bh > 0)) return image; // a placement with no area has nothing to turn
   const { width: w, height: h, data } = image;
   const [W, H] = turned ? [h, w] : [w, h];
   const out = new Uint8ClampedArray(W * H * 4);
   const minX = Math.min(0, ex[0]) + Math.min(0, ey[0]), minY = Math.min(0, ex[1]) + Math.min(0, ey[1]);
-  const bw = Math.abs(ex[0]) + Math.abs(ey[0]), bh = Math.abs(ex[1]) + Math.abs(ey[1]);
   for (let sy = 0; sy < h; sy++) for (let sx = 0; sx < w; sx++) {
     // Pixel rows run top to bottom, while the image's own y axis points up.
     const u = (sx + 0.5) / w, v = 1 - (sy + 0.5) / h;
