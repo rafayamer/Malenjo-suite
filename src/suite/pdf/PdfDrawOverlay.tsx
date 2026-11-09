@@ -12,6 +12,10 @@ interface Props {
   /** The rendered page; fractions are measured against its box. */
   surface(): HTMLElement | null;
   onShape(shape: DrawnShape): void;
+  /** Replaces the default instruction (for tools that reuse a drawing kind, such as measuring). */
+  label?: string;
+  /** Points already placed, joined by a line (for measurements made of several clicks). */
+  placed?: ShownPoint[];
 }
 
 const LABELS: Record<DrawingKind, string> = {
@@ -21,7 +25,7 @@ const LABELS: Record<DrawingKind, string> = {
 const CALLOUT = { width: 0.3, height: 0.07 };
 
 /** MAL-055 pointer capture over one page; reports shapes as fractions of the page as shown. */
-export default function PdfDrawOverlay({ pageNumber, kind, color, busy = false, surface, onShape }: Props) {
+export default function PdfDrawOverlay({ pageNumber, kind, color, busy = false, surface, onShape, label, placed }: Props) {
   const [points, setPoints] = useState<ShownPoint[]>([]);
   const path = useRef<ShownPoint[] | null>(null);
   const at = (event: ReactPointerEvent<HTMLDivElement>): ShownPoint => {
@@ -51,7 +55,7 @@ export default function PdfDrawOverlay({ pageNumber, kind, color, busy = false, 
     return <rect x={r.x * 1000} y={r.y * 1000} width={r.width * 1000} height={r.height * 1000} />;
   })() : null;
 
-  return <div role="region" aria-label={`${LABELS[kind]} on PDF page ${pageNumber}`} data-pdf-draw-overlay={pageNumber}
+  return <div role="region" aria-label={`${label ?? LABELS[kind]} on PDF page ${pageNumber}`} data-pdf-draw-overlay={pageNumber}
     aria-busy={busy}
     style={{ position: 'absolute', inset: 0, zIndex: 9, cursor: busy ? 'progress' : 'crosshair', touchAction: 'none' }}
     onPointerDown={(event) => {
@@ -82,6 +86,11 @@ export default function PdfDrawOverlay({ pageNumber, kind, color, busy = false, 
       finish(kind === 'Ink' ? [...current, end] : [current[0], end]);
     }}
     onPointerCancel={() => { path.current = null; setPoints([]); }}>
+    {!!placed?.length && <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true" data-placed-points={placed.length}
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', fill: 'none', stroke: color, strokeWidth: 2, vectorEffect: 'non-scaling-stroke' }}>
+      <polyline points={placed.map((p) => `${p.x * 1000},${p.y * 1000}`).join(' ')}/>
+      {placed.map((p, i) => <rect key={i} x={p.x * 1000 - 4} y={p.y * 1000 - 4} width={8} height={8}/>)}
+    </svg>}
     {preview && <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true"
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', fill: 'none', stroke: color, strokeWidth: 3, vectorEffect: 'non-scaling-stroke' }}>
       {preview}

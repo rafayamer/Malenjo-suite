@@ -132,6 +132,11 @@ import PdfCompressDialog from './PdfCompressDialog';
 import { PdfProtectDialog, PdfSanitizeDialog, PdfUnlockDialog } from './PdfSecurityDialogs';
 import PdfRedactPanel, { newMarkId, type RedactState } from './PdfRedactPanel';
 import PdfBatesDialog from './PdfBatesDialog';
+import PdfCompareDialog from './PdfCompareDialog';
+import PdfPreflightDialog from './PdfPreflightDialog';
+import PdfMeasurePanel, { NEW_MEASURE_STATE, type MeasureState } from './PdfMeasurePanel';
+import PdfDynamicStampPanel, { type StampPlacing } from './PdfDynamicStampPanel';
+import { addDynamicStamp } from './pdfDynamicStamp';
 import { boxToShown, frameOf, shownToBox } from './security/pdfRedact';
 import PdfMarkupPanel, { MARKUP_AUTHOR, type MarkupSettings } from './PdfMarkupPanel';
 import PdfTextEditPanel, { type TextEditState } from './PdfTextEditPanel';
@@ -426,7 +431,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   useEffect(() => { setOverflowOpen(false); }, [masterTab]);
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
   // MAL-001 / 002 / 009 / 010 dialogs; focus returns to the control that opened them.
-  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup'|'text-edit'|'find'|'objects'|'paragraphs'|'form-design'|'form-fill'|'export'|'office-convert'|'create-pdf'|'protect'|'unlock'|'sanitize'|'redact'|'bates-files';
+  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup'|'text-edit'|'find'|'objects'|'paragraphs'|'form-design'|'form-fill'|'export'|'office-convert'|'create-pdf'|'protect'|'unlock'|'sanitize'|'redact'|'bates-files'|'compare'|'preflight'|'measure'|'stamps';
   const [paragraphState,setParagraphState]=useState<ParagraphEditState|null>(null);
   const [formDesign,setFormDesign]=useState<FormDesignState|null>(null);
   const [exportRegion,setExportRegion]=useState<ExportRegion|null>(null);
@@ -440,6 +445,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const toolDialogOpenerRef = useRef<HTMLElement|null>(null);
   // MAL-054/055 markup tools: the active drawing tool and its style live here so every page can draw.
   const [redactState,setRedactState]=useState<RedactState|null>(null);
+  const [measureState,setMeasureState]=useState<MeasureState>(NEW_MEASURE_STATE);
+  const [stampPlacing,setStampPlacing]=useState<StampPlacing|null>(null);
   const [markupSettings,setMarkupSettings]=useState<MarkupSettings>({tool:null,style:{color:'#e0b000',opacity:0.6,width:2},text:''});
   const openToolDialog=(kind:ToolDialog)=>{
     toolDialogOpenerRef.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
@@ -449,6 +456,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setToolDialog(null);
     setMarkupSettings(current=>({...current,tool:null}));
     setRedactState(null);
+    setMeasureState(current=>({...current,active:false,points:[],pageNumber:null}));
+    setStampPlacing(null);
     const opener=toolDialogOpenerRef.current;toolDialogOpenerRef.current=null;
     window.requestAnimationFrame(()=>{if(opener?.isConnected)opener.focus();});
   };
@@ -2743,6 +2752,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     ],
     comment:[
       {id:'markup-tools',label:'Markup tools…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('markup')},
+      {id:'stamps',label:'Stamps…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('stamps')},
+      {id:'measure',label:'Measure…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('measure')},
+      {id:'compare',label:'Compare…',enabled:!!sourceBytes,disabledReason:'No PDF is loaded.',run:()=>openToolDialog('compare')},
       {id:'comments-panel',label:'Comments panel',enabled:true,run:()=>openLeftPanel('comments')},
       {id:'add-comment',label:'Add comment',enabled:!!sourceBytes&&!mutating&&!!commentDraft.text.trim(),disabledReason:!sourceBytes?'No PDF is loaded.':!commentDraft.text.trim()?'Enter comment text in the Comments panel first.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addComment},
       {id:'markup-region',label:'Add '+markupDraft.kind+' region',enabled:!!sourceBytes&&!mutating,disabledReason:!sourceBytes?'No PDF is loaded.':mutating?'Wait for the current PDF edit to finish.':undefined,run:addReviewMarkup},
@@ -2758,6 +2770,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'unlock-pdf',label:'Remove protection…',enabled:!!sourceBytes&&encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'This PDF is not protected.',run:()=>openToolDialog('unlock')},
       {id:'redact-pdf',label:'Redact…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('redact')},
       {id:'bates-files',label:'Bates numbering across files…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('bates-files')},
+      {id:'preflight',label:'Preflight…',enabled:!!sourceBytes,disabledReason:'No PDF is loaded.',run:()=>openToolDialog('preflight')},
       {id:'sanitize-pdf',label:'Sanitize…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('sanitize')},
       navigateAction('Open Security Center','security'),
       navigateAction('Open Sign workspace','sign'),
@@ -3001,7 +3014,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             if(applied)setActionNotice(summary);
             return applied;
           }}/>}
-      {(toolDialog==='properties'||toolDialog==='navigation'||toolDialog==='compress'||toolDialog==='sanitize'||toolDialog==='redact'||toolDialog==='markup'||toolDialog==='text-edit'||toolDialog==='find'||toolDialog==='objects'||toolDialog==='paragraphs'||toolDialog==='form-design'||toolDialog==='form-fill')&&sourceBytes&&(()=>{
+      {(toolDialog==='properties'||toolDialog==='navigation'||toolDialog==='compress'||toolDialog==='sanitize'||toolDialog==='redact'||toolDialog==='measure'||toolDialog==='markup'||toolDialog==='text-edit'||toolDialog==='find'||toolDialog==='objects'||toolDialog==='paragraphs'||toolDialog==='form-design'||toolDialog==='form-fill')&&sourceBytes&&(()=>{
         const apply=async (label:string,operation:(latest:Uint8Array)=>Promise<{bytes:Uint8Array;summary:string}>)=>{
           let summary='';
           const applied=await mutate(label,async latest=>{const edited=await operation(latest);summary=edited.summary;return edited.bytes;},currentPage);
@@ -3026,6 +3039,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         if(toolDialog==='markup')return <PdfMarkupPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} viewRotation={rotation} busy={mutating}
           settings={markupSettings} onSettings={setMarkupSettings} onApply={apply} onClose={closeToolDialog}/>;
         if(toolDialog==='compress')return <PdfCompressDialog domIdPrefix={domIdPrefix} busy={mutating} onApply={apply} onClose={closeToolDialog}/>;
+        if(toolDialog==='measure')return <PdfMeasurePanel domIdPrefix={domIdPrefix} bytes={sourceBytes} viewRotation={rotation} busy={mutating} author={MARKUP_AUTHOR}
+          state={measureState} onState={setMeasureState} onApply={apply} onClose={closeToolDialog}/>;
         if(toolDialog==='redact')return <PdfRedactPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} busy={mutating} state={redactState} onState={setRedactState} onApply={apply} onClose={closeToolDialog}/>;
         if(toolDialog==='sanitize')return <PdfSanitizeDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} busy={mutating} onApply={apply} onClose={closeToolDialog}/>;
         return toolDialog==='properties'
@@ -3036,6 +3051,12 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {toolDialog==='bates-files'&&sourceBytes&&<PdfBatesDialog domIdPrefix={domIdPrefix} currentName={sourceName||'document.pdf'} currentSize={sourceBytes.length} busy={mutating}
         getBytes={()=>currentPdfBytesRef.current} onNotice={setActionNotice}
         onApplyCurrent={(label,bytes)=>mutate(label,async()=>bytes,currentPage)} onClose={closeToolDialog}/>}
+      {toolDialog==='compare'&&sourceBytes&&<PdfCompareDialog domIdPrefix={domIdPrefix} sourceName={sourceName||'document.pdf'} getBytes={()=>currentPdfBytesRef.current}
+        revisions={(historyRef.current?.entries??[]).map((entry,index)=>({index,label:index===0&&!historyRef.current!.baselineEvicted?'Opened document':entry.label,bytes:entry.bytes})).filter(r=>r.index<(historyRef.current?.cursor??0))}
+        onClose={closeToolDialog}/>}
+      {toolDialog==='preflight'&&sourceBytes&&<PdfPreflightDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} sourceName={sourceName||'document.pdf'} onClose={closeToolDialog}/>}
+      {toolDialog==='stamps'&&sourceBytes&&<PdfDynamicStampPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} sourceName={sourceName||'document.pdf'} busy={mutating} defaultUser={MARKUP_AUTHOR}
+        placing={stampPlacing} onPlacing={setStampPlacing} onClose={closeToolDialog}/>}
       {toolDialog==='unlock'&&sourceBytes&&<PdfUnlockDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} sourceName={sourceName} onOpenPdfs={onOpenConversionOutputs} onNotice={setActionNotice} onClose={closeToolDialog}/>}
       {toolDialog==='create-pdf'&&<PdfCreateDialog domIdPrefix={domIdPrefix} onOpenPdfs={onOpenConversionOutputs} onNotice={setActionNotice} onClose={closeToolDialog}/>}
       {toolDialog==='office-convert'&&sourceBytes&&<PdfOfficeConvertDialog domIdPrefix={domIdPrefix} sourceName={sourceName} getBytes={()=>currentPdfBytesRef.current}
@@ -3603,7 +3624,19 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               })()
               :toolDialog==='text-edit'&&textEditState&&textEditState.pageNumber===page?{targets:textEditState.runs,selected:textEditState.selected,
                 onSelect:id=>setTextEditState(current=>current?{...current,selected:id}:current)}:null}
-              drawTool={toolDialog==='redact'&&redactState?.drawing&&redactState.frames.length?{kind:'Square',color:'#b91c1c',busy:mutating,onShape:shape=>{
+              drawTool={toolDialog==='measure'&&measureState.active?{kind:'Note',color:measureState.color,busy:mutating,label:'Click to place measurement points',
+                placed:measureState.pageNumber===page?measureState.points:[],onShape:shape=>{
+                const point=shape.points?.[0];if(!point)return;
+                setMeasureState(current=>current.pageNumber===null||current.pageNumber===page?{...current,pageNumber:page,points:[...current.points,point]}:{...current,pageNumber:page,points:[point]});
+              }}
+              :toolDialog==='stamps'&&stampPlacing?{kind:'Note',color:stampPlacing.design.color,busy:mutating,label:'Click to place the stamp',onShape:shape=>{
+                const point=shape.points?.[0];if(!point)return;
+                const placing=stampPlacing;let text='';
+                void mutate(`Placed the ${placing.design.name} stamp.`,async latest=>{const out=await addDynamicStamp(latest,{pageNumber:page,viewRotation:rotation,point,design:placing.design,
+                  values:{user:placing.user,now:new Date(),docId:placing.docId,file:placing.file}});text=out.text;return out.bytes;},page)
+                  .then(ok=>{if(ok)setActionNotice(`Placed the stamp “${text}” on page ${page}.`);});
+              }}
+              :toolDialog==='redact'&&redactState?.drawing&&redactState.frames.length?{kind:'Square',color:'#b91c1c',busy:mutating,onShape:shape=>{
                 if(!shape.rect)return;
                 const box=shownToBox(frameOf(redactState.frames[page-1],rotation),shape.rect);
                 setRedactState(current=>current?{...current,marks:[...current.marks,{id:newMarkId(),pageNumber:page,box,label:'drawn area'}]}:current);

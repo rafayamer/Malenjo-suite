@@ -41,7 +41,7 @@ interface Props {
   onCropPage?():void;
   editingBusy?:boolean;
   /** MAL-055: active drawing tool; shapes are reported as fractions of the page as shown. */
-  drawTool?:{kind:DrawingKind;color:string;busy:boolean;onShape(shape:DrawnShape):void}|null;
+  drawTool?:{kind:DrawingKind;color:string;busy:boolean;onShape(shape:DrawnShape):void;label?:string;placed?:{x:number;y:number}[]}|null;
   /** MAL-011: clickable boxes over the page's own text runs (fractions of the page as shown). */
   textRuns?:{targets:readonly {id:number;text:string;editable:boolean;shown:{x:number;y:number;width:number;height:number}}[];selected:number|null;onSelect(id:number):void;labelPrefix?:string}|null;
 }
@@ -464,7 +464,7 @@ export default function PdfPageCanvas({
         style={{position:'absolute',pointerEvents:'auto',left:`${target.shown.x*100}%`,top:`${target.shown.y*100}%`,width:`${target.shown.width*100}%`,height:`${target.shown.height*100}%`}}
         onClick={()=>textRuns.onSelect(target.id)}/>)}
     </div>}
-    {drawTool&&<PdfDrawOverlay pageNumber={pageNumber} kind={drawTool.kind} color={drawTool.color} busy={drawTool.busy}
+    {drawTool&&<PdfDrawOverlay pageNumber={pageNumber} kind={drawTool.kind} color={drawTool.color} busy={drawTool.busy} label={drawTool.label} placed={drawTool.placed}
       surface={()=>canvasRef.current} onShape={drawTool.onShape}/>}
     {showEditSelection&&<div role="group" aria-label={`Actions for PDF page ${pageNumber}`}
       className="pdf-page-inline-actions">

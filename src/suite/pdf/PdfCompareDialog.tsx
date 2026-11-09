@@ -67,7 +67,7 @@ export default function PdfCompareDialog({ domIdPrefix, sourceName, getBytes, re
 
   // Draw the chosen page in the chosen mode.
   useEffect(() => {
-    if (!docs || mode === 'text') return;
+    if (!docs || !texts || mode === 'text') return;
     let live = true;
     (async () => {
       const [bw, bh] = await pageSize(docs.before.document, pageNumber); const [aw, ah] = await pageSize(docs.after.document, pageNumber);
@@ -89,7 +89,7 @@ export default function PdfCompareDialog({ domIdPrefix, sourceName, getBytes, re
       show(overlayHost.current, overlay, `Overlay of page ${pageNumber}: red is new, blue is removed`);
     })().catch((reason) => { if (live) setError(describePdfError(reason)); });
     return () => { live = false; };
-  }, [docs, mode, pageNumber]);
+  }, [docs, texts, mode, pageNumber]);
 
   const pages = texts?.length ?? 0;
   const differing = texts?.filter((p) => p.added || p.removed).length ?? 0;

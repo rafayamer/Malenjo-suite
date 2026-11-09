@@ -44,8 +44,14 @@ export function resolveStamp(design: StampDesign, values: StampValues): { status
   return { status, detail: fill(design.detail, status) };
 }
 
-/** The document identifier: the first part of the trailer ID, as 12 hex digits (blank when the file has none). */
+/** The document identifier: the first part of the trailer ID as 12 hex digits, or, for a file without one, the start of its SHA-256. */
 export async function documentIdentifier(bytes: Uint8Array): Promise<string> {
+  const fromId = await trailerIdentifier(bytes);
+  if (fromId) return fromId;
+  try { return Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes.slice().buffer as ArrayBuffer)).subarray(0, 6), (b) => b.toString(16).padStart(2, '0')).join('').toUpperCase(); }
+  catch { return ''; }
+}
+async function trailerIdentifier(bytes: Uint8Array): Promise<string> {
   try {
     const pdf = await PDFDocument.load(bytes, { updateMetadata: false, ignoreEncryption: true });
     const id = pdf.context.trailerInfo.ID;

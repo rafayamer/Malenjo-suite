@@ -41,6 +41,7 @@ export const VERIFIED_EVIDENCE_SCRIPTS = [
   'scripts/pdf-phase3-topdf-acceptance.mjs',
   'scripts/pdf-phase4-security-acceptance.mjs',
   'scripts/pdf-phase4-redact-acceptance.mjs',
+  'scripts/pdf-phase4-review-acceptance.mjs',
 ] as const;
 
 export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Object.freeze([
@@ -305,6 +306,21 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     evidence: ['MAL-034 HTML to PDF through the controlled renderer: supported CSS applied, scripts and remote content blocked'],
   },
   {
+    id: 'MAL-057', workspaceTab: 'Review',
+    guidance: 'Choose Stamps…, pick a stamp from the library or make your own (status line for the approval state, detail line with {user}, {date}, {time}, {docid}, {file} and {status}, and a colour), then Place on the page and click where it goes. Your stamps and name are kept on this device for next time. Placed stamps are Stamp annotations with the values filled in when placed.',
+    evidence: ['MAL-057 reusable stamps with date, time, user, document identifier and approval-state variables'],
+  },
+  {
+    id: 'MAL-058', workspaceTab: 'Review',
+    guidance: 'Choose Measure…, set the scale (for example 1 in = 10 ft) or calibrate it by clicking both ends of a known length, choose Distance, Perimeter, Area or Angle, and click the points on the page (Finish shape for perimeter and area). Measurements are saved as standard measurement annotations carrying the scale and the value in your units and decimal places.',
+    evidence: ['MAL-058 calibrated distance, angle, area and perimeter measurements with units and scale factors'],
+  },
+  {
+    id: 'MAL-059', workspaceTab: 'Review',
+    guidance: 'Choose Compare…, then Another PDF… or an earlier revision of the open document. View the pages side by side, as an overlay (red for what is new, blue for what went away) or as a list of text changes by page, and save the comparison as an HTML report. Pages are paired by position.',
+    evidence: ['MAL-059 compare revisions side by side, by text differences and as a visual overlay'],
+  },
+  {
     id: 'MAL-061', workspaceTab: 'Protect',
     guidance: 'Choose Protect PDF…, enter an optional open password and an owner password (twice), choose printing and the other permissions, then Save protected copy. The copy uses AES-256 (PDF 2.0 security handler, revision 6); the open document is unchanged. Permissions are honoured by conforming readers; software that ignores them can still print or copy.',
     evidence: ['MAL-061 protect a PDF with AES-256, an open password, an owner password and permission flags'],
@@ -328,6 +344,11 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     id: 'MAL-067', workspaceTab: 'Protect',
     guidance: 'Choose Bates numbering across files…, add PDFs and put them in order, set the prefix ({vol} adds the file number), start number, padding, suffix, position and margins, and whether numbering continues, restarts or jumps to the next round number between files. The numbered files are saved as one ZIP named by their first number, with bates-log.csv; the open document can be numbered in place.',
     evidence: ['MAL-067 Bates numbers across files with prefix, padding, placement and continuation rules'],
+  },
+  {
+    id: 'MAL-068', workspaceTab: 'Protect',
+    guidance: 'Choose Preflight…, select PDF/A-1b, 2b or 3b, PDF/X-1a or 4 and/or PDF/UA-1, and Run preflight. Each profile lists its checks — fonts, colour spaces and output intents, transparency, metadata, actions and attachments, annotations and forms, tagging, page boxes and file structure — as passed or failed, with where each failure is; Save report keeps it as text. MALENJO checks these listed conditions; it is not a certified validator such as veraPDF.',
+    evidence: ['MAL-068 preflight against selected PDF/A, PDF/X and PDF/UA profiles'],
   },
   {
     id: 'MAL-070', workspaceTab: 'Protect',
