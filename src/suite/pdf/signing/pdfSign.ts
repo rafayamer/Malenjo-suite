@@ -34,7 +34,7 @@ const latin1 = (s: string) => Uint8Array.from(s, (c) => c.charCodeAt(0) & 0xff);
 const pdfDate = (d: Date) => { const p = (n: number) => String(n).padStart(2, '0'); return `D:${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}Z`; };
 const text = (s: string) => PDFHexString.fromText(s).toString();
 
-function serialize(object: PDFObject): Uint8Array {
+export function serialize(object: PDFObject): Uint8Array {
   const out = new Uint8Array(object.sizeInBytes()); object.copyBytesInto(out, 0); return out;
 }
 function findLast(haystack: Uint8Array, needle: string, from = haystack.length): number {
@@ -58,7 +58,7 @@ export function nextObjectNumber(original: Uint8Array, pdf: PDFDocument): number
 }
 
 /** Appends one incremental update holding `objects` (number -> body bytes), in the cross-reference style of the original. */
-function appendUpdate(original: Uint8Array, pdf: PDFDocument, objects: Map<number, Uint8Array>): Uint8Array {
+export function appendUpdate(original: Uint8Array, pdf: PDFDocument, objects: Map<number, Uint8Array>): Uint8Array {
   const startxref = findLast(original, 'startxref');
   if (startxref < 0) throw new Error('This PDF has no cross-reference position, so it cannot be signed incrementally.');
   const prev = Number(/startxref\s+(\d+)/.exec(new TextDecoder('latin1').decode(original.subarray(startxref, startxref + 40)))?.[1]);
