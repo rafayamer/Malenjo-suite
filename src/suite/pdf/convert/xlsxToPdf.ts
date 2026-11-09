@@ -103,14 +103,25 @@ function formatValue(raw: string, fmt: string, id: number, date1904 = false): st
     const places = fmt.split(';')[0].replace(/"[^"]*"|\\./g, '').match(/\.([0#?]+)/)?.[1] ?? '';
     const decimals = places.length, required = places.replace(/[#?]+$/, '').length;
     const trim = (s: string) => { if (decimals === required) return s; const [w, f = ''] = s.split('.'); const kept = f.replace(/0+$/, '').padEnd(required, '0'); return kept ? `${w}.${kept}` : `${w}.`; };
-    const text = trim(fixed(decimals, fmt.includes(',')));
-    const value = fmt.includes('%') ? `${trim((n * 100).toFixed(decimals))}%` : text;
+    // A comma between digit placeholders groups thousands; commas after the last placeholder divide by 1000 each
+    // (0.0," thousand" shows 1234 as 1.2 thousand). A quoted literal after the number is kept as written.
+    const section = fmt.split(';')[0].replace(/"[^"]*"|\\./g, (m) => ' '.repeat(m.length));
+    const scale = 1000 ** (section.match(/[0#?.](,+)(?![0#?])/)?.[1].length ?? 0);
+    const group = /[0#?],[0#?]/.test(section);
+    const scaled = n / scale;
+    const fixedScaled = (d: number) => { const s = Math.abs(scaled).toFixed(d); const [w, f] = s.split('.'); return `${scaled < 0 ? '-' : ''}${group ? w.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : w}${f ? '.' + f : ''}`; };
+    const text = trim(fixedScaled(decimals));
+    const value = fmt.includes('%') ? `${trim((scaled * 100).toFixed(decimals))}%` : text;
     const prefix = fmt.match(/^"?([$€£¥])"?/)?.[1] ?? (fmt.includes('[$') ? fmt.match(/\[\$([^\-\]]+)/)?.[1] ?? '' : '');
-    return prefix + value;
+    const suffix = fmt.split(';')[0].match(/[0#?.,%]\s*"([^"]*)"\s*$/)?.[1] ?? '';
+    return prefix + value + suffix;
   }
   // General: every significant digit a double holds (15), in scientific notation when very small or large.
   return String(Number(n.toPrecision(15))).replace('e', 'E');
 }
+
+/** An XML boolean attribute ("1" or "true"). */
+const truthy = (v: string | undefined) => v === '1' || v === 'true';
 
 /** A colour lightened (tint > 0) or darkened (tint < 0) the way spreadsheets apply a tint: on its HSL lightness. */
 function tinted([r, g, b]: [number, number, number], tint: number): [number, number, number] {
@@ -206,10 +217,10 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
     if (!cells.size && !printAreas.has(sheetIndex)) continue;
     rendered++;
     const widths = new Map<number, number>(); const heights = new Map<number, number>();
-    for (const col of all(ws, 'col')) for (let c = Number(col.attrs.min) - 1; c < Number(col.attrs.max) && c < 500; c++) widths.set(c, col.attrs.hidden === '1' ? 0 : (Number(col.attrs.width ?? 8.43) * 7 + 5) * 0.75);
+    for (const col of all(ws, 'col')) for (let c = Number(col.attrs.min) - 1; c < Number(col.attrs.max) && c < 500; c++) widths.set(c, truthy(col.attrs.hidden) ? 0 : (Number(col.attrs.width ?? 8.43) * 7 + 5) * 0.75);
     // A hidden row needs no custom height to be hidden.
     for (const row of all(ws, 'row')) {
-      if (row.attrs.hidden === '1') heights.set(Number(row.attrs.r) - 1, 0);
+      if (truthy(row.attrs.hidden)) heights.set(Number(row.attrs.r) - 1, 0);
       else if (row.attrs.ht) heights.set(Number(row.attrs.r) - 1, Number(row.attrs.ht));
     }
     const colW = (c: number) => widths.get(c) ?? 64 * 0.75 + 0.5, rowH = (r: number) => heights.get(r) ?? 15;

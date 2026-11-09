@@ -219,6 +219,17 @@ describe('SVG export (MAL-043)', () => {
     expect(svg).toMatch(/<path d="M0 0L100 0L100 100Z"[^>]*fill-rule="evenodd"/);
   });
 
+  it('reports a picture with a colour-key mask instead of drawing it opaque', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([300, 300]);
+    const img = pdf.context.register(pdf.context.flateStream(new Uint8Array([0, 0, 0]), { Type: 'XObject', Subtype: 'Image', Width: 1, Height: 1, ColorSpace: 'DeviceRGB', BitsPerComponent: 8, Mask: [0, 0, 0, 0, 0, 0] }));
+    const name = page.node.newXObject('Im', img).decodeText();
+    page.node.addContentStream(pdf.context.register(pdf.context.stream(`q 100 0 0 100 10 10 cm /${name} Do Q`)));
+    const result = await pdfToSvg(await pdf.save(), [1], 'keyed');
+    expect(text(result.files[0].bytes)).not.toContain('<image');
+    expect(result.notes.join(' ')).toMatch(/1 image\(s\) in formats SVG export does not support/);
+  });
+
   it('leaves invisible text out of the SVG and outlines stroked text', async () => {
     const pdf = await PDFDocument.create();
     const page = pdf.addPage([300, 300]);

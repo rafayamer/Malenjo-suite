@@ -628,3 +628,49 @@ describe('conversion edge cases, round 16', () => {
     expect((await gap(3)) - (await gap(0))).toBeGreaterThan(3 * 12);
   });
 });
+
+describe('conversion edge cases, round 17', () => {
+  const S = 'xmlns="m" xmlns:r="r"';
+  const book = (sheet: string, styles = '', cols = '') => zipSync({
+    'xl/workbook.xml': strToU8(`<workbook ${S}><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>`),
+    'xl/_rels/workbook.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>'),
+    'xl/worksheets/sheet1.xml': strToU8(`<worksheet ${S}>${cols}<sheetData>${sheet}</sheetData></worksheet>`),
+    ...(styles ? { 'xl/styles.xml': strToU8(styles) } : {}),
+  });
+  const options = { pageSize: 'letter', orientation: 'sheet', gridlines: 'sheet', sheets: 'all' } as const;
+
+  it('divides by a thousand for each scaling comma and keeps the quoted suffix', async () => {
+    const styles = '<styleSheet><numFmts><numFmt numFmtId="164" formatCode="0.0,&quot; thousand&quot;"/><numFmt numFmtId="165" formatCode="#,##0,,&quot;M&quot;"/></numFmts><cellXfs><xf numFmtId="0"/><xf numFmtId="164"/><xf numFmtId="165"/></cellXfs></styleSheet>';
+    const [page] = await read((await xlsxToPdf(book('<row r="1"><c r="A1" s="1"><v>1234</v></c><c r="B1" s="2"><v>2500000000</v></c></row>', styles, '<cols><col min="1" max="2" width="20"/></cols>'), options)).bytes);
+    expect(page.items.map((i) => i.str)).toEqual(['1.2 thousand', '2,500M']);
+  });
+
+  it('hides rows and columns marked hidden="true"', async () => {
+    const sheet = '<row r="1"><c r="A1" t="inlineStr"><is><t>Shown</t></is></c><c r="B1" t="inlineStr"><is><t>Hidden column</t></is></c></row><row r="2" hidden="true"><c r="A2" t="inlineStr"><is><t>Hidden row</t></is></c></row>';
+    const [page] = await read((await xlsxToPdf(book(sheet, '', '<cols><col min="2" max="2" hidden="true"/></cols>'), options)).bytes);
+    expect(page.text).toBe('Shown');
+  });
+
+  it('inherits line-height from a containing element', async () => {
+    const gap = async (html: string) => { const [page] = await read((await htmlToPdf(html, { pageSize: 'a4', landscape: false, margin: 36 })).bytes); const at = (s: string) => page.items.find((i) => i.str === s)!.top; return at('Second') - at('First'); };
+    const inherited = await gap('<body style="line-height:2"><p>First<br>Second</p></body>');
+    expect(inherited).toBe(await gap('<body><p style="line-height:2">First<br>Second</p></body>'));
+    expect(inherited).toBeGreaterThan(await gap('<body><p>First<br>Second</p></body>'));
+  });
+
+  it('reports shapes inherited from a slide layout or master', async () => {
+    const A = 'xmlns:a="a" xmlns:p="p" xmlns:r="r"';
+    const sp = (text: string) => `<p:sp><p:nvSpPr><p:cNvPr id="2" name="t"/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1270000" cy="635000"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:p><a:r><a:t>${text}</a:t></a:r></a:p></p:txBody></p:sp>`;
+    const pptx = zipSync({
+      'ppt/presentation.xml': strToU8(`<p:presentation ${A}><p:sldIdLst><p:sldId id="256" r:id="rId1"/></p:sldIdLst><p:sldSz cx="9144000" cy="5143500"/></p:presentation>`),
+      'ppt/_rels/presentation.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="slides/slide1.xml"/></Relationships>'),
+      'ppt/slides/slide1.xml': strToU8(`<p:sld ${A}><p:cSld><p:spTree>${sp('Slide text')}</p:spTree></p:cSld></p:sld>`),
+      'ppt/slides/_rels/slide1.xml.rels': strToU8('<Relationships><Relationship Id="rL" Target="../slideLayouts/slideLayout1.xml"/></Relationships>'),
+      'ppt/slideLayouts/slideLayout1.xml': strToU8(`<p:sldLayout ${A}><p:cSld><p:spTree>${sp('Layout text')}</p:spTree></p:cSld></p:sldLayout>`),
+      'ppt/slideLayouts/_rels/slideLayout1.xml.rels': strToU8('<Relationships><Relationship Id="rM" Target="../slideMasters/slideMaster1.xml"/></Relationships>'),
+      'ppt/slideMasters/slideMaster1.xml': strToU8(`<p:sldMaster ${A}><p:cSld><p:spTree>${sp('Master text')}</p:spTree></p:cSld></p:sldMaster>`),
+    });
+    const result = await pptxToPdf(pptx);
+    expect(result.notes.join(' ')).toMatch(/Not rendered: 2 shape\(s\) inherited from slide layouts or masters/);
+  });
+});

@@ -45,6 +45,8 @@ function imageUri(pdf: PDFDocument, stream: PDFRawStream): { uri: string; mask?:
   const components = cs instanceof PDFName ? ({ '/DeviceRGB': 3, '/DeviceGray': 1 } as Record<string, number>)[cs.toString()] ?? 0
     : cs instanceof PDFArray && String(cs.get(0)) === '/ICCBased' ? (pdf.context.lookup(cs.get(1)) as PDFRawStream)?.dict.lookupMaybe(N('N'), PDFNumber)?.asNumber() ?? 0 : 0;
   if (components !== 1 && components !== 3) return null;
+  // A colour-key or stencil /Mask is not applied here: such a picture is counted as not converted, never drawn opaque.
+  if (dict.has(N('Mask'))) return null;
   if (filters.length === 1 && filters[0] === '/DCTDecode') {
     const uri = `data:image/jpeg;base64,${base64(stream.contents)}`;
     if (!dict.has(N('SMask'))) return { uri };

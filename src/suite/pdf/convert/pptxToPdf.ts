@@ -25,7 +25,7 @@ export async function pptxToPdf(bytes: Uint8Array): Promise<DocumentPdf> {
   const presRels = relationships(files, 'ppt/presentation.xml');
   const slidePaths = all(pres, 'p:sldId').map((s) => presRels.get(s.attrs['r:id'])).filter((p): p is string => Boolean(p && files[p]));
   if (!slidePaths.length) throw new Error('This presentation has no slides.');
-  const counts = { charts: 0, smartArt: 0, rotated: 0, gradients: 0, images: 0, geometry: 0, media: 0 };
+  const counts = { charts: 0, smartArt: 0, rotated: 0, gradients: 0, images: 0, geometry: 0, media: 0, inherited: 0 };
 
   // Theme colours (for schemeClr).
   const masterPath = slidePaths.length ? [...relationships(files, [...relationships(files, slidePaths[0]).values()].find((p) => p.includes('slideLayout')) ?? '').values()].find((p) => p.includes('slideMaster')) : undefined;
@@ -190,13 +190,19 @@ export async function pptxToPdf(bytes: Uint8Array): Promise<DocumentPdf> {
         } else if (node.name === 'p:contentPart' || node.name === 'mc:AlternateContent') counts.media++;
       }
     };
+    // Ordinary shapes on the slide's layout and master (logos, footers, decorations) show behind the slide unless the
+    // slide or layout hides them (showMasterSp="0"). They are not drawn; they are counted for the report.
+    const shows = (doc: XNode | undefined) => doc?.children.find((c) => c.name === 'p:sld' || c.name === 'p:sldLayout')?.attrs.showMasterSp !== '0';
+    const ownShapes = (doc: XNode | undefined) => (all(doc ?? slide, 'p:spTree')[0]?.children ?? [])
+      .filter((c) => ['p:sp', 'p:pic', 'p:grpSp', 'p:cxnSp', 'p:graphicFrame'].includes(c.name) && !all(c, 'p:ph').length).length;
+    if (shows(slide)) counts.inherited += (layout ? ownShapes(layout) : 0) + (shows(layout) && master ? ownShapes(master) : 0);
     const tree = all(slide, 'p:spTree')[0];
     if (tree) await walk(tree, (b) => b);
   }
   const notes = [`Rendered ${slidePaths.length} slide(s) at ${Math.round(W)} × ${Math.round(H)} pt.`];
   if (writer.replaced) notes.push(`${writer.replaced} character(s) outside the standard fonts were drawn as “?”.`);
   const missing: [number, string][] = [[counts.charts, 'chart(s) or other embedded objects'], [counts.smartArt, 'SmartArt diagram(s)'], [counts.images, 'picture(s) in formats other than PNG or JPEG'],
-    [counts.media, 'ink or alternate-content item(s)']];
+    [counts.media, 'ink or alternate-content item(s)'], [counts.inherited, 'shape(s) inherited from slide layouts or masters (such as logos or footers)']];
   for (const [n, label] of missing) if (n) notes.push(`Not rendered: ${n} ${label}.`);
   if (counts.rotated) notes.push(`${counts.rotated} rotated item(s) are drawn unrotated.`);
   if (counts.gradients) notes.push(`${counts.gradients} gradient fill(s) are drawn with their first colour.`);

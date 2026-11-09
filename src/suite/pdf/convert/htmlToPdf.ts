@@ -84,7 +84,7 @@ export async function htmlToPdf(source: string, options: HtmlPdfOptions): Promis
     pendingBreak = false; runs = [];
   };
   const derive = (n: XNode, parent: Ctx): Ctx | null => {
-    const css = cssOf(n);
+    let css = cssOf(n);
     if (css.display === 'none' || n.attrs.hidden !== undefined) return null;
     const run = { ...parent.run };
     const tagStyle: Partial<RunStyle> = n.name in HEADING ? { size: 12 * HEADING[n.name], bold: true } : ['b', 'strong', 'th'].includes(n.name) ? { bold: true } : ['i', 'em', 'cite', 'var'].includes(n.name) ? { italic: true }
@@ -101,6 +101,8 @@ export async function htmlToPdf(source: string, options: HtmlPdfOptions): Promis
     const align = (['left', 'center', 'right', 'justify'].includes(css['text-align']) ? css['text-align'] : n.name === 'th' ? 'left' : parent.align) as Align;
     const indent = parent.indent + (length(css['margin-left'] ?? css['padding-left'], run.size) ?? (['ul', 'ol', 'blockquote', 'dd'].includes(n.name) ? 24 : 0));
     if (css['page-break-before'] === 'always' || css['break-before'] === 'page') pendingBreak = true;
+    // line-height is inherited: a child keeps its container's value unless it sets its own.
+    if (css['line-height'] === undefined && parent.css['line-height'] !== undefined) css = { ...css, 'line-height': parent.css['line-height'] };
     return { run, align, indent, css: n.name in HEADING ? { 'margin-top': '0.6em', 'margin-bottom': '0.4em', ...css } : n.name === 'p' ? { 'margin-bottom': '0.8em', ...css } : css, list: parent.list, pre: parent.pre || n.name === 'pre', background: (BLOCK.has(n.name) ? bg : undefined) ?? parent.background };
   };
   const inline = (n: XNode, ctx: Ctx) => {
