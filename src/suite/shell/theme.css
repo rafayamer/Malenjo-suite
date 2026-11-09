@@ -2425,6 +2425,11 @@ body {min-width:0;width:100%;overflow-x:hidden;background:var(--ml-background)}
 .pdf-text-run-target:hover,.pdf-text-run-target:focus-visible{background:rgba(61,159,255,.12);outline:2px solid #3d9fff}
 .pdf-text-run-target.selected{background:rgba(61,159,255,.18);border:2px solid #1269cc}
 .pdf-text-run-target:disabled{border-color:rgba(150,150,150,.4);cursor:not-allowed}
+.pdf-text-run-target[aria-label^="Redaction mark"]{background:rgba(15,23,42,.45);border:2px solid #b91c1c;cursor:pointer}
+.pdf-text-run-target[aria-label^="Redaction mark"].selected{background:rgba(15,23,42,.6);border:2px solid #7f1d1d}
+.pdf-redact-marks,.pdf-redact-candidates{list-style:none;margin:4px 0;padding:0;max-height:180px;overflow:auto}
+.pdf-redact-marks li{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:2px 0}
+.pdf-redact-marks li.selected{font-weight:600}
 .pdf-object-row-label{flex-basis:100%;font-size:12px;color:var(--ml-muted)}
 .pdf-markup-swatch{display:inline-block;width:10px;height:10px;border-radius:2px;border:1px solid var(--ml-border);margin-right:4px}
 .pdf-markup-panel .pdf-tool-dialog-error{color:var(--ml-error-fg);background:var(--ml-error-bg);border-radius:6px;padding:6px 8px}

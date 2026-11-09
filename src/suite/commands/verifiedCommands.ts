@@ -40,6 +40,7 @@ export const VERIFIED_EVIDENCE_SCRIPTS = [
   'scripts/pdf-phase3-office-acceptance.mjs',
   'scripts/pdf-phase3-topdf-acceptance.mjs',
   'scripts/pdf-phase4-security-acceptance.mjs',
+  'scripts/pdf-phase4-redact-acceptance.mjs',
 ] as const;
 
 export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Object.freeze([
@@ -312,6 +313,21 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     id: 'MAL-062', workspaceTab: 'Protect',
     guidance: 'Open the protected PDF (with its open password if it has one), choose Remove protection…, enter the owner password and the unprotected copy opens in a new tab. Files protected with RC4, AES-128 or AES-256 passwords are supported; certificate (public-key) protection is refused with a message, because it needs the recipient\'s private key.',
     evidence: ['MAL-062 remove protection with the owner password, refusing a password that does not permit it'],
+  },
+  {
+    id: 'MAL-063', workspaceTab: 'Protect',
+    guidance: 'Choose Redact…, mark areas by drawing on the page or by finding text, then Apply. Text under an area is removed character by character (the text around it keeps its place), image pixels there are replaced by black, drawings with points there, comments, links and form fields there are removed, and shared drawings are rewritten as private copies. Optionally the removed words are also taken out of document information, metadata, bookmarks, comments, form values and tags. Nothing that was redacted is left in the saved file; Undo restores it until you save. Signed PDFs are refused.',
+    evidence: ['MAL-063 permanently remove selected text, images, graphics and associated hidden content'],
+  },
+  {
+    id: 'MAL-064', workspaceTab: 'Protect',
+    guidance: 'In Redact…, choose what to look for (names, addresses and postcodes, email addresses, phone numbers, national identity numbers, payment cards, IBANs, dates of birth, and your own phrases or /patterns/), Find candidates, untick any you want to keep, and mark the rest. Detection runs on this device and is rule-based (patterns, check digits such as Luhn and mod 97, and name and address cues), not a learned model; review every candidate. Scanned pages need OCR first.',
+    evidence: ['MAL-064 privately detect candidate identifiers, financial data, names and addresses for reviewed redaction'],
+  },
+  {
+    id: 'MAL-067', workspaceTab: 'Protect',
+    guidance: 'Choose Bates numbering across files…, add PDFs and put them in order, set the prefix ({vol} adds the file number), start number, padding, suffix, position and margins, and whether numbering continues, restarts or jumps to the next round number between files. The numbered files are saved as one ZIP named by their first number, with bates-log.csv; the open document can be numbered in place.',
+    evidence: ['MAL-067 Bates numbers across files with prefix, padding, placement and continuation rules'],
   },
   {
     id: 'MAL-070', workspaceTab: 'Protect',

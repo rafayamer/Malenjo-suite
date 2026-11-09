@@ -65,6 +65,8 @@ jobs:
         run: node scripts/pdf-phase3-topdf-acceptance.mjs
       - name: Phase 4 security acceptance (protect, unlock, sanitize) with independent PDF.js reopen
         run: node scripts/pdf-phase4-security-acceptance.mjs
+      - name: Phase 4 redaction acceptance (redact, detect, Bates across files) with independent reopen
+        run: node scripts/pdf-phase4-redact-acceptance.mjs
       - name: Publish Phase 3 light/dark visual review screenshots
         if: success()
         uses: actions/upload-artifact@v4

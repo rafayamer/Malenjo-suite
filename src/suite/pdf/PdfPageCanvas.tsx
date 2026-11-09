@@ -456,7 +456,7 @@ export default function PdfPageCanvas({
         outline:'2px dashed currentColor',boxShadow:'0 0 0 100vmax rgba(15,23,42,.35)',
       }}/>}
     </div>}
-    {textRuns&&<div role="group" aria-label={`${textRuns.labelPrefix==='Select object'?'Objects':'Text'} on PDF page ${pageNumber}`} style={{position:'absolute',inset:0,zIndex:9,pointerEvents:'none'}}>
+    {textRuns&&<div role="group" aria-label={`${textRuns.labelPrefix==='Select object'?'Objects':textRuns.labelPrefix==='Redaction mark'?'Redaction marks':'Text'} on PDF page ${pageNumber}`} style={{position:'absolute',inset:0,zIndex:9,pointerEvents:'none'}}>
       {textRuns.targets.map(target=><button key={target.id} type="button"
         className={'pdf-text-run-target'+(textRuns.selected===target.id?' selected':'')}
         aria-label={`${textRuns.labelPrefix??'Edit text'}: ${target.text.slice(0,80)}`} aria-pressed={textRuns.selected===target.id}
