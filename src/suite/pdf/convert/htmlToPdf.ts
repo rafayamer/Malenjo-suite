@@ -160,10 +160,13 @@ export async function htmlToPdf(source: string, options: HtmlPdfOptions): Promis
   };
   const root: Ctx = { run: { ...DEFAULT_STYLE, size: 12 }, align: 'left', indent: 0, css: {}, pre: false };
   const body = all(doc, 'body')[0] ?? doc;
-  const bodyCtx = derive(body, root) ?? root;
-  paraCtx = bodyCtx;
-  inline(body, bodyCtx);
-  flush(bodyCtx);
+  // A body hidden by display:none or the hidden attribute shows nothing, as in a browser.
+  const bodyCtx = derive(body, root);
+  if (bodyCtx) {
+    paraCtx = bodyCtx;
+    inline(body, bodyCtx);
+    flush(bodyCtx);
+  }
   let [w, h] = PAGE_SIZES[options.pageSize];
   if (options.landscape !== w > h) [w, h] = [h, w];
   const writer = await FlowWriter.create({ width: w, height: h, margin: { top: options.margin, right: options.margin, bottom: options.margin, left: options.margin } });

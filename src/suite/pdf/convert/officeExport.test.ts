@@ -93,3 +93,27 @@ describe('PDF to Office (MAL-037 – 039)', () => {
     expect(sheet).toMatch(/<c r="C2"><v>42<\/v><\/c>/);
   });
 });
+
+describe('PowerPoint paint order and text colour', () => {
+  it('writes shapes in paint order and keeps the text colour', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([400, 300]);
+    const png = await pdf.embedPng(encodePng({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(200) }));
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    // A photograph, then a black panel over part of it, then white text on the panel.
+    page.drawImage(png, { x: 20, y: 20, width: 360, height: 260 });
+    page.drawRectangle({ x: 50, y: 100, width: 200, height: 60, color: rgb(0, 0, 0) });
+    page.drawText('Callout text', { x: 60, y: 120, size: 18, font, color: rgb(1, 1, 1) });
+    const bytes = await pdf.save();
+    const loading = getDocument({ data: bytes.slice(), isOffscreenCanvasSupported: false, fontExtraProperties: true } as never);
+    const doc = await loading.promise;
+    let pages;
+    try { pages = await readPdfStructure(doc, [1], { images: true, ops: OPS as never }); } finally { await loading.destroy(); }
+    const { files } = await pdfToPptx(pages, bytes, 'callout');
+    const slide = part(files[0].bytes, 'ppt/slides/slide1.xml');
+    const [pic, rect, text] = ['<p:pic>', 'name="Rectangle', 'Callout text'].map((needle) => slide.indexOf(needle));
+    expect(pic).toBeGreaterThan(0);
+    expect(pic).toBeLessThan(rect); expect(rect).toBeLessThan(text);
+    expect(slide).toMatch(/<a:solidFill><a:srgbClr val="FFFFFF"\/><\/a:solidFill><a:latin typeface="Arial"\/><\/a:rPr><a:t>Callout text/);
+  });
+});

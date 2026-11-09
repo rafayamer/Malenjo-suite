@@ -126,12 +126,18 @@ export function pdfToDocx(pages: PageStructure[], title: string): ConversionResu
 
 // ---- PowerPoint ---------------------------------------------------------------------------------
 
-/** Rectangles drawn on a page (fill and/or outline), as fractions of the page as shown. */
-function pageRectangles(pdf: PDFDocument | null, pageNumber: number) {
-  if (!pdf) return { rects: [], other: 0 };
+type Shown = { x: number; y: number; width: number; height: number };
+/**
+ * What a page draws, as fractions of the page as shown, each with its place in the paint order (`z`): rectangles
+ * (fill and/or outline), visible text runs with their colours, and image placements.
+ */
+function pageObjects(pdf: PDFDocument | null, pageNumber: number) {
+  if (!pdf) return { rects: [], other: 0, runs: [], images: [] };
   const model = readPageModel(pdf, pageNumber - 1);
   const frame = frameOf(pdf, pageNumber, 0);
-  const rects: { shown: { x: number; y: number; width: number; height: number }; fill: string | null; stroke: string | null; width: number }[] = [];
+  const rects: { shown: Shown; fill: string | null; stroke: string | null; width: number; z: number }[] = [];
+  const runs = model.runs.filter((r) => r.render % 4 !== 3 && r.text.trim()).map((r) => ({ shown: frame.toShown(r.box), fill: r.fill, z: r.opIndex }));
+  const images = model.images.map((i) => ({ z: i.opIndex }));
   let other = 0;
   for (const path of model.paths) {
     const ops = model.ops.slice(path.startIndex, path.endIndex);
@@ -145,9 +151,9 @@ function pageRectangles(pdf: PDFDocument | null, pageNumber: number) {
       return [path.box[0], path.box[2]].some((c) => Math.abs(c - px) < 0.01) && [path.box[1], path.box[3]].some((c) => Math.abs(c - py) < 0.01);
     });
     if (rotated || !(names === 're' || (/^m l l l( l)? h$/.test(names) && onCorners))) { other++; continue; }
-    rects.push({ shown: frame.toShown(path.box), fill: /^[fFbB]/.test(path.paint) ? path.fill : null, stroke: /^[sSbB]/.test(path.paint) ? path.stroke : null, width: path.lineWidth * Math.abs(path.ctm[0]) });
+    rects.push({ shown: frame.toShown(path.box), fill: /^[fFbB]/.test(path.paint) ? path.fill : null, stroke: /^[sSbB]/.test(path.paint) ? path.stroke : null, width: path.lineWidth * Math.abs(path.ctm[0]), z: path.startIndex });
   }
-  return { rects, other };
+  return { rects, other, runs, images };
 }
 const hex = (c: string) => c.replace('#', '').toUpperCase();
 
@@ -162,23 +168,30 @@ export async function pdfToPptx(pages: PageStructure[], pdfBytes: Uint8Array | n
   pages.forEach((page, index) => {
     const n = index + 1;
     const sx = cx / page.width, sy = cy / page.height;
-    const shapes: string[] = []; const rels: string[] = [`<Relationship Id="rIdLayout" Type="${officeRel}slideLayout" Target="../slideLayouts/slideLayout1.xml"/>`];
+    // Shapes are written in the page's paint order, so later ones cover earlier ones as in the PDF.
+    const shapes: { z: number; xml: string }[] = []; const rels: string[] = [`<Relationship Id="rIdLayout" Type="${officeRel}slideLayout" Target="../slideLayouts/slideLayout1.xml"/>`];
     let id = 2;
     const xfrm = (l: number, t: number, w: number, h: number) => `<a:xfrm><a:off x="${Math.round(l * sx)}" y="${Math.round(t * sy)}"/><a:ext cx="${Math.max(1, Math.round(w * sx))}" cy="${Math.max(1, Math.round(h * sy))}"/></a:xfrm>`;
-    const { rects, other } = pdf ? pageRectangles(pdf, page.pageNumber) : { rects: [], other: 0 };
+    const objects = pageObjects(pdf, page.pageNumber);
+    const { rects, other } = objects;
     otherShapes += other;
+    // Text runs under a point (fractions of the shown page): the colour and paint position of the text there.
+    const runAt = (fx: number, fy: number) => objects.runs.find((r) => fx >= r.shown.x - 0.002 && fx <= r.shown.x + r.shown.width + 0.002 && fy >= r.shown.y - 0.002 && fy <= r.shown.y + r.shown.height + 0.002);
+    // Images keep their paint position when the content model sees the same pictures; otherwise they go above
+    // the rectangles and below the text, as before.
+    const imageZ = (k: number) => objects.images.length === page.images.length ? objects.images[k].z : 1e9 + k;
     for (const rect of rects) {
       const fill = rect.fill ? `<a:solidFill><a:srgbClr val="${hex(rect.fill)}"/></a:solidFill>` : '<a:noFill/>';
       const line = rect.stroke ? `<a:ln w="${Math.round(rect.width * EMU)}"><a:solidFill><a:srgbClr val="${hex(rect.stroke)}"/></a:solidFill></a:ln>` : '<a:ln><a:noFill/></a:ln>';
-      shapes.push(`<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Rectangle ${id++}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${xfrm(rect.shown.x * page.width, rect.shown.y * page.height, rect.shown.width * page.width, rect.shown.height * page.height)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${fill}${line}</p:spPr></p:sp>`);
+      shapes.push({ z: rect.z, xml: `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Rectangle ${id++}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${xfrm(rect.shown.x * page.width, rect.shown.y * page.height, rect.shown.width * page.width, rect.shown.height * page.height)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${fill}${line}</p:spPr></p:sp>` });
     }
     page.images.forEach((image, k) => {
       imageCount++;
       const name = `image${n}-${k + 1}.png`;
       files[`ppt/media/${name}`] = encodePng(image.image);
       rels.push(`<Relationship Id="rIdImg${k + 1}" Type="${officeRel}image" Target="../media/${name}"/>`);
-      shapes.push(`<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="Picture ${id++}" descr="Page ${page.pageNumber} image ${k + 1}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr>`
-        + `<p:blipFill><a:blip r:embed="rIdImg${k + 1}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${xfrm(image.x, image.y, image.width, image.height)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`);
+      shapes.push({ z: imageZ(k), xml: `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="Picture ${id++}" descr="Page ${page.pageNumber} image ${k + 1}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr>`
+        + `<p:blipFill><a:blip r:embed="rIdImg${k + 1}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${xfrm(image.x, image.y, image.width, image.height)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>` });
     });
     // Text boxes: consecutive lines that share a left edge and size become one box.
     const groups: ReturnType<typeof linesOf>[] = [];
@@ -191,11 +204,18 @@ export async function pdfToPptx(pages: PageStructure[], pdfBytes: Uint8Array | n
       boxes++;
       const left = Math.min(...group.map((l) => l.x)), right = Math.max(...group.map((l) => l.end));
       const top = group[0].y - group[0].size * 0.95, bottom = group[group.length - 1].y + group[group.length - 1].size * 0.3;
-      const paras = group.map((l) => `<a:p>${l.cells.map((c, i) => `<a:r><a:rPr lang="en-US" sz="${Math.round(l.size * 100)}"${c.bold ? ' b="1"' : ''}${c.italic ? ' i="1"' : ''} dirty="0"><a:latin typeface="Arial"/></a:rPr><a:t>${x((i ? '\t' : '') + c.text)}</a:t></a:r>`).join('')}</a:p>`).join('');
-      shapes.push(`<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Text ${id++}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>${xfrm(left, top, Math.max(right - left, 4) * 1.06, bottom - top)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>`
-        + `<p:txBody><a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="t"><a:noAutofit/></a:bodyPr><a:lstStyle/>${paras}</p:txBody></p:sp>`);
+      let z = 2e9;
+      const paras = group.map((l) => `<a:p>${l.cells.map((c, i) => {
+        // The run drawn at the middle of the cell gives the text its colour and the box its place in the paint order.
+        const run = runAt((c.x + c.end) / 2 / page.width, (l.y - l.size * 0.3) / page.height);
+        if (run) z = Math.min(z, run.z);
+        const color = run ? `<a:solidFill><a:srgbClr val="${hex(run.fill)}"/></a:solidFill>` : '';
+        return `<a:r><a:rPr lang="en-US" sz="${Math.round(l.size * 100)}"${c.bold ? ' b="1"' : ''}${c.italic ? ' i="1"' : ''} dirty="0">${color}<a:latin typeface="Arial"/></a:rPr><a:t>${x((i ? '\t' : '') + c.text)}</a:t></a:r>`;
+      }).join('')}</a:p>`).join('');
+      shapes.push({ z, xml: `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Text ${id++}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>${xfrm(left, top, Math.max(right - left, 4) * 1.06, bottom - top)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>`
+        + `<p:txBody><a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="t"><a:noAutofit/></a:bodyPr><a:lstStyle/>${paras}</p:txBody></p:sp>` });
     }
-    files[`ppt/slides/slide${n}.xml`] = enc(`${XML}<p:sld ${ns}><p:cSld><p:spTree>${spTree}${shapes.join('')}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`);
+    files[`ppt/slides/slide${n}.xml`] = enc(`${XML}<p:sld ${ns}><p:cSld><p:spTree>${spTree}${shapes.sort((a, b) => a.z - b.z).map((shape) => shape.xml).join('')}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`);
     files[`ppt/slides/_rels/slide${n}.xml.rels`] = enc(`${XML}<Relationships xmlns="${relsNS}">${rels.join('')}</Relationships>`);
   });
   const count = pages.length;

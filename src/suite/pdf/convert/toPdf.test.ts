@@ -398,3 +398,40 @@ describe('conversion edge cases, round 9', () => {
     expect((await read(result.bytes)).map((p) => p.text)).toEqual(['Inside']);
   });
 });
+
+describe('conversion edge cases, round 10', () => {
+  it('looks up one-bit palette TIFF pixels in the colour map', () => {
+    // A 2×1 uncompressed TIFF: index 0 is red and index 1 is blue.
+    const entries: [number, number, number][] = [[256, 3, 2], [257, 3, 1], [258, 3, 1], [259, 3, 1], [262, 3, 3], [273, 4, 0], [277, 3, 1], [278, 3, 1], [279, 4, 1], [320, 3, 0]];
+    const ifd = 8, mapAt = ifd + 2 + entries.length * 12 + 4, stripAt = mapAt + 12;
+    const bytes = new Uint8Array(stripAt + 1); const v = new DataView(bytes.buffer);
+    bytes.set([0x49, 0x49]); v.setUint16(2, 42, true); v.setUint32(4, ifd, true); v.setUint16(ifd, entries.length, true);
+    entries.forEach(([tag, type, value], i) => {
+      const e = ifd + 2 + i * 12;
+      v.setUint16(e, tag, true); v.setUint16(e + 2, type, true); v.setUint32(e + 4, tag === 320 ? 6 : 1, true);
+      if (tag === 320) v.setUint32(e + 8, mapAt, true); else if (tag === 273) v.setUint32(e + 8, stripAt, true); else if (type === 3) v.setUint16(e + 8, value, true); else v.setUint32(e + 8, value, true);
+    });
+    [65535, 0, 0, 0, 0, 65535].forEach((c, k) => v.setUint16(mapAt + k * 2, c, true)); // red: 1, 0; green: 0, 0; blue: 0, 1
+    bytes[stripAt] = 0b01000000;
+    const [page] = decodeTiff(bytes);
+    expect([...page.data]).toEqual([255, 0, 0, 255, 0, 0, 255, 255]);
+  });
+
+  it('prints nothing from an HTML body hidden by display:none', async () => {
+    const result = await htmlToPdf('<body style="display:none"><p>Hidden body content</p></body>', { pageSize: 'a4', landscape: false, margin: 36 });
+    expect((await read(result.bytes)).map((p) => p.text).join('')).toBe('');
+  });
+
+  it('bounds a sheet-sized merged range by the conversion limits', async () => {
+    const S = 'xmlns="m" xmlns:r="r"';
+    const xlsx = zipSync({
+      'xl/workbook.xml': strToU8(`<workbook ${S}><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>`),
+      'xl/_rels/workbook.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>'),
+      'xl/worksheets/sheet1.xml': strToU8(`<worksheet ${S}><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Merged</t></is></c></row><row r="3"><c r="A3" t="inlineStr"><is><t>Below</t></is></c></row></sheetData><mergeCells><mergeCell ref="B5:XFD1048576"/><mergeCell ref="A1:B1"/></mergeCells></worksheet>`),
+    });
+    const started = Date.now();
+    const result = await xlsxToPdf(xlsx, { pageSize: 'letter', orientation: 'sheet', gridlines: 'sheet', sheets: 'all' });
+    expect(Date.now() - started).toBeLessThan(5000);
+    expect((await read(result.bytes))[0].text).toBe('Merged Below');
+  }, 20000);
+});

@@ -16,6 +16,7 @@ export interface SheetPdfOptions { pageSize: Exclude<PageSizeName, 'image'>; ori
 const colIndex = (ref: string) => [...(ref.match(/[A-Z]+/)?.[0] ?? 'A')].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0) - 1;
 const rowIndex = (ref: string) => Number(ref.match(/\d+/)?.[0] ?? '1') - 1;
 /** A1-style range. Whole columns (A:B) and whole rows (2:4) span the sheet's used extent on the missing axis. */
+const MAX_ROWS = 20000, MAX_COLS = 500;
 const rangeOf = (ref: string, used = { maxC: 0, maxR: 0 }) => {
   const [a, b = a] = ref.replace(/\$/g, '').split(':');
   const wholeColumns = /^[A-Z]+$/i.test(a) && /^[A-Z]+$/i.test(b), wholeRows = /^\d+$/.test(a) && /^\d+$/.test(b);
@@ -153,7 +154,7 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
     for (const c of all(ws, 'c')) {
       const ref = c.attrs.r; if (!ref) continue;
       const [r, col] = [rowIndex(ref), colIndex(ref)];
-      if (r > 20000 || col > 500) { if (child(c, 'v') || child(c, 'is')) counts.beyond++; continue; }
+      if (r >= MAX_ROWS || col >= MAX_COLS) { if (child(c, 'v') || child(c, 'is')) counts.beyond++; continue; }
       const v = child(c, 'v') ? textOf(child(c, 'v')!) : ''; const s = Number(c.attrs.s ?? 0);
       if (child(c, 'f') && !child(c, 'v')) counts.formulas++;
       const type = c.attrs.t ?? 'n';
@@ -163,13 +164,20 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
       cells.set(`${r},${col}`, { text, style: s, numeric: type === 'n' && v !== '' });
       maxR = Math.max(maxR, r); maxC = Math.max(maxC, col);
     }
+    // Merged ranges are clipped to the conversion limits, so a sheet-sized merge (A1:XFD1048576) costs no more than
+    // the cells it can show. Cells covered by a merge are found per row from the merges active on it, never enumerated.
+    const merges = all(ws, 'mergeCell').map((cell) => rangeOf(cell.attrs.ref))
+      .filter((m) => m.r1 < MAX_ROWS && m.c1 < MAX_COLS && m.r2 >= m.r1 && m.c2 >= m.c1)
+      .map((m) => ({ ...m, r2: Math.min(m.r2, MAX_ROWS - 1), c2: Math.min(m.c2, MAX_COLS - 1) }))
+      .sort((a, b) => a.r1 - b.r1);
+    const anchors = new Map(merges.map((m) => [`${m.r1},${m.c1}`, m]));
     // A merged cell whose anchor is the last used cell still spans its whole range when printed.
-    for (const m of all(ws, 'mergeCell').map((cell) => rangeOf(cell.attrs.ref))) {
+    for (const m of merges) {
       if (cells.has(`${m.r1},${m.c1}`)) { maxR = Math.max(maxR, m.r2); maxC = Math.max(maxC, m.c2); }
     }
     // A print area may list several ranges (Sheet1!$A$1:$B$9,Sheet1!$D$1:$E$9): each prints in turn, on its own pages.
     const areaRefs = printAreas.has(sheetIndex) ? splitOutsideQuotes(printAreas.get(sheetIndex)!).map((part) => part.replace(/^\s*(?:'(?:[^']|'')*'|[^'!]*)!/, '').trim()).filter(Boolean) : [];
-    const areaList = areaRefs.length ? areaRefs.map((ref) => rangeOf(ref, { maxC, maxR })) : [{ c1: 0, r1: 0, c2: maxC, r2: maxR }];
+    const areaList = areaRefs.length ? areaRefs.map((ref) => rangeOf(ref, { maxC, maxR })).map((a) => ({ ...a, r2: Math.min(a.r2, MAX_ROWS - 1), c2: Math.min(a.c2, MAX_COLS - 1) })) : [{ c1: 0, r1: 0, c2: maxC, r2: maxR }];
     if (areaRefs.length) areas.push(`${sheet.attrs.name} (${areaRefs.join(', ')})`);
     if (!cells.size && !printAreas.has(sheetIndex)) continue;
     rendered++;
@@ -181,9 +189,6 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
       else if (row.attrs.ht) heights.set(Number(row.attrs.r) - 1, Number(row.attrs.ht));
     }
     const colW = (c: number) => widths.get(c) ?? 64 * 0.75 + 0.5, rowH = (r: number) => heights.get(r) ?? 15;
-    const merges = all(ws, 'mergeCell').map((m) => rangeOf(m.attrs.ref));
-    const covered = new Set<string>();
-    for (const m of merges) for (let r = m.r1; r <= m.r2; r++) for (let c = m.c1; c <= m.c2; c++) if (r !== m.r1 || c !== m.c1) covered.add(`${r},${c}`);
     const setup = all(ws, 'pageSetup')[0];
     const landscape = options.orientation === 'landscape' || (options.orientation === 'sheet' && setup?.attrs.orientation === 'landscape');
     let [pw, ph] = PAGE_SIZES[options.pageSize];
@@ -202,7 +207,10 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
     for (const cols of bands) {
       writer.newPageSized(pw, ph);
       let y = ph - margin;
+      let next = 0; let active: typeof merges = [];
       for (let r = area.r1; r <= area.r2; r++) {
+        while (next < merges.length && merges[next].r1 <= r) active.push(merges[next++]);
+        active = active.filter((m) => m.r2 >= r);
         const h = rowH(r);
         if (h === 0) continue;
         if (y - h < margin) { writer.newPageSized(pw, ph); y = ph - margin; }
@@ -212,11 +220,11 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
           if (w === 0) continue;
           const key = `${r},${c}`;
           const cell = cells.get(key); const st = styleOf(cell?.style ?? 0);
-          const merge = merges.find((m) => m.r1 === r && m.c1 === c);
+          const merge = anchors.get(key);
           const mw = merge ? cols.filter((k) => k >= merge.c1 && k <= merge.c2).reduce((n, k) => n + Math.min(colW(k), pw - 2 * margin), 0) : w;
           const mh = merge ? Array.from({ length: merge.r2 - merge.r1 + 1 }, (_, k) => rowH(merge.r1 + k)).reduce((a, b) => a + b, 0) : h;
           const page = writer.currentPage;
-          if (!covered.has(key)) {
+          if (!active.some((m) => (m.r1 !== r || m.c1 !== c) && c >= m.c1 && c <= m.c2)) {
             if (st.fill) page.drawRectangle({ x, y: y - mh, width: mw, height: mh, color: rgb(...st.fill) });
             if (cell) {
               const font = await writer.font(st.run);

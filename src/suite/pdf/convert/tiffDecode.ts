@@ -96,6 +96,8 @@ export function decodeTiff(bytes: Uint8Array): Rgba[] {
       const o = (y * width + x) * 4;
       if (bps === 1) {
         const bit = (data[y * rowBytes + (x >> 3)] >> (7 - (x & 7))) & 1;
+        // A one-bit palette image looks its two colours up in the colour map, like any other palette image.
+        if (photometric === 3 && palette) { const n = palette.length / 3; out[o] = palette[bit] >> 8; out[o + 1] = palette[n + bit] >> 8; out[o + 2] = palette[2 * n + bit] >> 8; out[o + 3] = 255; continue; }
         const value = (photometric === 0 ? 1 - bit : bit) * 255;
         out[o] = out[o + 1] = out[o + 2] = value; out[o + 3] = 255;
         continue;
