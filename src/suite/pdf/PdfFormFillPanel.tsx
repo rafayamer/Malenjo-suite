@@ -13,6 +13,11 @@ interface Props {
 }
 
 /** MAL-050 / 052 / 053: fill with live calculations, visibility and validation; save, flatten, import and export data. */
+/** The "Shown as" hint for a formatted text field, or null; a password's value is never shown in plain text. */
+export function formatHint(f: FillField, value: string, hasError: boolean): string | null {
+  return f.kind === 'text' && !f.password && f.logic.format && !f.calculated && value && !hasError ? `Shown as ${displayValue(value, f.logic)}` : null;
+}
+
 export default function PdfFormFillPanel({ domIdPrefix, bytes, sourceName, busy, onApply, onNotice, onClose }: Props) {
   const [fields, setFields] = useState<FillField[]>([]);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -103,7 +108,7 @@ export default function PdfFormFillPanel({ domIdPrefix, bytes, sourceName, busy,
         return <div key={f.name} className="pdf-form-fill-row" data-hidden={hidden || undefined}>
           <label htmlFor={id(f.name)}>{f.name}{f.required ? ' (required)' : ''}{f.calculated ? ' (calculated)' : ''}{hidden ? ' (hidden by a rule)' : ''}</label>
           {input(f)}
-          {f.kind === 'text' && f.logic.format && !f.calculated && values[f.name] && !err && <span className="pdf-form-fill-hint">Shown as {displayValue(values[f.name], f.logic)}</span>}
+          {formatHint(f, values[f.name] ?? '', Boolean(err)) && <span className="pdf-form-fill-hint">{formatHint(f, values[f.name] ?? '', Boolean(err))}</span>}
           {err && <span id={`${id(f.name)}-error`} className="pdf-tool-dialog-error">{err}</span>}
         </div>;
       })}

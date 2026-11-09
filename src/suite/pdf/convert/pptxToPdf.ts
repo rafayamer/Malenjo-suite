@@ -7,7 +7,7 @@
  * pictures (PNG/JPEG); group shapes; simple tables. Charts, SmartArt, rotation, gradients and
  * effects are reported.
  */
-import { rgb } from 'pdf-lib';
+import { clip, endPath, popGraphicsState, pushGraphicsState, rectangle, rgb } from 'pdf-lib';
 import { DEFAULT_STYLE, FlowWriter, imageInfo, type Align, type Paragraph, type Run } from './flowLayout';
 import { hexColor, relationships, unzipOffice, xml, type DocumentPdf } from './docxToPdf';
 import { all, child, kids, type XNode } from './xmlTree';
@@ -146,8 +146,17 @@ export async function pptxToPdf(bytes: Uint8Array): Promise<DocumentPdf> {
           const target = blip ? rels.get(blip.attrs['r:embed']) : undefined;
           const data = target ? files[target] : undefined; const info = data ? imageInfo(data) : null;
           if (!box || !data || !info) { counts.images++; continue; }
+          // A cropped picture (a:srcRect, in thousandths of a percent from each edge) shows only the kept part:
+          // the whole bitmap is scaled so that part fills the box, and drawing is clipped to the box.
+          const crop = child(child(node, 'p:blipFill'), 'a:srcRect');
+          const [l, t, r, b] = ['l', 't', 'r', 'b'].map((k) => Number(crop?.attrs[k] ?? 0) / 100000);
+          if (![l, t, r, b].every(Number.isFinite) || l + r >= 1 || t + b >= 1) { counts.images++; continue; }
           const image = info.format === 'png' ? await writer.pdf.embedPng(data) : await writer.pdf.embedJpg(data);
-          page.drawImage(image, { x: box.x, y: top(box.y + box.h), width: box.w, height: box.h });
+          const fullW = box.w / (1 - l - r), fullH = box.h / (1 - t - b);
+          const cropped = l || t || r || b;
+          if (cropped) page.pushOperators(pushGraphicsState(), rectangle(box.x, top(box.y + box.h), box.w, box.h), clip(), endPath());
+          page.drawImage(image, { x: box.x - l * fullW, y: top(box.y + box.h) - b * fullH, width: fullW, height: fullH });
+          if (cropped) page.pushOperators(popGraphicsState());
         } else if (node.name === 'p:grpSp') {
           const xfrm = child(child(node, 'p:grpSpPr'), 'a:xfrm');
           const [off, ext, chOff, chExt] = ['a:off', 'a:ext', 'a:chOff', 'a:chExt'].map((n) => child(xfrm, n));

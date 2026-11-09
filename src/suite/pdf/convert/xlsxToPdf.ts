@@ -183,8 +183,9 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
       const type = c.attrs.t ?? 'n';
       const st = styleOf(s);
       const text = type === 's' ? shared[Number(v)] ?? '' : type === 'inlineStr' ? all(c, 't').map(textOf).join('') : type === 'b' ? (v === '1' ? 'TRUE' : 'FALSE') : type === 'str' || type === 'e' ? v : formatValue(v, numFmts.get(st.numFmtId) ?? '', st.numFmtId, date1904);
-      if (!text) continue;
-      cells.set(`${r},${col}`, { text, style: s, numeric: type === 'n' && v !== '' });
+      // A blank cell is still printed when it has a fill, and counts toward the printed extent.
+      if (!text && !st.fill) continue;
+      cells.set(`${r},${col}`, { text, style: s, numeric: Boolean(text) && type === 'n' && v !== '' });
       maxR = Math.max(maxR, r); maxC = Math.max(maxC, col);
     }
     // Merged ranges are clipped to the conversion limits, so a sheet-sized merge (A1:XFD1048576) costs no more than

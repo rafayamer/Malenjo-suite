@@ -128,7 +128,8 @@ export async function pdfToSvg(bytes: Uint8Array, pages: number[], title: string
       const paint = path.paint;
       const fill = /^[fFbB]/.test(paint) ? path.fill : 'none';
       const stroke = /^[sSbB]/.test(paint) ? path.stroke : 'none';
-      if (/^[sb]$/.test(paint)) d.push('Z');
+      // s, b and b* close the path before painting (so the stroke closes too).
+      if (/^(s|b\*?)$/.test(paint)) d.push('Z');
       items.push({ at: path.startIndex, svg: `<path d="${d.join('')}" transform="${mat(path.ctm)}" fill="${fill}"${paint.endsWith('*') ? ' fill-rule="evenodd"' : ''} stroke="${stroke}"${stroke !== 'none' ? ` stroke-width="${r(path.lineWidth || 1)}"` : ''}/>` });
     }
     for (const run of model.runs) {

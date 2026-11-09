@@ -211,6 +211,14 @@ describe('SVG export (MAL-043)', () => {
     expect(result.notes).not.toContain('Every graphic on these pages was converted.');
   });
 
+  it('closes a path painted with b* so its outline closes too', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([300, 300]);
+    page.node.addContentStream(pdf.context.register(pdf.context.stream('0 0 1 RG 1 0 0 rg 0 0 m 100 0 l 100 100 l b*')));
+    const svg = text((await pdfToSvg(await pdf.save(), [1], 'triangle')).files[0].bytes);
+    expect(svg).toMatch(/<path d="M0 0L100 0L100 100Z"[^>]*fill-rule="evenodd"/);
+  });
+
   it('leaves invisible text out of the SVG and outlines stroked text', async () => {
     const pdf = await PDFDocument.create();
     const page = pdf.addPage([300, 300]);

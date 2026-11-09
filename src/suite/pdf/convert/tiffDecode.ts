@@ -102,6 +102,10 @@ export function decodeTiff(bytes: Uint8Array): Rgba[] {
     if (tag(284, 1) !== 1 && spp > 1) throw new Error('TIFF images with separate colour planes are not supported.');
     if (![1, 8].includes(bps)) throw new Error(`TIFF images with ${bps} bits per sample are not supported.`);
     if (![0, 1, 2, 3].includes(photometric)) throw new Error('This TIFF colour model (for example CMYK or YCbCr) is not supported.');
+    // Samples per pixel must fit the colour model (grey or palette, optionally with alpha; RGB, optionally with alpha),
+    // so the decoded size is bounded by the pixel limit before anything is allocated.
+    const allowed = photometric === 2 ? [3, 4] : photometric === 3 ? [1] : [1, 2];
+    if (!allowed.includes(spp)) throw new Error(`TIFF images with ${spp} samples per pixel in this colour model are not supported.`);
     const rowBytes = Math.ceil((width * spp * bps) / 8);
     const rowsPerStrip = tag(278, height)!;
     const offsets = tags.get(273) ?? [], counts = tags.get(279) ?? [];

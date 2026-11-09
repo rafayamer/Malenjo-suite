@@ -551,3 +551,49 @@ describe('conversion edge cases, round 14', () => {
     expect(content).toMatch(/BT\n0\.5 0\.5 0\.5 rg/); // black lightened by half
   });
 });
+
+describe('conversion edge cases, round 15', () => {
+  it('refuses TIFF sample counts outside the colour model before allocating', () => {
+    // A 1000×1000 grey TIFF header claiming 1024 samples per pixel (over 1 GB decoded), with no image data.
+    const entries: [number, number, number][] = [[256, 3, 1000], [257, 3, 1000], [258, 3, 8], [259, 3, 1], [262, 3, 1], [273, 4, 0], [277, 3, 1024], [278, 3, 1000], [279, 4, 0]];
+    const ifd = 8; const bytes = new Uint8Array(ifd + 2 + entries.length * 12 + 4); const v = new DataView(bytes.buffer);
+    bytes.set([0x49, 0x49]); v.setUint16(2, 42, true); v.setUint32(4, ifd, true); v.setUint16(ifd, entries.length, true);
+    entries.forEach(([tag, type, value], i) => {
+      const e = ifd + 2 + i * 12;
+      v.setUint16(e, tag, true); v.setUint16(e + 2, type, true); v.setUint32(e + 4, 1, true);
+      if (type === 3) v.setUint16(e + 8, value, true); else v.setUint32(e + 8, value, true);
+    });
+    expect(() => decodeTiff(bytes)).toThrow(/1024 samples per pixel/);
+  });
+
+  it('prints blank worksheet cells that have a fill', async () => {
+    const S = 'xmlns="m" xmlns:r="r"';
+    const xlsx = zipSync({
+      'xl/workbook.xml': strToU8(`<workbook ${S}><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>`),
+      'xl/_rels/workbook.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>'),
+      'xl/styles.xml': strToU8('<styleSheet><fonts><font><sz val="11"/></font></fonts><fills><fill/><fill/><fill><patternFill patternType="solid"><fgColor rgb="FFFF0000"/></patternFill></fill></fills><cellXfs><xf fontId="0" fillId="0"/><xf fontId="0" fillId="2"/></cellXfs></styleSheet>'),
+      'xl/worksheets/sheet1.xml': strToU8(`<worksheet ${S}><sheetData><row r="1"><c r="A1" s="1"/></row></sheetData></worksheet>`),
+    });
+    const result = await xlsxToPdf(xlsx, { pageSize: 'letter', orientation: 'sheet', gridlines: 'sheet', sheets: 'all' });
+    const { PDFDocument } = await import('pdf-lib');
+    const { pageContentBytes } = await import('../content/contentModel');
+    expect(new TextDecoder('latin1').decode(pageContentBytes(await PDFDocument.load(result.bytes), 0))).toMatch(/1 0 0 rg[\s\S]*?\nf\n/);
+  });
+
+  it('crops a PowerPoint picture by its source rectangle', async () => {
+    const A = 'xmlns:a="a" xmlns:p="p" xmlns:r="r"';
+    const pptx = zipSync({
+      'ppt/presentation.xml': strToU8(`<p:presentation ${A}><p:sldIdLst><p:sldId id="256" r:id="rId1"/></p:sldIdLst><p:sldSz cx="9144000" cy="5143500"/></p:presentation>`),
+      'ppt/_rels/presentation.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="slides/slide1.xml"/></Relationships>'),
+      'ppt/slides/slide1.xml': strToU8(`<p:sld ${A}><p:cSld><p:spTree><p:pic><p:blipFill><a:blip r:embed="rId5"/><a:srcRect l="50000"/></p:blipFill><p:spPr><a:xfrm><a:off x="1270000" y="1270000"/><a:ext cx="1270000" cy="635000"/></a:xfrm></p:spPr></p:pic></p:spTree></p:cSld></p:sld>`),
+      'ppt/slides/_rels/slide1.xml.rels': strToU8('<Relationships><Relationship Id="rId5" Target="../media/a.png"/></Relationships>'),
+      'ppt/media/a.png': encodePng(rgba(4, 2, [0, 0, 255, 255])),
+    });
+    const result = await pptxToPdf(pptx);
+    const { PDFDocument } = await import('pdf-lib');
+    const { pageContentBytes } = await import('../content/contentModel');
+    const content = new TextDecoder('latin1').decode(pageContentBytes(await PDFDocument.load(result.bytes), 0));
+    // Clipped to the 100 × 50 pt box at (100, 255); the whole picture is drawn 200 pt wide, starting 100 pt to the left.
+    expect(content).toMatch(/100 255 100 50 re\s+W\s+n\s+q\s+1 0 0 1 0 255 cm[\s\S]*?200 0 0 50 0 0 cm/);
+  });
+});
