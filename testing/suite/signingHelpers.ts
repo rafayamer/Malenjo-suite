@@ -6,6 +6,8 @@ import { join, resolve } from 'node:path';
 import type { Transport } from '../../src/suite/pdf/signing/cms';
 
 export const PKI = resolve(__dirname, 'fixtures/signatures/pki');
+/** The OpenSSL-backed checks run where OpenSSL is on the path (the Linux CI jobs); elsewhere they are skipped. */
+export const HAS_OPENSSL = (() => { if (process.platform === 'win32') return false; try { execFileSync('openssl', ['version'], { stdio: 'pipe' }); return true; } catch { return false; } })();
 export const pki = (name: string) => new Uint8Array(readFileSync(join(PKI, name)));
 
 /** Answers timestamp requests with `openssl ts -reply` and serves the CA's CRL, like a TSA and a CRL server would. */

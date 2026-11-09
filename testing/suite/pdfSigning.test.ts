@@ -5,7 +5,7 @@ import { appendUpdate, nextObjectNumber, serialize, signPdf, type PadesProfile }
 import { verifyPdfSignatures } from '../../src/suite/pdf/signing/pdfVerify';
 import { readCertificateFile } from '../../src/suite/pdf/signing/x509';
 import { PDFName } from 'pdf-lib';
-import { opensslTransport, opensslVerify, pki, pyhankoValidate } from './signingHelpers';
+import { HAS_OPENSSL, opensslTransport, opensslVerify, pki, pyhankoValidate } from './signingHelpers';
 
 async function doc(objectStreams: boolean) {
   const pdf = await PDFDocument.create();
@@ -23,7 +23,7 @@ describe('Certificate-based PDF signing (MAL-065)', () => {
   });
 
   for (const [profile, objectStreams, p12] of [['B-B', false, 'signer.p12'], ['B-T', true, 'signer-ec.p12'], ['B-LT', true, 'signer.p12'], ['B-LTA', false, 'signer.p12']] as [PadesProfile, boolean, string][]) {
-    it(`signs at PAdES ${profile} (${objectStreams ? 'cross-reference stream' : 'classic cross-reference'}, ${p12}), verified by OpenSSL and pyHanko`, async () => {
+    it.skipIf(!HAS_OPENSSL)(`signs at PAdES ${profile} (${objectStreams ? 'cross-reference stream' : 'classic cross-reference'}, ${p12}), verified by OpenSSL and pyHanko`, async () => {
       const log: string[] = [];
       const identity = await readPkcs12(pki(p12), 'test-pass');
       const source = await doc(objectStreams);
@@ -42,7 +42,7 @@ describe('Certificate-based PDF signing (MAL-065)', () => {
     });
   }
 
-  it('validates signatures: level, trust, timestamps, revocation and changes after signing', async () => {
+  it.skipIf(!HAS_OPENSSL)('validates signatures: level, trust, timestamps, revocation and changes after signing', async () => {
     const trusted = readCertificateFile(pki('ca.pem'));
     const identity = await readPkcs12(pki('signer.p12'), 'test-pass');
     const { bytes: lta } = await signPdf(await doc(true), identity, { profile: 'B-LTA', tsaUrl: TSA, transport: opensslTransport(), reason: 'Approval' });

@@ -13,7 +13,7 @@ concurrency:
 jobs:
   pdf-ui-browser-linux:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -69,6 +69,10 @@ jobs:
         run: node scripts/pdf-phase4-redact-acceptance.mjs
       - name: Phase 4 review acceptance (stamps, measurement, compare, preflight) with independent reopen
         run: node scripts/pdf-phase4-review-acceptance.mjs
+      - name: Install pyHanko, the independent PAdES validator for the signing acceptance
+        run: python3 -m pip install --user --break-system-packages pyhanko-cli==0.6.0 pyHanko==0.38.1
+      - name: Phase 4 digital-signature acceptance (PAdES B-LTA signing, validation) with OpenSSL and pyHanko checks
+        run: PATH="$HOME/.local/bin:$PATH" node scripts/pdf-phase4-signing-acceptance.mjs
       - name: Publish Phase 3 light/dark visual review screenshots
         if: success()
         uses: actions/upload-artifact@v4

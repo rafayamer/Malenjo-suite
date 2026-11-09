@@ -193,3 +193,13 @@ export async function exportPdfPartsZip(name:string,bytes:Uint8Array):Promise<bo
   if(!/\.zip$/i.test(destination))throw new Error('PDF archive destination must use .zip.');
   return invoke<boolean>('write_pdf_tool_output',{destination,bytes:Array.from(copy)});
 }
+
+/** Network for PDF signing (timestamps, revocation lists): the desktop app's own client, else the browser's fetch. */
+export async function signingHttp(request:{method:'GET'|'POST';url:string;body?:Uint8Array;contentType?:string}):Promise<Uint8Array>{
+  if(!isTauri()){
+    const response=await fetch(request.url,{method:request.method,body:request.body?request.body.slice().buffer as ArrayBuffer:undefined,headers:request.contentType?{'Content-Type':request.contentType}:undefined});
+    if(!response.ok)throw new Error(`${new URL(request.url).host} answered ${response.status}.`);
+    return new Uint8Array(await response.arrayBuffer());
+  }
+  return Uint8Array.from(await invoke<number[]>('pdf_signing_http',{method:request.method,url:request.url,body:request.body?Array.from(request.body):null,contentType:request.contentType??null}));
+}

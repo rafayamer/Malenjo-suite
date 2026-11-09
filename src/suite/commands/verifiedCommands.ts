@@ -42,6 +42,7 @@ export const VERIFIED_EVIDENCE_SCRIPTS = [
   'scripts/pdf-phase4-security-acceptance.mjs',
   'scripts/pdf-phase4-redact-acceptance.mjs',
   'scripts/pdf-phase4-review-acceptance.mjs',
+  'scripts/pdf-phase4-signing-acceptance.mjs',
 ] as const;
 
 export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Object.freeze([
@@ -339,6 +340,11 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     id: 'MAL-064', workspaceTab: 'Protect',
     guidance: 'In Redact…, choose what to look for (names, addresses and postcodes, email addresses, phone numbers, national identity numbers, payment cards, IBANs, dates of birth, and your own phrases or /patterns/), Find candidates, untick any you want to keep, and mark the rest. Detection runs on this device and is rule-based (patterns, check digits such as Luhn and mod 97, and name and address cues), not a learned model; review every candidate. Scanned pages need OCR first.',
     evidence: ['MAL-064 privately detect candidate identifiers, financial data, names and addresses for reviewed redaction'],
+  },
+  {
+    id: 'MAL-065', workspaceTab: 'Protect',
+    guidance: 'Choose Digital signatures…, pick your signing certificate (.p12 or .pfx) and enter its password, choose PAdES B-B, B-T (trusted timestamp from the RFC 3161 timestamp authority you name), B-LT (plus embedded certificates and revocation lists) or B-LTA (plus an archive timestamp), optionally draw a visible signature box, and Sign and save a copy. Under Validate, add the certificates you trust and Check signatures: each signature shows integrity, signer and chain, trusted time, revocation, changes after signing and its PAdES level. RSA and elliptic-curve keys; certificate files must use AES encryption (current OpenSSL, Windows and macOS exports).',
+    evidence: ['MAL-065 certificate-based signing with a trusted timestamp at PAdES B-LTA, validated independently and in the app'],
   },
   {
     id: 'MAL-067', workspaceTab: 'Protect',

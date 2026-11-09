@@ -137,7 +137,8 @@ import PdfPreflightDialog from './PdfPreflightDialog';
 import PdfMeasurePanel, { NEW_MEASURE_STATE, type MeasureState } from './PdfMeasurePanel';
 import PdfDynamicStampPanel, { type StampPlacing } from './PdfDynamicStampPanel';
 import { addDynamicStamp } from './pdfDynamicStamp';
-import { boxToShown, frameOf, shownToBox } from './security/pdfRedact';
+import PdfSignaturePanel, { type SignatureBoxState } from './PdfSignaturePanel';
+import { boxToShown, frameOf, pdfPageFrames, shownToBox } from './security/pdfRedact';
 import PdfMarkupPanel, { MARKUP_AUTHOR, type MarkupSettings } from './PdfMarkupPanel';
 import PdfTextEditPanel, { type TextEditState } from './PdfTextEditPanel';
 import PdfFindReplaceDialog from './PdfFindReplaceDialog';
@@ -431,7 +432,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   useEffect(() => { setOverflowOpen(false); }, [masterTab]);
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
   // MAL-001 / 002 / 009 / 010 dialogs; focus returns to the control that opened them.
-  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup'|'text-edit'|'find'|'objects'|'paragraphs'|'form-design'|'form-fill'|'export'|'office-convert'|'create-pdf'|'protect'|'unlock'|'sanitize'|'redact'|'bates-files'|'compare'|'preflight'|'measure'|'stamps';
+  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup'|'text-edit'|'find'|'objects'|'paragraphs'|'form-design'|'form-fill'|'export'|'office-convert'|'create-pdf'|'protect'|'unlock'|'sanitize'|'redact'|'bates-files'|'compare'|'preflight'|'measure'|'stamps'|'signatures';
   const [paragraphState,setParagraphState]=useState<ParagraphEditState|null>(null);
   const [formDesign,setFormDesign]=useState<FormDesignState|null>(null);
   const [exportRegion,setExportRegion]=useState<ExportRegion|null>(null);
@@ -447,6 +448,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   const [redactState,setRedactState]=useState<RedactState|null>(null);
   const [measureState,setMeasureState]=useState<MeasureState>(NEW_MEASURE_STATE);
   const [stampPlacing,setStampPlacing]=useState<StampPlacing|null>(null);
+  const [signatureBox,setSignatureBox]=useState<SignatureBoxState>({picking:false});
+  const [signatureFrames,setSignatureFrames]=useState<Awaited<ReturnType<typeof pdfPageFrames>>>([]);
   const [markupSettings,setMarkupSettings]=useState<MarkupSettings>({tool:null,style:{color:'#e0b000',opacity:0.6,width:2},text:''});
   const openToolDialog=(kind:ToolDialog)=>{
     toolDialogOpenerRef.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
@@ -458,6 +461,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
     setRedactState(null);
     setMeasureState(current=>({...current,active:false,points:[],pageNumber:null}));
     setStampPlacing(null);
+    setSignatureBox({picking:false});
     const opener=toolDialogOpenerRef.current;toolDialogOpenerRef.current=null;
     window.requestAnimationFrame(()=>{if(opener?.isConnected)opener.focus();});
   };
@@ -2770,6 +2774,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {id:'unlock-pdf',label:'Remove protection…',enabled:!!sourceBytes&&encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'This PDF is not protected.',run:()=>openToolDialog('unlock')},
       {id:'redact-pdf',label:'Redact…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('redact')},
       {id:'bates-files',label:'Bates numbering across files…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>openToolDialog('bates-files')},
+      {id:'digital-signatures',label:'Digital signatures…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'Remove the PDF password first.',run:()=>{if(sourceBytes)void pdfPageFrames(sourceBytes).then(setSignatureFrames).catch(()=>setSignatureFrames([]));openToolDialog('signatures');}},
       {id:'preflight',label:'Preflight…',enabled:!!sourceBytes,disabledReason:'No PDF is loaded.',run:()=>openToolDialog('preflight')},
       {id:'sanitize-pdf',label:'Sanitize…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('sanitize')},
       navigateAction('Open Security Center','security'),
@@ -3054,6 +3059,8 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       {toolDialog==='compare'&&sourceBytes&&<PdfCompareDialog domIdPrefix={domIdPrefix} sourceName={sourceName||'document.pdf'} getBytes={()=>currentPdfBytesRef.current}
         revisions={(historyRef.current?.entries??[]).map((entry,index)=>({index,label:index===0&&!historyRef.current!.baselineEvicted?'Opened document':entry.label,bytes:entry.bytes})).filter(r=>r.index<(historyRef.current?.cursor??0))}
         onClose={closeToolDialog}/>}
+      {toolDialog==='signatures'&&sourceBytes&&<PdfSignaturePanel domIdPrefix={domIdPrefix} sourceName={sourceName||'document.pdf'} getBytes={()=>currentPdfBytesRef.current} busy={mutating}
+        box={signatureBox} onBox={setSignatureBox} onOpenPdfs={onOpenConversionOutputs} onNotice={setActionNotice} onClose={closeToolDialog}/>}
       {toolDialog==='preflight'&&sourceBytes&&<PdfPreflightDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} sourceName={sourceName||'document.pdf'} onClose={closeToolDialog}/>}
       {toolDialog==='stamps'&&sourceBytes&&<PdfDynamicStampPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} sourceName={sourceName||'document.pdf'} busy={mutating} defaultUser={MARKUP_AUTHOR}
         placing={stampPlacing} onPlacing={setStampPlacing} onClose={closeToolDialog}/>}
@@ -3624,7 +3631,11 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
               })()
               :toolDialog==='text-edit'&&textEditState&&textEditState.pageNumber===page?{targets:textEditState.runs,selected:textEditState.selected,
                 onSelect:id=>setTextEditState(current=>current?{...current,selected:id}:current)}:null}
-              drawTool={toolDialog==='measure'&&measureState.active?{kind:'Note',color:measureState.color,busy:mutating,label:'Click to place measurement points',
+              drawTool={toolDialog==='signatures'&&signatureBox.picking&&signatureFrames[page-1]?{kind:'Square',color:'#1f5ba0',busy:false,label:'Drag to draw the signature box',onShape:shape=>{
+                if(!shape.rect)return;
+                setSignatureBox({picking:false,pageNumber:page,box:shownToBox(frameOf(signatureFrames[page-1],rotation),shape.rect)});
+              }}
+              :toolDialog==='measure'&&measureState.active?{kind:'Note',color:measureState.color,busy:mutating,label:'Click to place measurement points',
                 placed:measureState.pageNumber===page?measureState.points:[],onShape:shape=>{
                 const point=shape.points?.[0];if(!point)return;
                 setMeasureState(current=>current.pageNumber===null||current.pageNumber===page?{...current,pageNumber:page,points:[...current.points,point]}:{...current,pageNumber:page,points:[point]});
