@@ -229,7 +229,8 @@ export interface FormEvaluation { values: Record<string, string>; hidden: string
 /** Runs calculations (in dependency order), visibility and validation the way a form reader would. */
 export function evaluateForm(fields: LogicField[]): FormEvaluation {
   const byName = new Map(fields.map((f) => [f.name, f]));
-  const values: Record<string, string> = Object.fromEntries(fields.map((f) => [f.name, f.value]));
+  // Prototype-free dictionaries: a field may be called __proto__ or constructor.
+  const values: Record<string, string> = Object.assign(Object.create(null) as Record<string, string>, Object.fromEntries(fields.map((f) => [f.name, f.value])));
   const numeric = (name: string) => { const f = byName.get(name); const v = values[name] ?? ''; return parseNumber(v, f?.logic.format?.kind === 'number' ? f.logic.format : undefined) ?? parseNumber(v) ?? 0; };
   for (const field of calculationOrder(fields)) {
     const calc = field.logic.calculate!;
@@ -237,7 +238,9 @@ export function evaluateForm(fields: LogicField[]): FormEvaluation {
     const result = calc.op === 'SUM' ? inputs.reduce((a, b) => a + b, 0) : calc.op === 'PRD' ? inputs.reduce((a, b) => a * b, 1)
       : calc.op === 'AVG' ? inputs.reduce((a, b) => a + b, 0) / Math.max(1, inputs.length) : calc.op === 'MIN' ? Math.min(...inputs) : Math.max(...inputs);
     const format = field.logic.format?.kind === 'number' ? field.logic.format : undefined;
-    const rounded = Number(result.toFixed(format ? format.decimals : 10));
+    // The full result is kept (as AFSimple_Calculate does); the field's format only rounds what is shown, so
+    // calculations that read this field use the exact amount. Ten places drop binary noise (0.1 + 0.2).
+    const rounded = Number(result.toFixed(10));
     // Stored with the field's own decimal separator and no grouping, so the field's locale parses it back
     // to the same amount (a "12.5" in a 1.234,56 field would otherwise read as 125).
     values[field.name] = format ? String(rounded).replace('.', SEPARATORS[format.separator][1]) : String(rounded);
@@ -247,7 +250,7 @@ export function evaluateForm(fields: LogicField[]): FormEvaluation {
     const other = values[f.logic.showWhen.field] ?? '';
     return f.logic.showWhen.value === '*' ? !other || (other === 'Off' && isButton(byName.get(f.logic.showWhen.field))) : other !== f.logic.showWhen.value;
   }).map((f) => f.name);
-  const errors: Record<string, string> = {};
+  const errors = Object.create(null) as Record<string, string>;
   for (const field of fields) {
     if (hidden.includes(field.name)) continue;
     // Required, number, date and range checks read the trimmed text; length and pattern checks read the saved value.
@@ -283,6 +286,22 @@ function validate(field: LogicField, saved: string): string | null {
 }
 
 /** Calculated fields ordered so each runs after the fields it reads; cycles are refused. */
+/** Names of calculated fields whose calculation depends, directly or through others, on itself. */
+export function cyclicCalculations(fields: { name: string; logic: FieldLogic }[]): Set<string> {
+  const deps = new Map(fields.filter((f) => f.logic.calculate).map((f) => [f.name, f.logic.calculate!.fields]));
+  const cyclic = new Set<string>();
+  for (const start of deps.keys()) {
+    const seen = new Set<string>(); const stack = [...deps.get(start)!];
+    while (stack.length) {
+      const name = stack.pop()!;
+      if (name === start) { cyclic.add(start); break; }
+      if (seen.has(name) || !deps.has(name)) continue;
+      seen.add(name); stack.push(...deps.get(name)!);
+    }
+  }
+  return cyclic;
+}
+
 export function calculationOrder<T extends { name: string; logic: FieldLogic }>(fields: T[]): T[] {
   const calculated = fields.filter((f) => f.logic.calculate);
   const byName = new Map(calculated.map((f) => [f.name, f]));

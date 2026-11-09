@@ -435,3 +435,29 @@ describe('conversion edge cases, round 10', () => {
     expect((await read(result.bytes))[0].text).toBe('Merged Below');
   }, 20000);
 });
+
+describe('conversion edge cases, round 11', () => {
+  it('leaves out an HTML picture hidden by its own attribute or style', async () => {
+    const img = `data:image/png;base64,${btoa(String.fromCharCode(...encodePng(rgba(8, 4, [255, 0, 0, 255]))))}`;
+    const result = await htmlToPdf(`<p>Text<img hidden src="${img}"><img style="display:none" src="${img}"></p>`, { pageSize: 'a4', landscape: false, margin: 36 });
+    const { PDFDocument, PDFName, PDFDict } = await import('pdf-lib');
+    const pdf = await PDFDocument.load(result.bytes);
+    expect(pdf.getPage(0).node.Resources()?.lookupMaybe(PDFName.of('XObject'), PDFDict)?.keys().length ?? 0).toBe(0);
+  });
+
+  it('turns premultiplied TIFF alpha into straight alpha', () => {
+    // A 1×1 RGBA TIFF with associated alpha: half-transparent red is stored as 128, 0, 0, 128.
+    const entries: [number, number, number, number][] = [[256, 3, 1, 1], [257, 3, 1, 1], [258, 3, 4, 0], [259, 3, 1, 1], [262, 3, 1, 2], [273, 4, 1, 0], [277, 3, 1, 4], [278, 3, 1, 1], [279, 4, 1, 4], [338, 3, 1, 1]];
+    const ifd = 8, bpsAt = ifd + 2 + entries.length * 12 + 4, stripAt = bpsAt + 8;
+    const bytes = new Uint8Array(stripAt + 4); const v = new DataView(bytes.buffer);
+    bytes.set([0x49, 0x49]); v.setUint16(2, 42, true); v.setUint32(4, ifd, true); v.setUint16(ifd, entries.length, true);
+    entries.forEach(([tag, type, count, value], i) => {
+      const e = ifd + 2 + i * 12;
+      v.setUint16(e, tag, true); v.setUint16(e + 2, type, true); v.setUint32(e + 4, count, true);
+      if (tag === 258) v.setUint32(e + 8, bpsAt, true); else if (tag === 273) v.setUint32(e + 8, stripAt, true); else if (type === 3) v.setUint16(e + 8, value, true); else v.setUint32(e + 8, value, true);
+    });
+    for (let k = 0; k < 4; k++) v.setUint16(bpsAt + k * 2, 8, true);
+    bytes.set([128, 0, 0, 128], stripAt);
+    expect([...decodeTiff(bytes)[0].data]).toEqual([255, 0, 0, 128]);
+  });
+});

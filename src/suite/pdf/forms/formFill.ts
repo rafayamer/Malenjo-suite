@@ -7,7 +7,7 @@
 import { PDFArray, PDFBool, PDFCheckBox, PDFDict, PDFDropdown, PDFName, PDFNumber, PDFOptionList, PDFRadioGroup, PDFRef, PDFSignature, PDFStream, PDFTextField, type PDFDocument, type PDFField, type PDFForm, type PDFPage } from 'pdf-lib';
 import { fillPdfFormFields, type PdfFormFieldUpdate } from '../editor';
 import { choiceOptions, loadForm, readScripts, refreshFieldAppearances, refuseSigned, saveForm } from './formDesign';
-import { evaluateForm, logicDependencies, parseLogic, type FieldLogic, type FormEvaluation, type LogicField } from './formLogic';
+import { cyclicCalculations, evaluateForm, logicDependencies, parseLogic, type FieldLogic, type FormEvaluation, type LogicField } from './formLogic';
 
 const N = PDFName.of;
 const HIDDEN = 2;
@@ -47,7 +47,7 @@ function valueOf(field: PDFField): string {
 }
 
 function fieldsOf(pdf: PDFDocument): FillField[] {
-  return pdf.getForm().getFields().map((field) => {
+  const fields: FillField[] = pdf.getForm().getFields().map((field) => {
     const logic = parseLogic(readScripts(pdf, field.acroField.dict));
     return {
       name: field.getName(), kind: kindOf(field), value: valueOf(field),
@@ -57,6 +57,13 @@ function fieldsOf(pdf: PDFDocument): FillField[] {
       concealedValue: field instanceof PDFTextField && (field.isPassword() || field.isRichFormatted()) && Boolean(field.getText()), maxLength: field instanceof PDFTextField ? field.getMaxLength() ?? null : null,
       logic, calculated: Boolean(logic.calculate), editable: field instanceof PDFDropdown && field.isEditable(),
     };
+  });
+  // A calculation that depends on itself cannot be evaluated: it is kept in the file, listed as unsupported,
+  // and the field is filled like any other, so the rest of the form still works.
+  const cyclic = cyclicCalculations(fields);
+  return fields.map((f) => !cyclic.has(f.name) ? f : {
+    ...f, calculated: false,
+    logic: { ...f.logic, calculate: undefined, unsupported: [...f.logic.unsupported, `${f.name}: its calculation depends on itself, so MALENJO does not run it`] },
   });
 }
 

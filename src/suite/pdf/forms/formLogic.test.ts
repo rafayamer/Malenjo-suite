@@ -158,4 +158,23 @@ describe('form evaluation', () => {
     // A JavaScript-only escape ("\d" means "d") is decoded as JavaScript does instead of failing to read the form.
     expect(parseLogic({ V: String.raw`AFDate_FormatEx("\d\x41");` }).format).toEqual({ kind: 'date', pattern: 'dA' });
   });
+
+  it('keeps a calculated amount exact; its format only rounds what is shown', () => {
+    const number = { kind: 'number' as const, decimals: 0, separator: 0 as const, currency: '' };
+    const result = evaluateForm([
+      { name: 'A', value: '1.4', required: false, logic: { unsupported: [] } },
+      { name: 'Two', value: '2', required: false, logic: { unsupported: [] } },
+      { name: 'Rounded', value: '', required: false, logic: { format: number, calculate: { op: 'SUM', fields: ['A'] }, unsupported: [] } },
+      { name: 'Double', value: '', required: false, logic: { calculate: { op: 'PRD', fields: ['Rounded', 'Two'] }, unsupported: [] } },
+    ]);
+    expect(result.values.Rounded).toBe('1.4');
+    expect(result.values.Double).toBe('2.8');
+    expect(displayValue(result.values.Rounded, { format: number, unsupported: [] })).toBe('1');
+  });
+
+  it('reports an error for a field named __proto__', () => {
+    const result = evaluateForm([{ name: '__proto__', value: '', required: true, logic: { unsupported: [] } }]);
+    expect(Object.keys(result.errors)).toEqual(['__proto__']);
+    expect(Object.values(result.errors)).toEqual(['__proto__ is required.']);
+  });
 });

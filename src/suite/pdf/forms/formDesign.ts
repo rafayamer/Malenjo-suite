@@ -200,7 +200,8 @@ async function refreshAppearances(pdf: PDFDocument, field: PDFField): Promise<vo
   }
   if (field instanceof PDFTextField) {
     const raw = field.getText() ?? '';
-    const shown = displayValue(raw, parseLogic(readScripts(pdf, field.acroField.dict)));
+    // A password is never drawn: its appearance shows one asterisk per character, as readers do.
+    const shown = field.isPassword() ? '*'.repeat([...raw].length) : displayValue(raw, parseLogic(readScripts(pdf, field.acroField.dict)));
     if (shown !== raw) field.setText(shown);
     try { field.defaultUpdateAppearances(font); } finally { if (shown !== raw) field.acroField.dict.set(N('V'), PDFHexString.fromText(raw)); }
   } else if (field instanceof PDFCheckBox || field instanceof PDFRadioGroup) field.defaultUpdateAppearances();

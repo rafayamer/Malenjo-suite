@@ -104,7 +104,7 @@ export async function htmlToPdf(source: string, options: HtmlPdfOptions): Promis
       if (c.name === '#text') { const text = ctx.pre ? c.text : c.text.replace(/\s+/g, ' '); if (text) runs.push({ text, style: ctx.run }); continue; }
       if (SKIP.has(c.name)) { if (!['style', 'head', 'meta', 'link', 'template', 'noscript'].includes(c.name)) skipped.set(c.name, (skipped.get(c.name) ?? 0) + 1); continue; }
       if (c.name === 'br') { runs.push({ text: '\n', style: ctx.run }); continue; }
-      if (c.name === 'img') { image(c, ctx); continue; }
+      if (c.name === 'img') { if (derive(c, ctx)) image(c, ctx); continue; } // a hidden picture is left out
       if (BLOCK.has(c.name) || c.name === 'tr' || c.name === 'td') { block(c, ctx); continue; }
       const next = derive(c, ctx); if (next) inline(c, next);
     }

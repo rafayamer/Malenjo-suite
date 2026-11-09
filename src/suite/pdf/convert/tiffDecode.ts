@@ -45,6 +45,13 @@ function packBits(input: Uint8Array, expected: number): Uint8Array {
   return out;
 }
 
+/** Turns premultiplied colour channels at `o` back into straight colour. */
+function unpremultiply(out: Uint8ClampedArray, o: number, channels: number): void {
+  const a = out[o + 3];
+  if (a === 0 || a === 255) return;
+  for (let k = 0; k < channels; k++) out[o + k] = Math.round((out[o + k] * 255) / a);
+}
+
 export function decodeTiff(bytes: Uint8Array): Rgba[] {
   if (bytes.length < 8) throw new Error('This TIFF file is empty or damaged.');
   const little = bytes[0] === 0x49 && bytes[1] === 0x49;
@@ -91,6 +98,8 @@ export function decodeTiff(bytes: Uint8Array): Rgba[] {
     });
     if (predictor === 2 && bps === 8) for (let y = 0; y < height; y++) for (let x = spp; x < rowBytes; x++) data[y * rowBytes + x] = (data[y * rowBytes + x] + data[y * rowBytes + x - spp]) & 255;
     const palette = tags.get(320);
+    // ExtraSamples 1 is associated (premultiplied) alpha; the decoded pixels are straight alpha, as PNG stores.
+    const associated = tags.get(338)?.[0] === 1;
     const out = new Uint8ClampedArray(width * height * 4);
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
       const o = (y * width + x) * 4;
@@ -103,9 +112,9 @@ export function decodeTiff(bytes: Uint8Array): Rgba[] {
         continue;
       }
       const i = y * rowBytes + x * spp;
-      if (photometric === 2) { out[o] = data[i]; out[o + 1] = data[i + 1]; out[o + 2] = data[i + 2]; out[o + 3] = spp >= 4 ? data[i + 3] : 255; }
+      if (photometric === 2) { out[o] = data[i]; out[o + 1] = data[i + 1]; out[o + 2] = data[i + 2]; out[o + 3] = spp >= 4 ? data[i + 3] : 255; if (associated && spp >= 4) unpremultiply(out, o, 3); }
       else if (photometric === 3 && palette) { const k = data[i]; const n = palette.length / 3; out[o] = palette[k] >> 8; out[o + 1] = palette[n + k] >> 8; out[o + 2] = palette[2 * n + k] >> 8; out[o + 3] = 255; }
-      else { const g = photometric === 0 ? 255 - data[i] : data[i]; out[o] = out[o + 1] = out[o + 2] = g; out[o + 3] = spp >= 2 ? data[i + 1] : 255; }
+      else { const g = photometric === 0 ? 255 - data[i] : data[i]; out[o] = out[o + 1] = out[o + 2] = g; out[o + 3] = spp >= 2 ? data[i + 1] : 255; if (associated && spp >= 2) unpremultiply(out, o, 3); }
     }
     pages.push({ width, height, data: out });
     ifd = u32(ifd + 2 + count * 12);

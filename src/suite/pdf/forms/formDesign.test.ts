@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PDFDocument, PDFName, StandardFonts, degrees } from 'pdf-lib';
+import { PDFDocument, PDFHexString, PDFName, StandardFonts, degrees } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { addFormField, deleteFormField, listFormDesign, moveFormWidget, renameFormField, updateFormField, type DesignFieldSpec } from './formDesign';
 import { evaluateFill, fillFormWithLogic, flattenFormFields, readFillForm } from './formFill';
@@ -300,5 +300,35 @@ describe('fill, flatten and data exchange (MAL-050, MAL-052, MAL-053)', () => {
     expect(fields.map((f) => [f.name, f.editable])).toEqual([['City', true], ['Size', false]]);
     const filled = await fillFormWithLogic(bytes, { City: 'Lyon' });
     expect((await readFillForm(filled.bytes)).find((f) => f.name === 'City')?.value).toBe('Lyon');
+  });
+
+  it('masks a password in a regenerated appearance', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([300, 200]);
+    const field = pdf.getForm().createTextField('PIN'); field.enablePassword(); field.setText('secret'); field.addToPage(page, { x: 20, y: 100, width: 120, height: 20 });
+    const { refreshFieldAppearances } = await import('./formDesign');
+    await refreshFieldAppearances(pdf, field);
+    const { PDFStream, PDFRawStream, decodePDFRawStream, PDFDict } = await import('pdf-lib');
+    const ap = (field.acroField.getWidgets()[0].dict.lookup(PDFName.of('AP'), PDFDict)).lookup(PDFName.of('N'));
+    const content = ap instanceof PDFRawStream ? new TextDecoder('latin1').decode(decodePDFRawStream(ap).decode()) : ap instanceof PDFStream ? new TextDecoder('latin1').decode((ap as unknown as { getUnencodedContents(): Uint8Array }).getUnencodedContents()) : '';
+    expect(content.toUpperCase()).not.toContain('736563726574'); // "secret"
+    expect(content).not.toContain('secret');
+    expect(content.toUpperCase()).toContain('2A2A2A2A2A2A'); // six asterisks
+    expect(field.getText()).toBe('secret');
+  });
+
+  it('fills a form whose calculations depend on each other, without running them', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([300, 200]);
+    const form = pdf.getForm();
+    for (const [name, other, y] of [['A', 'B', 100], ['B', 'A', 60]] as const) {
+      const f = form.createTextField(name); f.addToPage(page, { x: 20, y, width: 120, height: 20 });
+      const action = pdf.context.obj({ S: 'JavaScript', JS: PDFHexString.fromText(`AFSimple_Calculate("SUM", new Array("${other}"));`) });
+      f.acroField.dict.set(PDFName.of('AA'), pdf.context.obj({ C: action }));
+    }
+    const fields = await readFillForm(await pdf.save());
+    expect(fields.map((f) => [f.name, f.calculated])).toEqual([['A', false], ['B', false]]);
+    expect(fields[0].logic.unsupported.join(' ')).toMatch(/depends on itself/);
+    expect(evaluateFill(fields, { A: '1', B: '2' }).values).toMatchObject({ A: '1', B: '2' });
   });
 });
