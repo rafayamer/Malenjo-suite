@@ -101,6 +101,8 @@ export function decodeTiff(bytes: Uint8Array): Rgba[] {
     const compression = tag(259, 1)!, photometric = tag(262, 1)!, spp = tag(277, 1)!, bps = tag(258, 1)!, predictor = tag(317, 1)!;
     if (tag(284, 1) !== 1 && spp > 1) throw new Error('TIFF images with separate colour planes are not supported.');
     if (![1, 8].includes(bps)) throw new Error(`TIFF images with ${bps} bits per sample are not supported.`);
+    // One-bit images are read as a single grey or palette sample per pixel; one-bit colour or alpha is refused.
+    if (bps === 1 && spp !== 1) throw new Error('One-bit TIFF images with several samples per pixel (colour or alpha) are not supported.');
     if (![0, 1, 2, 3].includes(photometric)) throw new Error('This TIFF colour model (for example CMYK or YCbCr) is not supported.');
     // Samples per pixel must fit the colour model (grey or palette, optionally with alpha; RGB, optionally with alpha),
     // so the decoded size is bounded by the pixel limit before anything is allocated.
@@ -115,7 +117,7 @@ export function decodeTiff(bytes: Uint8Array): Rgba[] {
       const rows = Math.min(rowsPerStrip, height - s * rowsPerStrip);
       const expected = rows * rowBytes;
       const strip = compression === 1 ? raw : compression === 32773 ? packBits(raw, expected) : compression === 5 ? lzw(raw, expected)
-        : compression === 8 || compression === 32946 ? unzlibSync(raw) : (() => { throw new Error('This TIFF compression (for example JPEG or CCITT fax) is not supported.'); })();
+        : compression === 8 || compression === 32946 ? unzlibSync(raw, { out: new Uint8Array(expected) }) : (() => { throw new Error('This TIFF compression (for example JPEG or CCITT fax) is not supported.'); })();
       data.set(strip.subarray(0, expected), s * rowsPerStrip * rowBytes);
     });
     // FillOrder 2 stores one-bit samples least significant bit first: put them in the usual order.

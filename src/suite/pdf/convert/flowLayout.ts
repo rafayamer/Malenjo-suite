@@ -86,7 +86,9 @@ export class FlowWriter {
     let line: Piece[] = []; let lineWidth = 0;
     const push = (hard: boolean) => {
       while (line.length && line[line.length - 1].space) lineWidth -= line.pop()!.width;
-      const height = Math.max(...(line.length ? line : pieces.slice(0, 1)).map((p) => p.style.size), 1);
+      // An empty line (an empty paragraph) is as tall as its text would be: its first run's size, or the default.
+      const sizes = (line.length ? line : pieces.slice(0, 1)).map((p) => p.style.size);
+      const height = sizes.length ? Math.max(...sizes) : runs[0]?.style.size ?? DEFAULT_STYLE.size;
       lines.push({ pieces: line, width: lineWidth, height, hard }); line = []; lineWidth = 0;
     };
     for (const piece of pieces) {

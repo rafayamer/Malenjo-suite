@@ -597,3 +597,34 @@ describe('conversion edge cases, round 15', () => {
     expect(content).toMatch(/100 255 100 50 re\s+W\s+n\s+q\s+1 0 0 1 0 255 cm[\s\S]*?200 0 0 50 0 0 cm/);
   });
 });
+
+describe('conversion edge cases, round 16', () => {
+  const tiff = (entries: [number, number, number][], strip: number[]) => {
+    const ifd = 8, stripAt = ifd + 2 + entries.length * 12 + 4;
+    const bytes = new Uint8Array(stripAt + strip.length); const v = new DataView(bytes.buffer);
+    bytes.set([0x49, 0x49]); v.setUint16(2, 42, true); v.setUint32(4, ifd, true); v.setUint16(ifd, entries.length, true);
+    entries.forEach(([tag, type, value], i) => {
+      const e = ifd + 2 + i * 12;
+      v.setUint16(e, tag, true); v.setUint16(e + 2, type, true); v.setUint32(e + 4, 1, true);
+      if (tag === 273) v.setUint32(e + 8, stripAt, true); else if (tag === 279) v.setUint32(e + 8, strip.length, true); else if (type === 3) v.setUint16(e + 8, value, true); else v.setUint32(e + 8, value, true);
+    });
+    bytes.set(strip, stripAt);
+    return bytes;
+  };
+
+  it('refuses one-bit TIFF colour', () => {
+    // 1×1 RGB with one bit per sample (bits 100: red).
+    const entries: [number, number, number][] = [[256, 3, 1], [257, 3, 1], [258, 3, 1], [259, 3, 1], [262, 3, 2], [273, 4, 0], [277, 3, 3], [278, 3, 1], [279, 4, 0]];
+    expect(() => decodeTiff(tiff(entries, [0b10000000]))).toThrow(/One-bit TIFF images with several samples/);
+  });
+
+  it('keeps a normal line height for empty Word paragraphs', async () => {
+    const docx = (blanks: number) => zipSync({
+      '[Content_Types].xml': strToU8('<Types/>'),
+      'word/document.xml': strToU8(`<w:document ${W}><w:body><w:p><w:r><w:t>Top</w:t></w:r></w:p>${'<w:p/>'.repeat(blanks)}<w:p><w:r><w:t>Bottom</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:body></w:document>`),
+    });
+    const gap = async (blanks: number) => { const [page] = await read((await docxToPdf(docx(blanks))).bytes); const at = (s: string) => page.items.find((i) => i.str === s)!.top; return at('Bottom') - at('Top'); };
+    // Three empty paragraphs add about three lines of 11 pt text (12.65 pt each), not three points.
+    expect((await gap(3)) - (await gap(0))).toBeGreaterThan(3 * 12);
+  });
+});
