@@ -352,4 +352,21 @@ describe('fill, flatten and data exchange (MAL-050, MAL-052, MAL-053)', () => {
     expect(amount.getText()).toBe('1000');
     expect(amount.getMaxLength()).toBe(4);
   });
+
+  it('calculates from a concealed value the user leaves untouched, without showing or rewriting it', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([300, 200]);
+    const form = pdf.getForm();
+    const amount = form.createTextField('Amount'); amount.enablePassword(); amount.setText('12'); amount.addToPage(page, { x: 20, y: 120, width: 120, height: 20 });
+    const total = form.createTextField('Total'); total.addToPage(page, { x: 20, y: 60, width: 120, height: 20 });
+    total.acroField.dict.set(PDFName.of('AA'), pdf.context.obj({ C: pdf.context.obj({ S: 'JavaScript', JS: PDFHexString.fromText('AFSimple_Calculate("SUM", new Array("Amount"));') }) }));
+    const bytes = await pdf.save();
+    const fields = await readFillForm(bytes);
+    const evaluation = evaluateFill(fields, Object.fromEntries(fields.map((f) => [f.name, f.value])));
+    expect(evaluation.values.Total).toBe('12');
+    expect(evaluation.values.Amount).toBe('');
+    const filled = (await PDFDocument.load((await fillFormWithLogic(bytes, {})).bytes)).getForm();
+    expect(filled.getTextField('Total').getText()).toBe('12');
+    expect(filled.getTextField('Amount').getText()).toBe('12');
+  });
 });

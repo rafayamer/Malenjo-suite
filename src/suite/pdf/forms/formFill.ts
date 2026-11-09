@@ -22,6 +22,8 @@ export interface FillField {
   multiline: boolean;
   /** The field's existing value is not shown (password or rich text) but it is not empty. */
   concealedValue: boolean;
+  /** The concealed value itself, used only to evaluate calculations and rules while the user leaves it untouched. */
+  storedValue?: string;
   /** An editable dropdown: besides its options, any typed value is allowed. */
   editable: boolean;
 }
@@ -55,6 +57,7 @@ function fieldsOf(pdf: PDFDocument): FillField[] {
       options: choiceOptions(pdf, field), multiselect: (field instanceof PDFDropdown || field instanceof PDFOptionList) && field.isMultiselect(),
       required: field.isRequired(), readOnly: field.isReadOnly(), password: field instanceof PDFTextField && field.isPassword(), multiline: field instanceof PDFTextField && field.isMultiline(),
       concealedValue: field instanceof PDFTextField && (field.isPassword() || field.isRichFormatted()) && Boolean(field.getText()), maxLength: field instanceof PDFTextField ? field.getMaxLength() ?? null : null,
+      ...(field instanceof PDFTextField && (field.isPassword() || field.isRichFormatted()) && field.getText() ? { storedValue: field.getText() } : {}),
       logic, calculated: Boolean(logic.calculate), editable: field instanceof PDFDropdown && field.isEditable(),
     };
   });
@@ -74,11 +77,15 @@ export async function readFillForm(bytes: Uint8Array): Promise<FillField[]> {
 
 /** Calculations, visibility and validation for proposed values (field name → value). */
 export function evaluateFill(fields: FillField[], values: Record<string, string>): FormEvaluation {
-  return evaluateForm(fields.filter((f) => f.kind !== 'button' && f.kind !== 'signature').map((f): LogicField => ({
-    name: f.name, kind: f.kind, value: values[f.name] ?? f.value, logic: f.logic, maxLength: f.maxLength ?? undefined,
-    // A concealed value the user leaves untouched is still there, so it satisfies "required".
-    required: f.required && !(f.concealedValue && !(values[f.name] ?? '')),
+  // A concealed value the user leaves untouched is still in the file: calculations and rules read it, and it
+  // satisfies "required", but it is never shown and never written back.
+  const untouched = (f: FillField) => f.concealedValue && !(values[f.name] ?? '');
+  const evaluation = evaluateForm(fields.filter((f) => f.kind !== 'button' && f.kind !== 'signature').map((f): LogicField => ({
+    name: f.name, kind: f.kind, value: untouched(f) ? f.storedValue ?? '' : values[f.name] ?? f.value, logic: f.logic, maxLength: f.maxLength ?? undefined,
+    required: f.required && !untouched(f),
   })));
+  for (const f of fields) if (untouched(f) && f.name in evaluation.values) { evaluation.values[f.name] = ''; delete evaluation.errors[f.name]; }
+  return evaluation;
 }
 
 function widgets(field: PDFField): PDFDict[] { return field.acroField.getWidgets().map((w) => w.dict); }

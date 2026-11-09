@@ -519,3 +519,35 @@ describe('conversion edge cases, round 13', () => {
     expect(Array.from({ length: 8 }, (_, k) => page.data[k * 4])).toEqual([255, 0, 0, 0, 0, 0, 0, 0]);
   });
 });
+
+describe('conversion edge cases, round 14', () => {
+  it('bounds Word table spans and refuses tables wider than 1000 columns', async () => {
+    const docx = (cells: string) => zipSync({
+      '[Content_Types].xml': strToU8('<Types/>'),
+      'word/document.xml': strToU8(`<w:document ${W}><w:body><w:tbl><w:tr>${cells}</w:tr></w:tbl><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:body></w:document>`),
+    });
+    const cell = (span: string, text: string) => `<w:tc><w:tcPr><w:gridSpan w:val="${span}"/></w:tcPr><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+    const started = Date.now();
+    const [page] = await read((await docxToPdf(docx(cell('1000000000', 'Hello')))).bytes);
+    expect(page.text).toBe('Hello');
+    expect(Date.now() - started).toBeLessThan(5000);
+    await expect(docxToPdf(docx(cell('1000', 'A') + cell('1000', 'B')))).rejects.toThrow(/more than 1000 columns/);
+  }, 20000);
+
+  it('resolves worksheet theme colours, with their tint', async () => {
+    const S = 'xmlns="m" xmlns:r="r"';
+    const xlsx = zipSync({
+      'xl/workbook.xml': strToU8(`<workbook ${S}><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>`),
+      'xl/_rels/workbook.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Target="theme/theme1.xml"/></Relationships>'),
+      'xl/theme/theme1.xml': strToU8('<a:theme xmlns:a="a"><a:themeElements><a:clrScheme name="Office"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="1F497D"/></a:dk2><a:lt2><a:srgbClr val="EEECE1"/></a:lt2><a:accent1><a:srgbClr val="4F81BD"/></a:accent1></a:clrScheme></a:themeElements></a:theme>'),
+      'xl/styles.xml': strToU8('<styleSheet><fonts><font><sz val="11"/></font><font><sz val="11"/><color theme="0"/></font><font><sz val="11"/><color theme="1" tint="0.5"/></font></fonts><fills><fill/><fill/><fill><patternFill patternType="solid"><fgColor rgb="FF000000"/></patternFill></fill></fills><cellXfs><xf fontId="0" fillId="0"/><xf fontId="1" fillId="2"/><xf fontId="2" fillId="0"/></cellXfs></styleSheet>'),
+      'xl/worksheets/sheet1.xml': strToU8(`<worksheet ${S}><sheetData><row r="1"><c r="A1" s="1" t="inlineStr"><is><t>White on black</t></is></c><c r="B1" s="2" t="inlineStr"><is><t>Grey</t></is></c></row></sheetData></worksheet>`),
+    });
+    const result = await xlsxToPdf(xlsx, { pageSize: 'letter', orientation: 'sheet', gridlines: 'sheet', sheets: 'all' });
+    const { PDFDocument } = await import('pdf-lib');
+    const { pageContentBytes } = await import('../content/contentModel');
+    const content = new TextDecoder('latin1').decode(pageContentBytes(await PDFDocument.load(result.bytes), 0));
+    expect(content).toMatch(/0 0 0 rg[\s\S]*?\nf\n[\s\S]*?BT\n1 1 1 rg/);
+    expect(content).toMatch(/BT\n0\.5 0\.5 0\.5 rg/); // black lightened by half
+  });
+});

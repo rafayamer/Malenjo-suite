@@ -194,10 +194,14 @@ export async function pdfToPptx(pages: PageStructure[], pdfBytes: Uint8Array | n
         + `<p:blipFill><a:blip r:embed="rIdImg${k + 1}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${xfrm(image.x, image.y, image.width, image.height)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>` });
     });
     // Text boxes: consecutive lines that share a left edge and size become one box.
+    // Lines painted on either side of a rectangle or picture stay in separate boxes, so each keeps its place in the paint order.
+    const lineZ = (l: ReturnType<typeof linesOf>[number]) => Math.min(...l.cells.map((c) => runAt((c.x + c.end) / 2 / page.width, (l.y - l.size * 0.3) / page.height)?.z ?? Infinity));
+    const shapeZs = [...rects.map((r) => r.z), ...page.images.map((_, k) => imageZ(k))];
+    const straddle = (a: number, b: number) => Number.isFinite(a) && Number.isFinite(b) && shapeZs.some((z) => z > Math.min(a, b) && z < Math.max(a, b));
     const groups: ReturnType<typeof linesOf>[] = [];
     for (const line of linesOf(page)) {
       const last = groups[groups.length - 1]?.at(-1);
-      if (last && Math.abs(last.x - line.x) < 2 && Math.abs(last.size - line.size) < 0.6 && line.y - last.y < line.size * 1.7 && last.cells.length === 1 && line.cells.length === 1) groups[groups.length - 1].push(line);
+      if (last && Math.abs(last.x - line.x) < 2 && Math.abs(last.size - line.size) < 0.6 && line.y - last.y < line.size * 1.7 && last.cells.length === 1 && line.cells.length === 1 && !straddle(lineZ(last), lineZ(line))) groups[groups.length - 1].push(line);
       else groups.push([line]);
     }
     for (const group of groups) {

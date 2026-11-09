@@ -112,6 +112,20 @@ function formatValue(raw: string, fmt: string, id: number, date1904 = false): st
   return String(Number(n.toPrecision(15))).replace('e', 'E');
 }
 
+/** A colour lightened (tint > 0) or darkened (tint < 0) the way spreadsheets apply a tint: on its HSL lightness. */
+function tinted([r, g, b]: [number, number, number], tint: number): [number, number, number] {
+  if (!Number.isFinite(tint) || !tint) return [r, g, b];
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let l = (max + min) / 2;
+  const d = max - min, s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  let h = d === 0 ? 0 : max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = (h * 60 + 360) % 360;
+  l = tint < 0 ? l * (1 + tint) : l * (1 - tint) + tint;
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  const [r1, g1, b1] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return [r1 + m, g1 + m, b1 + m];
+}
+
 export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Promise<DocumentPdf> {
   const files = unzipOffice(bytes);
   const book = xml(files, 'xl/workbook.xml');
@@ -121,6 +135,12 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
   const date1904 = pr === '1' || pr === 'true';
   const shared = (() => { const s = xml(files, 'xl/sharedStrings.xml'); return s ? kids(all(s, 'sst')[0] ?? s, 'si').map((si) => all(si, 't').map(textOf).join('')) : []; })();
   const styles = xml(files, 'xl/styles.xml');
+  // Theme colours, in SpreadsheetML's index order: light 1, dark 1, light 2, dark 2, accents 1–6, links.
+  const themePath = [...rels.values()].find((p) => p.includes('theme'));
+  const themeDoc = themePath ? xml(files, themePath) : undefined;
+  const schemeNodes = themeDoc ? all(themeDoc, 'a:clrScheme')[0]?.children.filter((c) => c.name !== '#text') ?? [] : [];
+  const scheme = schemeNodes.map((c) => child(c, 'a:srgbClr')?.attrs.val ?? child(c, 'a:sysClr')?.attrs.lastClr);
+  const themeColors = [scheme[1], scheme[0], scheme[3], scheme[2], ...scheme.slice(4)];
   const numFmts = new Map<number, string>(styles ? all(styles, 'numFmt').map((n) => [Number(n.attrs.numFmtId), n.attrs.formatCode ?? '']) : []);
   const fonts = styles ? kids(all(styles, 'fonts')[0], 'font') : [];
   const fills = styles ? kids(all(styles, 'fills')[0], 'fill') : [];
@@ -128,7 +148,10 @@ export async function xlsxToPdf(bytes: Uint8Array, options: SheetPdfOptions): Pr
   const styleOf = (s: number) => {
     const xf = xfs[s]; const font = fonts[Number(xf?.attrs.fontId ?? 0)]; const fill = fills[Number(xf?.attrs.fillId ?? 0)];
     const pattern = child(fill, 'patternFill');
-    const color = (n: XNode | undefined) => hexColor(n?.attrs.rgb?.slice(-6));
+    const color = (n: XNode | undefined) => {
+      const base = n?.attrs.rgb ? hexColor(n.attrs.rgb.slice(-6)) : n?.attrs.theme !== undefined ? hexColor(themeColors[Number(n.attrs.theme)]) : undefined;
+      return base && n?.attrs.tint ? tinted(base, Number(n.attrs.tint)) : base;
+    };
     const run: RunStyle = { ...DEFAULT_STYLE, size: Number(child(font, 'sz')?.attrs.val ?? 11) * 0.9, bold: Boolean(child(font, 'b')) && child(font, 'b')?.attrs.val !== '0', italic: Boolean(child(font, 'i')), color: color(child(font, 'color')) ?? [0, 0, 0] };
     return { run, fill: pattern?.attrs.patternType === 'solid' ? color(child(pattern, 'fgColor')) : undefined, numFmtId: Number(xf?.attrs.numFmtId ?? 0), align: child(xf, 'alignment')?.attrs.horizontal };
   };

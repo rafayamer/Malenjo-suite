@@ -43,6 +43,7 @@ export function relationships(files: Record<string, Uint8Array>, path: string): 
 
 interface Props { p: Partial<Pick<Paragraph, 'align' | 'indent' | 'firstIndent' | 'spaceBefore' | 'spaceAfter' | 'lineHeight' | 'pageBreakBefore'>> & { num?: [string, number]; heading?: number }; r: Partial<RunStyle> }
 
+const MAX_COLUMNS = 1000;
 export async function docxToPdf(bytes: Uint8Array): Promise<DocumentPdf> {
   const files = unzipOffice(bytes);
   const doc = xml(files, 'word/document.xml');
@@ -185,10 +186,12 @@ export async function docxToPdf(bytes: Uint8Array): Promise<DocumentPdf> {
         // Paragraphs and pictures are laid out in the cell; anything else a paragraph can yield is not cell content.
         const paras = tc.children.flatMap((c) => (c.name === 'w:p' ? paragraph(c, true) : c.name === 'w:tbl' ? all(c, 'w:p').flatMap((p) => paragraph(p, true)) : []))
           .filter((b): b is Paragraph | ImageBlock => b.kind === 'para' || b.kind === 'image');
-        return { blocks: paras.length ? paras : [{ kind: 'para', runs: [], align: 'left', indent: 0, spaceBefore: 0, spaceAfter: 0, lineHeight: 1.15 }], colSpan: Number(val(child(tcPr, 'w:gridSpan')) ?? 1), background: hexColor(child(tcPr, 'w:shd')?.attrs['w:fill']) };
+        return { blocks: paras.length ? paras : [{ kind: 'para', runs: [], align: 'left', indent: 0, spaceBefore: 0, spaceAfter: 0, lineHeight: 1.15 }], colSpan: Math.min(MAX_COLUMNS, Math.max(1, Math.floor(Number(val(child(tcPr, 'w:gridSpan')) ?? 1)) || 1)), background: hexColor(child(tcPr, 'w:shd')?.attrs['w:fill']) };
       }),
     }));
     const cols = Math.max(grid.length, ...rows.map((r) => r.cells.reduce((n, c) => n + c.colSpan, 0)));
+    // Word itself allows 63 columns; anything past 1000 is refused before widths are allocated.
+    if (cols > MAX_COLUMNS) throw new Error(`This document has a table more than ${MAX_COLUMNS} columns wide, which cannot be laid out on a page.`);
     return { kind: 'table', rows, colWidths: Array.from({ length: cols }, (_, i) => grid[i] ?? 72), borders, spaceAfter: 8 };
   };
   const body = all(doc, 'w:body')[0];

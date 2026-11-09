@@ -117,3 +117,23 @@ describe('PowerPoint paint order and text colour', () => {
     expect(slide).toMatch(/<a:solidFill><a:srgbClr val="FFFFFF"\/><\/a:solidFill><a:latin typeface="Arial"\/><\/a:rPr><a:t>Callout text/);
   });
 });
+
+describe('PowerPoint text boxes around a shape', () => {
+  it('keeps lines painted on either side of a rectangle in separate boxes', async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([400, 300]);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    page.drawText('Before', { x: 60, y: 200, size: 14, font });
+    page.drawRectangle({ x: 50, y: 170, width: 200, height: 22, color: rgb(1, 1, 0) });
+    page.drawText('After', { x: 60, y: 180, size: 14, font });
+    const bytes = await pdf.save();
+    const loading = getDocument({ data: bytes.slice(), isOffscreenCanvasSupported: false, fontExtraProperties: true } as never);
+    const doc = await loading.promise;
+    let pages;
+    try { pages = await readPdfStructure(doc, [1], { images: true, ops: OPS as never }); } finally { await loading.destroy(); }
+    const slide = part((await pdfToPptx(pages, bytes, 'straddle')).files[0].bytes, 'ppt/slides/slide1.xml');
+    const [before, rect, after] = ['>Before<', 'name="Rectangle', '>After<'].map((needle) => slide.indexOf(needle));
+    expect(before).toBeGreaterThan(0);
+    expect(before).toBeLessThan(rect); expect(rect).toBeLessThan(after);
+  });
+});
