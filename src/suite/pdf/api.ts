@@ -65,7 +65,7 @@ export async function exportPdfPlainText(name:string,text:string):Promise<boolea
   return invoke<boolean>('write_pdf_tool_output',{destination,bytes:Array.from(bytes)});
 }
 
-const CONVERSION_TYPES:Record<string,string>={png:'PNG image',jpg:'JPEG image',tif:'TIFF image',md:'Markdown',html:'HTML',svg:'SVG',txt:'Plain text',zip:'ZIP archive'};
+const CONVERSION_TYPES:Record<string,string>={png:'PNG image',jpg:'JPEG image',tif:'TIFF image',md:'Markdown',html:'HTML',svg:'SVG',txt:'Plain text',zip:'ZIP archive',pdf:'PDF document'};
 /** Save a conversion result (image, text format or ZIP of several files). */
 export async function exportConversionFile(name:string,bytes:Uint8Array,mime:string):Promise<boolean>{
   const extension=name.split('.').pop()?.toLowerCase()??'';

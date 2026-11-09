@@ -129,6 +129,7 @@ import PdfStampDialog, { type StampDialogKind } from './PdfStampDialogs';
 import PdfPropertiesDialog from './PdfPropertiesDialog';
 import PdfNavigationDialog from './PdfNavigationDialog';
 import PdfCompressDialog from './PdfCompressDialog';
+import { PdfProtectDialog, PdfSanitizeDialog, PdfUnlockDialog } from './PdfSecurityDialogs';
 import PdfMarkupPanel, { MARKUP_AUTHOR, type MarkupSettings } from './PdfMarkupPanel';
 import PdfTextEditPanel, { type TextEditState } from './PdfTextEditPanel';
 import PdfFindReplaceDialog from './PdfFindReplaceDialog';
@@ -422,7 +423,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
   useEffect(() => { setOverflowOpen(false); }, [masterTab]);
   const [featureGalleryOpen, setFeatureGalleryOpen] = useState(false);
   // MAL-001 / 002 / 009 / 010 dialogs; focus returns to the control that opened them.
-  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup'|'text-edit'|'find'|'objects'|'paragraphs'|'form-design'|'form-fill'|'export'|'office-convert'|'create-pdf';
+  type ToolDialog='merge'|'split'|'nup'|'batch'|StampDialogKind|'properties'|'navigation'|'compress'|'markup'|'text-edit'|'find'|'objects'|'paragraphs'|'form-design'|'form-fill'|'export'|'office-convert'|'create-pdf'|'protect'|'unlock'|'sanitize';
   const [paragraphState,setParagraphState]=useState<ParagraphEditState|null>(null);
   const [formDesign,setFormDesign]=useState<FormDesignState|null>(null);
   const [exportRegion,setExportRegion]=useState<ExportRegion|null>(null);
@@ -2748,6 +2749,9 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
       providerAction,
     ],
     protect:[
+      {id:'protect-pdf',label:'Protect PDF…',enabled:!!sourceBytes&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'This PDF is already protected; remove its protection first.',run:()=>openToolDialog('protect')},
+      {id:'unlock-pdf',label:'Remove protection…',enabled:!!sourceBytes&&encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':'This PDF is not protected.',run:()=>openToolDialog('unlock')},
+      {id:'sanitize-pdf',label:'Sanitize…',enabled:!!sourceBytes&&!mutating&&!encryptedPdf,disabledReason:!sourceBytes?'No PDF is loaded.':encryptedPdf?'Remove the PDF password first.':'Wait for the current PDF edit to finish.',run:()=>openToolDialog('sanitize')},
       navigateAction('Open Security Center','security'),
       navigateAction('Open Sign workspace','sign'),
       {id:'signatures-panel',label:'Signature fields',enabled:true,run:()=>openLeftPanel('signatures')},
@@ -2990,7 +2994,7 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
             if(applied)setActionNotice(summary);
             return applied;
           }}/>}
-      {(toolDialog==='properties'||toolDialog==='navigation'||toolDialog==='compress'||toolDialog==='markup'||toolDialog==='text-edit'||toolDialog==='find'||toolDialog==='objects'||toolDialog==='paragraphs'||toolDialog==='form-design'||toolDialog==='form-fill')&&sourceBytes&&(()=>{
+      {(toolDialog==='properties'||toolDialog==='navigation'||toolDialog==='compress'||toolDialog==='sanitize'||toolDialog==='markup'||toolDialog==='text-edit'||toolDialog==='find'||toolDialog==='objects'||toolDialog==='paragraphs'||toolDialog==='form-design'||toolDialog==='form-fill')&&sourceBytes&&(()=>{
         const apply=async (label:string,operation:(latest:Uint8Array)=>Promise<{bytes:Uint8Array;summary:string}>)=>{
           let summary='';
           const applied=await mutate(label,async latest=>{const edited=await operation(latest);summary=edited.summary;return edited.bytes;},currentPage);
@@ -3015,10 +3019,13 @@ export default function PdfWorkspace({ session, active, notice, onBackToFiles, o
         if(toolDialog==='markup')return <PdfMarkupPanel domIdPrefix={domIdPrefix} bytes={sourceBytes} viewRotation={rotation} busy={mutating}
           settings={markupSettings} onSettings={setMarkupSettings} onApply={apply} onClose={closeToolDialog}/>;
         if(toolDialog==='compress')return <PdfCompressDialog domIdPrefix={domIdPrefix} busy={mutating} onApply={apply} onClose={closeToolDialog}/>;
+        if(toolDialog==='sanitize')return <PdfSanitizeDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} busy={mutating} onApply={apply} onClose={closeToolDialog}/>;
         return toolDialog==='properties'
           ? <PdfPropertiesDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} busy={mutating} onApply={apply} onClose={closeToolDialog}/>
           : <PdfNavigationDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} pageCount={pageCount} currentPage={currentPage} busy={mutating} onApply={apply} onClose={closeToolDialog}/>;
       })()}
+      {toolDialog==='protect'&&sourceBytes&&<PdfProtectDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} sourceName={sourceName} busy={mutating} onNotice={setActionNotice} onClose={closeToolDialog}/>}
+      {toolDialog==='unlock'&&sourceBytes&&<PdfUnlockDialog domIdPrefix={domIdPrefix} bytes={sourceBytes} sourceName={sourceName} onOpenPdfs={onOpenConversionOutputs} onNotice={setActionNotice} onClose={closeToolDialog}/>}
       {toolDialog==='create-pdf'&&<PdfCreateDialog domIdPrefix={domIdPrefix} onOpenPdfs={onOpenConversionOutputs} onNotice={setActionNotice} onClose={closeToolDialog}/>}
       {toolDialog==='office-convert'&&sourceBytes&&<PdfOfficeConvertDialog domIdPrefix={domIdPrefix} sourceName={sourceName} getBytes={()=>currentPdfBytesRef.current}
         busy={mutating} onOpenOutputs={onOpenConversionOutputs} onNotice={setActionNotice} onClose={closeToolDialog}/>}

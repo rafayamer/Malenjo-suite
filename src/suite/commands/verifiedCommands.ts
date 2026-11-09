@@ -39,6 +39,7 @@ export const VERIFIED_EVIDENCE_SCRIPTS = [
   'scripts/pdf-phase3-export-acceptance.mjs',
   'scripts/pdf-phase3-office-acceptance.mjs',
   'scripts/pdf-phase3-topdf-acceptance.mjs',
+  'scripts/pdf-phase4-security-acceptance.mjs',
 ] as const;
 
 export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Object.freeze([
@@ -301,6 +302,21 @@ export const VERIFIED_COMMAND_BINDINGS: readonly VerifiedCommandBinding[] = Obje
     id: 'MAL-034', workspaceTab: 'Convert',
     guidance: 'Choose Create PDF from files… → HTML. MALENJO\'s own renderer lays out headings, paragraphs, lists, tables, embedded images and a CSS subset (colours, sizes, weights, alignment, margins, page breaks); it never runs scripts or downloads anything, and reports unsupported CSS and elements.',
     evidence: ['MAL-034 HTML to PDF through the controlled renderer: supported CSS applied, scripts and remote content blocked'],
+  },
+  {
+    id: 'MAL-061', workspaceTab: 'Protect',
+    guidance: 'Choose Protect PDF…, enter an optional open password and an owner password (twice), choose printing and the other permissions, then Save protected copy. The copy uses AES-256 (PDF 2.0 security handler, revision 6); the open document is unchanged. Permissions are honoured by conforming readers; software that ignores them can still print or copy.',
+    evidence: ['MAL-061 protect a PDF with AES-256, an open password, an owner password and permission flags'],
+  },
+  {
+    id: 'MAL-062', workspaceTab: 'Protect',
+    guidance: 'Open the protected PDF (with its open password if it has one), choose Remove protection…, enter the owner password and the unprotected copy opens in a new tab. Files protected with RC4, AES-128 or AES-256 passwords are supported; certificate (public-key) protection is refused with a message, because it needs the recipient\'s private key.',
+    evidence: ['MAL-062 remove protection with the owner password, refusing a password that does not permit it'],
+  },
+  {
+    id: 'MAL-070', workspaceTab: 'Protect',
+    guidance: 'Choose Sanitize… to list document information and XMP metadata, embedded files, scripts and actions, links, hidden content (layers that are off, invisible text, hidden annotations) and other resources; untick what to keep and choose Remove selected. Undo restores the document. Signed PDFs are refused.',
+    evidence: ['MAL-070 inspect and remove selected metadata, attachments, scripts, links and hidden content'],
   },
 ]);
 
